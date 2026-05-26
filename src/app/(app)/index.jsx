@@ -3,7 +3,6 @@ import { supabase } from "@utils/supabase";
 import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-	Alert,
 	Dimensions,
 	FlatList,
 	Image,
@@ -17,11 +16,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import "react-native-url-polyfill/auto";
-import Login from "../components/auth/Login";
-import Register from "../components/auth/Register";
+
 const { width } = Dimensions.get("window");
 
-// Mock Movie Data for a Premium Visual Experience
 const POPULAR_MOVIES = [
 	{
 		id: "1",
@@ -86,78 +83,31 @@ const RECOMMENDED_MOVIES = [
 
 export default function Index() {
 	const systemColorScheme = useColorScheme();
-	const [screen, setScreen] = useState<"login" | "register" | "dashboard">(
-		"login",
-	);
 	const [userEmail, setUserEmail] = useState("");
 	const [userName, setUserName] = useState("");
 	const [userAvatarUrl, setUserAvatarUrl] = useState("");
 	const [theme, setTheme] = useState(systemColorScheme || "dark");
-
-	const handleLoginSuccess = (email: string) => {
-		setUserEmail(email || "sinefil@cineverse.com");
-		setScreen("dashboard");
-	};
-
-	const handleRegisterSuccess = (name: string, email: string) => {
-		Alert.alert(
-			"Başarılı",
-			`Hoş geldiniz ${name}! Hesabınız oluşturuldu.`,
-			[{ text: "Tamam", onPress: () => setScreen("login") }],
-		);
-	};
-
-	const handleForgotPassword = () => {
-		Alert.alert(
-			"Şifre Sıfırlama",
-			"Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.",
-		);
-	};
-
-	// ✅ Bunu ekle — session değişince otomatik yönlendirir
+	console.log("6-Index Render Edildi");
 	useEffect(() => {
-		// Uygulama açılırken mevcut session var mı kontrol et
 		supabase.auth.getSession().then(async ({ data: { session } }) => {
-			if (session) {
-				setUserEmail(session.user.email ?? "");
+			if (!session) return;
+			setUserEmail(session.user.email ?? "");
 
-				const { data } = await supabase
-					.from("profiles")
-					.select("*")
-					.eq("id", session.user.id);
+			const { data } = await supabase
+				.from("profiles")
+				.select("*")
+				.eq("id", session.user.id);
 
-				setUserName(data?.[0].full_name ?? "");
-				setUserAvatarUrl(data?.[0].avatar_url ?? "");
-				setScreen("dashboard");
+			if (data && data[0]) {
+				setUserName(data[0].full_name ?? "");
+				setUserAvatarUrl(data[0].avatar_url ?? "");
 			}
 		});
-
-		// Login/logout olunca dinle
-		const {
-			data: { subscription },
-		} = supabase.auth.onAuthStateChange(async (_event, session) => {
-			if (session) {
-				setUserEmail(session.user.email ?? "");
-
-				const { data } = await supabase
-					.from("profiles")
-					.select("*")
-					.eq("id", session.user.id);
-
-				setUserName(data?.[0].full_name ?? "");
-				setUserAvatarUrl(data?.[0].avatar_url ?? "");
-
-				setScreen("dashboard");
-			} else {
-				setScreen("login");
-			}
-		});
-
-		return () => subscription.unsubscribe();
 	}, []);
 
 	const handleLogout = async () => {
-		await supabase.auth.signOut(); // onAuthStateChange otomatik "login"e götürür
+		// SignOut olunca RootLayout'taki useEffect bunu yakalayıp otomatik (auth)/login'e atacak
+		await supabase.auth.signOut();
 	};
 
 	const toggleTheme = () => {
@@ -173,33 +123,6 @@ export default function Index() {
 		border: theme === "dark" ? "#374151" : "#d1d5db",
 	};
 
-	// Auth navigation handler
-	if (screen === "login") {
-		return (
-			<>
-				<Stack.Screen options={{ headerShown: false }} />
-				<Login
-					onRegisterPress={() => setScreen("register")}
-					onForgotPasswordPress={handleForgotPassword}
-					onLoginSuccess={handleLoginSuccess}
-				/>
-			</>
-		);
-	}
-
-	if (screen === "register") {
-		return (
-			<>
-				<Stack.Screen options={{ headerShown: false }} />
-				<Register
-					onLoginPress={() => setScreen("login")}
-					onRegisterSuccess={handleRegisterSuccess}
-				/>
-			</>
-		);
-	}
-
-	// CineVerse Premium Movie Dashboard
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
@@ -235,7 +158,6 @@ export default function Index() {
 					</View>
 
 					<View style={styles.headerActions}>
-						{/* Toggle Theme */}
 						<TouchableOpacity
 							style={[
 								styles.headerIconBtn,
@@ -256,7 +178,6 @@ export default function Index() {
 							/>
 						</TouchableOpacity>
 
-						{/* Profile / Logout */}
 						<TouchableOpacity
 							style={[
 								styles.headerIconBtn,
@@ -298,7 +219,9 @@ export default function Index() {
 									{ color: colors.text },
 								]}
 								numberOfLines={1}>
-								{userName || "Sinefil"}
+								{userName ||
+									userEmail.split("@")[0] ||
+									"Sinefil"}
 							</Text>
 						</View>
 						{userAvatarUrl ? (
@@ -319,7 +242,7 @@ export default function Index() {
 						)}
 					</View>
 
-					{/* Category Section: Popular Movies */}
+					{/* Popular Movies */}
 					<View style={styles.sectionContainer}>
 						<View style={styles.sectionHeader}>
 							<Text
@@ -390,7 +313,7 @@ export default function Index() {
 						/>
 					</View>
 
-					{/* Category Section: Recommended */}
+					{/* Recommended Section */}
 					<View style={styles.sectionContainer}>
 						<View style={styles.sectionHeader}>
 							<Text
@@ -488,9 +411,7 @@ export default function Index() {
 }
 
 const styles = StyleSheet.create({
-	safeArea: {
-		flex: 1,
-	},
+	safeArea: { flex: 1 },
 	header: {
 		height: 60,
 		flexDirection: "row",
@@ -499,21 +420,9 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 20,
 		borderBottomWidth: 1,
 	},
-	headerLogo: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 8,
-	},
-	headerTitle: {
-		fontSize: 20,
-		fontWeight: "bold",
-		letterSpacing: 0.5,
-	},
-	headerActions: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 12,
-	},
+	headerLogo: { flexDirection: "row", alignItems: "center", gap: 8 },
+	headerTitle: { fontSize: 20, fontWeight: "bold", letterSpacing: 0.5 },
+	headerActions: { flexDirection: "row", alignItems: "center", gap: 12 },
 	headerIconBtn: {
 		width: 36,
 		height: 36,
@@ -522,9 +431,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		alignItems: "center",
 	},
-	scrollContainer: {
-		paddingBottom: 40,
-	},
+	scrollContainer: { paddingBottom: 40 },
 	welcomeBanner: {
 		margin: 20,
 		padding: 20,
@@ -538,16 +445,8 @@ const styles = StyleSheet.create({
 		shadowRadius: 8,
 		elevation: 3,
 	},
-	welcomeSub: {
-		fontSize: 14,
-		fontWeight: "500",
-		marginBottom: 4,
-	},
-	welcomeTitle: {
-		fontSize: 22,
-		fontWeight: "bold",
-		maxWidth: width * 0.55,
-	},
+	welcomeSub: { fontSize: 14, fontWeight: "500", marginBottom: 4 },
+	welcomeTitle: { fontSize: 22, fontWeight: "bold", maxWidth: width * 0.55 },
 	avatar: {
 		width: 48,
 		height: 48,
@@ -555,14 +454,8 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		alignItems: "center",
 	},
-	avatarText: {
-		color: "#ffffff",
-		fontSize: 18,
-		fontWeight: "bold",
-	},
-	sectionContainer: {
-		marginBottom: 28,
-	},
+	avatarText: { color: "#ffffff", fontSize: 18, fontWeight: "bold" },
+	sectionContainer: { marginBottom: 28 },
 	sectionHeader: {
 		flexDirection: "row",
 		justifyContent: "space-between",
@@ -570,18 +463,9 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 20,
 		marginBottom: 16,
 	},
-	sectionTitle: {
-		fontSize: 18,
-		fontWeight: "bold",
-	},
-	seeAll: {
-		fontSize: 13,
-		fontWeight: "600",
-	},
-	horizontalList: {
-		paddingHorizontal: 20,
-		gap: 16,
-	},
+	sectionTitle: { fontSize: 18, fontWeight: "bold" },
+	seeAll: { fontSize: 13, fontWeight: "600" },
+	horizontalList: { paddingHorizontal: 20, gap: 16 },
 	movieCard: {
 		width: 150,
 		borderRadius: 16,
@@ -592,11 +476,7 @@ const styles = StyleSheet.create({
 		shadowRadius: 6,
 		elevation: 4,
 	},
-	moviePoster: {
-		width: "100%",
-		height: 200,
-		backgroundColor: "#333",
-	},
+	moviePoster: { width: "100%", height: 200, backgroundColor: "#333" },
 	ratingBadge: {
 		position: "absolute",
 		top: 10,
@@ -609,22 +489,10 @@ const styles = StyleSheet.create({
 		borderRadius: 20,
 		gap: 4,
 	},
-	ratingText: {
-		color: "#ffffff",
-		fontSize: 11,
-		fontWeight: "bold",
-	},
-	movieInfo: {
-		padding: 12,
-	},
-	movieTitle: {
-		fontSize: 14,
-		fontWeight: "bold",
-		marginBottom: 4,
-	},
-	movieMeta: {
-		fontSize: 11,
-	},
+	ratingText: { color: "#ffffff", fontSize: 11, fontWeight: "bold" },
+	movieInfo: { padding: 12 },
+	movieTitle: { fontSize: 14, fontWeight: "bold", marginBottom: 4 },
+	movieMeta: { fontSize: 11 },
 	horizontalMovieCard: {
 		flexDirection: "row",
 		marginHorizontal: 20,
@@ -645,26 +513,15 @@ const styles = StyleSheet.create({
 		borderRadius: 8,
 		backgroundColor: "#333",
 	},
-	horizontalMovieInfo: {
-		flex: 1,
-		marginLeft: 16,
-		justifyContent: "center",
-	},
+	horizontalMovieInfo: { flex: 1, marginLeft: 16, justifyContent: "center" },
 	movieGenre: {
 		fontSize: 12,
 		fontWeight: "500",
 		marginBottom: 6,
 		marginTop: 2,
 	},
-	metaRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
-	},
-	horizontalMetaText: {
-		fontSize: 11,
-		fontWeight: "500",
-	},
+	metaRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+	horizontalMetaText: { fontSize: 11, fontWeight: "500" },
 	metaSeparator: {
 		width: 4,
 		height: 4,

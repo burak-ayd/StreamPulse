@@ -17,6 +17,7 @@ config.resolver.alias = {
 	"@hooks": path.resolve(__dirname, "src/hooks"),
 	"@theme": path.resolve(__dirname, "src/theme"),
 	"@lib": path.resolve(__dirname, "src/lib"),
+	"@context": path.resolve(__dirname, "src/context"),
 };
 
 config.watchFolders.push(path.resolve(__dirname));

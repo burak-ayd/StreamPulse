@@ -1,9 +1,11 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { supabase } from "@utils/supabase";
 import * as Linking from "expo-linking";
+import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useState } from "react";
 import {
+	Alert,
 	Animated,
 	Platform,
 	ScrollView,
@@ -25,19 +27,23 @@ export default function Login({
 	onForgotPasswordPress,
 	onLoginSuccess,
 }) {
+	const router = useRouter();
+
 	const insets = useSafeAreaInsets();
 	const systemColorScheme = useColorScheme();
 	// Initialize theme based on system settings, but let user toggle for full preview!
 	const [theme, setTheme] = useState(systemColorScheme || "dark");
 
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
+	const [email, setEmail] = useState("test@gmail.com");
+	const [password, setPassword] = useState("123456789");
 	const [showPassword, setShowPassword] = useState(false);
 
 	// Focus states for input highlight rings
 	// 1. Focus state'leri BURADA KALMALI (Bunları silmiyoruz)
 	const [isEmailFocused, setIsEmailFocused] = useState(false);
 	const [isPasswordFocused, setIsPasswordFocused] = useState(false);
+
+	const [isLoading, setIsLoading] = useState(false);
 
 	const handleEmailFocus = useCallback(() => {
 		setTimeout(() => setIsEmailFocused(true), 100);
@@ -73,22 +79,31 @@ export default function Login({
 	};
 
 	const handleLogin = async () => {
-		const { data, error } = await supabase.auth.signInWithPassword({
-			email,
-			password,
-		});
-		if (error) {
-			console.log("Error signing in:", error);
-		} else {
-			console.log("User signed in:", data);
-			if (onLoginSuccess) {
-				onLoginSuccess(email, password);
-			}
+		if (!email || !password) {
+			Alert.alert("Hata", "Email ve şifre boş bırakılamaz.");
+			return;
+		}
+		setIsLoading(true);
+		try {
+			const { data, error } = await supabase.auth.signInWithPassword({
+				email,
+				password,
+			});
+			if (error) throw error;
+
+			// console.log("User signed in:", data);
+
+			// BAŞARILI GİRİŞ SONRASI MANUEL YÖNLENDİRME:
+			router.replace("/(app)");
+		} catch (error) {
+			Alert.alert("Giriş Hatası", error.message);
+		} finally {
+			setIsLoading(false);
 		}
 	};
-
 	const handleGoogleSignIn = async () => {
 		const redirectTo = Linking.createURL("auth/callback");
+		console.log(redirectTo);
 
 		const { data } = await supabase.auth.signInWithOAuth({
 			provider: "google",
