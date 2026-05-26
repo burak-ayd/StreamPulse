@@ -1,3 +1,4 @@
+import { useThemeContext } from "@context/ThemeContext";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { supabase } from "@utils/supabase";
 import * as Linking from "expo-linking";
@@ -14,7 +15,6 @@ import {
 	Text,
 	TextInput,
 	TouchableOpacity,
-	useColorScheme,
 	View,
 } from "react-native";
 import {
@@ -30,9 +30,8 @@ export default function Login({
 	const router = useRouter();
 
 	const insets = useSafeAreaInsets();
-	const systemColorScheme = useColorScheme();
 	// Initialize theme based on system settings, but let user toggle for full preview!
-	const [theme, setTheme] = useState(systemColorScheme || "dark");
+	const { theme, colors } = useThemeContext();
 
 	const [email, setEmail] = useState("test@gmail.com");
 	const [password, setPassword] = useState("123456789");
@@ -135,22 +134,6 @@ export default function Login({
 			if (error) console.error(error);
 			// session artık kuruldu, yönlendirme yapabilirsin
 		}
-	};
-
-	const toggleTheme = () => {
-		console.log("Theme toggle");
-		setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-	};
-
-	// Harmonious palette matching the design guidelines exactly
-	const colors = {
-		primary: "#ea2a33",
-		bg: theme === "dark" ? "#121212" : "#f8f6f6",
-		cardBg: theme === "dark" ? "#1A1A1A" : "#ffffff",
-		text: theme === "dark" ? "#ffffff" : "#111827",
-		textSecondary: theme === "dark" ? "#9ca3af" : "#4b5563",
-		textMuted: theme === "dark" ? "#6b7280" : "#9ca3af",
-		border: theme === "dark" ? "#374151" : "#d1d5db",
 	};
 
 	return (

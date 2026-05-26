@@ -1,3 +1,4 @@
+import { useThemeContext } from "@context/ThemeContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import { supabase } from "@utils/supabase";
 import React, { useState } from "react";
@@ -11,7 +12,6 @@ import {
 	Text,
 	TextInput,
 	TouchableOpacity,
-	useColorScheme,
 	View,
 } from "react-native";
 import {
@@ -21,8 +21,7 @@ import {
 
 export default function Register({ onLoginPress, onRegisterSuccess }) {
 	const insets = useSafeAreaInsets();
-	const systemColorScheme = useColorScheme();
-	const [theme, setTheme] = useState(systemColorScheme || "dark");
+	const { theme, colors } = useThemeContext();
 
 	const [username, setUsername] = useState("");
 	const [email, setEmail] = useState("");
@@ -71,23 +70,6 @@ export default function Register({ onLoginPress, onRegisterSuccess }) {
 			console.log("User registered:", data);
 			onRegisterSuccess();
 		}
-	};
-
-	const toggleTheme = () => {
-		setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-	};
-
-	// Harmonious palette matching the design guidelines exactly
-	const colors = {
-		primary: "#ea2a33",
-		bg: theme === "dark" ? "#121212" : "#f8f6f6",
-		cardBg: theme === "dark" ? "#1A1A1A" : "#ffffff",
-		inputBg: theme === "dark" ? "#1e293b" : "#f1f5f9", // bg-slate-800 / bg-slate-100
-		inputBorder: theme === "dark" ? "#334155" : "#cbd5e1", // border-slate-700 / border-slate-300
-		text: theme === "dark" ? "#ffffff" : "#0f172a", // slate-900 / white
-		textSecondary: theme === "dark" ? "#9ca3af" : "#4b5563", // slate-400 / slate-600
-		textMuted: theme === "dark" ? "#64748b" : "#94a3b8", // slate-500 / slate-400
-		border: theme === "dark" ? "#334155" : "#cbd5e1",
 	};
 
 	return (

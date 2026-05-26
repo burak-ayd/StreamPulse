@@ -1,3 +1,4 @@
+// app/(auth)/login.jsx
 import Login from "@components/auth/Login";
 import { useRouter } from "expo-router";
 

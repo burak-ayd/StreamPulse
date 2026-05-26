@@ -1,23 +1,22 @@
+import BottomNavigation from "@components/BottomNavigation";
+import HorizontalMovieCard from "@components/HorizontalMovieCard";
+import PlatformModal from "@components/modal/PlatformModal";
+import { useThemeContext } from "@context/ThemeContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import { supabase } from "@utils/supabase";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-	Dimensions,
-	FlatList,
-	Image,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
 	Text,
 	TouchableOpacity,
-	useColorScheme,
 	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import "react-native-url-polyfill/auto";
-
-const { width } = Dimensions.get("window");
+import VerticalMovieCard from "./../../components/VerticalMovieCard";
 
 const POPULAR_MOVIES = [
 	{
@@ -82,12 +81,16 @@ const RECOMMENDED_MOVIES = [
 ];
 
 export default function Index() {
-	const systemColorScheme = useColorScheme();
+	const { theme, colors, toggleTheme } = useThemeContext();
 	const [userEmail, setUserEmail] = useState("");
 	const [userName, setUserName] = useState("");
 	const [userAvatarUrl, setUserAvatarUrl] = useState("");
-	const [theme, setTheme] = useState(systemColorScheme || "dark");
+	const [isPlatformModalVisible, setIsPlatformModalVisible] = useState(false);
+
 	console.log("6-Index Render Edildi");
+
+	const router = useRouter();
+
 	useEffect(() => {
 		supabase.auth.getSession().then(async ({ data: { session } }) => {
 			if (!session) return;
@@ -110,24 +113,11 @@ export default function Index() {
 		await supabase.auth.signOut();
 	};
 
-	const toggleTheme = () => {
-		setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-	};
-
-	const colors = {
-		primary: "#ea2a33",
-		bg: theme === "dark" ? "#121212" : "#f8f6f6",
-		cardBg: theme === "dark" ? "#1A1A1A" : "#ffffff",
-		text: theme === "dark" ? "#ffffff" : "#111827",
-		textSecondary: theme === "dark" ? "#9ca3af" : "#4b5563",
-		border: theme === "dark" ? "#374151" : "#d1d5db",
-	};
-
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
-				edges={["top", "left", "right"]}
+				edges={["top", "left", "right", "bottom"]}
 				style={[styles.safeArea, { backgroundColor: colors.bg }]}>
 				<StatusBar
 					barStyle={
@@ -158,7 +148,7 @@ export default function Index() {
 					</View>
 
 					<View style={styles.headerActions}>
-						<TouchableOpacity
+						{/* <TouchableOpacity
 							style={[
 								styles.headerIconBtn,
 								{
@@ -176,8 +166,8 @@ export default function Index() {
 								size={18}
 								color={colors.text}
 							/>
-						</TouchableOpacity>
-
+						</TouchableOpacity> */}
+						{/* platformlar iconu eklenecek */}
 						<TouchableOpacity
 							style={[
 								styles.headerIconBtn,
@@ -186,9 +176,26 @@ export default function Index() {
 									borderColor: colors.border,
 								},
 							]}
-							onPress={handleLogout}>
+							onPress={() => {
+								setIsPlatformModalVisible(true);
+							}}>
 							<MaterialIcons
-								name="logout"
+								name="menu-book"
+								size={18}
+								color={colors.primary}
+							/>
+						</TouchableOpacity>
+						<TouchableOpacity
+							style={[
+								styles.headerIconBtn,
+								{
+									backgroundColor: colors.cardBg,
+									borderColor: colors.border,
+								},
+							]}
+							onPress={() => router.push("/(app)/profile")}>
+							<MaterialIcons
+								name="person"
 								size={18}
 								color={colors.primary}
 							/>
@@ -200,211 +207,27 @@ export default function Index() {
 					showsVerticalScrollIndicator={false}
 					contentContainerStyle={styles.scrollContainer}>
 					{/* Welcome Banner */}
-					<View
-						style={[
-							styles.welcomeBanner,
-							{ backgroundColor: colors.cardBg },
-						]}>
-						<View>
-							<Text
-								style={[
-									styles.welcomeSub,
-									{ color: colors.textSecondary },
-								]}>
-								Tekrar hoş geldin,
-							</Text>
-							<Text
-								style={[
-									styles.welcomeTitle,
-									{ color: colors.text },
-								]}
-								numberOfLines={1}>
-								{userName ||
-									userEmail.split("@")[0] ||
-									"Sinefil"}
-							</Text>
-						</View>
-						{userAvatarUrl ? (
-							<Image
-								source={{ uri: userAvatarUrl }}
-								style={styles.avatar}
-							/>
-						) : (
-							<View
-								style={[
-									styles.avatar,
-									{ backgroundColor: colors.primary },
-								]}>
-								<Text style={styles.avatarText}>
-									{(userEmail.charAt(0) || "S").toUpperCase()}
-								</Text>
-							</View>
-						)}
-					</View>
 
 					{/* Popular Movies */}
-					<View style={styles.sectionContainer}>
-						<View style={styles.sectionHeader}>
-							<Text
-								style={[
-									styles.sectionTitle,
-									{ color: colors.text },
-								]}>
-								Popüler Filmler
-							</Text>
-							<TouchableOpacity>
-								<Text
-									style={[
-										styles.seeAll,
-										{ color: colors.primary },
-									]}>
-									Tümünü Gör
-								</Text>
-							</TouchableOpacity>
-						</View>
-
-						<FlatList
-							data={POPULAR_MOVIES}
-							keyExtractor={(item) => item.id}
-							horizontal
-							showsHorizontalScrollIndicator={false}
-							contentContainerStyle={styles.horizontalList}
-							renderItem={({ item }) => (
-								<TouchableOpacity
-									style={[
-										styles.movieCard,
-										{ backgroundColor: colors.cardBg },
-									]}
-									activeOpacity={0.9}>
-									<Image
-										source={{ uri: item.image }}
-										style={styles.moviePoster}
-									/>
-									<View style={styles.ratingBadge}>
-										<MaterialIcons
-											name="star"
-											size={14}
-											color="#FFD700"
-										/>
-										<Text style={styles.ratingText}>
-											{item.rating}
-										</Text>
-									</View>
-									<View style={styles.movieInfo}>
-										<Text
-											style={[
-												styles.movieTitle,
-												{ color: colors.text },
-											]}
-											numberOfLines={1}>
-											{item.title}
-										</Text>
-										<Text
-											style={[
-												styles.movieMeta,
-												{ color: colors.textSecondary },
-											]}>
-											{item.duration} •{" "}
-											{item.genre.split(" / ")[0]}
-										</Text>
-									</View>
-								</TouchableOpacity>
-							)}
-						/>
-					</View>
+					<HorizontalMovieCard
+						colors={colors}
+						movies={POPULAR_MOVIES}
+						title="Popüler Filmler"
+					/>
 
 					{/* Recommended Section */}
-					<View style={styles.sectionContainer}>
-						<View style={styles.sectionHeader}>
-							<Text
-								style={[
-									styles.sectionTitle,
-									{ color: colors.text },
-								]}>
-								Senin İçin Seçilenler
-							</Text>
-							<TouchableOpacity>
-								<Text
-									style={[
-										styles.seeAll,
-										{ color: colors.primary },
-									]}>
-									Tümünü Gör
-								</Text>
-							</TouchableOpacity>
-						</View>
-
-						{RECOMMENDED_MOVIES.map((item) => (
-							<TouchableOpacity
-								key={item.id}
-								style={[
-									styles.horizontalMovieCard,
-									{ backgroundColor: colors.cardBg },
-								]}
-								activeOpacity={0.8}>
-								<Image
-									source={{ uri: item.image }}
-									style={styles.horizontalPoster}
-								/>
-								<View style={styles.horizontalMovieInfo}>
-									<Text
-										style={[
-											styles.movieTitle,
-											{ color: colors.text },
-										]}
-										numberOfLines={1}>
-										{item.title}
-									</Text>
-									<Text
-										style={[
-											styles.movieGenre,
-											{ color: colors.primary },
-										]}>
-										{item.genre}
-									</Text>
-									<View style={styles.metaRow}>
-										<MaterialIcons
-											name="schedule"
-											size={14}
-											color={colors.textSecondary}
-										/>
-										<Text
-											style={[
-												styles.horizontalMetaText,
-												{ color: colors.textSecondary },
-											]}>
-											{item.duration}
-										</Text>
-										<View style={styles.metaSeparator} />
-										<MaterialIcons
-											name="star"
-											size={14}
-											color="#FFD700"
-										/>
-										<Text
-											style={[
-												styles.horizontalMetaText,
-												{ color: colors.text },
-											]}>
-											{item.rating}
-										</Text>
-									</View>
-								</View>
-								<TouchableOpacity
-									style={[
-										styles.playButton,
-										{ backgroundColor: colors.primary },
-									]}>
-									<MaterialIcons
-										name="play-arrow"
-										size={20}
-										color="#ffffff"
-									/>
-								</TouchableOpacity>
-							</TouchableOpacity>
-						))}
-					</View>
+					<VerticalMovieCard
+						colors={colors}
+						title="Senin İçin Seçilenler"
+						movies={RECOMMENDED_MOVIES}
+					/>
 				</ScrollView>
+				<PlatformModal
+					isVisible={isPlatformModalVisible}
+					onDismiss={() => setIsPlatformModalVisible(false)}
+					colors={colors}
+				/>
+				<BottomNavigation activeRoute="/(app)" />
 			</SafeAreaView>
 		</>
 	);
@@ -432,36 +255,14 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 	},
 	scrollContainer: { paddingBottom: 40 },
-	welcomeBanner: {
-		margin: 20,
-		padding: 20,
-		borderRadius: 16,
-		flexDirection: "row",
-		justifyContent: "space-between",
-		alignItems: "center",
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.05,
-		shadowRadius: 8,
-		elevation: 3,
-	},
-	welcomeSub: { fontSize: 14, fontWeight: "500", marginBottom: 4 },
-	welcomeTitle: { fontSize: 22, fontWeight: "bold", maxWidth: width * 0.55 },
-	avatar: {
-		width: 48,
-		height: 48,
-		borderRadius: 24,
-		justifyContent: "center",
-		alignItems: "center",
-	},
-	avatarText: { color: "#ffffff", fontSize: 18, fontWeight: "bold" },
+
 	sectionContainer: { marginBottom: 28 },
 	sectionHeader: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
 		paddingHorizontal: 20,
-		marginBottom: 16,
+		marginVertical: 16,
 	},
 	sectionTitle: { fontSize: 18, fontWeight: "bold" },
 	seeAll: { fontSize: 13, fontWeight: "600" },

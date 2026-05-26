@@ -3,5 +3,14 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
+  },
+  "yaml.schemas": {
+    "file:///c%3A/Users/Burak/.vscode/extensions/continue.continue-1.2.7-win32-x64/config-yaml-schema.json": [
+      ".continue/**/*.yaml"
+    ],
+    "file:///c%3A/Users/Burak/.vscode/extensions/continue.continue-1.2.22-win32-x64/config-yaml-schema.json": [
+      ".continue/**/*.yaml",
+      "file:///c%3A/Users/Burak/.continue/config.yaml"
+    ]
   }
 }
