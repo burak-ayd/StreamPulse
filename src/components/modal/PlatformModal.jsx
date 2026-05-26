@@ -1,28 +1,22 @@
-//  Modal Component
-// src/components/modal/PlatformModal.jsx
-
+import HorizontalCategoryList from "@components/HorizontalCategoryList";
 import { useThemeContext } from "@context/ThemeContext";
-import { MaterialIcons } from "@expo/vector-icons";
 import { supabase } from "@utils/supabase";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
 	Image,
-	Modal,
 	ScrollView,
 	StyleSheet,
 	Text,
 	TouchableOpacity,
 	View,
 } from "react-native";
-
+import Modal from "react-native-modal";
 const PlatformModal = ({ isVisible, onDismiss }) => {
 	const router = useRouter();
-
 	const { theme, colors } = useThemeContext();
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
 	const [platformList, setPlatformList] = useState([]);
-
 	useEffect(() => {
 		supabase.auth.getSession().then(async ({ data: { session } }) => {
 			if (!session) return;
@@ -46,40 +40,27 @@ const PlatformModal = ({ isVisible, onDismiss }) => {
 		});
 		onDismiss();
 	};
-
 	return (
-		<Modal
-			visible={isVisible}
-			onDismiss={onDismiss}
-			animationType="fade"
-			presentationStyle="overFullScreen"
-			transparent={true}>
-			<View style={styles.modalOverlay}>
-				<View
-					style={[
-						styles.modalContent,
-						{
-							backgroundColor: colors.bg,
-							borderColor: colors.border,
-						},
-					]}>
-					<View style={styles.header}>
-						<Text
-							style={[styles.modalTitle, { color: colors.text }]}>
-							Platform Seçin
-						</Text>
-						<TouchableOpacity
-							style={styles.closeButton}
-							onPress={onDismiss}>
-							<MaterialIcons
-								name="close"
-								size={24}
-								color={colors.text}
-							/>
-						</TouchableOpacity>
-					</View>
-					<ScrollView showsVerticalScrollIndicator={false}>
-						<View style={styles.platformList}>
+		<View style={styles.container}>
+			<Text style={styles.headerText}>Ana Ekran</Text>
+
+			<Modal
+				isVisible={isVisible}
+				onBackdropPress={onDismiss} // 1. Etrafındaki boşluğa basınca kapatır
+				swipeDirection={["down"]} // 2. Sadece aşağı kaydırma ile kapanmaya izin verir
+				onSwipeComplete={onDismiss} // 3. Aşağı kaydırma işlemi bitince çalışır (kapatır)
+				propagateSwipe={true} // 4. ÖNEMLİ: ScrollView'in kendi kaydırmasıyla Modal kaydırmasının çakışmasını önler
+				style={styles.modalStyle}>
+				<View style={styles.modalContent}>
+					{/* Sürüklenebilir olduğunu belirten küçük çubuk (UI detayı) */}
+					<View style={styles.dragHandle} />
+
+					<Text style={styles.modalTitle}>Platformlar</Text>
+
+					<View style={styles.content}>
+						<ScrollView
+							contentContainerStyle={styles.scrollContent}>
+							{/* Örnek liste elemanları */}
 							{platformList.map((platform) => (
 								<TouchableOpacity
 									key={platform.id}
@@ -112,45 +93,63 @@ const PlatformModal = ({ isVisible, onDismiss }) => {
 									</Text>
 								</TouchableOpacity>
 							))}
-						</View>
-					</ScrollView>
+						</ScrollView>
+						<HorizontalCategoryList />
+					</View>
 				</View>
-			</View>
-		</Modal>
+			</Modal>
+		</View>
 	);
 };
 
-export default PlatformModal;
-
 const styles = StyleSheet.create({
-	modalOverlay: {
+	content: {
 		flex: 1,
 		justifyContent: "flex-end",
-		backgroundColor: "rgba(0, 0, 0, 0.5)",
 	},
-	modalContent: {
-		borderTopLeftRadius: 20,
-		borderTopRightRadius: 20,
-		padding: 20,
-		maxHeight: "80%",
-	},
-	header: {
-		width: "100%",
-		marginTop: 20,
-		flexDirection: "row",
+	container: {
+		flex: 1,
+		justifyContent: "center",
 		alignItems: "center",
-		justifyContent: "space-between",
+		backgroundColor: "#0c0b0bff",
 	},
-	closeButton: {
-		padding: 10,
-	},
-	modalTitle: {
+	headerText: {
 		fontSize: 20,
-		fontWeight: "bold",
 		marginBottom: 20,
 	},
-	platformList: {
+	modalStyle: {
+		justifyContent: "flex-end", // Modalı ekranın en altına hizalar
+		margin: 0, // Yanlardaki varsayılan boşlukları sıfırlar
+	},
+	modalContent: {
+		backgroundColor: "#0c0b0bff",
+		padding: 20,
+		height: "90%", // Ekranın %60'ını kaplasın
+		borderTopLeftRadius: 20,
+		borderTopRightRadius: 20,
+	},
+	dragHandle: {
+		width: 40,
+		height: 5,
+		backgroundColor: "#ccc",
+		borderRadius: 3,
+		alignSelf: "center",
+		marginBottom: 15,
+	},
+	modalTitle: {
+		fontSize: 18,
+		fontWeight: "bold",
+		marginBottom: 10,
+		textAlign: "center",
+	},
+	scrollContent: {
+		paddingBottom: 20,
 		gap: 10,
+	},
+	listItem: {
+		padding: 15,
+		borderBottomWidth: 1,
+		borderBottomColor: "#eee",
 	},
 	platformItem: {
 		flexDirection: "row",
@@ -168,3 +167,5 @@ const styles = StyleSheet.create({
 		fontWeight: "500",
 	},
 });
+
+export default PlatformModal;

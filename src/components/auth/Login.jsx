@@ -146,7 +146,7 @@ export default function Login({
 			/>
 
 			{/* Floating Theme Toggle (Premium visual feedback feature) */}
-			<TouchableOpacity
+			{/* <TouchableOpacity
 				style={[
 					styles.themeToggle,
 					{
@@ -167,7 +167,7 @@ export default function Login({
 					size={20}
 					color={colors.text}
 				/>
-			</TouchableOpacity>
+			</TouchableOpacity> */}
 			<ScrollView
 				contentContainerStyle={styles.scrollContent}
 				showsVerticalScrollIndicator={false}
