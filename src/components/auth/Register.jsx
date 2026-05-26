@@ -82,7 +82,7 @@ export default function Register({ onLoginPress, onRegisterSuccess }) {
 			/>
 
 			{/* Floating Theme Toggle */}
-			<TouchableOpacity
+			{/* <TouchableOpacity
 				style={[
 					styles.themeToggle,
 					{
@@ -103,7 +103,7 @@ export default function Register({ onLoginPress, onRegisterSuccess }) {
 					size={20}
 					color={colors.text}
 				/>
-			</TouchableOpacity>
+			</TouchableOpacity> */}
 
 			<KeyboardAvoidingView
 				behavior={Platform.OS === "ios" ? "padding" : "height"}

@@ -1,6 +1,6 @@
+import PlatformModal from "@/components/modal/PlatformModal";
 import BottomNavigation from "@components/BottomNavigation";
 import HorizontalMovieCard from "@components/HorizontalMovieCard";
-import PlatformModal from "@components/modal/PlatformModal";
 import { useThemeContext } from "@context/ThemeContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import { supabase } from "@utils/supabase";
