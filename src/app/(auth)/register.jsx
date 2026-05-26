@@ -1,3 +1,4 @@
+// app/(auth)/register.jsx
 import Register from "@components/auth/Register";
 import { useRouter } from "expo-router";
 
