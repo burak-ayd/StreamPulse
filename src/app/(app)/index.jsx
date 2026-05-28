@@ -1,7 +1,7 @@
+import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
 import BottomNavigation from "@components/BottomNavigation";
 import PlatformList from "@components/Content/PlatformList";
 import HorizontalMovieCard from "@components/HorizontalMovieCard";
-import BottomSheetModal from "@components/modal/Bottomsheetmodal2";
 import { useThemeContext } from "@context/ThemeContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import { supabase } from "@utils/supabase";
