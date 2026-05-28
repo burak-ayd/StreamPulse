@@ -1,7 +1,14 @@
+import PlatformList from "@/components/content/PlatformList";
 import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
 import BottomNavigation from "@components/BottomNavigation";
-import PlatformList from "@components/Content/PlatformList";
+import FeaturedCarousel from "@components/FeaturedCarousel";
 import HorizontalMovieCard from "@components/HorizontalMovieCard";
+import VerticalMovieCard from "@components/VerticalMovieCard";
+import {
+	FEATURED_MOVIES,
+	POPULAR_MOVIES,
+	RECOMMENDED_MOVIES,
+} from "@constants/data";
 import { useThemeContext } from "@context/ThemeContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import { supabase } from "@utils/supabase";
@@ -17,69 +24,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import "react-native-url-polyfill/auto";
-import VerticalMovieCard from "./../../components/VerticalMovieCard";
-
-const POPULAR_MOVIES = [
-	{
-		id: "1",
-		title: "Interstellar",
-		genre: "Bilim Kurgu / Drama",
-		rating: "8.7",
-		duration: "2sa 49dk",
-		image: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=60",
-	},
-	{
-		id: "2",
-		title: "Inception",
-		genre: "Aksiyon / Bilim Kurgu",
-		rating: "8.8",
-		duration: "2sa 28dk",
-		image: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=60",
-	},
-	{
-		id: "3",
-		title: "The Dark Knight",
-		genre: "Aksiyon / Suç",
-		rating: "9.0",
-		duration: "2sa 32dk",
-		image: "https://images.unsplash.com/photo-1509281373149-e957c6296406?w=800&auto=format&fit=crop&q=60",
-	},
-	{
-		id: "4",
-		title: "Avatar: The Way of Water",
-		genre: "Macera / Fantezi",
-		rating: "7.6",
-		duration: "3sa 12dk",
-		image: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&auto=format&fit=crop&q=60",
-	},
-];
-
-const RECOMMENDED_MOVIES = [
-	{
-		id: "5",
-		title: "Dune: Part Two",
-		genre: "Macera / Bilim Kurgu",
-		rating: "8.9",
-		duration: "2sa 46dk",
-		image: "https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?w=800&auto=format&fit=crop&q=60",
-	},
-	{
-		id: "6",
-		title: "Oppenheimer",
-		genre: "Biyografi / Drama",
-		rating: "8.4",
-		duration: "3sa",
-		image: "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=800&auto=format&fit=crop&q=60",
-	},
-	{
-		id: "7",
-		title: "Spider-Man: Across the Spider-Verse",
-		genre: "Animasyon / Macera",
-		rating: "8.6",
-		duration: "2sa 20dk",
-		image: "https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=800&auto=format&fit=crop&q=60",
-	},
-];
 
 export default function Index() {
 	const { theme, colors, toggleTheme } = useThemeContext();
@@ -208,7 +152,18 @@ export default function Index() {
 					showsVerticalScrollIndicator={false}
 					contentContainerStyle={styles.scrollContainer}>
 					{/* Welcome Banner */}
-
+					{/* Carousel */}
+					{/* <Carousel2 /> */}
+					<FeaturedCarousel
+						movies={FEATURED_MOVIES} // API'nızdan gelen veri
+						onPress={(movie) =>
+							router.push({
+								pathname: "/(app)/detail",
+								params: { movie },
+							})
+						}
+						oneMovieCard={false}
+					/>
 					{/* Popular Movies */}
 					<HorizontalMovieCard
 						colors={colors}

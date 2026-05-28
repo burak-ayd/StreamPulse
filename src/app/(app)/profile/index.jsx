@@ -1,3 +1,4 @@
+import { WATCH_HISTORY } from "@constants/data";
 import { useThemeContext } from "@context/ThemeContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import { supabase } from "@utils/supabase";
@@ -17,39 +18,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
-
-const WATCH_HISTORY = [
-	{
-		id: "1",
-		title: "Interstellar",
-		image: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=400&auto=format&fit=crop&q=60",
-	},
-	{
-		id: "2",
-		title: "Inception",
-		image: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=400&auto=format&fit=crop&q=60",
-	},
-	{
-		id: "3",
-		title: "The Dark Knight",
-		image: "https://images.unsplash.com/photo-1509281373149-e957c6296406?w=400&auto=format&fit=crop&q=60",
-	},
-	{
-		id: "4",
-		title: "Avatar",
-		image: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=400&auto=format&fit=crop&q=60",
-	},
-	{
-		id: "5",
-		title: "Dune",
-		image: "https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?w=400&auto=format&fit=crop&q=60",
-	},
-	{
-		id: "6",
-		title: "Oppenheimer",
-		image: "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=400&auto=format&fit=crop&q=60",
-	},
-];
 
 export default function ProfileScreen() {
 	const { theme, colors, toggleTheme } = useThemeContext();

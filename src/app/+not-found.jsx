@@ -20,11 +20,11 @@ export default function NotFoundScreen() {
 						fontWeight: "bold",
 						color: "white",
 					}}>
-					This screen doesn't exist.
+					Sayfa bulunamadı!
 				</Text>
 				<Link href="/" asChild>
 					<Text style={{ marginTop: 14, color: "#3B82F6" }}>
-						Go to home screen!
+						Ana sayfaya git!
 					</Text>
 				</Link>
 			</View>

@@ -1,3 +1,4 @@
+import PlatformScreenComponent from "@components/platformScreen/PlatformScreenComponent";
 import { useThemeContext } from "@context/ThemeContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -11,9 +12,10 @@ import {
 	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
 const { width } = Dimensions.get("window");
 
-const index = () => {
+export default function PlatformScreen() {
 	const { theme, colors, toggleTheme } = useThemeContext();
 
 	const { platformData } = useLocalSearchParams();
@@ -61,13 +63,13 @@ const index = () => {
 				</View>
 				<ScrollView
 					showsVerticalScrollIndicator={false}
-					contentContainerStyle={styles.scrollContainer}></ScrollView>
+					contentContainerStyle={styles.scrollContainer}>
+					<PlatformScreenComponent />
+				</ScrollView>
 			</SafeAreaView>
 		</>
 	);
-};
-
-export default index;
+}
 
 const styles = StyleSheet.create({
 	safeArea: {
@@ -93,5 +95,8 @@ const styles = StyleSheet.create({
 		fontWeight: "bold",
 		textAlign: "center",
 		letterSpacing: -0.015,
+	},
+	scrollContainer: {
+		paddingBottom: 40,
 	},
 });
