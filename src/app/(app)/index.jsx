@@ -1,6 +1,7 @@
-import PlatformModal from "@/components/modal/PlatformModal";
 import BottomNavigation from "@components/BottomNavigation";
+import PlatformList from "@components/Content/PlatformList";
 import HorizontalMovieCard from "@components/HorizontalMovieCard";
+import BottomSheetModal from "@components/modal/Bottomsheetmodal2";
 import { useThemeContext } from "@context/ThemeContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import { supabase } from "@utils/supabase";
@@ -222,11 +223,18 @@ export default function Index() {
 						movies={RECOMMENDED_MOVIES}
 					/>
 				</ScrollView>
-				<PlatformModal
-					isVisible={isPlatformModalVisible}
-					onDismiss={() => setIsPlatformModalVisible(false)}
-					colors={colors}
-				/>
+				<BottomSheetModal
+					visible={isPlatformModalVisible}
+					onClose={() => setIsPlatformModalVisible(false)}
+					snapToHeight={0.7} // ekranın %70'ı
+					title=""
+					opacity={0.55}
+					handle={false}
+					closeOnBackdrop={true} // backdrop'a tıklayınca kapat
+					swipeable={true} // sürükleyerek kapat
+				>
+					<PlatformList />
+				</BottomSheetModal>
 				<BottomNavigation activeRoute="/(app)" />
 			</SafeAreaView>
 		</>
