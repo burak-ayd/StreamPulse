@@ -3,7 +3,7 @@
     "name": "NotificationTest",
     "slug": "NotificationTest",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "notificationtest",
     "userInterfaceStyle": "automatic",
@@ -54,7 +54,13 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "DEFAULT"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

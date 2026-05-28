@@ -1,3 +1,4 @@
+import { CATEGORIES } from "@constants/data";
 import { useState } from "react";
 import {
 	ScrollView,
@@ -7,20 +8,9 @@ import {
 	View,
 } from "react-native";
 
-const categories = [
-	"Aksiyon",
-	"Macera",
-	"Komedi",
-	"Bilim Kurgu",
-	"Dram",
-	"Korku",
-	"Animasyon",
-	"Belgesel",
-];
-
 const HorizontalCategoryList = () => {
 	// Varsayılan olarak ilk kategoriyi seçili yapıyoruz
-	const [activeCategory, setActiveCategory] = useState("Aksiyon");
+	const [activeCategory, setActiveCategory] = useState("Action");
 
 	return (
 		<View style={styles.container}>
@@ -29,7 +19,7 @@ const HorizontalCategoryList = () => {
 				showsHorizontalScrollIndicator={false} // Alt kısımdaki çirkin kaydırma çubuğunu gizler
 				contentContainerStyle={styles.scrollContent} // İçeriğin etrafındaki boşlukları ayarlar
 			>
-				{categories.map((category, index) => {
+				{CATEGORIES[1].map((category, index) => {
 					const isActive = activeCategory === category;
 
 					return (

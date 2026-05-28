@@ -1,4 +1,5 @@
 import BottomNavigation from "@components/BottomNavigation";
+import { CATEGORIES } from "@constants/data";
 import { useThemeContext } from "@context/ThemeContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
@@ -12,15 +13,6 @@ import {
 	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const CATEGORIES = [
-	{ id: "1", name: "Action", icon: "local-fire-department" },
-	{ id: "2", name: "Comedy", icon: "sentiment-very-satisfied" },
-	{ id: "3", name: "Drama", icon: "theater-comedy" },
-	{ id: "4", name: "Horror", icon: "sentiment-very-dissatisfied" },
-	{ id: "5", name: "Sci-Fi", icon: "rocket-launch" },
-	{ id: "6", name: "Romance", icon: "favorite" },
-];
 
 export default function DiscoverScreen() {
 	const { theme, colors } = useThemeContext();
