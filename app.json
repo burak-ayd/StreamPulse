@@ -25,9 +25,7 @@
           "autoVerify": true,
           "data": [
             {
-              "scheme": "notificationtest",
-              "host": "auth",
-              "pathPrefix": "/callback"
+              "scheme": "notificationtest"
             }
           ],
           "category": [

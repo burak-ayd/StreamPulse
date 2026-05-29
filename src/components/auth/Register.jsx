@@ -23,9 +23,9 @@ export default function Register({ onLoginPress, onRegisterSuccess }) {
 	const insets = useSafeAreaInsets();
 	const { theme, colors } = useThemeContext();
 
-	const [username, setUsername] = useState("");
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
+	const [username, setUsername] = useState("Burak");
+	const [email, setEmail] = useState("kes.ici0619@gmail.com");
+	const [password, setPassword] = useState("Burak0678");
 	const [showPassword, setShowPassword] = useState(false);
 
 	// Focus states for input highlight rings
@@ -51,14 +51,14 @@ export default function Register({ onLoginPress, onRegisterSuccess }) {
 	};
 
 	const handleRegister = async () => {
-		console.log("Register details:", { username, email, password });
 		const { data, error } = await supabase.auth.signUp({
 			email,
 			password,
 			options: {
+				emailRedirectTo: "notificationtest://callback",
 				data: {
-					username,
-					full_name: username,
+					username: username,
+					display_name: username,
 					avatar_url: null,
 				},
 			},
@@ -67,7 +67,6 @@ export default function Register({ onLoginPress, onRegisterSuccess }) {
 		if (error) {
 			console.log("Error registering:", error);
 		} else {
-			console.log("User registered:", data);
 			onRegisterSuccess();
 		}
 	};

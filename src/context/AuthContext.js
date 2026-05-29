@@ -10,18 +10,45 @@ export function AuthProvider({ children }) {
 
 	useEffect(() => {
 		// İlk açılışta mevcut session'ı yükle
-		supabase.auth.getSession().then(({ data: { session } }) => {
+		supabase.auth.getSession().then(async ({ data: { session } }) => {
 			setSession(session);
-			setUser(session?.user ?? null);
+
+			if (session) {
+				const { data, error } = await supabase.auth.getUser();
+
+				if (error || !data?.user) {
+					await supabase.auth.signOut();
+					setSession(null);
+					setUser(null);
+				} else {
+					setUser(data.user);
+				}
+			}
+
 			setIsInitialized(true);
 		});
 
 		// Auth değişikliklerini dinle
 		const {
 			data: { subscription },
-		} = supabase.auth.onAuthStateChange((_event, session) => {
+		} = supabase.auth.onAuthStateChange(async (_event, session) => {
 			setSession(session);
-			setUser(session?.user ?? null);
+
+			if (!session) {
+				setUser(null);
+				return;
+			}
+
+			const { data, error } = await supabase.auth.getUser();
+
+			if (error || !data?.user) {
+				await supabase.auth.signOut();
+				setSession(null);
+				setUser(null);
+				return;
+			}
+
+			setUser(data.user);
 		});
 
 		return () => subscription.unsubscribe();

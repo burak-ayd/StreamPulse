@@ -25,6 +25,7 @@ export default function ProfileScreen() {
 	const router = useRouter();
 	const [userEmail, setUserEmail] = useState("");
 	const [userName, setUserName] = useState("");
+	const [userDisplayName, setUserDisplayName] = useState("");
 	const [userAvatarUrl, setUserAvatarUrl] = useState("");
 	const [activeTab, setActiveTab] = useState("history");
 
@@ -39,7 +40,8 @@ export default function ProfileScreen() {
 				.eq("id", session.user.id);
 
 			if (data && data[0]) {
-				setUserName(data[0].full_name ?? "");
+				setUserName(data[0].username ?? "");
+				setUserDisplayName(data[0].display_name ?? "");
 				setUserAvatarUrl(data[0].avatar_url ?? "");
 			}
 		});
@@ -129,7 +131,9 @@ export default function ProfileScreen() {
 
 						{/* Name and Username */}
 						<Text style={[styles.userName, { color: colors.text }]}>
-							{userName || userEmail.split("@")[0] || "User"}
+							{userDisplayName ||
+								userEmail.split("@")[0] ||
+								"User"}
 						</Text>
 						<Text
 							style={[

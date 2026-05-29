@@ -33,8 +33,8 @@ export default function Login({
 	// Initialize theme based on system settings, but let user toggle for full preview!
 	const { theme, colors } = useThemeContext();
 
-	const [email, setEmail] = useState("test@gmail.com");
-	const [password, setPassword] = useState("123456789");
+	const [email, setEmail] = useState("kes.ici0619@gmail.com");
+	const [password, setPassword] = useState("Burak0678");
 	const [showPassword, setShowPassword] = useState(false);
 
 	// Focus states for input highlight rings
@@ -101,8 +101,7 @@ export default function Login({
 		}
 	};
 	const handleGoogleSignIn = async () => {
-		const redirectTo = Linking.createURL("auth/callback");
-		console.log(redirectTo);
+		const redirectTo = Linking.createURL("callback");
 
 		const { data } = await supabase.auth.signInWithOAuth({
 			provider: "google",
@@ -116,8 +115,6 @@ export default function Login({
 			data.url,
 			redirectTo,
 		);
-
-		console.log("result:", result);
 
 		if (result.type !== "success") return;
 

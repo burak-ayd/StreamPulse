@@ -93,7 +93,7 @@ export default function Index() {
 					</View>
 
 					<View style={styles.headerActions}>
-						{/* <TouchableOpacity
+						<TouchableOpacity
 							style={[
 								styles.headerIconBtn,
 								{
@@ -101,7 +101,9 @@ export default function Index() {
 									borderColor: colors.border,
 								},
 							]}
-							onPress={toggleTheme}>
+							onPress={() => {
+								router.push("notificationtest://callback");
+							}}>
 							<MaterialIcons
 								name={
 									theme === "dark"
@@ -111,7 +113,7 @@ export default function Index() {
 								size={18}
 								color={colors.text}
 							/>
-						</TouchableOpacity> */}
+						</TouchableOpacity>
 						{/* platformlar iconu eklenecek */}
 						<TouchableOpacity
 							style={[

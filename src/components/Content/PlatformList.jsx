@@ -18,7 +18,6 @@ const PlatformList = () => {
 	useEffect(() => {
 		supabase.auth.getSession().then(async ({ data: { session } }) => {
 			if (!session) return;
-			console.log("test");
 			const { data } = await supabase
 				.from("platforms")
 				.select("*")
