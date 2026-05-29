@@ -6,5 +6,10 @@ export default function RegisterScreen() {
 	const router = useRouter();
 	console.log("5-RegisterScreen Render Edildi");
 
-	return <Register onLoginPress={() => router.push("/(auth)/login")} />;
+	return (
+		<Register
+			onLoginPress={() => router.push("/(auth)/login")}
+			onRegisterSuccess={() => router.push("/(auth)/login")}
+		/>
+	);
 }
