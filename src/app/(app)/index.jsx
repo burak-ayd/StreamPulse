@@ -93,27 +93,6 @@ export default function Index() {
 					</View>
 
 					<View style={styles.headerActions}>
-						<TouchableOpacity
-							style={[
-								styles.headerIconBtn,
-								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
-								},
-							]}
-							onPress={() => {
-								router.push("notificationtest://callback");
-							}}>
-							<MaterialIcons
-								name={
-									theme === "dark"
-										? "light-mode"
-										: "dark-mode"
-								}
-								size={18}
-								color={colors.text}
-							/>
-						</TouchableOpacity>
 						{/* platformlar iconu eklenecek */}
 						<TouchableOpacity
 							style={[

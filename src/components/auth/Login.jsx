@@ -6,6 +6,7 @@ import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useState } from "react";
 import {
+	ActivityIndicator,
 	Alert,
 	Animated,
 	Platform,
@@ -316,15 +317,23 @@ export default function Login({
 						<TouchableOpacity
 							style={[
 								styles.loginButton,
-								{ backgroundColor: colors.primary },
+								{
+									backgroundColor: colors.primary,
+									opacity: isLoading ? 0.7 : 1,
+								},
 							]}
 							activeOpacity={0.9}
-							onPressIn={handlePressIn}
-							onPressOut={handlePressOut}
-							onPress={handleLogin}>
-							<Text style={styles.loginButtonText}>
-								Giriş Yap
-							</Text>
+							onPressIn={!isLoading ? handlePressIn : null}
+							onPressOut={!isLoading ? handlePressOut : null}
+							onPress={handleLogin}
+							disabled={isLoading}>
+							{isLoading ? (
+								<ActivityIndicator color="#ffffff" />
+							) : (
+								<Text style={styles.loginButtonText}>
+									Giriş Yap
+								</Text>
+							)}
 						</TouchableOpacity>
 					</Animated.View>
 

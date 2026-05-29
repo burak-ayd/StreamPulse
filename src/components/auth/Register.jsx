@@ -3,6 +3,8 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { supabase } from "@utils/supabase";
 import React, { useState } from "react";
 import {
+	ActivityIndicator,
+	Alert,
 	Animated,
 	KeyboardAvoidingView,
 	Platform,
@@ -27,6 +29,7 @@ export default function Register({ onLoginPress, onRegisterSuccess }) {
 	const [email, setEmail] = useState("kes.ici0619@gmail.com");
 	const [password, setPassword] = useState("Burak0678");
 	const [showPassword, setShowPassword] = useState(false);
+	const [isLoading, setIsLoading] = useState(false);
 
 	// Focus states for input highlight rings
 	const [isUsernameFocused, setIsUsernameFocused] = useState(false);
@@ -51,23 +54,33 @@ export default function Register({ onLoginPress, onRegisterSuccess }) {
 	};
 
 	const handleRegister = async () => {
-		const { data, error } = await supabase.auth.signUp({
-			email,
-			password,
-			options: {
-				emailRedirectTo: "notificationtest://callback",
-				data: {
-					username: username,
-					display_name: username,
-					avatar_url: null,
-				},
-			},
-		});
+		if (!username || !email || !password) {
+			Alert.alert("Hata", "Tüm alanları doldurun.");
+			return;
+		}
 
-		if (error) {
-			console.log("Error registering:", error);
-		} else {
+		setIsLoading(true);
+		try {
+			const { data, error } = await supabase.auth.signUp({
+				email,
+				password,
+				options: {
+					emailRedirectTo: "notificationtest://callback",
+					data: {
+						username: username,
+						display_name: username,
+						avatar_url: null,
+					},
+				},
+			});
+
+			if (error) throw error;
+
 			onRegisterSuccess();
+		} catch (error) {
+			Alert.alert("Kayıt Hatası", error.message);
+		} finally {
+			setIsLoading(false);
 		}
 	};
 
@@ -321,15 +334,23 @@ export default function Register({ onLoginPress, onRegisterSuccess }) {
 							<TouchableOpacity
 								style={[
 									styles.registerButton,
-									{ backgroundColor: colors.primary },
+									{
+										backgroundColor: colors.primary,
+										opacity: isLoading ? 0.7 : 1,
+									},
 								]}
 								activeOpacity={0.9}
-								onPressIn={handlePressIn}
-								onPressOut={handlePressOut}
-								onPress={handleRegister}>
-								<Text style={styles.registerButtonText}>
-									Kaydol
-								</Text>
+								onPressIn={!isLoading ? handlePressIn : null}
+								onPressOut={!isLoading ? handlePressOut : null}
+								onPress={handleRegister}
+								disabled={isLoading}>
+								{isLoading ? (
+									<ActivityIndicator color="#ffffff" />
+								) : (
+									<Text style={styles.registerButtonText}>
+										Kaydol
+									</Text>
+								)}
 							</TouchableOpacity>
 						</Animated.View>
 
