@@ -39,10 +39,30 @@ export default function ProfileScreen() {
 				.select("*")
 				.eq("id", session.user.id);
 
+			const { data: urlData } = await supabase.storage
+				.from("avatars")
+				.createSignedUrl(
+					data[0].avatar_url.replace("/avatars/", ""),
+					3600,
+				);
+
 			if (data && data[0]) {
 				setUserName(data[0].username ?? "");
 				setUserDisplayName(data[0].display_name ?? "");
-				setUserAvatarUrl(data[0].avatar_url ?? "");
+				setUserAvatarUrl(urlData?.signedUrl ?? "");
+				// Signed URL için path'i doğru çıkar
+				const avatarPath = data[0].avatar_url.split("/avatars/")[1];
+				if (avatarPath) {
+					const { data: urlData, error } = await supabase.storage
+						.from("avatars")
+						.createSignedUrl(avatarPath, 3600);
+
+					if (!error && urlData?.signedUrl) {
+						setUserAvatarUrl(urlData.signedUrl);
+					} else {
+						console.log("signedUrl error:", error);
+					}
+				}
 			}
 		});
 	}, []);
@@ -114,7 +134,9 @@ export default function ProfileScreen() {
 						{/* Avatar */}
 						{userAvatarUrl ? (
 							<Image
-								source={{ uri: userAvatarUrl }}
+								source={{
+									uri: userAvatarUrl,
+								}}
 								style={styles.avatar}
 							/>
 						) : (
@@ -147,24 +169,6 @@ export default function ProfileScreen() {
 								"user"
 							).toLowerCase()}
 						</Text>
-
-						{/* Edit Profile Button */}
-						<TouchableOpacity
-							style={[
-								styles.editButton,
-								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
-								},
-							]}>
-							<Text
-								style={[
-									styles.editButtonText,
-									{ color: colors.text },
-								]}>
-								Edit Profile
-							</Text>
-						</TouchableOpacity>
 					</View>
 
 					{/* Stats Component */}

@@ -1,3 +1,4 @@
+import { useAuth } from "@context/AuthContext";
 import { useThemeContext } from "@context/ThemeContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
@@ -15,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function SettingsScreen() {
 	const { theme, toggleTheme, colors } = useThemeContext();
 	const router = useRouter();
+	const { signOut } = useAuth();
 
 	const handleBack = () => {
 		router.back();
@@ -121,7 +123,11 @@ export default function SettingsScreen() {
 							<SettingItem
 								icon="person"
 								label="Profili Düzenle"
-								onPress={() => router.push("/(app)/profile")}
+								onPress={() =>
+									router.push({
+										pathname: "profile/EditProfile",
+									})
+								}
 							/>
 							<View
 								style={[
@@ -235,6 +241,35 @@ export default function SettingsScreen() {
 											{ color: colors.textSecondary },
 										]}>
 										1.0.0
+									</Text>
+								}
+							/>
+						</View>
+					</View>
+
+					{/* Logout Section */}
+					<View style={styles.section}>
+						<SectionHeader title="ÇIKIŞ YAP" />
+						<View
+							style={[
+								styles.settingsGroup,
+								{
+									backgroundColor: colors.cardBg,
+									borderColor: colors.border,
+								},
+							]}>
+							<SettingItem
+								icon="logout"
+								label="Çıkış Yap"
+								showChevron={false}
+								onPress={signOut}
+								rightComponent={
+									<Text
+										style={[
+											styles.versionText,
+											{ color: colors.textSecondary },
+										]}>
+										Çıkış Yap
 									</Text>
 								}
 							/>
