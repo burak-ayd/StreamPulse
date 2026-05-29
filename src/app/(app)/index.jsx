@@ -134,7 +134,6 @@ export default function Index() {
 					contentContainerStyle={styles.scrollContainer}>
 					{/* Welcome Banner */}
 					{/* Carousel */}
-					{/* <Carousel2 /> */}
 					<FeaturedCarousel
 						movies={FEATURED_MOVIES} // API'nızdan gelen veri
 						onPress={(movie) =>
@@ -145,6 +144,29 @@ export default function Index() {
 						}
 						oneMovieCard={false}
 					/>
+					{/* TEST BUTONU - Geçici */}
+					<TouchableOpacity
+						style={{
+							backgroundColor: colors.primary,
+							padding: 16,
+							margin: 20,
+							borderRadius: 12,
+							alignItems: "center",
+						}}
+						onPress={() =>
+							router.push(
+								"/(app)/MovieDetails/1e70a60f-e5fc-45d9-aa19-a987062faec6",
+							)
+						}>
+						<Text
+							style={{
+								color: "#fff",
+								fontWeight: "700",
+								fontSize: 16,
+							}}>
+							🎬 Test: Film Detayı Aç
+						</Text>
+					</TouchableOpacity>
 					{/* Popular Movies */}
 					<HorizontalMovieCard
 						colors={colors}
