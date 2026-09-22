@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	Animated,
 	Dimensions,
@@ -9,11 +9,12 @@ import {
 	Text,
 	View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const SWIPE_CLOSE_THRESHOLD = 120;
-const SWIPE_VELOCITY_THRESHOLD = 0.5;
+const SWIPE_CLOSE_THRESHOLD = 80;
+const SWIPE_VELOCITY_THRESHOLD = 0.4;
 
 /**
  * BottomSheetModal
@@ -21,16 +22,20 @@ const SWIPE_VELOCITY_THRESHOLD = 0.5;
  * Props:
  *  visible         {boolean}  – modalı göster/gizle
  *  onClose         {function} – kapatma callback'i
- *  snapToHeight    {number}   – 0-1 arası oran, varsayılan 0.6
+ *  snapToHeight    {number|string} – 0-1 arası oran veya "auto"
+ *  fitContent      {boolean}  – modal yüksekliğini içeriğe göre otomatik ayarla
  *  closeOnBackdrop {boolean}  – backdrop'a tıklayınca kapat, varsayılan true
  *  swipeable       {boolean}  – sürükleyerek kapat, varsayılan true
  *  title           {string}   – opsiyonel başlık
+ *  handle          {boolean}  – tutma çubuğu (drag handle) göster
+ *  opacity         {number}   – arka plan karartma opaklığı
  *  children        {node}     – modal içeriği
  */
 const BottomSheetModal = ({
 	visible,
 	onClose,
 	snapToHeight = 0.6,
+	fitContent = false,
 	closeOnBackdrop = true,
 	swipeable = true,
 	title,
@@ -38,13 +43,29 @@ const BottomSheetModal = ({
 	opacity = 0.55,
 	children,
 }) => {
-	const sheetHeight = SCREEN_HEIGHT * snapToHeight;
+	const insets = useSafeAreaInsets();
+	const isAuto = fitContent || snapToHeight === "auto";
 
-	const translateY = useRef(new Animated.Value(sheetHeight)).current;
+	const fixedHeight =
+		typeof snapToHeight === "number"
+			? SCREEN_HEIGHT * snapToHeight
+			: SCREEN_HEIGHT * 0.5;
+
+	const [measuredHeight, setMeasuredHeight] = useState(0);
+
+	const sheetHeight = isAuto
+		? measuredHeight > 0
+			? measuredHeight
+			: SCREEN_HEIGHT * 0.4
+		: fixedHeight;
+
+	const sheetHeightRef = useRef(sheetHeight);
+	sheetHeightRef.current = sheetHeight;
+
+	const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 	const backdropOpacity = useRef(new Animated.Value(0)).current;
-	// Gesture ile kapanma başladığında useEffect'in ikinci kez animasyon
-	// çalıştırmasını engellemek için kullanılır.
 	const isClosingByGesture = useRef(false);
+	const hasOpened = useRef(false);
 
 	// ─── Animasyon yardımcıları ──────────────────────────────────────────────
 	const animateOpen = useCallback(() => {
@@ -58,7 +79,7 @@ const BottomSheetModal = ({
 			}),
 			Animated.timing(backdropOpacity, {
 				toValue: 1,
-				duration: 280,
+				duration: 260,
 				useNativeDriver: true,
 			}),
 		]).start();
@@ -66,9 +87,10 @@ const BottomSheetModal = ({
 
 	const animateClose = useCallback(
 		(onFinish) => {
+			const closeTarget = sheetHeightRef.current || SCREEN_HEIGHT;
 			Animated.parallel([
 				Animated.spring(translateY, {
-					toValue: sheetHeight,
+					toValue: closeTarget,
 					damping: 26,
 					stiffness: 300,
 					mass: 0.8,
@@ -76,29 +98,50 @@ const BottomSheetModal = ({
 				}),
 				Animated.timing(backdropOpacity, {
 					toValue: 0,
-					duration: 220,
+					duration: 200,
 					useNativeDriver: true,
 				}),
 			]).start(({ finished }) => {
 				if (finished) onFinish?.();
 			});
 		},
-		[translateY, backdropOpacity, sheetHeight],
+		[translateY, backdropOpacity],
 	);
 
 	// ─── visible değişince aç/kapat ──────────────────────────────────────────
 	useEffect(() => {
 		if (visible) {
 			isClosingByGesture.current = false;
-			translateY.setValue(sheetHeight);
-			animateOpen();
+			if (!isAuto || measuredHeight > 0) {
+				hasOpened.current = true;
+				translateY.setValue(sheetHeightRef.current);
+				animateOpen();
+			} else {
+				hasOpened.current = false;
+				translateY.setValue(SCREEN_HEIGHT);
+			}
 		} else {
-			// Gesture zaten kapanma animasyonunu başlattıysa tekrar çalıştırma.
+			hasOpened.current = false;
 			if (!isClosingByGesture.current) {
 				animateClose();
 			}
 		}
-	}, [visible]);
+	}, [visible, isAuto, animateOpen, animateClose, measuredHeight]);
+
+	// İçerik ölçümü (fitContent aktifse)
+	const handleLayout = (e) => {
+		if (!isAuto) return;
+		const h = Math.round(e.nativeEvent.layout.height);
+		if (h > 0 && Math.abs(h - measuredHeight) > 2) {
+			setMeasuredHeight(h);
+			sheetHeightRef.current = h;
+			if (visible && !hasOpened.current) {
+				hasOpened.current = true;
+				translateY.setValue(h);
+				animateOpen();
+			}
+		}
+	};
 
 	// ─── PanResponder ────────────────────────────────────────────────────────
 	const panResponder = useRef(
@@ -123,16 +166,17 @@ const BottomSheetModal = ({
 
 				if (shouldClose) {
 					isClosingByGesture.current = true;
+					const closeTarget = sheetHeightRef.current || SCREEN_HEIGHT;
 					Animated.parallel([
 						Animated.spring(translateY, {
-							toValue: sheetHeight,
+							toValue: closeTarget,
 							damping: 24,
 							stiffness: 280,
 							useNativeDriver: true,
 						}),
 						Animated.timing(backdropOpacity, {
 							toValue: 0,
-							duration: 200,
+							duration: 180,
 							useNativeDriver: true,
 						}),
 					]).start(({ finished }) => {
@@ -189,9 +233,12 @@ const BottomSheetModal = ({
 
 			{/* Sheet */}
 			<Animated.View
+				onLayout={handleLayout}
 				style={[
 					styles.sheet,
-					{ height: sheetHeight },
+					isAuto
+						? { maxHeight: SCREEN_HEIGHT * 0.85 }
+						: { height: sheetHeight },
 					{ transform: [{ translateY }] },
 				]}
 				{...panResponder.panHandlers}>
@@ -203,14 +250,21 @@ const BottomSheetModal = ({
 				)}
 
 				{/* Başlık */}
-				{title && (
+				{title ? (
 					<View style={styles.titleRow}>
 						<Text style={styles.titleText}>{title}</Text>
 					</View>
-				)}
+				) : null}
 
 				{/* İçerik */}
-				<View style={styles.content}>{children}</View>
+				<View
+					style={[
+						styles.content,
+						isAuto && styles.autoContent,
+						{ paddingBottom: Math.max(insets.bottom, 20) },
+					]}>
+					{children}
+				</View>
 			</Animated.View>
 		</Modal>
 	);
@@ -263,6 +317,9 @@ const styles = StyleSheet.create({
 		flex: 1,
 		paddingHorizontal: 20,
 		paddingTop: 16,
+	},
+	autoContent: {
+		flex: 0,
 	},
 });
 
