@@ -154,13 +154,15 @@ export default function Index() {
 				<BottomSheetModal
 					visible={isPlatformModalVisible}
 					onClose={() => setIsPlatformModalVisible(false)}
-					snapToHeight={0.7}
+					fitContent={true}
 					title=""
 					opacity={0.55}
-					handle={false}
+					handle={true}
 					closeOnBackdrop={true}
 					swipeable={true}>
-					<PlatformList />
+					<PlatformList
+						onSelectPlatform={() => setIsPlatformModalVisible(false)}
+					/>
 				</BottomSheetModal>
 				<BottomNavigation activeRoute="/(app)" />
 			</SafeAreaView>

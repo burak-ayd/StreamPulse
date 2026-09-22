@@ -12,7 +12,7 @@ import {
 	View,
 } from "react-native";
 
-const PlatformList = () => {
+const PlatformList = ({ onSelectPlatform }) => {
 	const router = useRouter();
 	const { theme, colors } = useThemeContext();
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
@@ -42,6 +42,7 @@ const PlatformList = () => {
 
 	const handlePlatformSelect = (platform) => {
 		setSelectedPlatform(platform.id || platform.name);
+		onSelectPlatform?.(platform);
 		router.push({
 			pathname: "/(app)/platforms",
 			params: { platformData: JSON.stringify(platform) },
@@ -57,7 +58,11 @@ const PlatformList = () => {
 	}
 
 	return (
-		<ScrollView contentContainerStyle={styles.scrollContent}>
+		<ScrollView
+			style={styles.scrollView}
+			contentContainerStyle={styles.scrollContent}
+			showsVerticalScrollIndicator={false}
+			bounces={false}>
 			{platformList.map((platform, index) => {
 				const platformKey = platform.id || platform.name || index;
 				const isSelected =
@@ -102,8 +107,11 @@ const PlatformList = () => {
 export default PlatformList;
 
 const styles = StyleSheet.create({
+	scrollView: {
+		flexGrow: 0,
+	},
 	scrollContent: {
-		paddingBottom: 20,
+		paddingBottom: 8,
 		gap: 10,
 	},
 	loadingContainer: {
@@ -128,3 +136,4 @@ const styles = StyleSheet.create({
 		fontWeight: "500",
 	},
 });
+
