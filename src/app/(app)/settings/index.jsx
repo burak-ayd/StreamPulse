@@ -1,4 +1,4 @@
-import { useThemeContext } from "@context/ThemeContext";
+import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, useRouter } from "expo-router";
@@ -14,43 +14,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-export default function SettingsScreen() {
-	const { theme, toggleTheme, colors } = useThemeContext();
-	const router = useRouter();
-
-	const handleBack = () => {
-		router.back();
-	};
-
-	const handleClearCache = () => {
-		Alert.alert(
-			"Verileri Temizle",
-			"Tüm yerel veriler ve geçmiş silinsin mi?",
-			[
-				{ text: "İptal", style: "cancel" },
-				{
-					text: "Temizle",
-					style: "destructive",
-					onPress: async () => {
-						try {
-							await AsyncStorage.clear();
-							Alert.alert("Başarılı", "Yerel veriler temizlendi.");
-						} catch (error) {
-							Alert.alert("Hata", "Veriler temizlenirken hata oluştu.");
-						}
-					},
-				},
-			],
-		);
-	};
-
-	const SettingItem = ({
-		icon,
-		label,
-		onPress,
-		rightComponent,
-		showChevron = true,
-	}) => (
+function SettingItem({
+	icon,
+	label,
+	onPress,
+	rightComponent,
+	showChevron = true,
+}) {
+	const { colors } = useThemeContext();
+	return (
 		<TouchableOpacity
 			style={styles.settingItem}
 			onPress={onPress}
@@ -84,12 +56,46 @@ export default function SettingsScreen() {
 			</View>
 		</TouchableOpacity>
 	);
+}
 
-	const SectionHeader = ({ title }) => (
+function SectionHeader({ title }) {
+	const { colors } = useThemeContext();
+	return (
 		<Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
 			{title}
 		</Text>
 	);
+}
+
+export default function SettingsScreen() {
+	const { theme, toggleTheme, colors } = useThemeContext();
+	const router = useRouter();
+
+	const handleBack = () => {
+		router.back();
+	};
+
+	const handleClearCache = () => {
+		Alert.alert(
+			"Verileri Temizle",
+			"Tüm yerel veriler ve geçmiş silinsin mi?",
+			[
+				{ text: "İptal", style: "cancel" },
+				{
+					text: "Temizle",
+					style: "destructive",
+					onPress: async () => {
+						try {
+							await AsyncStorage.clear();
+							Alert.alert("Başarılı", "Yerel veriler temizlendi.");
+						} catch {
+							Alert.alert("Hata", "Veriler temizlenirken hata oluştu.");
+						}
+					},
+				},
+			],
+		);
+	};
 
 	return (
 		<>
@@ -225,6 +231,29 @@ export default function SettingsScreen() {
 						</View>
 					</View>
 
+					{/* Player & Subtitles Section */}
+					<View style={styles.section}>
+						<SectionHeader title="OYNATICI VE MEDYA" />
+						<View
+							style={[
+								styles.settingsGroup,
+								{
+									backgroundColor: colors.cardBg,
+									borderColor: colors.border,
+								},
+							]}>
+							<SettingItem
+								icon="play-circle-outline"
+								label="Oynatıcı ve Altyazı Ayarları"
+								onPress={() =>
+									router.push({
+										pathname: "settings/player",
+									})
+								}
+							/>
+						</View>
+					</View>
+
 					{/* Data Section */}
 					<View style={styles.section}>
 						<SectionHeader title="VERİ VE DEPOLAMA" />
@@ -233,6 +262,7 @@ export default function SettingsScreen() {
 								styles.settingsGroup,
 								{
 									backgroundColor: colors.cardBg,
+
 									borderColor: colors.border,
 								},
 							]}>
