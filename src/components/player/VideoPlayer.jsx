@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Video, { TextTrackType } from "react-native-video";
+import { usePlayerSettings } from "@/context/PlayerSettingsContext";
 import TrackSelectionModal from "./TrackSelectionModal";
 
 
@@ -109,6 +110,10 @@ export default function VideoPlayer({
 }) {
 	const insets = useSafeAreaInsets();
 	const videoRef = useRef(null);
+	const { settings } = usePlayerSettings();
+
+	const seekDuration = settings?.seekDuration || 10;
+	const hideTimeoutMs = (settings?.controlsTimeout || 4) * 1000;
 
 	// Player state
 	const [activeSourceIndex, setActiveSourceIndex] = useState(0);
@@ -120,7 +125,9 @@ export default function VideoPlayer({
 	const [isBuffering, setIsBuffering] = useState(false);
 	const [hasError, setHasError] = useState(false);
 	const [errorMessage, setErrorMessage] = useState("");
-	const [resizeMode, setResizeMode] = useState("contain"); // 'contain' | 'cover'
+	const [resizeMode, setResizeMode] = useState(
+		settings?.defaultResizeMode || "contain",
+	); // 'contain' | 'cover'
 	const [isLocked, setIsLocked] = useState(false);
 	const [showControls, setShowControls] = useState(true);
 	const [isLandscape, setIsLandscape] = useState(true); // Her zaman yatay başlat
@@ -137,7 +144,7 @@ export default function VideoPlayer({
 	const [availableAudioTracks, setAvailableAudioTracks] = useState([]);
 	const [selectedAudioTrackIndex, setSelectedAudioTrackIndex] =
 		useState(null);
-	const [selectedSubtitle, setSelectedSubtitle] = useState(null);
+	const [userSubtitleChoice, setUserSubtitleChoice] = useState(undefined);
 	const [streamTextTracks, setStreamTextTracks] = useState([]);
 
 	// Altyazı Cueleri & Senkronizasyon (Gecikme) Ayarı
@@ -151,8 +158,8 @@ export default function VideoPlayer({
 		if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
 		hideTimerRef.current = setTimeout(() => {
 			setShowControls(false);
-		}, 4000);
-	}, []);
+		}, hideTimeoutMs);
+	}, [hideTimeoutMs]);
 
 	// showControls veya paused değiştikçe sayacı senkronize et
 	useEffect(() => {
@@ -218,6 +225,28 @@ export default function VideoPlayer({
 		return combined;
 	}, [externalSubtitles, streamTextTracks]);
 
+	// Varsayılan Altyazı Dili Otomatik Seçimi (veya kullanıcının manuel tercihi)
+	const selectedSubtitle = useMemo(() => {
+		if (userSubtitleChoice !== undefined) {
+			return userSubtitleChoice;
+		}
+		const defLang = settings?.defaultSubtitleLanguage;
+		if (!defLang || defLang === "off") return null;
+
+		return (
+			allSubtitles.find(
+				(sub) =>
+					sub.language?.toLowerCase() === defLang.toLowerCase() ||
+					(defLang === "tr" &&
+						(sub.title?.toLowerCase().includes("türk") ||
+							sub.title?.toLowerCase().includes("turk"))) ||
+					(defLang === "en" &&
+						(sub.title?.toLowerCase().includes("ing") ||
+							sub.title?.toLowerCase().includes("eng"))),
+			) || null
+		);
+	}, [userSubtitleChoice, settings?.defaultSubtitleLanguage, allSubtitles]);
+
 	// Altyazı dosyası değiştiğinde VTT/SRT içeriğini indirip ayrıştır
 	useEffect(() => {
 		if (!selectedSubtitle?.uri) return;
@@ -270,6 +299,40 @@ export default function VideoPlayer({
 		[startHideTimer],
 	);
 
+	// Dinamik Altyazı Stilleri (Ayarlardan Alınır)
+	const subtitleBgStyle = useMemo(() => {
+		switch (settings?.subtitleBgColor) {
+			case "solid-black":
+				return { backgroundColor: "#000000" };
+			case "blur":
+				return { backgroundColor: "rgba(25, 27, 34, 0.92)" };
+			case "transparent":
+				return { backgroundColor: "transparent" };
+			case "semi-black":
+			default:
+				return { backgroundColor: "rgba(0, 0, 0, 0.78)" };
+		}
+	}, [settings?.subtitleBgColor]);
+
+	const subtitleTextStyle = useMemo(() => {
+		const fontSize = settings?.subtitleFontSize || 16;
+		const color = settings?.subtitleTextColor || "#FFFFFF";
+		const hasShadow = settings?.subtitleTextShadow !== false;
+		return {
+			fontSize,
+			lineHeight: Math.round(fontSize * 1.35),
+			color,
+			textShadowColor: hasShadow ? "rgba(0, 0, 0, 0.95)" : "transparent",
+			textShadowOffset: { width: 0, height: 1 },
+			textShadowRadius: hasShadow ? 3 : 0,
+		};
+	}, [
+		settings?.subtitleFontSize,
+		settings?.subtitleTextColor,
+		settings?.subtitleTextShadow,
+	]);
+
+
 	// Build video source object for react-native-video
 	const videoSource = useMemo(() => {
 		if (!currentSourceData?.result?.url) return null;
@@ -282,16 +345,17 @@ export default function VideoPlayer({
 			headers.Referer = currentSourceData.result.referer;
 		}
 
-		// Detect stream type
+		// Convert Cookie object to string (react-native-video only accepts string)
+		if (headers.Cookie && typeof headers.Cookie === 'object') {
+			headers.Cookie = Object.entries(headers.Cookie)
+				.map(([k, v]) => `${k}=${v}`)
+				.join('; ');
+		}
+
+		// Detect type from URL or force m3u8 for known HLS endpoints
 		let type = undefined;
-		if (
-			streamUrl.includes(".m3u8") ||
-			streamUrl.includes("master.txt") ||
-			streamUrl.includes("/hls/")
-		) {
-			type = "m3u8";
-		} else if (streamUrl.includes(".mp4")) {
-			type = "mp4";
+		if (streamUrl.includes('.m3u8') || streamUrl.includes('/q/') || streamUrl.includes('molystream')) {
+			type = 'm3u8';
 		}
 
 		return {
@@ -322,24 +386,31 @@ export default function VideoPlayer({
 	};
 
 	useEffect(() => {
-		// Player açıldığında her zaman doğrudan yatay moda kilitlen
-		ScreenOrientation.lockAsync(
-			ScreenOrientation.OrientationLock.LANDSCAPE,
-		).catch(() => {});
+		if (settings?.defaultOrientation === "sensor") {
+			ScreenOrientation.unlockAsync().catch(() => {});
+		} else {
+			ScreenOrientation.lockAsync(
+				ScreenOrientation.OrientationLock.LANDSCAPE,
+			).catch(() => {});
+		}
 
 		return () => {
 			ScreenOrientation.lockAsync(
 				ScreenOrientation.OrientationLock.PORTRAIT_UP,
 			).catch(() => {});
 		};
-	}, []);
+	}, [settings?.defaultOrientation]);
 
 	// Handle switching video source
 	const handleSelectSource = (index) => {
 		if (index === activeSourceIndex) return;
 
-		// Save current time so new source resumes seamlessly
-		pendingSeekTimeRef.current = currentTime;
+		// Save current time so new source resumes seamlessly (if autoResume is enabled)
+		if (settings?.autoResume !== false) {
+			pendingSeekTimeRef.current = currentTime;
+		} else {
+			pendingSeekTimeRef.current = 0;
+		}
 		setIsLoading(true);
 		setHasError(false);
 		setActiveSourceIndex(index);
@@ -348,13 +419,13 @@ export default function VideoPlayer({
 		setSelectedAudioTrackIndex(null);
 		setStreamTextTracks([]);
 		setParsedCues([]);
-		setSelectedSubtitle(null);
+		setUserSubtitleChoice(undefined);
 		setSubtitleOffset(0);
 	};
 
 	// Handle subtitle selection
 	const handleSelectSubtitle = (sub) => {
-		setSelectedSubtitle(sub);
+		setUserSubtitleChoice(sub);
 		setSubtitleOffset(0);
 		if (!sub?.uri) {
 			setParsedCues([]);
@@ -425,6 +496,20 @@ export default function VideoPlayer({
 		console.warn("Video playback error:", error);
 		setIsLoading(false);
 		setIsBuffering(false);
+		
+		// Auto-try next source on format/network errors
+		const errorCode = error?.error?.errorCode;
+		const isFormatError = errorCode === "23003" || error?.error?.errorString?.includes("PARSING_CONTAINER");
+		const hasMoreSources = activeSourceIndex < sources.length - 1;
+		
+		if ((isFormatError || errorCode?.startsWith("2")) && hasMoreSources) {
+			console.log(`Source ${activeSourceIndex} failed, trying next...`);
+			setActiveSourceIndex((prev) => prev + 1);
+			setHasError(false);
+			setIsLoading(true);
+			return;
+		}
+		
 		setHasError(true);
 		setErrorMessage(
 			error?.error?.errorString ||
@@ -476,12 +561,12 @@ export default function VideoPlayer({
 			lastTapRef.current = { time: 0, x: 0 }; // Sıfırla
 
 			if (locationX < screenW * 0.35) {
-				handleSeekBy(-10);
-				setDoubleTapInfo({ type: "rewind" });
+				handleSeekBy(-seekDuration);
+				setDoubleTapInfo({ type: "rewind", delta: seekDuration });
 				setTimeout(() => setDoubleTapInfo(null), 700);
 			} else if (locationX > screenW * 0.65) {
-				handleSeekBy(10);
-				setDoubleTapInfo({ type: "forward" });
+				handleSeekBy(seekDuration);
+				setDoubleTapInfo({ type: "forward", delta: seekDuration });
 				setTimeout(() => setDoubleTapInfo(null), 700);
 			} else {
 				setPaused((prev) => !prev);
@@ -753,13 +838,13 @@ export default function VideoPlayer({
 								<TouchableOpacity
 									style={styles.seekButton}
 									onPress={() => {
-										handleSeekBy(-10);
+										handleSeekBy(-seekDuration);
 										startHideTimer();
 									}}
 									activeOpacity={0.7}
 								>
 									<Ionicons name="play-back-outline" size={24} color="#FFFFFF" />
-									<Text style={styles.seekButtonText}>-10s</Text>
+									<Text style={styles.seekButtonText}>-{seekDuration}s</Text>
 								</TouchableOpacity>
 
 								<TouchableOpacity
@@ -780,13 +865,13 @@ export default function VideoPlayer({
 								<TouchableOpacity
 									style={styles.seekButton}
 									onPress={() => {
-										handleSeekBy(10);
+										handleSeekBy(seekDuration);
 										startHideTimer();
 									}}
 									activeOpacity={0.7}
 								>
 									<Ionicons name="play-forward-outline" size={24} color="#FFFFFF" />
-									<Text style={styles.seekButtonText}>+10s</Text>
+									<Text style={styles.seekButtonText}>+{seekDuration}s</Text>
 								</TouchableOpacity>
 							</View>
 						)}
@@ -868,8 +953,8 @@ export default function VideoPlayer({
 						{ bottom: showControls ? 100 : 36 },
 					]}
 					pointerEvents="none">
-					<View style={styles.subtitlePill}>
-						<Text style={styles.subtitleText}>
+					<View style={[styles.subtitlePill, subtitleBgStyle]}>
+						<Text style={[styles.subtitleText, subtitleTextStyle]}>
 							{currentSubtitleText}
 						</Text>
 					</View>
@@ -897,7 +982,9 @@ export default function VideoPlayer({
 						color="#FFFFFF"
 					/>
 					<Text style={styles.doubleTapText}>
-						{doubleTapInfo.type === "rewind" ? "-10 sn" : "+10 sn"}
+						{doubleTapInfo.type === "rewind"
+							? `-${doubleTapInfo.delta || seekDuration} sn`
+							: `+${doubleTapInfo.delta || seekDuration} sn`}
 					</Text>
 				</View>
 			)}

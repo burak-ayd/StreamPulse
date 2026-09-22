@@ -6,6 +6,24 @@ const STORAGE_KEYS = {
 	WATCH_HISTORY: "user_watch_history",
 	SETTINGS: "app_settings",
 	SEARCH_HISTORY: "user_search_history",
+	PLAYER_SETTINGS: "app_player_settings",
+};
+
+export const DEFAULT_PLAYER_SETTINGS = {
+	// Video oynatıcı ayarları
+	seekDuration: 10, // 5, 10, 15, 30 sn
+	defaultResizeMode: "contain", // 'contain' | 'cover'
+	autoPlay: true,
+	controlsTimeout: 4, // 3, 4, 5, 8 sn
+	defaultOrientation: "landscape", // 'landscape' | 'sensor'
+	autoResume: true,
+
+	// Altyazı görünüm ayarları
+	subtitleFontSize: 16, // 14, 16, 20, 24
+	subtitleTextColor: "#FFFFFF", // '#FFFFFF', '#FFD600', '#00E676', '#00E5FF'
+	subtitleBgColor: "semi-black", // 'semi-black', 'solid-black', 'transparent', 'blur'
+	subtitleTextShadow: true,
+	defaultSubtitleLanguage: "tr", // 'tr', 'en', 'off'
 };
 
 const DEFAULT_PROFILE = {
@@ -217,6 +235,59 @@ export async function clearSearchHistory() {
 	}
 }
 
+/**
+ * Video oynatıcı ve altyazı ayarlarını getirir
+ */
+export async function getPlayerSettings() {
+	try {
+		const data = await AsyncStorage.getItem(STORAGE_KEYS.PLAYER_SETTINGS);
+		if (data) {
+			return { ...DEFAULT_PLAYER_SETTINGS, ...JSON.parse(data) };
+		}
+		return DEFAULT_PLAYER_SETTINGS;
+	} catch (error) {
+		console.error("Player ayarları okunurken hata:", error);
+		return DEFAULT_PLAYER_SETTINGS;
+	}
+}
+
+/**
+ * Video oynatıcı ve altyazı ayarlarını günceller
+ */
+export async function savePlayerSettings(updates) {
+	try {
+		const current = await getPlayerSettings();
+		const updated = {
+			...current,
+			...updates,
+		};
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.PLAYER_SETTINGS,
+			JSON.stringify(updated),
+		);
+		return updated;
+	} catch (error) {
+		console.error("Player ayarları kaydedilirken hata:", error);
+		throw error;
+	}
+}
+
+/**
+ * Video oynatıcı ayarlarını varsayılana sıfırlar
+ */
+export async function resetPlayerSettings() {
+	try {
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.PLAYER_SETTINGS,
+			JSON.stringify(DEFAULT_PLAYER_SETTINGS),
+		);
+		return DEFAULT_PLAYER_SETTINGS;
+	} catch (error) {
+		console.error("Player ayarları sıfırlanırken hata:", error);
+		return DEFAULT_PLAYER_SETTINGS;
+	}
+}
+
 export default {
 	getUserProfile,
 	saveUserProfile,
@@ -229,4 +300,8 @@ export default {
 	addToSearchHistory,
 	removeFromSearchHistory,
 	clearSearchHistory,
+	getPlayerSettings,
+	savePlayerSettings,
+	resetPlayerSettings,
+	DEFAULT_PLAYER_SETTINGS,
 };
