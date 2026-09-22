@@ -24,7 +24,7 @@ export default function HeroSection({ content }) {
 	let resizeMode = "cover";
 	if (width > 768) {
 		BACKDROP_HEIGHT = height * 0.85;
-		resizeMode = "stretch";
+		resizeMode = "cover";
 	}
 
 	// Dynamic styles that depend on current dimensions
@@ -57,7 +57,7 @@ export default function HeroSection({ content }) {
 					<Image
 						source={{ uri: content.backdrop_url }}
 						style={styles.backdrop}
-						contentFit={resizeMode}
+						contentFit="cover"
 						transition={200}
 						cachePolicy="memory-disk"
 					/>
