@@ -1,6 +1,6 @@
 // src/components/HorizontalMovieCard.jsx
 
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import {
 	FlatList,
 	Image,
@@ -42,7 +42,7 @@ const HorizontalMovieCard = ({ colors, movies, title }) => {
 							style={styles.moviePoster}
 						/>
 						<View style={styles.ratingBadge}>
-							<MaterialIcons
+							<Ionicons
 								name="star"
 								size={14}
 								color="#FFD700"

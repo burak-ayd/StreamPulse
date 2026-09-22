@@ -1,9 +1,9 @@
-import { supabase } from "@utils/supabase";
+import { fetchContentDetails } from "@/services/api";
 import { useEffect, useState } from "react";
 
 /**
- * Custom hook to fetch content details from Supabase
- * @param {string} contentId - UUID of the content
+ * Custom hook to fetch content details from API
+ * @param {string} contentId - ID of the content
  * @returns {Object} { content, loading, error, refetch }
  */
 export function useContentDetails(contentId) {
@@ -16,13 +16,10 @@ export function useContentDetails(contentId) {
 			setLoading(true);
 			setError(null);
 
-			const { data, error: fetchError } = await supabase
-				.from("v_content_list")
-				.select("*")
-				.eq("id", contentId)
-				.single();
-
-			if (fetchError) throw fetchError;
+			const data = await fetchContentDetails(contentId);
+			if (!data) {
+				throw new Error("İçerik bulunamadı");
+			}
 
 			setContent(data);
 		} catch (err) {
@@ -46,3 +43,5 @@ export function useContentDetails(contentId) {
 		refetch: fetchContent,
 	};
 }
+
+export default useContentDetails;

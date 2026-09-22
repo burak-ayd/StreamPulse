@@ -1,6 +1,6 @@
 import PlatformScreenComponent from "@components/platformScreen/PlatformScreenComponent";
 import { useThemeContext } from "@context/ThemeContext";
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
 	Dimensions,
@@ -51,9 +51,9 @@ export default function PlatformScreen() {
 					<TouchableOpacity
 						onPress={handleBack}
 						style={styles.backButton}>
-						<MaterialIcons
+						<Ionicons
 							name="arrow-back"
-							size={28}
+							size={26}
 							color={colors.text}
 						/>
 					</TouchableOpacity>

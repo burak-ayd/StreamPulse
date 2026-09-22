@@ -94,12 +94,12 @@ const WATCH_HISTORY = [
 ];
 
 const CATEGORIES = [
-	{ id: "1", name: "Action", icon: "local-fire-department" },
-	{ id: "2", name: "Comedy", icon: "sentiment-very-satisfied" },
-	{ id: "3", name: "Drama", icon: "theater-comedy" },
-	{ id: "4", name: "Horror", icon: "sentiment-very-dissatisfied" },
-	{ id: "5", name: "Sci-Fi", icon: "rocket-launch" },
-	{ id: "6", name: "Romance", icon: "favorite" },
+	{ id: "1", name: "Aksiyon", icon: "flame" },
+	{ id: "2", name: "Komedi", icon: "happy" },
+	{ id: "3", name: "Dram", icon: "film" },
+	{ id: "4", name: "Korku", icon: "skull" },
+	{ id: "5", name: "Bilim Kurgu", icon: "rocket" },
+	{ id: "6", name: "Romantik", icon: "heart" },
 ];
 
 const FEATURED_MOVIES = [

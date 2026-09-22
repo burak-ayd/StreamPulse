@@ -1,5 +1,5 @@
 // @components/VerticalMovieCard.jsx
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import {
 	Dimensions,
 	Image,
@@ -51,8 +51,8 @@ const VerticalMovieCard = ({ title, colors, movies }) => {
 							{item.genre}
 						</Text>
 						<View style={styles.metaRow}>
-							<MaterialIcons
-								name="schedule"
+							<Ionicons
+								name="time-outline"
 								size={14}
 								color={colors.textSecondary}
 							/>
@@ -64,7 +64,7 @@ const VerticalMovieCard = ({ title, colors, movies }) => {
 								{item.duration}
 							</Text>
 							<View style={styles.metaSeparator} />
-							<MaterialIcons
+							<Ionicons
 								name="star"
 								size={14}
 								color="#FFD700"
@@ -83,8 +83,8 @@ const VerticalMovieCard = ({ title, colors, movies }) => {
 							styles.playButton,
 							{ backgroundColor: colors.primary },
 						]}>
-						<MaterialIcons
-							name="play-arrow"
+						<Ionicons
+							name="play"
 							size={20}
 							color="#ffffff"
 						/>

@@ -1,7 +1,7 @@
 import BottomNavigation from "@components/BottomNavigation";
 import { CATEGORIES } from "@constants/data";
 import { useThemeContext } from "@context/ThemeContext";
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack } from "expo-router";
 import {
 	FlatList,
@@ -40,7 +40,7 @@ export default function DiscoverScreen() {
 						},
 					]}>
 					<Text style={[styles.headerTitle, { color: colors.text }]}>
-						Discover
+						Keşfet
 					</Text>
 				</View>
 
@@ -54,7 +54,7 @@ export default function DiscoverScreen() {
 								styles.sectionTitle,
 								{ color: colors.text },
 							]}>
-							Browse by Category
+							Kategorilere Göre Göz At
 						</Text>
 						<FlatList
 							data={CATEGORIES}
@@ -69,9 +69,9 @@ export default function DiscoverScreen() {
 										{ backgroundColor: colors.cardBg },
 									]}
 									activeOpacity={0.8}>
-									<MaterialIcons
+									<Ionicons
 										name={item.icon}
-										size={40}
+										size={36}
 										color={colors.primary}
 									/>
 									<Text
@@ -93,16 +93,16 @@ export default function DiscoverScreen() {
 								styles.sectionTitle,
 								{ color: colors.text },
 							]}>
-							Trending Now
+							Şu Anda Trend
 						</Text>
 						<View
 							style={[
 								styles.trendingCard,
 								{ backgroundColor: colors.cardBg },
 							]}>
-							<MaterialIcons
-								name="trending-up"
-								size={48}
+							<Ionicons
+								name="stats-chart"
+								size={44}
 								color={colors.primary}
 							/>
 							<Text
@@ -110,7 +110,7 @@ export default function DiscoverScreen() {
 									styles.trendingText,
 									{ color: colors.textSecondary },
 								]}>
-								Discover what's trending in your region
+								Bölgenizdeki en popüler yapımları keşfedin
 							</Text>
 						</View>
 					</View>

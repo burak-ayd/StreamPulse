@@ -1,5 +1,5 @@
 import { FEATURED_MOVIES } from "@constants/data";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import React, {
 	useCallback,

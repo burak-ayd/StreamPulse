@@ -1,5 +1,5 @@
 import { useThemeContext } from "@context/ThemeContext";
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -8,12 +8,11 @@ export default function BottomNavigation({ activeRoute }) {
 	const { theme, colors } = useThemeContext();
 
 	const navItems = [
-		{ name: "Home", icon: "home", route: "/(app)" },
-		{ name: "Filmler", icon: "movie", route: "/(app)/movies" },
-		{ name: "Discover", icon: "explore", route: "/(app)/discover" },
+		{ name: "Ana Sayfa", icon: "home", route: "/(app)" },
+		{ name: "Filmler", icon: "film", route: "/(app)/movies" },
+		{ name: "Keşfet", icon: "compass", route: "/(app)/discover" },
 		{ name: "Diziler", icon: "tv", route: "/(app)/series" },
-
-		{ name: "Search", icon: "search", route: "/(app)/search" },
+		{ name: "Arama", icon: "search", route: "/(app)/search" },
 	];
 
 	const handleNavigation = (route) => {
@@ -31,24 +30,19 @@ export default function BottomNavigation({ activeRoute }) {
 			]}>
 			{navItems.map((item) => {
 				const isActive = activeRoute === item.route;
+				const iconName = isActive ? item.icon : `${item.icon}-outline`;
 				return (
 					<TouchableOpacity
 						key={item.route}
 						onPress={() => handleNavigation(item.route)}
 						style={styles.navItem}
 						activeOpacity={0.7}>
-						<MaterialIcons
-							name={item.icon}
-							size={24}
+						<Ionicons
+							name={iconName}
+							size={22}
 							color={
 								isActive ? colors.primary : colors.textSecondary
 							}
-							style={{
-								fontVariationSettings:
-									isActive && item.icon === "person"
-										? "'FILL' 1"
-										: "'FILL' 0",
-							}}
 						/>
 						<Text
 							style={[
