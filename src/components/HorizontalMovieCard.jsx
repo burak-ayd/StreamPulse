@@ -1,16 +1,55 @@
-// src/components/HorizontalMovieCard.jsx
-
 import { Ionicons } from "@react-native-vector-icons/ionicons";
+import { Image } from "expo-image";
+import { useRouter } from "expo-router";
 import {
 	FlatList,
-	Image,
 	StyleSheet,
 	Text,
 	TouchableOpacity,
 	View,
 } from "react-native";
 
-const HorizontalMovieCard = ({ colors, movies, title }) => {
+const HorizontalMovieCard = ({ colors, movies, title, onMoviePress }) => {
+	const router = useRouter();
+
+	const handlePress = (item) => {
+		if (onMoviePress) {
+			onMoviePress(item);
+			return;
+		}
+
+		let itemData = { ...item };
+		const epTitleMatch = (itemData.title || "").match(
+			/^(.+?)\s+(\d+)\.\s*Sezon\s+(\d+)\.\s*Bölüm/i,
+		);
+
+		if (epTitleMatch) {
+			itemData = {
+				...itemData,
+				seriesTitle: epTitleMatch[1].trim(),
+				initialSeason: String(epTitleMatch[2]),
+				initialEpisode: String(epTitleMatch[3]),
+				is_series: true,
+				content_type: "series",
+			};
+		}
+
+		const id =
+			itemData.id ||
+			encodeURIComponent(
+				itemData.url ||
+					itemData.slug ||
+					itemData.title,
+			);
+		router.push({
+			pathname: "/(app)/MovieDetails/[id]",
+			params: {
+				id,
+				movieData: JSON.stringify(itemData),
+			},
+		});
+	};
+
 	return (
 		<View style={styles.sectionContainer}>
 			<View style={styles.sectionHeader}>
@@ -26,29 +65,51 @@ const HorizontalMovieCard = ({ colors, movies, title }) => {
 
 			<FlatList
 				data={movies}
-				keyExtractor={(item) => item.id}
+				keyExtractor={(item, index) =>
+					item.id || item.url || item.slug || `${item.title}-${index}`
+				}
 				horizontal
 				showsHorizontalScrollIndicator={false}
 				contentContainerStyle={styles.horizontalList}
+				initialNumToRender={4}
+				maxToRenderPerBatch={4}
+				windowSize={3}
 				renderItem={({ item }) => (
 					<TouchableOpacity
 						style={[
 							styles.movieCard,
 							{ backgroundColor: colors.cardBg },
 						]}
-						activeOpacity={0.9}>
-						<Image
-							source={{ uri: item.image }}
-							style={styles.moviePoster}
-						/>
-						<View style={styles.ratingBadge}>
-							<Ionicons
-								name="star"
-								size={14}
-								color="#FFD700"
+						activeOpacity={0.8}
+						onPress={() => handlePress(item)}>
+						{item.poster ? (
+							<Image
+								source={{ uri: item.poster }}
+								style={styles.moviePoster}
+								contentFit="cover"
+								transition={150}
+								cachePolicy="memory-disk"
 							/>
-							<Text style={styles.ratingText}>{item.rating}</Text>
-						</View>
+						) : (
+							<View
+								style={[
+									styles.moviePoster,
+									{ backgroundColor: colors.border },
+								]}
+							/>
+						)}
+						{item.rating ? (
+							<View style={styles.ratingBadge}>
+								<Ionicons
+									name="star"
+									size={14}
+									color="#FFD700"
+								/>
+								<Text style={styles.ratingText}>
+									{item.rating}
+								</Text>
+							</View>
+						) : null}
 						<View style={styles.movieInfo}>
 							<Text
 								style={[
@@ -63,7 +124,7 @@ const HorizontalMovieCard = ({ colors, movies, title }) => {
 									styles.movieMeta,
 									{ color: colors.textSecondary },
 								]}>
-								{item.duration} • {item.genre.split(" / ")[0]}
+								{item.release_date} - {item.language}
 							</Text>
 						</View>
 					</TouchableOpacity>

@@ -1,9 +1,9 @@
 import { useThemeContext } from "@context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
-	Image,
 	StatusBar,
 	StyleSheet,
 	Text,
@@ -57,7 +57,9 @@ export default function HeroSection({ content }) {
 					<Image
 						source={{ uri: content.backdrop_url }}
 						style={styles.backdrop}
-						resizeMode={resizeMode}
+						contentFit={resizeMode}
+						transition={200}
+						cachePolicy="memory-disk"
 					/>
 				) : (
 					<View
@@ -94,12 +96,14 @@ export default function HeroSection({ content }) {
 			{/* Content Info */}
 			<View style={styles.contentInfo}>
 				{/* Poster */}
-				<View style={styles.posterContainer}>
+				{/* <View style={styles.posterContainer}>
 					{content.poster_url ? (
 						<Image
 							source={{ uri: content.poster_url }}
 							style={styles.poster}
-							resizeMode="cover"
+							contentFit="cover"
+							transition={200}
+							cachePolicy="memory-disk"
 						/>
 					) : (
 						<View
@@ -114,7 +118,7 @@ export default function HeroSection({ content }) {
 							/>
 						</View>
 					)}
-				</View>
+				</View> */}
 
 				{/* Text Info */}
 				<View style={styles.textInfo}>

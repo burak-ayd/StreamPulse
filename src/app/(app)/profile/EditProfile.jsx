@@ -2,13 +2,13 @@ import { useThemeContext } from "@context/ThemeContext";
 import DateTimePicker from "@expo/ui/community/datetime-picker";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { getUserProfile, saveUserProfile } from "@utils/storage";
+import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
-	Image,
 	KeyboardAvoidingView,
 	Platform,
 	ScrollView,
@@ -247,6 +247,8 @@ export default function EditProfile() {
 									<Image
 										source={{ uri: avatarUrl }}
 										style={styles.avatarImage}
+										contentFit="cover"
+										transition={150}
 									/>
 								) : (
 									<Ionicons

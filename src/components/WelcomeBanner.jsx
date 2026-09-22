@@ -1,4 +1,5 @@
-import { Dimensions, Image, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { Dimensions, StyleSheet, Text, View } from "react-native";
 const width = Dimensions.get("window").width;
 const WelcomeBanner = ({ userEmail, userAvatarUrl, userName, colors }) => {
 	return (
@@ -19,7 +20,12 @@ const WelcomeBanner = ({ userEmail, userAvatarUrl, userName, colors }) => {
 				</Text>
 			</View>
 			{userAvatarUrl ? (
-				<Image source={{ uri: userAvatarUrl }} style={styles.avatar} />
+				<Image
+					source={{ uri: userAvatarUrl }}
+					style={styles.avatar}
+					contentFit="cover"
+					transition={150}
+				/>
 			) : (
 				<View
 					style={[

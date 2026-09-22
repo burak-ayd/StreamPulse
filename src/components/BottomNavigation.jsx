@@ -9,10 +9,11 @@ export default function BottomNavigation({ activeRoute }) {
 
 	const navItems = [
 		{ name: "Ana Sayfa", icon: "home", route: "/(app)" },
-		{ name: "Filmler", icon: "film", route: "/(app)/movies" },
-		{ name: "Keşfet", icon: "compass", route: "/(app)/discover" },
-		{ name: "Diziler", icon: "tv", route: "/(app)/series" },
+		// { name: "Filmler", icon: "film", route: "/(app)/movies" },
 		{ name: "Arama", icon: "search", route: "/(app)/search" },
+
+		// { name: "Diziler", icon: "tv", route: "/(app)/series" },
+		{ name: "Keşfet", icon: "compass", route: "/(app)/discover" },
 	];
 
 	const handleNavigation = (route) => {

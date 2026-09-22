@@ -5,6 +5,7 @@ const STORAGE_KEYS = {
 	FAVORITES: "user_favorites",
 	WATCH_HISTORY: "user_watch_history",
 	SETTINGS: "app_settings",
+	SEARCH_HISTORY: "user_search_history",
 };
 
 const DEFAULT_PROFILE = {
@@ -147,6 +148,75 @@ export async function addToWatchHistory(movie) {
 	}
 }
 
+/**
+ * Arama geçmişini getirir
+ */
+export async function getSearchHistory() {
+	try {
+		const data = await AsyncStorage.getItem(STORAGE_KEYS.SEARCH_HISTORY);
+		return data ? JSON.parse(data) : [];
+	} catch (error) {
+		console.error("Arama geçmişi okunurken hata:", error);
+		return [];
+	}
+}
+
+/**
+ * Arama geçmişine yeni sorgu ekler (en fazla 20 adet)
+ */
+export async function addToSearchHistory(query) {
+	try {
+		if (!query || !query.trim()) return [];
+		const trimmed = query.trim();
+		const history = await getSearchHistory();
+		const filtered = history.filter(
+			(item) => item.toLowerCase() !== trimmed.toLowerCase(),
+		);
+		const updated = [trimmed, ...filtered].slice(0, 20);
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.SEARCH_HISTORY,
+			JSON.stringify(updated),
+		);
+		return updated;
+	} catch (error) {
+		console.error("Arama geçmişi kaydedilirken hata:", error);
+		return [];
+	}
+}
+
+/**
+ * Arama geçmişinden tek bir sorguyu siler
+ */
+export async function removeFromSearchHistory(query) {
+	try {
+		const history = await getSearchHistory();
+		const updated = history.filter(
+			(item) => item.toLowerCase() !== query.toLowerCase(),
+		);
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.SEARCH_HISTORY,
+			JSON.stringify(updated),
+		);
+		return updated;
+	} catch (error) {
+		console.error("Arama geçmişinden silinirken hata:", error);
+		return [];
+	}
+}
+
+/**
+ * Arama geçmişini temizler
+ */
+export async function clearSearchHistory() {
+	try {
+		await AsyncStorage.removeItem(STORAGE_KEYS.SEARCH_HISTORY);
+		return [];
+	} catch (error) {
+		console.error("Arama geçmişi temizlenirken hata:", error);
+		return [];
+	}
+}
+
 export default {
 	getUserProfile,
 	saveUserProfile,
@@ -155,4 +225,8 @@ export default {
 	isFavorite,
 	getWatchHistory,
 	addToWatchHistory,
+	getSearchHistory,
+	addToSearchHistory,
+	removeFromSearchHistory,
+	clearSearchHistory,
 };

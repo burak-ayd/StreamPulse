@@ -1,9 +1,3 @@
-import {
-	FEATURED_MOVIES,
-	POPULAR_MOVIES,
-	RECOMMENDED_MOVIES,
-} from "@constants/data";
-
 const API_BASE_URL =
 	process.env.EXPO_PUBLIC_API_URL || "https://api.example.com";
 // Default fallback platforms list
@@ -81,122 +75,73 @@ const FALLBACK_CONTENT_DETAILS = {
 };
 
 /**
- * Fetch content details by id
+ * Fetch plugin content detail
  */
-export async function fetchContentDetails(contentId) {
+export async function fetchPluginDetail(pluginName, url) {
 	try {
-		const response = await fetch(`${API_BASE_URL}/contents/${contentId}`, {
-			headers: { "Content-Type": "application/json" },
-		});
+		const response = await fetch(
+			`${API_BASE_URL}/plugins/${pluginName}/detail?url=${encodeURIComponent(url)}`,
+			{
+				headers: { "Content-Type": "application/json" },
+			},
+		);
 		if (response.ok) {
 			const data = await response.json();
-			return data;
+			return data?.detail || data;
 		}
 	} catch (error) {
-		console.warn(
-			"API request failed, checking fallback data:",
-			error.message,
-		);
+		console.warn("API plugin detail request failed:", error.message);
 	}
 
-	// Fallback to local data
-	if (FALLBACK_CONTENT_DETAILS[contentId]) {
-		return FALLBACK_CONTENT_DETAILS[contentId];
-	}
-
-	// Check featured and popular movies
-	const found = [
-		...FEATURED_MOVIES,
-		...POPULAR_MOVIES,
-		...RECOMMENDED_MOVIES,
-	].find((m) => String(m.id) === String(contentId));
-
-	if (found) {
-		return {
-			id: found.id,
-			title: found.title,
-			original_title: found.title,
-			tagline: found.description || "Harika bir yapım",
-			overview: found.description || `${found.title} filmi özeti.`,
-			poster_url: found.poster || found.image,
-			backdrop_url: found.poster || found.image,
-			rating:
-				typeof found.rating === "number"
-					? found.rating
-					: parseFloat(found.rating) || 8.0,
-			vote_count: 50000,
-			runtime_minutes: 145,
-			release_date: "2024-01-01",
-			country: "ABD",
-			age_rating: "16+",
-			content_type: "movie",
-			status: "Released",
-			director: "Yönetmen Bilgisi",
-			production_co: "Yapım Şirketi",
-			language: "tr",
-			cast_members: ["Başrol 1", "Başrol 2", "Başrol 3"],
-			trailer_url: "https://www.youtube.com",
-		};
-	}
-
-	// Default template if id not found anywhere
-	return {
-		id: contentId,
-		title: "Film Detayı",
-		original_title: "Film Detayı",
-		tagline: "Harika bir yapım",
-		overview: "Bu içerik hakkında detaylı bilgi yakında eklenecektir.",
-		poster_url:
-			"https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=60",
-		backdrop_url:
-			"https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=1200&auto=format&fit=crop&q=60",
-		rating: 8.0,
-		vote_count: 10000,
-		runtime_minutes: 120,
-		release_date: "2024-01-01",
-		country: "TR",
-		age_rating: "13+",
-		content_type: "movie",
-		status: "Released",
-		director: "Yönetmen",
-		production_co: "Stüdyo",
-		language: "tr",
-		cast_members: ["Oyuncu 1", "Oyuncu 2"],
-		trailer_url: "https://www.youtube.com",
-	};
+	return null;
 }
 
 /**
- * Fetch related contents
+ * Fetch Platform Main Page
  */
-export async function fetchRelatedContent(contentType, currentId) {
+export async function fetchPlatformMainPage(platformName, categoryURL) {
 	try {
 		const response = await fetch(
-			`${API_BASE_URL}/contents/related?content_type=${encodeURIComponent(
-				contentType,
-			)}&current_id=${encodeURIComponent(currentId)}`,
-			{ headers: { "Content-Type": "application/json" } },
+			`${API_BASE_URL}/plugins/${platformName}/main-page?url=${encodeURIComponent(categoryURL)}`,
+			{
+				headers: { "Content-Type": "application/json" },
+			},
 		);
 		if (response.ok) {
 			return await response.json();
 		}
 	} catch (error) {
 		console.warn(
-			"API related content request failed, using fallback:",
+			"API platform main page request failed, using fallback:",
 			error.message,
 		);
 	}
 
-	// Fallback to constants
-	return POPULAR_MOVIES.filter(
-		(item) => String(item.id) !== String(currentId),
-	).map((item) => ({
-		id: item.id,
-		title: item.title,
-		poster_url: item.image,
-		rating: parseFloat(item.rating) || 8.0,
-		content_type: contentType || "movie",
-	}));
+	return [];
+}
+
+/**
+ * Fetch Platform Categories
+ */
+export async function fetchPlatformCategories(platformName) {
+	try {
+		const response = await fetch(
+			`${API_BASE_URL}/plugins/${platformName}/categories`,
+			{
+				headers: { "Content-Type": "application/json" },
+			},
+		);
+		if (response.ok) {
+			return await response.json();
+		}
+	} catch (error) {
+		console.warn(
+			"API platform categories request failed, using fallback:",
+			error.message,
+		);
+	}
+
+	return [];
 }
 
 /**
@@ -222,9 +167,88 @@ export async function fetchPlatforms() {
 	return [];
 }
 
+/**
+ * Fetch random contents
+ */
+export async function fetchRandomContents(platformName, count = 1) {
+	try {
+		const response = await fetch(
+			`${API_BASE_URL}/plugins/${platformName}/random?count=${count}`,
+			{
+				headers: { "Content-Type": "application/json" },
+			},
+		);
+		if (response.ok) {
+			const data = await response.json();
+			const contents = Array.isArray(data) ? data : data?.results;
+			if (Array.isArray(contents) && contents.length > 0) return contents;
+		}
+	} catch (error) {
+		console.warn(
+			"API random contents request failed, using fallback:",
+			error.message,
+		);
+	}
+
+	return [];
+}
+
+/**
+ * Fetch content details
+ */
+export async function fetchContentDetails(contentId) {
+	try {
+		if (FALLBACK_CONTENT_DETAILS[contentId]) {
+			return FALLBACK_CONTENT_DETAILS[contentId];
+		}
+	} catch (error) {
+		console.warn("API fetchContentDetails error:", error.message);
+	}
+	return null;
+}
+
+/**
+ * Fetch related content
+ */
+export async function fetchRelatedContent(contentType, currentId) {
+	try {
+		// Şu anda backend'de spesifik related endpoint'i yoksa boş liste dön
+		return [];
+	} catch (error) {
+		console.warn("API fetchRelatedContent error:", error.message);
+	}
+	return [];
+}
+
+/**
+ * Search content
+ */
+export async function searchContent(query) {
+	try {
+		const response = await fetch(
+			`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`,
+			{
+				headers: { "Content-Type": "application/json" },
+			},
+		);
+		if (response.ok) {
+			const data = await response.json();
+			const contents = Array.isArray(data) ? data : data?.results;
+			if (Array.isArray(contents)) return contents;
+		}
+	} catch (error) {
+		console.warn("API searchContent error:", error.message);
+	}
+	return [];
+}
+
 export default {
+	fetchPlatforms,
+	fetchPlatformMainPage,
+	fetchPlatformCategories,
+	fetchRandomContents,
+	fetchPluginDetail,
 	fetchContentDetails,
 	fetchRelatedContent,
-	fetchPlatforms,
-	DEFAULT_PLATFORMS,
+	searchContent,
 };

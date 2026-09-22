@@ -9,7 +9,7 @@ import {
 	formatYear,
 	getCountryFlag,
 } from "@utils/formatters";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 export default function MetadataSection({ content }) {
 	const { colors } = useThemeContext();
@@ -59,10 +59,7 @@ export default function MetadataSection({ content }) {
 
 	return (
 		<View style={styles.container}>
-			<ScrollView
-				horizontal
-				showsHorizontalScrollIndicator={false}
-				contentContainerStyle={styles.scrollContent}>
+			<View style={styles.badgesWrapper}>
 				{metadata.map((item, index) => (
 					<View
 						key={index}
@@ -93,7 +90,7 @@ export default function MetadataSection({ content }) {
 						)}
 					</View>
 				))}
-			</ScrollView>
+			</View>
 		</View>
 	);
 }
@@ -102,9 +99,10 @@ const styles = StyleSheet.create({
 	container: {
 		marginBottom: 20,
 	},
-	scrollContent: {
+	badgesWrapper: {
+		flexDirection: "row",
+		flexWrap: "wrap",
 		gap: 8,
-		paddingRight: 20,
 	},
 	badge: {
 		flexDirection: "row",

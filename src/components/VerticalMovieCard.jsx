@@ -1,8 +1,9 @@
 // @components/VerticalMovieCard.jsx
 import { Ionicons } from "@react-native-vector-icons/ionicons";
+import { Image } from "expo-image";
+import { useRouter } from "expo-router";
 import {
 	Dimensions,
-	Image,
 	StyleSheet,
 	Text,
 	TouchableOpacity,
@@ -11,12 +12,52 @@ import {
 
 const { width } = Dimensions.get("window");
 
-const VerticalMovieCard = ({ title, colors, movies }) => {
+const VerticalMovieCard = ({ title, colors, movies, onMoviePress }) => {
+	const router = useRouter();
+
+	const handlePress = (item) => {
+		if (onMoviePress) {
+			onMoviePress(item);
+			return;
+		}
+
+		let itemData = { ...item };
+		const epTitleMatch = (itemData.title || "").match(
+			/^(.+?)\s+(\d+)\.\s*Sezon\s+(\d+)\.\s*Bölüm/i,
+		);
+
+		if (epTitleMatch) {
+			itemData = {
+				...itemData,
+				seriesTitle: epTitleMatch[1].trim(),
+				initialSeason: String(epTitleMatch[2]),
+				initialEpisode: String(epTitleMatch[3]),
+				is_series: true,
+				content_type: "series",
+			};
+		}
+
+		const id =
+			itemData.id ||
+			encodeURIComponent(
+				itemData.url ||
+					itemData.slug ||
+					itemData.title,
+			);
+		router.push({
+			pathname: "/(app)/MovieDetails/[id]",
+			params: {
+				id,
+				movieData: JSON.stringify(itemData),
+			},
+		});
+	};
+
 	return (
 		<View style={styles.sectionContainer}>
 			<View style={styles.sectionHeader}>
 				<Text style={[styles.sectionTitle, { color: colors.text }]}>
-					Senin İçin Seçilenler
+					{title || "Senin İçin Seçilenler"}
 				</Text>
 				<TouchableOpacity>
 					<Text style={[styles.seeAll, { color: colors.primary }]}>
@@ -25,17 +66,21 @@ const VerticalMovieCard = ({ title, colors, movies }) => {
 				</TouchableOpacity>
 			</View>
 
-			{movies.map((item) => (
+			{movies.map((item, index) => (
 				<TouchableOpacity
-					key={item.id}
+					key={item.id || item.url || item.slug || index}
 					style={[
 						styles.horizontalMovieCard,
 						{ backgroundColor: colors.cardBg },
 					]}
-					activeOpacity={0.8}>
+					activeOpacity={0.8}
+					onPress={() => handlePress(item)}>
 					<Image
-						source={{ uri: item.image }}
+						source={{ uri: item.poster || item.image }}
 						style={styles.horizontalPoster}
+						contentFit="cover"
+						transition={150}
+						cachePolicy="memory-disk"
 					/>
 					<View style={styles.horizontalMovieInfo}>
 						<Text
