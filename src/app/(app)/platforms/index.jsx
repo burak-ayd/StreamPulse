@@ -64,7 +64,7 @@ export default function PlatformScreen() {
 				<ScrollView
 					showsVerticalScrollIndicator={false}
 					contentContainerStyle={styles.scrollContainer}>
-					<PlatformScreenComponent />
+					<PlatformScreenComponent platform={Platform} />
 				</ScrollView>
 			</SafeAreaView>
 		</>

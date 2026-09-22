@@ -1,10 +1,10 @@
 import { fetchPlatforms } from "@/services/api";
 import { useThemeContext } from "@context/ThemeContext";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
 	ActivityIndicator,
-	Image,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -81,6 +81,9 @@ const PlatformList = () => {
 								uri: platform.favicon,
 							}}
 							style={styles.platformImage}
+							contentFit="contain"
+							transition={150}
+							cachePolicy="memory-disk"
 						/>
 						<Text
 							style={[

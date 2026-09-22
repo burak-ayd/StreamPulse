@@ -1,10 +1,10 @@
 import { useThemeContext } from "@context/ThemeContext";
 import { fetchRelatedContent as getRelatedApiContent } from "@/services/api";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-	Image,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -25,8 +25,12 @@ export default function RelatedContent({ contentType, currentId }) {
 	const fetchRelated = async () => {
 		try {
 			setLoading(true);
-			const data = await getRelatedApiContent(contentType, currentId);
-			setRelatedContent(data || []);
+			if (typeof getRelatedApiContent === "function") {
+				const data = await getRelatedApiContent(contentType, currentId);
+				setRelatedContent(data || []);
+			} else {
+				setRelatedContent([]);
+			}
 		} catch (error) {
 			console.error("Error fetching related content:", error);
 		} finally {
@@ -57,11 +61,18 @@ export default function RelatedContent({ contentType, currentId }) {
 						onPress={() => handleContentPress(item.id)}
 						activeOpacity={0.8}>
 						<View style={styles.posterContainer}>
-							{item.poster_url ? (
+							{item.poster_url || item.poster || item.image ? (
 								<Image
-									source={{ uri: item.poster_url }}
+									source={{
+										uri:
+											item.poster_url ||
+											item.poster ||
+											item.image,
+									}}
 									style={styles.poster}
-									resizeMode="cover"
+									contentFit="cover"
+									transition={150}
+									cachePolicy="memory-disk"
 								/>
 							) : (
 								<View

@@ -6,12 +6,12 @@ import {
 	getUserProfile,
 	getWatchHistory,
 } from "@utils/storage";
+import { Image } from "expo-image";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
 	Dimensions,
 	FlatList,
-	Image,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -113,6 +113,8 @@ export default function ProfileScreen() {
 							<Image
 								source={{ uri: profile.avatarUrl }}
 								style={styles.avatar}
+								contentFit="cover"
+								transition={150}
 							/>
 						) : (
 							<View
@@ -339,9 +341,15 @@ export default function ProfileScreen() {
 										activeOpacity={0.8}>
 										<Image
 											source={{
-												uri: item.image || item.poster || item.poster_url,
+												uri:
+													item.image ||
+													item.poster ||
+													item.poster_url,
 											}}
 											style={styles.gridImage}
+											contentFit="cover"
+											transition={150}
+											cachePolicy="memory-disk"
 										/>
 									</TouchableOpacity>
 								)}

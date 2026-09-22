@@ -1,5 +1,6 @@
 import { FEATURED_MOVIES } from "@constants/data";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import React, {
 	useCallback,
@@ -91,7 +92,13 @@ function StarRating({ rating }) {
 				color="#F5C518"
 				style={{ marginRight: 1 }}
 			/>
-			<Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
+			<Text style={styles.ratingText}>
+				{typeof rating === "number"
+					? rating.toFixed(1)
+					: !isNaN(parseFloat(rating))
+						? parseFloat(rating).toFixed(1)
+						: rating}
+			</Text>
 		</View>
 	);
 }
@@ -100,16 +107,10 @@ function StarRating({ rating }) {
 function PosterImage({ uri, accentColor }) {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(false);
-	const fadeAnim = useRef(new Animated.Value(0)).current;
 
 	const onLoad = useCallback(() => {
 		setLoading(false);
-		Animated.timing(fadeAnim, {
-			toValue: 1,
-			duration: 300,
-			useNativeDriver: true,
-		}).start();
-	}, [fadeAnim]);
+	}, []);
 
 	const onError = useCallback(() => {
 		setLoading(false);
@@ -133,12 +134,14 @@ function PosterImage({ uri, accentColor }) {
 				</View>
 			)}
 
-			{/* Gerçek resim — yüklenince fade-in */}
+			{/* Gerçek resim — expo-image ile */}
 			{!error && (
-				<Animated.Image
+				<Image
 					source={{ uri }}
-					style={[styles.poster, { opacity: fadeAnim }]}
-					resizeMode="cover"
+					style={styles.poster}
+					contentFit="cover"
+					transition={300}
+					cachePolicy="memory-disk"
 					onLoad={onLoad}
 					onError={onError}
 				/>
@@ -211,37 +214,62 @@ const MovieCard = React.memo(
 							</Text>
 						</View>
 					</View> */}
-
+					{/* Genre Düzeltilecek. String olarak geliyor. */}
 					<View style={styles.info}>
-						<View style={styles.genreRow}>
-							{item.genres.map((g, i) => (
-								<React.Fragment key={g}>
-									<Text style={styles.genreText}>{g}</Text>
-									{i < item.genres.length - 1 && (
-										<Text style={styles.genreDot}> · </Text>
-									)}
-								</React.Fragment>
-							))}
-						</View>
+						{Array.isArray(item.category) &&
+							item.category.length > 0 && (
+								<View style={styles.genreRow}>
+									{item.category.map((g, i) => (
+										<React.Fragment key={g}>
+											<Text style={styles.genreText}>
+												{g}
+											</Text>
+											{i < item.category.length - 1 && (
+												<Text style={styles.genreDot}>
+													{" "}
+													·{" "}
+												</Text>
+											)}
+										</React.Fragment>
+									))}
+								</View>
+							)}
 
 						<Text style={styles.title} numberOfLines={2}>
 							{item.title}
 						</Text>
 
 						<View style={styles.metaRow}>
-							<StarRating rating={item.rating} />
-							<View style={styles.metaDivider} />
-							<Ionicons
-								name="time-outline"
-								size={12}
-								color="#aaa"
-							/>
-							<Text style={styles.metaText}>{item.duration}</Text>
+							{item.rating ? (
+								<StarRating rating={item.rating} />
+							) : null}
+							{item.rating &&
+							(item.duration || item.release_date) ? (
+								<View style={styles.metaDivider} />
+							) : null}
+							{item.duration ? (
+								<>
+									<Ionicons
+										name="time-outline"
+										size={12}
+										color="#aaa"
+									/>
+									<Text style={styles.metaText}>
+										{item.duration}
+									</Text>
+								</>
+							) : item.release_date ? (
+								<Text style={styles.metaText}>
+									{item.release_date}
+								</Text>
+							) : null}
 						</View>
 
-						<Text style={styles.description} numberOfLines={3}>
-							{item.description}
-						</Text>
+						{/* {item.description ? (
+							<Text style={styles.description} numberOfLines={3}>
+								{item.description}
+							</Text>
+						) : null} */}
 
 						{/* <TouchableOpacity
 							style={[
@@ -310,10 +338,13 @@ export default function FeaturedCarousel({
 	const [activeIndex, setActiveIndex] = useState(0);
 
 	const loopedData = useMemo(() => {
-		if (movies.length === 0) return [];
+		if (!movies || movies.length === 0) return [];
 		return [
 			{ ...movies[movies.length - 1], _loopKey: "clone-last" },
-			...movies.map((m) => ({ ...m, _loopKey: m.id })),
+			...movies.map((m, idx) => ({
+				...m,
+				_loopKey: m.id || m.url || m.slug || `item-${idx}`,
+			})),
 			{ ...movies[0], _loopKey: "clone-first" },
 		];
 	}, [movies]);
@@ -397,7 +428,9 @@ export default function FeaturedCarousel({
 				scrollEventThrottle={16}
 				getItemLayout={getItemLayout}
 			/>
-			<Indicators count={movies.length} activeIndex={activeIndex} />
+			{movies.length > 1 && (
+				<Indicators count={movies.length} activeIndex={activeIndex} />
+			)}
 		</View>
 	);
 }
