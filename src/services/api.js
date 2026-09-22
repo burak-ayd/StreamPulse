@@ -211,12 +211,7 @@ export async function fetchContentDetails(contentId) {
  * Fetch related content
  */
 export async function fetchRelatedContent(contentType, currentId) {
-	try {
-		// Şu anda backend'de spesifik related endpoint'i yoksa boş liste dön
-		return [];
-	} catch (error) {
-		console.warn("API fetchRelatedContent error:", error.message);
-	}
+	// Şu anda backend'de spesifik related endpoint'i yoksa boş liste dön
 	return [];
 }
 
@@ -242,6 +237,30 @@ export async function searchContent(query) {
 	return [];
 }
 
+/**
+ * Extract video stream sources from target URL
+ * @param {string} url - Target movie or series/episode URL
+ * @returns {Promise<Array>} Array of extractor results: [{ extractor, result: { name, url, referer, headers, subtitles } }]
+ */
+export async function extractVideoSources(url) {
+	try {
+		const response = await fetch(`${API_BASE_URL}/extract`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ url }),
+		});
+		if (response.ok) {
+			const data = await response.json();
+			if (Array.isArray(data)) return data;
+		} else {
+			console.warn("API extract failed with status:", response.status);
+		}
+	} catch (error) {
+		console.warn("API extractVideoSources error:", error.message);
+	}
+	return [];
+}
+
 export default {
 	fetchPlatforms,
 	fetchPlatformMainPage,
@@ -251,4 +270,5 @@ export default {
 	fetchContentDetails,
 	fetchRelatedContent,
 	searchContent,
+	extractVideoSources,
 };

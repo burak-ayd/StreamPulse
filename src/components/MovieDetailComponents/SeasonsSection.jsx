@@ -1,5 +1,6 @@
 import { useThemeContext } from "@context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
+import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
@@ -18,8 +19,11 @@ export default function SeasonsSection({
 	onEpisodePress,
 	loading = false,
 	initialSeason,
+	seriesTitle = "",
+	posterUrl = null,
 }) {
 	const { colors } = useThemeContext();
+	const router = useRouter();
 
 	// Sezon ve bölüm verilerini normalize et
 	const normalizedSeasons = useMemo(() => {
@@ -127,21 +131,16 @@ export default function SeasonsSection({
 		}
 
 		if (ep.url) {
-			Alert.alert(
-				`${selectedSeason}. Sezon ${ep.episode || index + 1}. Bölüm`,
-				ep.title ? `"${ep.title}"\n\nBölümü izlemek istiyor musunuz?` : "Bölümü izlemek istiyor musunuz?",
-				[
-					{ text: "Vazgeç", style: "cancel" },
-					{
-						text: "İzle",
-						onPress: () => {
-							Linking.openURL(ep.url).catch((err) =>
-								console.error("Link açma hatası:", err),
-							);
-						},
-					},
-				],
-			);
+			router.push({
+				pathname: "/player",
+				params: {
+					url: ep.url,
+					title: seriesTitle || ep.title || "Dizi",
+					subtitle: `${selectedSeason}. Sezon ${ep.episode || index + 1}. Bölüm${ep.title ? ` - ${ep.title}` : ""}`,
+					poster: ep.poster || posterUrl || null,
+					contentType: "series",
+				},
+			});
 		}
 	};
 
