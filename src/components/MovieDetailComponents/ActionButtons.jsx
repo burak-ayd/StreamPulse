@@ -1,5 +1,6 @@
 import { useThemeContext } from "@context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
+import { useRouter } from "expo-router";
 import {
 	Alert,
 	Share,
@@ -11,16 +12,42 @@ import {
 
 export default function ActionButtons({ content }) {
 	const { colors } = useThemeContext();
+	const router = useRouter();
 
 	const handleWatch = () => {
-		Alert.alert(
-			"Şimdi İzle",
-			`${content.title} izlemeye başlamak üzeresiniz.`,
-			[
-				{ text: "İptal", style: "cancel" },
-				{ text: "İzle", onPress: () => console.log("Watch pressed") },
-			],
-		);
+		// Determine target watch URL
+		let playUrl = content?.url;
+		let playTitle = content?.title;
+		let playSubtitle = content?.tagline || "";
+
+		// If it's a series and has seasons, get the first episode
+		if (content?.content_type === "series" || content?.seasons) {
+			const seasons = content.seasons;
+			if (seasons) {
+				const firstSeasonKey = Object.keys(seasons)[0];
+				const firstEpisode = seasons[firstSeasonKey]?.[0];
+				if (firstEpisode?.url) {
+					playUrl = firstEpisode.url;
+					playSubtitle = `${firstSeasonKey}. Sezon 1. Bölüm${firstEpisode.title ? ` - ${firstEpisode.title}` : ""}`;
+				}
+			}
+		}
+
+		if (!playUrl) {
+			Alert.alert("Bilgi", "Bu içerik için oynatılabilir bağlantı bulunamadı.");
+			return;
+		}
+
+		router.push({
+			pathname: "/player",
+			params: {
+				url: playUrl,
+				title: playTitle,
+				subtitle: playSubtitle,
+				poster: content?.poster_url || content?.backdrop_url,
+				id: content?.id,
+			},
+		});
 	};
 
 	const handleAddToList = () => {

@@ -241,6 +241,8 @@ export default function MovieDetailsScreen() {
 							episodes={content.episodes}
 							loading={pluginLoading && !content.seasons}
 							initialSeason={passedMovie?.initialSeason}
+							seriesTitle={content.title}
+							posterUrl={content.poster_url || content.backdrop_url}
 						/>
 					)}
 
