@@ -19,7 +19,7 @@ import TrailerSection from "@components/MovieDetailComponents/TrailerSection";
  * Movie/Series Details Screen
  * Dynamic route: /(app)/MovieDetails/[id]
  *
- * Displays comprehensive information about a movie or series from Supabase
+ * Displays comprehensive information about a movie or series from API
  */
 export default function MovieDetailsScreen() {
 	const { id } = useLocalSearchParams();

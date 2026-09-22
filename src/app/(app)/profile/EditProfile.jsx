@@ -1,7 +1,7 @@
 import { useThemeContext } from "@context/ThemeContext";
 import DateTimePicker from "@expo/ui/community/datetime-picker";
-import { MaterialIcons } from "@expo/vector-icons";
-import { supabase } from "@utils/supabase";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
+import { getUserProfile, saveUserProfile } from "@utils/storage";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
@@ -28,7 +28,7 @@ export default function EditProfile() {
 	const [isLoading, setIsLoading] = useState(false);
 
 	// User data states
-	const [userEmail, setUserEmail] = useState("");
+	const [email, setEmail] = useState("");
 	const [username, setUsername] = useState("");
 	const [displayName, setDisplayName] = useState("");
 	const [avatarUrl, setAvatarUrl] = useState("");
@@ -55,42 +55,26 @@ export default function EditProfile() {
 
 	// Load user data on mount
 	const loadUserData = useCallback(async () => {
-		const {
-			data: { session },
-		} = await supabase.auth.getSession();
-		if (!session) return;
-
-		setUserEmail(session.user.email ?? "");
-
-		const { data } = await supabase
-			.from("profiles")
-			.select("*")
-			.eq("id", session.user.id)
-			.single();
-
-		if (data) {
-			setUsername(data.username ?? "");
-			setDisplayName(data.display_name ?? "");
-			const avatarPath = data.avatar_url.split("/avatars/")[1];
-			if (avatarPath) {
-				const { data: urlData, error } = await supabase.storage
-					.from("avatars")
-					.createSignedUrl(avatarPath, 3600);
-
-				if (!error && urlData?.signedUrl) {
-					setAvatarUrl(urlData.signedUrl ?? "");
-				} else {
-					console.log("signedUrl error:", error);
-				}
+		try {
+			setIsLoading(true);
+			const data = await getUserProfile();
+			if (data) {
+				setEmail(data.email || "");
+				setUsername(data.username || "");
+				setDisplayName(data.displayName || "");
+				setAvatarUrl(data.avatarUrl || "");
+				setBio(data.bio || "");
+				setLanguage(data.language || "Türkçe");
+				setIsPrivate(data.isPrivate || false);
+				setBirthDate(data.birthDate || "");
 			}
-			setBio(data.bio ?? "");
-			setLanguage(data.language ?? "Türkçe");
-			setIsPrivate(data.is_private ?? false);
-			setBirthDate(data.birthdate ?? "");
+		} catch (error) {
+			console.error("Profil bilgisi alınamadı:", error);
+		} finally {
+			setIsLoading(false);
 		}
 	}, []);
 
-	// Initial data load
 	useEffect(() => {
 		loadUserData();
 	}, [loadUserData]);
@@ -126,40 +110,6 @@ export default function EditProfile() {
 		}
 	};
 
-	const uploadAvatar = async (uri) => {
-		try {
-			const fileExt = uri.split(".").pop();
-			const fileName = `${Date.now()}.${fileExt}`;
-
-			const {
-				data: { session },
-			} = await supabase.auth.getSession();
-
-			if (!session) {
-				throw new Error("Oturum bulunamadı");
-			}
-
-			const userId = session.user.id;
-			const arrayBuffer = await fetch(uri).then((r) => r.arrayBuffer());
-			const { error: uploadError } = await supabase.storage
-				.from("avatars")
-				.upload(`${userId}/${fileName}`, arrayBuffer, {
-					contentType: `image/${fileExt}`,
-				});
-
-			if (uploadError) throw uploadError;
-
-			const { data: urlData } = supabase.storage
-				.from("avatars")
-				.getPublicUrl(`${userId}/${fileName}`);
-
-			return urlData.publicUrl;
-		} catch (error) {
-			console.error("Upload error:", error);
-			return null;
-		}
-	};
-
 	const handleSave = async () => {
 		if (!username.trim()) {
 			Alert.alert("Hata", "Kullanıcı adı boş bırakılamaz.");
@@ -174,38 +124,17 @@ export default function EditProfile() {
 		setIsLoading(true);
 
 		try {
-			const {
-				data: { session },
-			} = await supabase.auth.getSession();
-			if (!session) throw new Error("Oturum bulunamadı");
+			await saveUserProfile({
+				username: username.trim(),
+				displayName: displayName.trim(),
+				avatarUrl: avatarUrl,
+				bio: bio.trim(),
+				language: language,
+				isPrivate: isPrivate,
+				birthDate: birthDate,
+			});
 
-			let newAvatarUrl = avatarUrl;
-
-			// If avatar is a local URI (not a Supabase URL), upload it
-			if (avatarUrl && !avatarUrl.includes("supabase")) {
-				const uploadedUrl = await uploadAvatar(avatarUrl);
-				if (uploadedUrl) {
-					newAvatarUrl = uploadedUrl;
-				}
-			}
-
-			const { error } = await supabase
-				.from("profiles")
-				.update({
-					username: username.trim(),
-					display_name: displayName.trim(),
-					avatar_url: newAvatarUrl,
-					bio: bio.trim(),
-					language: language,
-					is_private: isPrivate,
-					birthdate: birthDate,
-					updated_at: new Date().toISOString(),
-				})
-				.eq("id", session.user.id);
-
-			if (error) throw error;
-
-			Alert.alert("Başarılı", "Profil güncellendi.", [
+			Alert.alert("Başarılı", "Profil kaydedildi.", [
 				{
 					text: "Tamam",
 					onPress: () => router.back(),
@@ -263,7 +192,7 @@ export default function EditProfile() {
 					<TouchableOpacity
 						onPress={handleBack}
 						style={styles.backButton}>
-						<MaterialIcons
+						<Ionicons
 							name="arrow-back"
 							size={24}
 							color={colors.text}
@@ -316,17 +245,13 @@ export default function EditProfile() {
 								]}>
 								{avatarUrl ? (
 									<Image
-										source={{
-											uri: avatarUrl.includes("supabase")
-												? avatarUrl
-												: avatarUrl,
-										}}
+										source={{ uri: avatarUrl }}
 										style={styles.avatarImage}
 									/>
 								) : (
-									<MaterialIcons
+									<Ionicons
 										name="person"
-										size={64}
+										size={56}
 										color={colors.primary}
 									/>
 								)}
@@ -337,8 +262,8 @@ export default function EditProfile() {
 									{ borderColor: colors.primary },
 								]}
 								onPress={pickImage}>
-								<MaterialIcons
-									name="camera-alt"
+								<Ionicons
+									name="camera"
 									size={18}
 									color={colors.primary}
 								/>
@@ -351,31 +276,6 @@ export default function EditProfile() {
 									Fotoğrafı Değiştir
 								</Text>
 							</TouchableOpacity>
-						</View>
-
-						{/* Email Display */}
-						<View
-							style={[
-								styles.emailSection,
-								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
-								},
-							]}>
-							<Text
-								style={[
-									styles.emailLabel,
-									{ color: colors.textSecondary },
-								]}>
-								E-posta
-							</Text>
-							<Text
-								style={[
-									styles.emailText,
-									{ color: colors.text },
-								]}>
-								{userEmail || "Yükleniyor..."}
-							</Text>
 						</View>
 
 						{/* User Info Form */}
@@ -447,8 +347,8 @@ export default function EditProfile() {
 												: colors.border,
 										},
 									]}>
-									<MaterialIcons
-										name="alternate-email"
+									<Ionicons
+										name="at"
 										size={20}
 										color={colors.textSecondary}
 										style={styles.inputIcon}
@@ -544,8 +444,8 @@ export default function EditProfile() {
 											borderColor: colors.border,
 										},
 									]}>
-									<MaterialIcons
-										name="language"
+									<Ionicons
+										name="globe-outline"
 										size={20}
 										color={colors.textSecondary}
 										style={styles.inputIcon}
@@ -557,9 +457,9 @@ export default function EditProfile() {
 										]}>
 										{language}
 									</Text>
-									<MaterialIcons
-										name="chevron-right"
-										size={24}
+									<Ionicons
+										name="chevron-forward"
+										size={20}
 										color={colors.textSecondary}
 									/>
 								</View>
@@ -586,8 +486,8 @@ export default function EditProfile() {
 											borderColor: colors.border,
 										},
 									]}>
-									<MaterialIcons
-										name="cake"
+									<Ionicons
+										name="gift-outline"
 										size={20}
 										color={colors.textSecondary}
 										style={styles.inputIcon}
@@ -601,9 +501,9 @@ export default function EditProfile() {
 											? formatDate(birthDate)
 											: "Ayarlanmamış"}
 									</Text>
-									<MaterialIcons
-										name="calendar-today"
-										size={24}
+									<Ionicons
+										name="calendar-outline"
+										size={20}
 										color={colors.textSecondary}
 									/>
 								</View>
@@ -644,8 +544,8 @@ export default function EditProfile() {
 							]}>
 							<View style={styles.privacyItem}>
 								<View style={styles.privacyTextContainer}>
-									<MaterialIcons
-										name="lock"
+									<Ionicons
+										name="lock-closed-outline"
 										size={22}
 										color={colors.textSecondary}
 										style={styles.privacyIcon}
@@ -663,7 +563,7 @@ export default function EditProfile() {
 												styles.privacyDescription,
 												{ color: colors.textSecondary },
 											]}>
-											Hesabınızı özel yapın
+											Profilinizi gizli tutun
 										</Text>
 									</View>
 								</View>
@@ -760,20 +660,6 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		fontWeight: "500",
 	},
-	emailSection: {
-		padding: 16,
-		borderRadius: 16,
-		borderWidth: 1,
-		marginBottom: 12,
-	},
-	emailLabel: {
-		fontSize: 12,
-		marginBottom: 4,
-	},
-	emailText: {
-		fontSize: 16,
-		fontWeight: "500",
-	},
 	formSection: {
 		padding: 20,
 		borderRadius: 16,
@@ -801,26 +687,29 @@ const styles = StyleSheet.create({
 	},
 	textInput: {
 		flex: 1,
-		fontSize: 16,
+		fontSize: 15,
+		paddingVertical: 8,
 	},
 	bioInputWrapper: {
 		borderRadius: 12,
 		borderWidth: 1.5,
 		padding: 12,
-		minHeight: 100,
+		minHeight: 90,
 	},
 	bioTextInput: {
-		fontSize: 16,
-		minHeight: 60,
+		flex: 1,
+		fontSize: 15,
+		paddingTop: 0,
 	},
 	charCount: {
-		fontSize: 12,
+		fontSize: 11,
 		textAlign: "right",
-		marginTop: 8,
+		marginTop: 4,
 	},
 	selectWrapper: {
 		flexDirection: "row",
 		alignItems: "center",
+		justifyContent: "space-between",
 		height: 48,
 		borderRadius: 12,
 		borderWidth: 1.5,
@@ -828,13 +717,13 @@ const styles = StyleSheet.create({
 	},
 	selectText: {
 		flex: 1,
-		fontSize: 16,
-		marginLeft: 10,
+		fontSize: 15,
 	},
 	privacySection: {
 		padding: 16,
 		borderRadius: 16,
 		borderWidth: 1,
+		marginBottom: 12,
 	},
 	privacyItem: {
 		flexDirection: "row",
@@ -844,14 +733,15 @@ const styles = StyleSheet.create({
 	privacyTextContainer: {
 		flexDirection: "row",
 		alignItems: "center",
+		gap: 12,
 		flex: 1,
 	},
 	privacyIcon: {
-		marginRight: 12,
+		marginRight: 4,
 	},
 	privacyTitle: {
-		fontSize: 16,
-		fontWeight: "500",
+		fontSize: 15,
+		fontWeight: "600",
 	},
 	privacyDescription: {
 		fontSize: 12,

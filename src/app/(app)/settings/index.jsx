@@ -1,8 +1,9 @@
-import { useAuth } from "@context/AuthContext";
 import { useThemeContext } from "@context/ThemeContext";
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, useRouter } from "expo-router";
 import {
+	Alert,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -16,10 +17,31 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function SettingsScreen() {
 	const { theme, toggleTheme, colors } = useThemeContext();
 	const router = useRouter();
-	const { signOut } = useAuth();
 
 	const handleBack = () => {
 		router.back();
+	};
+
+	const handleClearCache = () => {
+		Alert.alert(
+			"Verileri Temizle",
+			"Tüm yerel veriler ve geçmiş silinsin mi?",
+			[
+				{ text: "İptal", style: "cancel" },
+				{
+					text: "Temizle",
+					style: "destructive",
+					onPress: async () => {
+						try {
+							await AsyncStorage.clear();
+							Alert.alert("Başarılı", "Yerel veriler temizlendi.");
+						} catch (error) {
+							Alert.alert("Hata", "Veriler temizlenirken hata oluştu.");
+						}
+					},
+				},
+			],
+		);
 	};
 
 	const SettingItem = ({
@@ -40,9 +62,9 @@ export default function SettingsScreen() {
 						styles.iconContainer,
 						{ backgroundColor: `${colors.primary}1A` },
 					]}>
-					<MaterialIcons
+					<Ionicons
 						name={icon}
-						size={24}
+						size={22}
 						color={colors.primary}
 					/>
 				</View>
@@ -53,9 +75,9 @@ export default function SettingsScreen() {
 			<View style={styles.settingItemRight}>
 				{rightComponent}
 				{showChevron && !rightComponent && (
-					<MaterialIcons
-						name="chevron-right"
-						size={24}
+					<Ionicons
+						name="chevron-forward"
+						size={20}
 						color={colors.textSecondary}
 					/>
 				)}
@@ -94,7 +116,7 @@ export default function SettingsScreen() {
 					<TouchableOpacity
 						onPress={handleBack}
 						style={styles.backButton}>
-						<MaterialIcons
+						<Ionicons
 							name="arrow-back"
 							size={24}
 							color={colors.text}
@@ -111,7 +133,7 @@ export default function SettingsScreen() {
 					contentContainerStyle={styles.scrollContainer}>
 					{/* Account Section */}
 					<View style={styles.section}>
-						<SectionHeader title="HESAP" />
+						<SectionHeader title="PROFİL" />
 						<View
 							style={[
 								styles.settingsGroup,
@@ -121,26 +143,13 @@ export default function SettingsScreen() {
 								},
 							]}>
 							<SettingItem
-								icon="person"
+								icon="person-outline"
 								label="Profili Düzenle"
 								onPress={() =>
 									router.push({
 										pathname: "profile/EditProfile",
 									})
 								}
-							/>
-							<View
-								style={[
-									styles.divider,
-									{ backgroundColor: colors.border },
-								]}
-							/>
-							<SettingItem
-								icon="lock"
-								label="Şifreyi Değiştir"
-								onPress={() => {
-									// TODO: Navigate to change password screen
-								}}
 							/>
 						</View>
 					</View>
@@ -157,7 +166,7 @@ export default function SettingsScreen() {
 								},
 							]}>
 							<SettingItem
-								icon="contrast"
+								icon="contrast-outline"
 								label="Koyu Mod"
 								showChevron={false}
 								rightComponent={
@@ -180,10 +189,10 @@ export default function SettingsScreen() {
 								]}
 							/>
 							<SettingItem
-								icon="notifications"
+								icon="notifications-outline"
 								label="Bildirim Ayarları"
 								onPress={() => {
-									// TODO: Navigate to notification settings
+									Alert.alert("Bildirimler", "Bildirim ayarları aktiftir.");
 								}}
 							/>
 							<View
@@ -193,11 +202,8 @@ export default function SettingsScreen() {
 								]}
 							/>
 							<SettingItem
-								icon="language"
+								icon="globe-outline"
 								label="Dil"
-								onPress={() => {
-									// TODO: Navigate to language settings
-								}}
 								rightComponent={
 									<View style={styles.languageContainer}>
 										<Text
@@ -207,14 +213,33 @@ export default function SettingsScreen() {
 											]}>
 											Türkçe
 										</Text>
-										<MaterialIcons
-											name="chevron-right"
-											size={24}
+										<Ionicons
+											name="chevron-forward"
+											size={20}
 											color={colors.textSecondary}
 										/>
 									</View>
 								}
 								showChevron={false}
+							/>
+						</View>
+					</View>
+
+					{/* Data Section */}
+					<View style={styles.section}>
+						<SectionHeader title="VERİ VE DEPOLAMA" />
+						<View
+							style={[
+								styles.settingsGroup,
+								{
+									backgroundColor: colors.cardBg,
+									borderColor: colors.border,
+								},
+							]}>
+							<SettingItem
+								icon="trash-outline"
+								label="Yerel Verileri Sıfırla"
+								onPress={handleClearCache}
 							/>
 						</View>
 					</View>
@@ -231,7 +256,7 @@ export default function SettingsScreen() {
 								},
 							]}>
 							<SettingItem
-								icon="info"
+								icon="information-circle-outline"
 								label="Sürüm"
 								showChevron={false}
 								rightComponent={
@@ -241,35 +266,6 @@ export default function SettingsScreen() {
 											{ color: colors.textSecondary },
 										]}>
 										1.0.0
-									</Text>
-								}
-							/>
-						</View>
-					</View>
-
-					{/* Logout Section */}
-					<View style={styles.section}>
-						<SectionHeader title="ÇIKIŞ YAP" />
-						<View
-							style={[
-								styles.settingsGroup,
-								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
-								},
-							]}>
-							<SettingItem
-								icon="logout"
-								label="Çıkış Yap"
-								showChevron={false}
-								onPress={signOut}
-								rightComponent={
-									<Text
-										style={[
-											styles.versionText,
-											{ color: colors.textSecondary },
-										]}>
-										Çıkış Yap
 									</Text>
 								}
 							/>

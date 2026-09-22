@@ -1,9 +1,13 @@
 import { WATCH_HISTORY } from "@constants/data";
 import { useThemeContext } from "@context/ThemeContext";
-import { MaterialIcons } from "@expo/vector-icons";
-import { supabase } from "@utils/supabase";
-import { Stack, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
+import {
+	getFavorites,
+	getUserProfile,
+	getWatchHistory,
+} from "@utils/storage";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import {
 	Dimensions,
 	FlatList,
@@ -20,56 +24,40 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const { width } = Dimensions.get("window");
 
 export default function ProfileScreen() {
-	const { theme, colors, toggleTheme } = useThemeContext();
-
+	const { theme, colors } = useThemeContext();
 	const router = useRouter();
-	const [userEmail, setUserEmail] = useState("");
-	const [userName, setUserName] = useState("");
-	const [userDisplayName, setUserDisplayName] = useState("");
-	const [userAvatarUrl, setUserAvatarUrl] = useState("");
+
+	const [profile, setProfile] = useState(null);
 	const [activeTab, setActiveTab] = useState("history");
+	const [favorites, setFavorites] = useState([]);
+	const [history, setHistory] = useState([]);
 
-	useEffect(() => {
-		supabase.auth.getSession().then(async ({ data: { session } }) => {
-			if (!session) return;
-			setUserEmail(session.user.email ?? "");
-
-			const { data } = await supabase
-				.from("profiles")
-				.select("*")
-				.eq("id", session.user.id);
-
-			const { data: urlData } = await supabase.storage
-				.from("avatars")
-				.createSignedUrl(
-					data[0].avatar_url.replace("/avatars/", ""),
-					3600,
-				);
-
-			if (data && data[0]) {
-				setUserName(data[0].username ?? "");
-				setUserDisplayName(data[0].display_name ?? "");
-				setUserAvatarUrl(urlData?.signedUrl ?? "");
-				// Signed URL için path'i doğru çıkar
-				const avatarPath = data[0].avatar_url.split("/avatars/")[1];
-				if (avatarPath) {
-					const { data: urlData, error } = await supabase.storage
-						.from("avatars")
-						.createSignedUrl(avatarPath, 3600);
-
-					if (!error && urlData?.signedUrl) {
-						setUserAvatarUrl(urlData.signedUrl);
-					} else {
-						console.log("signedUrl error:", error);
-					}
-				}
-			}
-		});
+	const loadData = useCallback(async () => {
+		try {
+			const [userProf, favs, hist] = await Promise.all([
+				getUserProfile(),
+				getFavorites(),
+				getWatchHistory(),
+			]);
+			setProfile(userProf);
+			setFavorites(favs);
+			setHistory(hist.length > 0 ? hist : WATCH_HISTORY);
+		} catch (error) {
+			console.error("Profil bilgileri yüklenirken hata:", error);
+		}
 	}, []);
+
+	useFocusEffect(
+		useCallback(() => {
+			loadData();
+		}, [loadData]),
+	);
 
 	const handleBack = () => {
 		router.back();
 	};
+
+	const displayList = activeTab === "history" ? history : favorites;
 
 	return (
 		<>
@@ -96,31 +84,21 @@ export default function ProfileScreen() {
 					<TouchableOpacity
 						onPress={handleBack}
 						style={styles.backButton}>
-						<MaterialIcons
+						<Ionicons
 							name="arrow-back"
-							size={28}
+							size={24}
 							color={colors.text}
 						/>
 					</TouchableOpacity>
 					<Text style={[styles.topBarTitle, { color: colors.text }]}>
-						Profile
+						Profil
 					</Text>
-					{/* <TouchableOpacity
-						onPress={toggleTheme}
-						style={styles.settingsButton}>
-						<MaterialIcons
-							name={theme === "dark" ? "light-mode" : "dark-mode"}
-							size={24}
-							color={colors.text}
-						/>
-					</TouchableOpacity> */}
-					{/* Settings */}
 					<TouchableOpacity
 						onPress={() => router.push("/settings")}
 						style={styles.settingsButton}>
-						<MaterialIcons
-							name="settings"
-							size={24}
+						<Ionicons
+							name="settings-outline"
+							size={22}
 							color={colors.text}
 						/>
 					</TouchableOpacity>
@@ -131,12 +109,9 @@ export default function ProfileScreen() {
 					contentContainerStyle={styles.scrollContainer}>
 					{/* Profile Header */}
 					<View style={styles.profileHeader}>
-						{/* Avatar */}
-						{userAvatarUrl ? (
+						{profile?.avatarUrl ? (
 							<Image
-								source={{
-									uri: userAvatarUrl,
-								}}
+								source={{ uri: profile.avatarUrl }}
 								style={styles.avatar}
 							/>
 						) : (
@@ -146,29 +121,50 @@ export default function ProfileScreen() {
 									{ backgroundColor: colors.primary },
 								]}>
 								<Text style={styles.avatarText}>
-									{(userEmail.charAt(0) || "U").toUpperCase()}
+									{(profile?.displayName || "S")
+										.charAt(0)
+										.toUpperCase()}
 								</Text>
 							</View>
 						)}
 
-						{/* Name and Username */}
 						<Text style={[styles.userName, { color: colors.text }]}>
-							{userDisplayName ||
-								userEmail.split("@")[0] ||
-								"User"}
+							{profile?.displayName || "Sinema Sever"}
 						</Text>
 						<Text
 							style={[
 								styles.userHandle,
 								{ color: colors.textSecondary },
 							]}>
-							@
-							{(
-								userName ||
-								userEmail.split("@")[0] ||
-								"user"
-							).toLowerCase()}
+							@{profile?.username || "sinemasever"}
 						</Text>
+						{profile?.bio ? (
+							<Text
+								style={[
+									styles.userBio,
+									{ color: colors.textSecondary },
+								]}>
+								{profile.bio}
+							</Text>
+						) : null}
+
+						<TouchableOpacity
+							style={[
+								styles.editButton,
+								{
+									borderColor: colors.primary,
+									backgroundColor: colors.cardBg,
+								},
+							]}
+							onPress={() => router.push("/profile/EditProfile")}>
+							<Text
+								style={[
+									styles.editButtonText,
+									{ color: colors.primary },
+								]}>
+								Profili Düzenle
+							</Text>
+						</TouchableOpacity>
 					</View>
 
 					{/* Stats Component */}
@@ -183,14 +179,14 @@ export default function ProfileScreen() {
 									styles.statNumber,
 									{ color: colors.text },
 								]}>
-								128
+								{history.length}
 							</Text>
 							<Text
 								style={[
 									styles.statLabel,
 									{ color: colors.textSecondary },
 								]}>
-								Filmler
+								İzlenenler
 							</Text>
 						</View>
 						<View
@@ -203,14 +199,14 @@ export default function ProfileScreen() {
 									styles.statNumber,
 									{ color: colors.text },
 								]}>
-								34
+								{favorites.length}
 							</Text>
 							<Text
 								style={[
 									styles.statLabel,
 									{ color: colors.textSecondary },
 								]}>
-								Diziler
+								Favoriler
 							</Text>
 						</View>
 						<View
@@ -223,14 +219,14 @@ export default function ProfileScreen() {
 									styles.statNumber,
 									{ color: colors.text },
 								]}>
-								750
+								{profile?.language || "Türkçe"}
 							</Text>
 							<Text
 								style={[
 									styles.statLabel,
 									{ color: colors.textSecondary },
 								]}>
-								Saat
+								Dil
 							</Text>
 						</View>
 					</View>
@@ -301,26 +297,56 @@ export default function ProfileScreen() {
 
 					{/* Image Grid */}
 					<View style={styles.gridContainer}>
-						<FlatList
-							data={WATCH_HISTORY}
-							keyExtractor={(item) => item.id}
-							numColumns={3}
-							scrollEnabled={false}
-							columnWrapperStyle={styles.gridRow}
-							renderItem={({ item }) => (
-								<TouchableOpacity
+						{displayList.length === 0 ? (
+							<View style={styles.emptyState}>
+								<Ionicons
+									name={
+										activeTab === "favorites"
+											? "heart-outline"
+											: "film-outline"
+									}
+									size={48}
+									color={colors.textSecondary}
+								/>
+								<Text
 									style={[
-										styles.gridItem,
-										{ backgroundColor: colors.cardBg },
-									]}
-									activeOpacity={0.8}>
-									<Image
-										source={{ uri: item.image }}
-										style={styles.gridImage}
-									/>
-								</TouchableOpacity>
-							)}
-						/>
+										styles.emptyText,
+										{ color: colors.textSecondary },
+									]}>
+									{activeTab === "favorites"
+										? "Henüz favori içerik eklenmedi"
+										: "İzleme geçmişiniz henüz boş"}
+								</Text>
+							</View>
+						) : (
+							<FlatList
+								data={displayList}
+								keyExtractor={(item) => String(item.id)}
+								numColumns={3}
+								scrollEnabled={false}
+								columnWrapperStyle={styles.gridRow}
+								renderItem={({ item }) => (
+									<TouchableOpacity
+										style={[
+											styles.gridItem,
+											{ backgroundColor: colors.cardBg },
+										]}
+										onPress={() =>
+											router.push(
+												`/(app)/MovieDetails/${item.id}`,
+											)
+										}
+										activeOpacity={0.8}>
+										<Image
+											source={{
+												uri: item.image || item.poster || item.poster_url,
+											}}
+											style={styles.gridImage}
+										/>
+									</TouchableOpacity>
+								)}
+							/>
+						)}
 					</View>
 				</ScrollView>
 			</SafeAreaView>
@@ -364,46 +390,48 @@ const styles = StyleSheet.create({
 	},
 	profileHeader: {
 		alignItems: "center",
-		paddingVertical: 32,
+		paddingVertical: 24,
 		paddingHorizontal: 16,
 	},
 	avatar: {
-		width: 128,
-		height: 128,
-		borderRadius: 64,
+		width: 100,
+		height: 100,
+		borderRadius: 50,
 		justifyContent: "center",
 		alignItems: "center",
-		marginBottom: 16,
+		marginBottom: 12,
 	},
 	avatarText: {
 		color: "#ffffff",
-		fontSize: 48,
+		fontSize: 38,
 		fontWeight: "bold",
 	},
 	userName: {
-		fontSize: 22,
+		fontSize: 20,
 		fontWeight: "bold",
-		marginBottom: 4,
-		letterSpacing: -0.015,
+		marginBottom: 2,
 	},
 	userHandle: {
-		fontSize: 16,
+		fontSize: 14,
 		fontWeight: "400",
-		marginBottom: 16,
+		marginBottom: 6,
+	},
+	userBio: {
+		fontSize: 13,
+		textAlign: "center",
+		paddingHorizontal: 20,
+		marginBottom: 12,
 	},
 	editButton: {
-		width: "100%",
-		height: 40,
-		borderRadius: 8,
-		justifyContent: "center",
-		alignItems: "center",
+		paddingHorizontal: 20,
+		paddingVertical: 8,
+		borderRadius: 20,
 		borderWidth: 1,
-		marginTop: 8,
+		marginTop: 6,
 	},
 	editButtonText: {
-		fontSize: 14,
-		fontWeight: "bold",
-		letterSpacing: 0.015,
+		fontSize: 13,
+		fontWeight: "600",
 	},
 	statsContainer: {
 		flexDirection: "row",
@@ -414,17 +442,17 @@ const styles = StyleSheet.create({
 	statCard: {
 		flex: 1,
 		borderRadius: 12,
-		padding: 16,
+		padding: 14,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	statNumber: {
-		fontSize: 24,
+		fontSize: 18,
 		fontWeight: "bold",
-		marginBottom: 4,
+		marginBottom: 2,
 	},
 	statLabel: {
-		fontSize: 12,
+		fontSize: 11,
 		fontWeight: "500",
 	},
 	tabsContainer: {
@@ -435,7 +463,7 @@ const styles = StyleSheet.create({
 	},
 	tab: {
 		flex: 1,
-		paddingVertical: 16,
+		paddingVertical: 14,
 		borderBottomWidth: 3,
 		alignItems: "center",
 	},
@@ -460,5 +488,14 @@ const styles = StyleSheet.create({
 	gridImage: {
 		width: "100%",
 		height: "100%",
+	},
+	emptyState: {
+		alignItems: "center",
+		justifyContent: "center",
+		paddingVertical: 40,
+		gap: 12,
+	},
+	emptyText: {
+		fontSize: 14,
 	},
 });

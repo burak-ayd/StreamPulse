@@ -1,6 +1,6 @@
 import { useThemeContext } from "@context/ThemeContext";
-import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "@utils/supabase";
+import { fetchRelatedContent as getRelatedApiContent } from "@/services/api";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -19,22 +19,13 @@ export default function RelatedContent({ contentType, currentId }) {
 	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
-		fetchRelatedContent();
+		fetchRelated();
 	}, [contentType, currentId]);
 
-	const fetchRelatedContent = async () => {
+	const fetchRelated = async () => {
 		try {
 			setLoading(true);
-
-			const { data, error } = await supabase
-				.from("contents")
-				.select("id, title, poster_url, rating, content_type")
-				.eq("content_type", contentType)
-				.neq("id", currentId)
-				.limit(6);
-
-			if (error) throw error;
-
+			const data = await getRelatedApiContent(contentType, currentId);
 			setRelatedContent(data || []);
 		} catch (error) {
 			console.error("Error fetching related content:", error);
@@ -94,7 +85,7 @@ export default function RelatedContent({ contentType, currentId }) {
 										color="#F5C518"
 									/>
 									<Text style={styles.ratingText}>
-										{item.rating.toFixed(1)}
+										{Number(item.rating).toFixed(1)}
 									</Text>
 								</View>
 							)}

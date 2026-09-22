@@ -1,6 +1,6 @@
 import BottomNavigation from "@components/BottomNavigation";
 import { useThemeContext } from "@context/ThemeContext";
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack } from "expo-router";
 import { useState } from "react";
 import {
@@ -40,7 +40,7 @@ export default function SearchScreen() {
 						},
 					]}>
 					<Text style={[styles.headerTitle, { color: colors.text }]}>
-						Search
+						Arama
 					</Text>
 				</View>
 
@@ -52,9 +52,9 @@ export default function SearchScreen() {
 						<View
 							style={[
 								styles.searchInputWrapper,
-								{ backgroundColor: colors.inputBg },
+								{ backgroundColor: colors.cardBg, borderColor: colors.border, borderWidth: 1 },
 							]}>
-							<MaterialIcons
+							<Ionicons
 								name="search"
 								size={20}
 								color={colors.textSecondary}
@@ -64,7 +64,7 @@ export default function SearchScreen() {
 									styles.searchInput,
 									{ color: colors.text },
 								]}
-								placeholder="Search movies, series..."
+								placeholder="Film veya dizi ara..."
 								placeholderTextColor={colors.textSecondary}
 								value={searchQuery}
 								onChangeText={setSearchQuery}
@@ -74,8 +74,8 @@ export default function SearchScreen() {
 
 					{/* Empty State */}
 					<View style={styles.emptyState}>
-						<MaterialIcons
-							name="search"
+						<Ionicons
+							name="search-outline"
 							size={64}
 							color={colors.textSecondary}
 						/>
@@ -84,7 +84,7 @@ export default function SearchScreen() {
 								styles.emptyStateText,
 								{ color: colors.textSecondary },
 							]}>
-							Start searching for your favorite movies and series
+							Favori film ve dizilerinizi aramaya başlayın
 						</Text>
 					</View>
 				</ScrollView>
@@ -121,8 +121,8 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		paddingHorizontal: 12,
-		borderRadius: 8,
-		height: 44,
+		borderRadius: 12,
+		height: 48,
 		gap: 8,
 	},
 	searchInput: {
