@@ -167,6 +167,7 @@ export default function PlayerScreen() {
 					subtitle={subtitle}
 					poster={poster}
 					onClose={handleClose}
+					initialTime={120}
 				/>
 			)}
 		</View>
