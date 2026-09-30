@@ -1,68 +1,74 @@
-# Graph Report - StreamPulse  (2026-09-26)
+# Graph Report - StreamPulse  (2026-09-30)
 
 ## Corpus Check
-- 84 files · ~85,781 words
+- 90 files · ~91,450 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 4 file(s) not represented in the graph (top: (none) 2, .example 1, .lock 1)
 
 ## Summary
-- 401 nodes · 664 edges · 41 communities (16 shown, 25 thin omitted)
-- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 30 edges (avg confidence: 0.86)
-- Token cost: 1,200 input · 800 output
+- 427 nodes · 760 edges · 47 communities (21 shown, 26 thin omitted)
+- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 38 edges (avg confidence: 0.86)
+- Token cost: 150 input · 100 output
 
 ## Community Hubs (Navigation)
-- Theme Context & Navigation Foundations
-- Metro Bundler & ESLint Configuration
-- Discover Screen & UI Layouts
-- Core Expo Dependencies & Plugins
-- Settings & Local Storage State
-- Profile Screen & Image Management
-- Movie Details & Platform Catalog
-- Expo App Configuration & Android Icons
-- Continue Watching Feature & Progress Logic
+- Core UI & Expo Libraries
+- Movie Details & Theme
+- Navigation & User Views
+- Expo Runtime Dependencies
+- Playback & Continue Watching
+- Project Metadata & Packages
+- App Configuration & Android
+- Platform Screen & Storage
+- Movie Carousel & Sections
 - TypeScript Configuration
-- JavaScript Path Aliases
-- Content Metadata & Formatters
-- Package Scripts & Native Run Targets
-- Offline Download & Cloudstream Pipeline
-- Project Rules & Architecture Constraints
-- Multi-Device Sync & QR Pairing
-- Static Asset (Community 16)
-- Static Asset (Community 17)
-- Static Asset (Community 18)
-- Static Asset (Community 19)
-- Static Asset (Community 20)
-- Static Asset (Community 21)
-- Static Asset (Community 22)
-- Static Asset (Community 23)
-- Static Asset (Community 24)
-- Static Asset (Community 25)
-- Static Asset (Community 26)
-- Static Asset (Community 27)
-- Static Asset (Community 28)
-- Static Asset (Community 29)
-- Static Asset (Community 30)
-- Static Asset (Community 31)
-- Static Asset (Community 32)
-- Static Asset (Community 33)
-- Static Asset (Community 34)
-- Static Asset (Community 35)
-- Static Asset (Community 36)
-- Static Asset (Community 37)
-- Static Asset (Community 38)
-- Continue Watching UI Component Spec
+- Featured Carousel Component
+- Path Aliases & JSConfig
+- Search & Content Caching
+- Metadata & Formatting Utils
+- NPM Build Scripts
+- Metro Bundler Config
+- Development Dependencies
+- ESLint Configuration
+- Graph-First Agent Rules
+- Claude & Expo Guidelines
+- Device Pairing & Sync Plan
+- Expo Symbol Asset
+- Grid Graphic Asset
+- Android Icon Background
+- Android Icon Foreground
+- Android Icon Monochrome
+- Expo Badge Graphic
+- Expo White Badge Graphic
+- Expo Logo Graphic
+- Favicon Graphic
+- App Icon Graphic
+- Logo Glow Graphic
+- App Logo Graphic
+- React Logo 2X Asset
+- React Logo 3X Asset
+- React Logo Asset
+- Splash Icon Asset
+- Explore Tab 2X Icon
+- Explore Tab 3X Icon
+- Explore Tab Icon
+- Home Tab 2X Icon
+- Home Tab 3X Icon
+- Home Tab Icon
+- Tutorial Web Graphic
+- Continue Watching UI Spec
+- Direct Downloader Service
 
 ## God Nodes (most connected - your core abstractions)
-1. `react-native` - 38 edges
-2. `@react-native-vector-icons/ionicons` - 25 edges
-3. `react` - 25 edges
-4. `expo-router` - 23 edges
-5. `expo` - 13 edges
-6. `react-native-safe-area-context` - 13 edges
-7. `paths` - 12 edges
-8. `expo-image` - 11 edges
-9. `paths` - 11 edges
-10. `MetadataSection()` - 9 edges
+1. `react-native` - 43 edges
+2. `@react-native-vector-icons/ionicons` - 31 edges
+3. `react` - 30 edges
+4. `expo-router` - 25 edges
+5. `react-native-safe-area-context` - 16 edges
+6. `Index()` - 15 edges
+7. `expo-image` - 14 edges
+8. `expo` - 13 edges
+9. `paths` - 12 edges
+10. `useThemeContext()` - 11 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Progress Tracking Logic (10s threshold)` --conceptually_related_to--> `VideoPlayer()`  [INFERRED]
@@ -71,103 +77,122 @@
   CONTINUE_WATCHING_PLAN.md → src/app/(app)/player.jsx
 - `StreamPulse Expo Application` --conceptually_related_to--> `Expo SDK 56 Version Constraint`  [INFERRED]
   README.md → AGENTS.md
-- `DownloadContext & Queue` --references--> `DirectDownloader Service`  [INFERRED]
-  OFFLINE_DOWNLOAD_PLAN.md → D:/Projeler/ReactNative/OFFLINE_DOWNLOAD_PLAN.md
 - `Claude Agent Guidelines` --references--> `Expo SDK 56 Version Constraint`  [EXTRACTED]
   CLAUDE.md → AGENTS.md
+- `DownloadsScreen()` --calls--> `getDownloads()`  [EXTRACTED]
+  src/app/(app)/downloads.jsx → src/utils/storage.js
 
 ## Import Cycles
 - None detected.
 
 ## Hyperedges (group relationships)
 - **Continue Watching End-to-End Pipeline** — continue_watching_plan_feature, continue_watching_plan_progress_tracking, src_utils_storage, src_components_player_videoplayer_videoplayer, src_app_app_player_playerscreen [INFERRED 0.85]
-- **Offline Download & Playback Pipeline** — offline_download_plan_download_item, offline_download_plan_hls_downloader, offline_download_plan_download_context, offline_download_plan_offline_playback [INFERRED 0.85]
 
-## Communities (41 total, 25 thin omitted)
+## Communities (47 total, 26 thin omitted)
 
-### Community 0 - "Theme Context & Navigation Foundations"
+### Community 0 - "Core UI & Expo Libraries"
 Cohesion: 0.07
-Nodes (33): ref_context_themecontext, expo-linear-gradient, expo-router, expo-web-browser, react-native, @react-native-vector-icons/ionicons, styles, styles (+25 more)
+Nodes (27): expo-image, expo-image-picker, expo-linear-gradient, expo-router, @expo/ui, react-native, react-native-safe-area-context, @react-native-vector-icons/ionicons (+19 more)
 
-### Community 1 - "Metro Bundler & ESLint Configuration"
-Cohesion: 0.04
-Nodes (43): { defineConfig }, expoConfig, config, { getDefaultConfig }, path, devDependencies, babel-plugin-module-resolver, eslint (+35 more)
+### Community 1 - "Movie Details & Theme"
+Cohesion: 0.09
+Nodes (29): ref_context_themecontext, expo-web-browser, react, MovieDetailsScreen(), styles, ActionButtons(), styles, CastSection() (+21 more)
 
-### Community 2 - "Discover Screen & UI Layouts"
-Cohesion: 0.08
-Nodes (23): expo-image, react, react-native-safe-area-context, styles, styles, BottomNavigation(), styles, FeaturedCarousel() (+15 more)
+### Community 2 - "Navigation & User Views"
+Cohesion: 0.12
+Nodes (32): DownloadsScreen(), Index(), initPlatform(), styles, EditProfile(), ProfileScreen(), styles, { width } (+24 more)
 
-### Community 3 - "Core Expo Dependencies & Plugins"
+### Community 3 - "Expo Runtime Dependencies"
 Cohesion: 0.06
 Nodes (36): dependencies, expo, expo-blur, expo-constants, expo-dev-client, expo-device, expo-font, expo-glass-effect (+28 more)
 
-### Community 4 - "Settings & Local Storage State"
+### Community 4 - "Playback & Continue Watching"
 Cohesion: 0.08
-Nodes (29): @react-native-async-storage/async-storage, SectionHeader(), SettingItem(), SettingsScreen(), styles, BG_STYLE_OPTIONS, COLOR_OPTIONS, DEFAULT_LANG_OPTIONS (+21 more)
+Nodes (31): Continue Watching Data Model, Episode Auto-Continue Logic, Continue Watching Feature Plan, Progress Tracking Logic (10s threshold), expo-screen-orientation, react-native-video, PlayerScreen(), styles (+23 more)
 
-### Community 5 - "Profile Screen & Image Management"
-Cohesion: 0.12
-Nodes (28): expo-image-picker, @expo/ui, Index(), loadProfile(), EditProfile(), styles, ProfileScreen(), styles (+20 more)
+### Community 5 - "Project Metadata & Packages"
+Cohesion: 0.07
+Nodes (28): main, name, private, version, babel-plugin-module-resolver, expo-blur, expo-constants, expo-dev-client (+20 more)
 
-### Community 6 - "Movie Details & Platform Catalog"
-Cohesion: 0.12
-Nodes (21): MovieDetailsScreen(), PlatformList(), loadPlatforms(), styles, HorizontalMovieCard(), styles, CategoryMovieSection(), loadCategoryMovies() (+13 more)
-
-### Community 7 - "Expo App Configuration & Android Icons"
+### Community 6 - "App Configuration & Android"
 Cohesion: 0.08
 Nodes (25): backgroundColor, foregroundImage, adaptiveIcon, intentFilters, package, predictiveBackGestureEnabled, reactCompiler, typedRoutes (+17 more)
 
-### Community 8 - "Continue Watching Feature & Progress Logic"
-Cohesion: 0.15
-Nodes (16): Continue Watching Data Model, Episode Auto-Continue Logic, Continue Watching Feature Plan, Progress Tracking Logic (10s threshold), expo-screen-orientation, react-native-video, PlayerScreen(), styles (+8 more)
+### Community 7 - "Platform Screen & Storage"
+Cohesion: 0.13
+Nodes (16): @react-native-async-storage/async-storage, PlatformScreen(), styles, SectionHeader(), SettingItem(), SettingsScreen(), styles, BottomTabInset (+8 more)
+
+### Community 8 - "Movie Carousel & Sections"
+Cohesion: 0.16
+Nodes (17): MovieCategorySection(), loadCategoryMovies(), styles, HorizontalMovieCard(), CategoryMovieSection(), loadCategoryMovies(), PlatformScreenComponent(), loadCategories() (+9 more)
 
 ### Community 9 - "TypeScript Configuration"
 Cohesion: 0.12
 Nodes (16): expo/tsconfig.base, compilerOptions, paths, strict, extends, include, @assets/*, @components/* (+8 more)
 
-### Community 10 - "JavaScript Path Aliases"
+### Community 10 - "Featured Carousel Component"
+Cohesion: 0.14
+Nodes (10): FeaturedCarousel(), getLayout(), MovieCard, styles, styles, CATEGORIES, FEATURED_MOVIES, POPULAR_MOVIES (+2 more)
+
+### Community 11 - "Path Aliases & JSConfig"
 Cohesion: 0.13
 Nodes (14): compilerOptions, baseUrl, paths, @assets/*, @components/*, @constants/*, @context/*, @hooks/* (+6 more)
 
-### Community 11 - "Content Metadata & Formatters"
+### Community 12 - "Search & Content Caching"
+Cohesion: 0.35
+Nodes (10): resetSearchMemoryCache(), searchMemoryCache, SearchScreen(), styles, searchContent(), searchPluginContent(), addToSearchHistory(), clearSearchHistory() (+2 more)
+
+### Community 13 - "Metadata & Formatting Utils"
 Cohesion: 0.44
 Nodes (9): MetadataSection(), styles, formatContentType(), formatRating(), formatRuntime(), formatStatus(), formatVoteCount(), formatYear() (+1 more)
 
-### Community 12 - "Package Scripts & Native Run Targets"
+### Community 14 - "NPM Build Scripts"
 Cohesion: 0.25
 Nodes (8): scripts, android, clean-start, ios, lint, reset-project, start, web
 
-### Community 13 - "Offline Download & Cloudstream Pipeline"
+### Community 15 - "Metro Bundler Config"
 Cohesion: 0.33
-Nodes (7): Cloudstream Download Architecture, DirectDownloader Service, DownloadContext & Queue, DownloadItem Schema, HlsDownloader Service, Offline Download Plan, Offline Playback (VideoPlayer)
+Nodes (5): config, { getDefaultConfig }, path, expo, ref_path
 
-### Community 14 - "Project Rules & Architecture Constraints"
+### Community 16 - "Development Dependencies"
+Cohesion: 0.33
+Nodes (6): devDependencies, babel-plugin-module-resolver, eslint, eslint-config-expo, @types/react, typescript
+
+### Community 17 - "ESLint Configuration"
+Cohesion: 0.40
+Nodes (4): { defineConfig }, expoConfig, eslint, eslint-config-expo
+
+### Community 18 - "Graph-First Agent Rules"
+Cohesion: 0.67
+Nodes (3): Golden Retrieval Principle, Graph-First Retrieval Rule, Targeted Reading Budget Constraint
+
+### Community 19 - "Claude & Expo Guidelines"
 Cohesion: 0.67
 Nodes (3): Expo SDK 56 Version Constraint, Claude Agent Guidelines, StreamPulse Expo Application
 
-### Community 15 - "Multi-Device Sync & QR Pairing"
+### Community 20 - "Device Pairing & Sync Plan"
 Cohesion: 0.67
 Nodes (3): Device Pairing & QR Code, Device Sync Plan, Watch Progress Sync
 
 ## Knowledge Gaps
-- **215 isolated node(s):** `name`, `slug`, `version`, `orientation`, `icon` (+210 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 232 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **25 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **222 isolated node(s):** `name`, `slug`, `version`, `orientation`, `icon` (+217 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 242 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **26 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `react-native` connect `Theme Context & Navigation Foundations` to `Metro Bundler & ESLint Configuration`, `Discover Screen & UI Layouts`, `Settings & Local Storage State`, `Profile Screen & Image Management`, `Movie Details & Platform Catalog`, `Continue Watching Feature & Progress Logic`, `Content Metadata & Formatters`?**
-  _High betweenness centrality (0.152) - this node is a cross-community bridge._
-- **Why does `dependencies` connect `Core Expo Dependencies & Plugins` to `Metro Bundler & ESLint Configuration`?**
-  _High betweenness centrality (0.125) - this node is a cross-community bridge._
-- **Why does `react` connect `Discover Screen & UI Layouts` to `Theme Context & Navigation Foundations`, `Metro Bundler & ESLint Configuration`, `Settings & Local Storage State`, `Profile Screen & Image Management`, `Movie Details & Platform Catalog`, `Continue Watching Feature & Progress Logic`?**
-  _High betweenness centrality (0.072) - this node is a cross-community bridge._
+- **Why does `react-native` connect `Core UI & Expo Libraries` to `Movie Details & Theme`, `Navigation & User Views`, `Playback & Continue Watching`, `Project Metadata & Packages`, `Platform Screen & Storage`, `Movie Carousel & Sections`, `Featured Carousel Component`, `Search & Content Caching`, `Metadata & Formatting Utils`?**
+  _High betweenness centrality (0.158) - this node is a cross-community bridge._
+- **Why does `dependencies` connect `Expo Runtime Dependencies` to `Project Metadata & Packages`?**
+  _High betweenness centrality (0.122) - this node is a cross-community bridge._
+- **Why does `react` connect `Movie Details & Theme` to `Core UI & Expo Libraries`, `Navigation & User Views`, `Playback & Continue Watching`, `Project Metadata & Packages`, `Platform Screen & Storage`, `Movie Carousel & Sections`, `Featured Carousel Component`, `Search & Content Caching`?**
+  _High betweenness centrality (0.078) - this node is a cross-community bridge._
 - **What connects `name`, `slug`, `version` to the rest of the system?**
-  _215 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Theme Context & Navigation Foundations` be split into smaller, more focused modules?**
-  _Cohesion score 0.07390648567119155 - nodes in this community are weakly interconnected._
-- **Should `Metro Bundler & ESLint Configuration` be split into smaller, more focused modules?**
-  _Cohesion score 0.044444444444444446 - nodes in this community are weakly interconnected._
-- **Should `Discover Screen & UI Layouts` be split into smaller, more focused modules?**
-  _Cohesion score 0.08108108108108109 - nodes in this community are weakly interconnected._
+  _222 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Core UI & Expo Libraries` be split into smaller, more focused modules?**
+  _Cohesion score 0.07227891156462585 - nodes in this community are weakly interconnected._
+- **Should `Movie Details & Theme` be split into smaller, more focused modules?**
+  _Cohesion score 0.09102564102564102 - nodes in this community are weakly interconnected._
+- **Should `Navigation & User Views` be split into smaller, more focused modules?**
+  _Cohesion score 0.12312312312312312 - nodes in this community are weakly interconnected._
