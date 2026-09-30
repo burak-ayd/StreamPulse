@@ -5,13 +5,19 @@ import { useRouter } from "expo-router";
 import {
 	Alert,
 	Linking,
-	Share,
 	StyleSheet,
 	Text,
 	TouchableOpacity,
 	View,
 } from "react-native";
 
+/**
+ * ActionButtons – Mockup tasarımındaki birleşik eylem bölümü.
+ *
+ * İçerir:
+ * 1. "Hemen Şimdi İzle" — Tam genişlik kırmızı CTA butonu
+ * 2. 4'lü grid: Listem, Fragman, Favori, İndir
+ */
 export default function ActionButtons({
 	content,
 	inWatchlist = false,
@@ -24,12 +30,10 @@ export default function ActionButtons({
 	const router = useRouter();
 
 	const handleWatch = () => {
-		// Determine target watch URL
 		let playUrl = content?.url;
 		let playTitle = content?.title;
 		let playSubtitle = content?.tagline || "";
 
-		// If it's a series and has seasons, get the first episode
 		if (content?.content_type === "series" || content?.seasons) {
 			const seasons = content.seasons;
 			if (seasons) {
@@ -43,7 +47,10 @@ export default function ActionButtons({
 		}
 
 		if (!playUrl) {
-			Alert.alert("Bilgi", "Bu içerik için oynatılabilir bağlantı bulunamadı.");
+			Alert.alert(
+				"Bilgi",
+				"Bu içerik için oynatılabilir bağlantı bulunamadı.",
+			);
 			return;
 		}
 
@@ -59,14 +66,6 @@ export default function ActionButtons({
 		});
 	};
 
-	const handleAddToList = () => {
-		if (onToggleWatchlist) {
-			onToggleWatchlist();
-		} else {
-			Alert.alert("Listem", "Bu özellik yakında eklenecek!");
-		}
-	};
-
 	const handleTrailer = async () => {
 		if (onOpenTrailer) {
 			onOpenTrailer();
@@ -74,141 +73,106 @@ export default function ActionButtons({
 		}
 		const trailerUrl = content?.trailer_url;
 		if (!trailerUrl) {
-			Alert.alert("Bilgi", "Bu içerik için fragman bağlantısı bulunamadı.");
+			Alert.alert(
+				"Bilgi",
+				"Bu içerik için fragman bağlantısı bulunamadı.",
+			);
 			return;
 		}
 		try {
 			await WebBrowser.openBrowserAsync(trailerUrl);
 		} catch (error) {
-			console.error("Fragman açma hatası:", error);
 			Linking.openURL(trailerUrl);
 		}
 	};
 
-	const handleFavorite = () => {
-		if (onToggleFavorite) {
-			onToggleFavorite();
-		} else {
-			Alert.alert("Favoriler", "Bu özellik yakında eklenecek!");
-		}
+	const handleDownload = () => {
+		Alert.alert("İndirme", "İndirme özelliği yakında eklenecek!");
 	};
+
+	const gridActions = [
+		{
+			key: "watchlist",
+			icon: inWatchlist ? "bookmark" : "bookmark-outline",
+			label: inWatchlist ? "Listemde" : "Listem",
+			color: "#E50914",
+			onPress: onToggleWatchlist,
+			active: inWatchlist,
+		},
+		{
+			key: "trailer",
+			icon: "play-circle",
+			label: "Fragman",
+			color: "#f43f5e",
+			onPress: handleTrailer,
+			hidden: !content?.trailer_url,
+		},
+		{
+			key: "favorite",
+			icon: isFav ? "heart" : "heart-outline",
+			label: isFav ? "Favorilerde" : "Favori",
+			color: "#fb7185",
+			onPress: onToggleFavorite,
+			active: isFav,
+		},
+		{
+			key: "download",
+			icon: "download-outline",
+			label: "İndir",
+			color: "#38bdf8",
+			onPress: handleDownload,
+		},
+	].filter((a) => !a.hidden);
+
+	const surfaceBg = theme === "dark" ? "#161B24" : "#ffffff";
+	const surfaceBorder = theme === "dark" ? "#232A36" : "#E2E8F0";
 
 	return (
 		<View style={styles.container}>
-			{/* Primary Button - Watch */}
+			{/* Primary CTA — Hemen Şimdi İzle */}
 			<TouchableOpacity
-				style={[
-					styles.primaryButton,
-					{ backgroundColor: colors.primary },
-				]}
+				style={styles.primaryButton}
 				onPress={handleWatch}
-				activeOpacity={0.8}>
-				<Ionicons name="play" size={20} color="#ffffff" />
-				<Text style={styles.primaryButtonText}>Şimdi İzle</Text>
+				activeOpacity={0.85}>
+				<Ionicons name="play" size={22} color="#ffffff" />
+				<Text style={styles.primaryButtonText}>Hemen Şimdi İzle</Text>
 			</TouchableOpacity>
 
-			{/* Secondary Buttons */}
-			<View style={styles.secondaryButtons}>
-				<TouchableOpacity
-					style={[
-						styles.secondaryButton,
-						inWatchlist
-							? {
-									backgroundColor: colors.primary,
-									borderColor: colors.primary,
-							  }
-							: {
-									backgroundColor:
-										theme === "dark"
-											? "#1A1A1A"
-											: colors.cardBg,
-									borderColor:
-										theme === "dark"
-											? "#2E2E2E"
-											: colors.border,
-							  },
-					]}
-					onPress={handleAddToList}
-					activeOpacity={0.8}>
-					<Ionicons
-						name={inWatchlist ? "bookmark" : "bookmark-outline"}
-						size={18}
-						color={inWatchlist ? "#ffffff" : colors.primary}
-					/>
-					<Text
-						style={[
-							styles.secondaryButtonText,
-							{
-								color: inWatchlist ? "#ffffff" : colors.text,
-							},
-						]}>
-						{inWatchlist ? "Listemde" : "Listem"}
-					</Text>
-				</TouchableOpacity>
-
-				{/* Fragman Butonu (Paylaş butonunun yerine konuldu) */}
-				{Boolean(content?.trailer_url) && (
+			{/* 4-Column Action Grid */}
+			<View style={styles.gridRow}>
+				{gridActions.map((action) => (
 					<TouchableOpacity
+						key={action.key}
 						style={[
-							styles.secondaryButton,
+							styles.gridItem,
 							{
-								backgroundColor:
-									theme === "dark"
-										? "#1A1A1A"
-										: colors.cardBg,
-								borderColor:
-									theme === "dark"
-										? "#2E2E2E"
-										: colors.border,
+								backgroundColor: surfaceBg,
+								borderColor: action.active
+									? "rgba(229,9,20,0.3)"
+									: surfaceBorder,
 							},
 						]}
-						onPress={handleTrailer}
-						activeOpacity={0.8}>
+						onPress={action.onPress}
+						activeOpacity={0.7}>
 						<Ionicons
-							name="play-circle-outline"
-							size={19}
-							color={colors.primary}
+							name={action.icon}
+							size={22}
+							color={action.color}
 						/>
 						<Text
 							style={[
-								styles.secondaryButtonText,
-								{ color: colors.text },
-							]}>
-							Fragman
+								styles.gridLabel,
+								{
+									color: action.active
+										? colors.primary
+										: colors.textSecondary,
+								},
+							]}
+							numberOfLines={1}>
+							{action.label}
 						</Text>
 					</TouchableOpacity>
-				)}
-
-				<TouchableOpacity
-					style={[
-						styles.iconButton,
-						isFav
-							? {
-									backgroundColor:
-										theme === "dark"
-											? "#281214"
-											: "#fee2e2",
-									borderColor: colors.primary,
-							  }
-							: {
-									backgroundColor:
-										theme === "dark"
-											? "#1A1A1A"
-											: colors.cardBg,
-									borderColor:
-										theme === "dark"
-											? "#2E2E2E"
-											: colors.border,
-							  },
-					]}
-					onPress={handleFavorite}
-					activeOpacity={0.8}>
-					<Ionicons
-						name={isFav ? "heart" : "heart-outline"}
-						size={20}
-						color={colors.primary}
-					/>
-				</TouchableOpacity>
+				))}
 			</View>
 		</View>
 	);
@@ -216,46 +180,45 @@ export default function ActionButtons({
 
 const styles = StyleSheet.create({
 	container: {
-		marginBottom: 24,
+		marginBottom: 16,
+		gap: 12,
 	},
 	primaryButton: {
+		backgroundColor: "#E50914",
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "center",
-		gap: 8,
-		paddingVertical: 14,
-		borderRadius: 12,
-		marginBottom: 12,
+		gap: 10,
+		paddingVertical: 15,
+		borderRadius: 16,
+		shadowColor: "#E50914",
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.45,
+		shadowRadius: 12,
+		elevation: 8,
 	},
 	primaryButtonText: {
 		color: "#ffffff",
 		fontSize: 16,
-		fontWeight: "700",
+		fontWeight: "800",
+		letterSpacing: 0.3,
 	},
-	secondaryButtons: {
+	gridRow: {
 		flexDirection: "row",
-		gap: 8,
+		gap: 10,
 	},
-	secondaryButton: {
+	gridItem: {
 		flex: 1,
-		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "center",
 		gap: 6,
-		paddingVertical: 12,
-		borderRadius: 12,
+		paddingVertical: 14,
+		paddingHorizontal: 6,
+		borderRadius: 14,
 		borderWidth: 1,
 	},
-	secondaryButtonText: {
-		fontSize: 14,
-		fontWeight: "600",
-	},
-	iconButton: {
-		width: 48,
-		height: 48,
-		justifyContent: "center",
-		alignItems: "center",
-		borderRadius: 12,
-		borderWidth: 1,
+	gridLabel: {
+		fontSize: 11,
+		fontWeight: "500",
 	},
 });

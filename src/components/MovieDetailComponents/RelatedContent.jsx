@@ -3,7 +3,7 @@ import { fetchRelatedContent as getRelatedApiContent } from "@/services/api";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
 	ScrollView,
 	StyleSheet,
@@ -12,107 +12,152 @@ import {
 	View,
 } from "react-native";
 
-export default function RelatedContent({ contentType, currentId }) {
-	const { colors } = useThemeContext();
+/**
+ * RelatedContent – Benzer İçerikler bölümü.
+ * Mockup tasarımındaki kırmızı accent çizgisi ve modern kart stiliyle.
+ */
+export default function RelatedContent({
+	contentType,
+	currentId,
+	pluginRelated,
+}) {
+	const { colors, theme } = useThemeContext();
 	const router = useRouter();
-	const [relatedContent, setRelatedContent] = useState([]);
-	const [loading, setLoading] = useState(true);
+
+	const hasPluginRelated = Array.isArray(pluginRelated) && pluginRelated.length > 0;
+	const [apiRelated, setApiRelated] = useState([]);
+	const [loading, setLoading] = useState(!hasPluginRelated);
 
 	useEffect(() => {
-		fetchRelated();
-	}, [contentType, currentId]);
-
-	const fetchRelated = async () => {
-		try {
-			setLoading(true);
-			if (typeof getRelatedApiContent === "function") {
-				const data = await getRelatedApiContent(contentType, currentId);
-				setRelatedContent(data || []);
-			} else {
-				setRelatedContent([]);
-			}
-		} catch (error) {
-			console.error("Error fetching related content:", error);
-		} finally {
+		// Eğer eklentiden gelen benzer içerikler varsa harici API çağrısı yapma
+		if (hasPluginRelated) {
 			setLoading(false);
+			return;
+		}
+
+		let isMounted = true;
+		const fetchRelated = async () => {
+			if (!currentId || typeof getRelatedApiContent !== "function") {
+				if (isMounted) setLoading(false);
+				return;
+			}
+			try {
+				setLoading(true);
+				const data = await getRelatedApiContent(contentType, currentId);
+				if (isMounted) {
+					setApiRelated(Array.isArray(data) ? data : []);
+				}
+			} catch (error) {
+				console.error("Error fetching related content:", error);
+			} finally {
+				if (isMounted) setLoading(false);
+			}
+		};
+
+		fetchRelated();
+		return () => {
+			isMounted = false;
+		};
+	}, [contentType, currentId, hasPluginRelated]);
+
+	const displayList = hasPluginRelated ? pluginRelated : apiRelated;
+
+	if (loading || !displayList || displayList.length === 0) return null;
+
+	const handleContentPress = (item) => {
+		if (item.url) {
+			router.push({
+				pathname: `/(app)/MovieDetails/${encodeURIComponent(item.id || item.url)}`,
+				params: {
+					movieData: JSON.stringify(item),
+					url: item.url,
+					plugin: item.plugin,
+				},
+			});
+		} else if (item.id) {
+			router.push(`/(app)/MovieDetails/${item.id}`);
 		}
 	};
 
-	if (loading || relatedContent.length === 0) return null;
-
-	const handleContentPress = (id) => {
-		router.push(`/(app)/MovieDetails/${id}`);
-	};
+	const surfaceBorder = theme === "dark" ? "#232A36" : "#E2E8F0";
 
 	return (
 		<View style={styles.container}>
-			<Text style={[styles.sectionTitle, { color: colors.text }]}>
-				Benzer İçerikler
-			</Text>
+			{/* Section Title with red accent bar */}
+			<View style={styles.titleRow}>
+				<View style={styles.accentBar} />
+				<Text style={[styles.sectionTitle, { color: colors.text }]}>
+					Benzer İçerikler
+				</Text>
+			</View>
 
 			<ScrollView
 				horizontal
 				showsHorizontalScrollIndicator={false}
 				contentContainerStyle={styles.scrollContent}>
-				{relatedContent.map((item) => (
-					<TouchableOpacity
-						key={item.id}
-						style={styles.contentCard}
-						onPress={() => handleContentPress(item.id)}
-						activeOpacity={0.8}>
-						<View style={styles.posterContainer}>
-							{item.poster_url || item.poster || item.image ? (
-								<Image
-									source={{
-										uri:
-											item.poster_url ||
-											item.poster ||
-											item.image,
-									}}
-									style={styles.poster}
-									contentFit="cover"
-									contentPosition="center"
-									transition={150}
-									cachePolicy="memory-disk"
-								/>
-							) : (
-								<View
-									style={[
-										styles.posterPlaceholder,
-										{ backgroundColor: colors.cardBg },
-									]}>
-									<Ionicons
-										name="film-outline"
-										size={32}
-										color={colors.textSecondary}
-									/>
-								</View>
-							)}
+				{displayList.map((item, index) => {
+					const posterUri =
+						item.poster_url || item.poster || item.image;
 
-							{item.rating && (
-								<View style={styles.ratingBadge}>
-									<Ionicons
-										name="star"
-										size={10}
-										color="#F5C518"
+					return (
+						<TouchableOpacity
+							key={item.id || item.url || index}
+							style={styles.contentCard}
+							onPress={() => handleContentPress(item)}
+							activeOpacity={0.8}>
+							<View
+								style={[
+									styles.posterContainer,
+									{ borderColor: surfaceBorder },
+								]}>
+								{posterUri ? (
+									<Image
+										source={{ uri: posterUri }}
+										style={styles.poster}
+										contentFit="cover"
+										contentPosition="center"
+										transition={150}
+										cachePolicy="memory-disk"
 									/>
-									<Text style={styles.ratingText}>
-										{Number(item.rating).toFixed(1)}
-									</Text>
-								</View>
-							)}
-						</View>
+								) : (
+									<View
+										style={[
+											styles.posterPlaceholder,
+											{ backgroundColor: colors.cardBg },
+										]}>
+										<Ionicons
+											name="film-outline"
+											size={32}
+											color={colors.textSecondary}
+										/>
+									</View>
+								)}
 
-						<Text
-							style={[
-								styles.contentTitle,
-								{ color: colors.text },
-							]}
-							numberOfLines={2}>
-							{item.title}
-						</Text>
-					</TouchableOpacity>
-				))}
+								{item.rating && (
+									<View style={styles.ratingBadge}>
+										<Ionicons
+											name="star"
+											size={10}
+											color="#FBBF24"
+										/>
+										<Text style={styles.ratingText}>
+											{Number(item.rating).toFixed(1)}
+										</Text>
+									</View>
+								)}
+							</View>
+
+							<Text
+								style={[
+									styles.contentTitle,
+									{ color: colors.text },
+								]}
+								numberOfLines={2}>
+								{item.title || item.name}
+							</Text>
+						</TouchableOpacity>
+					);
+				})}
 			</ScrollView>
 		</View>
 	);
@@ -122,10 +167,22 @@ const styles = StyleSheet.create({
 	container: {
 		marginBottom: 24,
 	},
+	titleRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 10,
+		marginBottom: 14,
+	},
+	accentBar: {
+		width: 4,
+		height: 22,
+		borderRadius: 2,
+		backgroundColor: "#E50914",
+	},
 	sectionTitle: {
 		fontSize: 18,
 		fontWeight: "700",
-		marginBottom: 12,
+		letterSpacing: -0.2,
 	},
 	scrollContent: {
 		gap: 12,
@@ -136,50 +193,43 @@ const styles = StyleSheet.create({
 	},
 	posterContainer: {
 		width: 120,
-		height: 180,
-		borderRadius: 12,
+		height: 175,
+		borderRadius: 14,
 		overflow: "hidden",
 		marginBottom: 8,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.3,
-		shadowRadius: 6,
-		elevation: 6,
+		borderWidth: 1,
+		backgroundColor: "rgba(0,0,0,0.2)",
 	},
 	poster: {
 		width: "100%",
 		height: "100%",
-		borderRadius: 12,
-		overflow: "hidden",
 	},
 	posterPlaceholder: {
 		width: "100%",
 		height: "100%",
-		borderRadius: 12,
-		overflow: "hidden",
 		justifyContent: "center",
 		alignItems: "center",
 	},
 	ratingBadge: {
 		position: "absolute",
-		top: 8,
-		left: 8,
+		top: 6,
+		left: 6,
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 4,
+		gap: 3,
 		backgroundColor: "rgba(0, 0, 0, 0.75)",
 		paddingHorizontal: 6,
-		paddingVertical: 4,
+		paddingVertical: 3,
 		borderRadius: 6,
 	},
 	ratingText: {
-		color: "#F5C518",
+		color: "#FBBF24",
 		fontSize: 11,
 		fontWeight: "700",
 	},
 	contentTitle: {
 		fontSize: 13,
 		fontWeight: "600",
-		lineHeight: 17,
+		lineHeight: 18,
 	},
 });

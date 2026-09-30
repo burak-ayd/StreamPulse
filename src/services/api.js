@@ -161,7 +161,11 @@ export async function fetchPluginDetail(pluginName, url, force = false) {
 /**
  * Fetch Platform Main Page
  */
-export async function fetchPlatformMainPage(platformName, categoryURL, force = false) {
+export async function fetchPlatformMainPage(
+	platformName,
+	categoryURL,
+	force = false,
+) {
 	const cacheKey = `${platformName}::${categoryURL}`;
 	if (!force && apiCache.categoryContents.has(cacheKey)) {
 		return apiCache.categoryContents.get(cacheKey);
@@ -304,7 +308,11 @@ export async function fetchPlatforms(force = false) {
 /**
  * Fetch random contents
  */
-export async function fetchRandomContents(platformName, count = 1, force = false) {
+export async function fetchRandomContents(
+	platformName,
+	count = 1,
+	force = false,
+) {
 	if (!force && apiCache.randomHero.has(platformName)) {
 		return apiCache.randomHero.get(platformName);
 	}
