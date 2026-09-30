@@ -15,6 +15,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Video, { TextTrackType } from "react-native-video";
 import { usePlayerSettings } from "@/context/PlayerSettingsContext";
+import {
+	markEpisodeComplete,
+	removeContinueWatching,
+	saveContinueWatching,
+} from "@/utils/storage";
 import TrackSelectionModal from "./TrackSelectionModal";
 
 
@@ -107,10 +112,17 @@ export default function VideoPlayer({
 	onClose,
 	onProgressUpdate,
 	initialTime = 0,
+	contentId = null,
+	contentType = "movie",
+	seriesInfo = null,
+	targetUrl = "",
 }) {
 	const insets = useSafeAreaInsets();
 	const videoRef = useRef(null);
 	const { settings } = usePlayerSettings();
+
+	const lastSavedTimeRef = useRef(0);
+	const currentTimeRef = useRef(0);
 
 	const seekDuration = settings?.seekDuration || 10;
 	const hideTimeoutMs = (settings?.controlsTimeout || 4) * 1000;
@@ -458,7 +470,9 @@ export default function VideoPlayer({
 	const handleLoad = (data) => {
 		setIsLoading(false);
 		setHasError(false);
-		setDuration(data.duration || 0);
+		const dur = data.duration || 0;
+		setDuration(dur);
+		durationRef.current = dur;
 
 		// If audio tracks detected in stream
 		if (Array.isArray(data.audioTracks) && data.audioTracks.length > 0) {
@@ -481,10 +495,63 @@ export default function VideoPlayer({
 	};
 
 	const handleProgress = (data) => {
-		setCurrentTime(data.currentTime || 0);
+		const curTime = data.currentTime || 0;
+		setCurrentTime(curTime);
+		currentTimeRef.current = curTime;
 		setPlayableDuration(data.playableDuration || 0);
 		if (onProgressUpdate) {
-			onProgressUpdate(data.currentTime, duration);
+			onProgressUpdate(curTime, duration);
+		}
+
+		// Kaldığın Yerden Devam Et - Progress Tracking
+		const totalDuration = durationRef.current || duration || 0;
+		const id = contentId || targetUrl || currentSourceData?.result?.url;
+
+		if (id && totalDuration > 0) {
+			const shouldSave =
+				(curTime >= 10 && lastSavedTimeRef.current === 0) ||
+				(curTime - lastSavedTimeRef.current >= 5 && curTime >= 10);
+
+			if (shouldSave) {
+				lastSavedTimeRef.current = curTime;
+				const progress = curTime / totalDuration;
+
+				if (progress >= 0.9) {
+					removeContinueWatching(id);
+					if (contentType === "episode" && seriesInfo?.nextEpisode) {
+						markEpisodeComplete(
+							seriesInfo.seriesId,
+							seriesInfo.season,
+							seriesInfo.episode,
+							seriesInfo.nextEpisode,
+							{
+								id,
+								title,
+								poster,
+								url: targetUrl || currentSourceData?.result?.url,
+								seriesTitle: seriesInfo.seriesTitle,
+							},
+						);
+					}
+				} else {
+					saveContinueWatching({
+						id,
+						title,
+						poster,
+						type: contentType,
+						currentTime: curTime,
+						duration: totalDuration,
+						progress,
+						url: targetUrl || currentSourceData?.result?.url,
+						seriesId: seriesInfo?.seriesId,
+						seriesTitle: seriesInfo?.seriesTitle,
+						season: seriesInfo?.season,
+						episode: seriesInfo?.episode,
+						episodeTitle: seriesInfo?.episodeTitle,
+						nextEpisode: seriesInfo?.nextEpisode,
+					});
+				}
+			}
 		}
 	};
 
@@ -646,6 +713,47 @@ export default function VideoPlayer({
 			}),
 		[],
 	);
+
+	// Çıkışta (unmount) son izleme pozisyonunu kaydet
+	useEffect(() => {
+		return () => {
+			const curTime = currentTimeRef.current;
+			const totalDuration = durationRef.current;
+			const id = contentId || targetUrl || currentSourceData?.result?.url;
+
+			if (
+				id &&
+				curTime >= 10 &&
+				totalDuration > 0 &&
+				curTime / totalDuration < 0.9
+			) {
+				saveContinueWatching({
+					id,
+					title,
+					poster,
+					type: contentType,
+					currentTime: curTime,
+					duration: totalDuration,
+					progress: curTime / totalDuration,
+					url: targetUrl || currentSourceData?.result?.url,
+					seriesId: seriesInfo?.seriesId,
+					seriesTitle: seriesInfo?.seriesTitle,
+					season: seriesInfo?.season,
+					episode: seriesInfo?.episode,
+					episodeTitle: seriesInfo?.episodeTitle,
+					nextEpisode: seriesInfo?.nextEpisode,
+				});
+			}
+		};
+	}, [
+		contentId,
+		targetUrl,
+		title,
+		poster,
+		contentType,
+		seriesInfo,
+		currentSourceData,
+	]);
 
 	const progressRatio =
 		scrubPosition !== null

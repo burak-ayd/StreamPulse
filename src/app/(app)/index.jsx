@@ -13,17 +13,18 @@ import {
 } from "@/services/api";
 import {
 	NONE_PLATFORM,
+	getContinueWatching,
 	getDownloads,
 	getSelectedPlatform,
 	getUserProfile,
-	getWatchHistory,
 	isFavorite,
+	removeContinueWatching,
 	saveSelectedPlatform,
 	toggleFavorite,
 } from "@/utils/storage";
 import BottomNavigation from "@components/BottomNavigation";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
 	ActivityIndicator,
@@ -46,7 +47,7 @@ export default function Index() {
 	const [loadingPlatform, setLoadingPlatform] = useState(true);
 	const [categories, setCategories] = useState([]);
 	const [featuredMovie, setFeaturedMovie] = useState(null);
-	const [watchHistory, setWatchHistory] = useState([]);
+	const [continueWatching, setContinueWatching] = useState([]);
 	const [downloadedItems, setDownloadedItems] = useState([]);
 	const [isInList, setIsInList] = useState(false);
 	const [userAvatarUrl, setUserAvatarUrl] = useState("");
@@ -61,20 +62,27 @@ export default function Index() {
 
 	const fetchUserData = useCallback(async () => {
 		try {
-			const [profile, history, downloads] = await Promise.all([
-				getUserProfile(),
-				getWatchHistory(),
-				getDownloads(),
-			]);
+			const [profile, downloads, continueList] =
+				await Promise.all([
+					getUserProfile(),
+					getDownloads(),
+					getContinueWatching(),
+				]);
 			if (profile?.avatarUrl) {
 				setUserAvatarUrl(profile.avatarUrl);
 			}
-			setWatchHistory(history || []);
 			setDownloadedItems(downloads || []);
+			setContinueWatching(continueList || []);
 		} catch (error) {
 			console.error("Kullanıcı verisi yüklenirken hata:", error);
 		}
 	}, []);
+
+	useFocusEffect(
+		useCallback(() => {
+			fetchUserData();
+		}, [fetchUserData]),
+	);
 
 	const fetchPlatformData = useCallback(async (platform, force = false) => {
 		if (!platform || platform.id === "none" || platform.name === "None") {
@@ -260,6 +268,34 @@ export default function Index() {
 		});
 	};
 
+	const handleContinueWatchingPress = (item) => {
+		if (item.url) {
+			router.push({
+				pathname: "/player",
+				params: {
+					url: item.url,
+					title: item.title,
+					subtitle: item.episodeTitle || item.seriesTitle || "",
+					poster: item.poster,
+					id: item.id,
+					type: item.type || "movie",
+					seriesId: item.seriesId,
+					season: item.season,
+					episode: item.episode,
+					episodeTitle: item.episodeTitle,
+					currentTime: item.currentTime,
+				},
+			});
+		} else if (item.id) {
+			handleMoviePress(item);
+		}
+	};
+
+	const handleRemoveContinueWatching = async (id) => {
+		const updated = await removeContinueWatching(id);
+		setContinueWatching(updated);
+	};
+
 	const handleToggleFavorite = async () => {
 		if (!featuredMovie || featuredMovie.id === "offline-placeholder") return;
 		try {
@@ -427,13 +463,17 @@ export default function Index() {
 									</View>
 								)}
 
-								{/* Offline Watch History */}
-								{watchHistory.length > 0 && (
+								{/* Offline Continue Watching */}
+								{continueWatching.length > 0 && (
 									<ContinueWatchingSection
-										items={watchHistory}
-										onItemPress={handleMoviePress}
+										items={continueWatching}
+										onItemPress={handleContinueWatchingPress}
+										onRemoveItem={handleRemoveContinueWatching}
 										onSeeAllPress={() =>
-											router.push("/(app)/profile")
+											router.push({
+												pathname: "/(app)/profile",
+												params: { tab: "continue" },
+											})
 										}
 									/>
 								)}
@@ -441,14 +481,20 @@ export default function Index() {
 						) : (
 							/* Online Normal Mode */
 							<>
-								{/* Continue Watching ("İzlemeye Devam Et") */}
-								<ContinueWatchingSection
-									items={watchHistory}
-									onItemPress={handleMoviePress}
-									onSeeAllPress={() =>
-										router.push("/(app)/profile")
-									}
-								/>
+								{/* Continue Watching ("Kaldığın Yerden Devam Et") */}
+								{continueWatching.length > 0 && (
+									<ContinueWatchingSection
+										items={continueWatching}
+										onItemPress={handleContinueWatchingPress}
+										onRemoveItem={handleRemoveContinueWatching}
+										onSeeAllPress={() =>
+											router.push({
+												pathname: "/(app)/profile",
+												params: { tab: "continue" },
+											})
+										}
+									/>
+								)}
 
 								{/* Platform Dynamic Category Sections */}
 								{categories

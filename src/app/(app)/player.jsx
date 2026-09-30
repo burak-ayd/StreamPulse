@@ -1,6 +1,6 @@
 import VideoPlayer from "@/components/player/VideoPlayer";
 import { extractVideoSources } from "@/services/api";
-import { addToWatchHistory } from "@/utils/storage";
+import { addToWatchHistory, getContinueWatching } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -22,12 +22,58 @@ export default function PlayerScreen() {
 	const subtitle = params.subtitle || "";
 	const poster = params.poster || null;
 	const contentId = params.id || null;
+	const contentType = params.type || (params.episode ? "episode" : "movie");
 
+	const seriesInfo = params.seriesInfo
+		? typeof params.seriesInfo === "string"
+			? JSON.parse(params.seriesInfo)
+			: params.seriesInfo
+		: params.seriesId
+			? {
+					seriesId: params.seriesId,
+					seriesTitle: params.seriesTitle,
+					season: params.season ? Number(params.season) : undefined,
+					episode: params.episode ? Number(params.episode) : undefined,
+					episodeTitle: params.episodeTitle,
+					nextEpisode: params.nextEpisode
+						? typeof params.nextEpisode === "string"
+							? JSON.parse(params.nextEpisode)
+							: params.nextEpisode
+						: undefined,
+				}
+			: null;
+
+	const [initialTime, setInitialTime] = useState(
+		params.currentTime ? Number(params.currentTime) : 0,
+	);
 	const [sources, setSources] = useState([]);
 	const [loading, setLoading] = useState(Boolean(targetUrl));
 	const [error, setError] = useState(
 		!targetUrl ? "Oynatılacak video bağlantısı bulunamadı." : null,
 	);
+
+	useEffect(() => {
+		async function checkResumePosition() {
+			if (params.currentTime) {
+				setInitialTime(Number(params.currentTime));
+				return;
+			}
+			try {
+				const continueData = await getContinueWatching();
+				const match = continueData.find(
+					(item) =>
+						item.id === (contentId || targetUrl) ||
+						(targetUrl && item.url === targetUrl),
+				);
+				if (match && match.currentTime > 10) {
+					setInitialTime(match.currentTime);
+				}
+			} catch (err) {
+				console.error("Resume pozisyonu kontrol edilirken hata:", err);
+			}
+		}
+		checkResumePosition();
+	}, [contentId, targetUrl, params.currentTime]);
 
 	const loadSources = useCallback(async () => {
 		if (!targetUrl) {
@@ -167,7 +213,11 @@ export default function PlayerScreen() {
 					subtitle={subtitle}
 					poster={poster}
 					onClose={handleClose}
-					initialTime={120}
+					initialTime={initialTime}
+					contentId={contentId || targetUrl}
+					contentType={contentType}
+					seriesInfo={seriesInfo}
+					targetUrl={targetUrl}
 				/>
 			)}
 		</View>
