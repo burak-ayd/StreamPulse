@@ -91,16 +91,73 @@ export function formatContentType(contentType) {
 
 /**
  * Get country flag emoji
- * @param {string} countryCode - ISO country code (e.g., "US", "TR")
- * @returns {string} Flag emoji or country code
+ * @param {string} country - Country name or ISO code (e.g. "ABD", "US", "Türkiye", "TR")
+ * @returns {string} Flag emoji or empty string
  */
-export function getCountryFlag(countryCode) {
-  if (!countryCode || countryCode.length !== 2) return countryCode || '';
-  
-  const codePoints = countryCode
-    .toUpperCase()
-    .split('')
-    .map(char => 127397 + char.charCodeAt());
-  
-  return String.fromCodePoint(...codePoints);
+export function getCountryFlag(country) {
+  if (!country || typeof country !== 'string') return '';
+
+  const clean = country.trim();
+  const lower = clean.toLowerCase();
+
+  const countryToCode = {
+    'abd': 'US',
+    'usa': 'US',
+    'us': 'US',
+    'amerika': 'US',
+    'amerika birleşik devletleri': 'US',
+    'türkiye': 'TR',
+    'turkey': 'TR',
+    'tr': 'TR',
+    'ingiltere': 'GB',
+    'ingıltere': 'GB',
+    'birleşik krallık': 'GB',
+    'uk': 'GB',
+    'gb': 'GB',
+    'fransa': 'FR',
+    'france': 'FR',
+    'fr': 'FR',
+    'almanya': 'DE',
+    'germany': 'DE',
+    'de': 'DE',
+    'italya': 'IT',
+    'italy': 'IT',
+    'it': 'IT',
+    'ispanya': 'ES',
+    'spain': 'ES',
+    'es': 'ES',
+    'japonya': 'JP',
+    'japan': 'JP',
+    'jp': 'JP',
+    'güney kore': 'KR',
+    'kore': 'KR',
+    'korea': 'KR',
+    'kr': 'KR',
+    'kanada': 'CA',
+    'canada': 'CA',
+    'ca': 'CA',
+    'rusya': 'RU',
+    'russia': 'RU',
+    'ru': 'RU',
+    'hindistan': 'IN',
+    'india': 'IN',
+    'in': 'IN',
+    'avustralya': 'AU',
+    'australia': 'AU',
+    'au': 'AU',
+    'çin': 'CN',
+    'china': 'CN',
+    'cn': 'CN',
+  };
+
+  const isoCode = countryToCode[lower] || (clean.length === 2 ? clean.toUpperCase() : null);
+
+  if (isoCode && isoCode.length === 2) {
+    const codePoints = isoCode
+      .split('')
+      .map(char => 127397 + char.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+  }
+
+  return '';
 }

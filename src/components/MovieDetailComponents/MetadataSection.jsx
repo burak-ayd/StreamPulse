@@ -11,83 +11,90 @@ import {
 } from "@utils/formatters";
 import { StyleSheet, Text, View } from "react-native";
 
+/**
+ * MetadataSection – Mockup tasarımındaki hap (pill) şeklinde meta bilgiler.
+ * Süre, Yıl, Yaş sınırı, Kalite, Durum gibi bilgileri küçük kutucuklar halinde gösterir.
+ */
 export default function MetadataSection({ content }) {
-	const { colors } = useThemeContext();
+	const { colors, theme } = useThemeContext();
 
-	const metadata = [
-		{
-			icon: "star",
-			value: content.rating ? `${formatRating(content.rating)}/10` : null,
-			subValue: content.vote_count
-				? `(${formatVoteCount(content.vote_count)} oy)`
-				: null,
-			color: "#F5C518",
-		},
+	const pills = [
 		{
 			icon: "time-outline",
 			value: formatRuntime(content.runtime_minutes),
-			color: colors.primary,
+			iconColor: "#E50914",
 		},
 		{
 			icon: "calendar-outline",
 			value: formatYear(content.release_date),
-			color: colors.primary,
+			iconColor: colors.textSecondary,
 		},
 		{
-			icon: "flag-outline",
-			value: content.country
-				? `${getCountryFlag(content.country)} ${content.country}`
-				: null,
-			color: colors.primary,
-		},
-		{
-			icon: "shield-outline",
 			value: content.age_rating,
-			color: colors.primary,
+			isAgeRating: true,
 		},
 		{
-			icon: "film-outline",
+			value: content.country
+				? (() => {
+						const flag = getCountryFlag(content.country);
+						return flag ? `${flag} ${content.country}` : content.country;
+				  })()
+				: null,
+		},
+		{
 			value: formatContentType(content.content_type),
-			color: colors.primary,
 		},
 		{
-			icon: "information-circle-outline",
 			value: formatStatus(content.status),
-			color: colors.primary,
+			isStatus: content.status === "Yayınlandı" || content.status === "Returning Series",
 		},
 	].filter((item) => item.value && item.value !== "N/A");
 
 	return (
 		<View style={styles.container}>
-			<View style={styles.badgesWrapper}>
-				{metadata.map((item, index) => (
+			<View style={styles.pillsRow}>
+				{pills.map((item, index) => (
 					<View
 						key={index}
 						style={[
-							styles.badge,
+							styles.pill,
 							{
-								backgroundColor: colors.cardBg,
-								borderColor: colors.border,
+								backgroundColor:
+									theme === "dark"
+										? "#161B24"
+										: "#ffffff",
+								borderColor:
+									theme === "dark"
+										? "#232A36"
+										: "#E2E8F0",
 							},
+							item.isAgeRating && styles.ageRatingPill,
+							item.isStatus && styles.statusPill,
 						]}>
-						<Ionicons
-							name={item.icon}
-							size={14}
-							color={item.color}
-						/>
+						{item.icon && (
+							<Ionicons
+								name={item.icon}
+								size={14}
+								color={item.iconColor || colors.textSecondary}
+							/>
+						)}
+						{item.isStatus && (
+							<View style={styles.statusDot} />
+						)}
 						<Text
-							style={[styles.badgeText, { color: colors.text }]}>
+							style={[
+								styles.pillText,
+								{
+									color: item.isAgeRating
+										? "#fb7185"
+										: item.isStatus
+											? "#34d399"
+											: colors.textSecondary,
+								},
+								item.isAgeRating && styles.ageRatingText,
+							]}>
 							{item.value}
 						</Text>
-						{item.subValue && (
-							<Text
-								style={[
-									styles.badgeSubText,
-									{ color: colors.textSecondary },
-								]}>
-								{item.subValue}
-							</Text>
-						)}
 					</View>
 				))}
 			</View>
@@ -97,28 +104,39 @@ export default function MetadataSection({ content }) {
 
 const styles = StyleSheet.create({
 	container: {
-		marginBottom: 20,
+		marginBottom: 16,
 	},
-	badgesWrapper: {
+	pillsRow: {
 		flexDirection: "row",
 		flexWrap: "wrap",
+		alignItems: "center",
 		gap: 8,
 	},
-	badge: {
+	pill: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 6,
-		paddingHorizontal: 12,
-		paddingVertical: 8,
-		borderRadius: 8,
+		gap: 4,
+		paddingHorizontal: 10,
+		paddingVertical: 6,
+		borderRadius: 10,
 		borderWidth: 1,
 	},
-	badgeText: {
-		fontSize: 13,
+	pillText: {
+		fontSize: 12,
 		fontWeight: "600",
 	},
-	badgeSubText: {
-		fontSize: 11,
-		fontWeight: "500",
+	ageRatingPill: {},
+	ageRatingText: {
+		fontWeight: "700",
+	},
+	statusPill: {
+		backgroundColor: "rgba(52,211,153,0.1)",
+		borderColor: "rgba(52,211,153,0.2)",
+	},
+	statusDot: {
+		width: 6,
+		height: 6,
+		borderRadius: 3,
+		backgroundColor: "#34d399",
 	},
 });

@@ -9,7 +9,8 @@ import { useThemeContext } from "@context/ThemeContext";
 import { useContentDetails } from "@hooks/useContentDetails";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import * as WebBrowser from "expo-web-browser";
+import { useEffect, useMemo, useState } from "react";
 import {
 	Alert,
 	Linking,
@@ -20,7 +21,6 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import * as WebBrowser from "expo-web-browser";
 
 // Components
 import ActionButtons from "@components/MovieDetailComponents/ActionButtons";
@@ -33,29 +33,26 @@ import MetadataSection from "@components/MovieDetailComponents/MetadataSection";
 import OverviewSection from "@components/MovieDetailComponents/OverviewSection";
 import RelatedContent from "@components/MovieDetailComponents/RelatedContent";
 import SeasonsSection from "@components/MovieDetailComponents/SeasonsSection";
-import TrailerSection from "@components/MovieDetailComponents/TrailerSection";
 
 /**
  * Detay Sayfası Bölüm / Bileşen Aktiflik Ayarları
  * İstediğiniz bileşeni buradan true / false yaparak kolayca açıp kapatabilirsiniz.
  */
 export const DETAIL_SECTIONS_CONFIG = {
-	showTrailer: true, // Fragman bölümü (sayfanın üst kısmına alındı)
+	showTrailer: true, // Fragman butonu eylem gridinde yer almaktadır
 	showCrew: false, // Kullanıcı isteği ile devre dışı bırakıldı (gözükmesin)
 	showCast: true, // Oyuncular bölümü
 	showOverview: true, // Açıklama / Özet bölümü
 	showSeasons: true, // Sezonlar ve bölümler listesi
 	showMetadata: true, // Film detay meta bilgileri (süre, puan, çıkış yılı vb.)
 	showRelated: true, // Benzer içerikler bölümü
-	showActionButtons: true, // Eylem butonları (İzle, Listem, Favori, Paylaş)
+	showActionButtons: true, // Eylem butonları (Hemen İzle, Listem, Fragman, Favori, İndir)
 	showFloatingBookmark: true, // Sağ altta kayan hızlı Liste/Kitaplık butonu
 };
 
 /**
- * Movie/Series Details Screen
+ * Movie/Series Details Screen (Birleşik Modern Tasarım)
  * Dynamic route: /(app)/MovieDetails/[id]
- *
- * Displays comprehensive information about a movie or series from API / Plugins
  */
 export default function MovieDetailsScreen() {
 	const params = useLocalSearchParams();
@@ -74,6 +71,7 @@ export default function MovieDetailsScreen() {
 
 	const [pluginDetail, setPluginDetail] = useState(null);
 	const [pluginLoading, setPluginLoading] = useState(isPlugin);
+	const [activeTab, setActiveTab] = useState("overview"); // 'overview' | 'episodes' | 'related'
 
 	// Normal statik / CMS içerikleri için hook (plugin değilse çağrılır)
 	const {
@@ -109,6 +107,14 @@ export default function MovieDetailsScreen() {
 	// Tüm verileri birleştir: pluginDetail > apiContent > passedMovie
 	const content = useMemo(() => {
 		if (pluginDetail) {
+			const parsedRating = pluginDetail.rating
+				? typeof pluginDetail.rating === "number"
+					? pluginDetail.rating
+					: parseFloat(pluginDetail.rating) || null
+				: passedMovie?.rating
+					? parseFloat(passedMovie.rating) || null
+					: null;
+
 			return {
 				id: pluginDetail.slug || id,
 				title: pluginDetail.title || passedMovie?.title,
@@ -120,14 +126,16 @@ export default function MovieDetailsScreen() {
 					pluginDetail.tagline ||
 					pluginDetail.tags ||
 					(Array.isArray(pluginDetail.genre)
-						? pluginDetail.genre.join(" · ")
-						: "") ||
+						? pluginDetail.genre.join(" • ")
+						: typeof pluginDetail.genre === "string"
+							? pluginDetail.genre
+							: null) ||
 					passedMovie?.category ||
-					"",
+					null,
 				overview:
 					pluginDetail.description ||
 					passedMovie?.description ||
-					`${pluginDetail.title || passedMovie?.title} açıklaması.`,
+					null,
 				poster_url:
 					pluginDetail.poster_url ||
 					pluginDetail.poster ||
@@ -139,33 +147,30 @@ export default function MovieDetailsScreen() {
 					pluginDetail.poster_url ||
 					pluginDetail.poster ||
 					passedMovie?.poster,
-				rating: pluginDetail.rating
-					? typeof pluginDetail.rating === "number"
-						? pluginDetail.rating
-						: parseFloat(pluginDetail.rating) || 8.0
-					: passedMovie?.rating
-						? parseFloat(passedMovie.rating) || 8.0
-						: 8.0,
-				vote_count: pluginDetail.vote_count || 100,
-				runtime_minutes: pluginDetail.runtime_minutes || 0,
+				rating: parsedRating,
+				vote_count: pluginDetail.vote_count || null,
+				runtime_minutes: pluginDetail.runtime_minutes || null,
 				release_date:
 					pluginDetail.release_date ||
 					pluginDetail.year ||
 					passedMovie?.release_date ||
-					"2025",
-				country: pluginDetail.country || "Türkiye",
+					null,
+				country: pluginDetail.country || null,
 				language:
-					pluginDetail.language || passedMovie?.language || "tr",
-				age_rating: pluginDetail.age_rating || "13+",
+					pluginDetail.language || passedMovie?.language || null,
+				age_rating: pluginDetail.age_rating || null,
 				content_type:
 					pluginDetail.content_type ||
 					(pluginDetail.is_series || pluginDetail.seasons
 						? "series"
 						: "movie"),
-				status: pluginDetail.status || "Yayınlandı",
-				director: pluginDetail.director,
-				creator: pluginDetail.creator,
-				production_co: pluginDetail.production_co,
+				status: pluginDetail.status || null,
+				director:
+					pluginDetail.director ||
+					pluginDetail.directors?.[0] ||
+					null,
+				creator: pluginDetail.creator || null,
+				production_co: pluginDetail.production_co || null,
 				cast_members:
 					pluginDetail.cast_members ||
 					(Array.isArray(pluginDetail.actors)
@@ -178,16 +183,24 @@ export default function MovieDetailsScreen() {
 				url: pluginDetail.url || movieUrl,
 				plugin: pluginName,
 				seasons: pluginDetail.seasons || passedMovie?.seasons || null,
-				episodes: pluginDetail.episodes || passedMovie?.episodes || null,
+				episodes:
+					pluginDetail.episodes || passedMovie?.episodes || null,
+				related: pluginDetail.related || null,
 			};
 		}
 
 		if (apiContent) {
-			return apiContent;
+			return {
+				...apiContent,
+				status: apiContent.status || null,
+				age_rating: apiContent.age_rating || null,
+				director: apiContent.director || null,
+				production_co: apiContent.production_co || null,
+			};
 		}
 
 		if (passedMovie) {
-			const isSeries =
+			const isSeriesGuess =
 				passedMovie.is_series ||
 				Boolean(passedMovie.initialSeason) ||
 				passedMovie.category?.toLowerCase()?.includes("dizi") ||
@@ -197,15 +210,12 @@ export default function MovieDetailsScreen() {
 			return {
 				id: passedMovie.id || id,
 				title: passedMovie.seriesTitle || passedMovie.title,
-				original_title:
-					passedMovie.seriesTitle || passedMovie.title,
+				original_title: passedMovie.seriesTitle || passedMovie.title,
 				tagline:
 					passedMovie.initialSeason && passedMovie.initialEpisode
 						? `${passedMovie.initialSeason}. Sezon ${passedMovie.initialEpisode}. Bölüm`
-						: passedMovie.category || passedMovie.description || "",
-				overview:
-					passedMovie.description ||
-					`${passedMovie.seriesTitle || passedMovie.title} detayları yükleniyor...`,
+						: passedMovie.category || null,
+				overview: passedMovie.description || null,
 				poster_url:
 					passedMovie.poster ||
 					passedMovie.poster_url ||
@@ -219,16 +229,22 @@ export default function MovieDetailsScreen() {
 				rating: passedMovie.rating
 					? typeof passedMovie.rating === "number"
 						? passedMovie.rating
-						: parseFloat(passedMovie.rating) || 8.0
-					: 8.0,
-				release_date: passedMovie.release_date || "2025",
-				language: passedMovie.language || "tr",
-				content_type: isSeries ? "series" : "movie",
-				status: "Yayınlandı",
+						: parseFloat(passedMovie.rating) || null
+					: null,
+				vote_count: null,
+				runtime_minutes: null,
+				release_date: passedMovie.release_date || null,
+				language: passedMovie.language || null,
+				age_rating: null,
+				content_type: isSeriesGuess ? "series" : "movie",
+				status: null,
+				director: null,
+				production_co: null,
 				url: movieUrl,
 				plugin: pluginName,
 				seasons: null,
 				episodes: null,
+				cast_members: [],
 			};
 		}
 
@@ -240,14 +256,14 @@ export default function MovieDetailsScreen() {
 
 	const isSeries = Boolean(
 		content?.content_type === "series" ||
-			content?.seasons ||
-			content?.episodes ||
-			passedMovie?.is_series ||
-			passedMovie?.category?.toLowerCase()?.includes("dizi") ||
-			content?.title?.toLowerCase()?.includes("sezon"),
+		content?.seasons ||
+		content?.episodes ||
+		passedMovie?.is_series ||
+		passedMovie?.category?.toLowerCase()?.includes("dizi") ||
+		content?.title?.toLowerCase()?.includes("sezon"),
 	);
 
-	// Tür / Kategori listesi (Dram, Aksiyon, Macera vb.)
+	// Tür / Kategori listesi (Dram, Tarih, Epik Savaş vb.)
 	const genreList = useMemo(() => {
 		const raw =
 			pluginDetail?.genre ||
@@ -260,14 +276,104 @@ export default function MovieDetailsScreen() {
 		if (Array.isArray(raw)) return raw;
 		if (typeof raw === "string") {
 			return raw
-				.split(/[,/·]/)
+				.split(/[,/·•]/)
 				.map((s) => s.trim())
 				.filter(Boolean);
 		}
 		return [];
 	}, [pluginDetail, passedMovie, content?.tagline]);
 
-	// Favori ve Kitaplık / İzleme Listesi Durumları (İki ayrı bağımsız özellik)
+	// Toplam bölüm sayısı hesaplama
+	const totalEpisodesCount = useMemo(() => {
+		if (!content?.seasons) return 0;
+		if (
+			typeof content.seasons === "object" &&
+			!Array.isArray(content.seasons)
+		) {
+			return Object.values(content.seasons).reduce(
+				(acc, list) => acc + (Array.isArray(list) ? list.length : 0),
+				0,
+			);
+		}
+		if (Array.isArray(content.seasons)) {
+			return content.seasons.reduce(
+				(acc, s) =>
+					acc + (Array.isArray(s.episodes) ? s.episodes.length : 1),
+				0,
+			);
+		}
+		return 0;
+	}, [content?.seasons]);
+
+	// Backend'den gelen Ses ve Altyazı seçeneklerini tespit et (varsa gösterilecek)
+	const audioSubtitleOptions = useMemo(() => {
+		const rawLanguage =
+			pluginDetail?.language ||
+			passedMovie?.language ||
+			content?.language;
+		const rawAudio =
+			pluginDetail?.audio || pluginDetail?.dubbing || content?.audio;
+		const rawSubtitles =
+			pluginDetail?.subtitles ||
+			pluginDetail?.subtitle ||
+			content?.subtitles;
+		const rawLanguages = pluginDetail?.languages || content?.languages;
+
+		const options = [];
+
+		const checkAndAdd = (text) => {
+			if (!text || typeof text !== "string") return;
+			const lower = text.toLowerCase();
+			if (lower.includes("dublaj") || lower.includes("türkçe dublaj")) {
+				if (!options.includes("Türkçe Dublaj")) {
+					options.push("Türkçe Dublaj");
+				}
+			}
+			if (
+				lower.includes("altyazı") ||
+				lower.includes("altyazılı") ||
+				lower.includes("sub")
+			) {
+				if (!options.includes("TR Altyazı")) {
+					options.push("TR Altyazı");
+				}
+			}
+			if (lower.includes("orijinal") || lower.includes("original")) {
+				if (!options.includes("Orijinal Dil")) {
+					options.push("Orijinal Dil");
+				}
+			}
+		};
+
+		if (Array.isArray(rawLanguages)) {
+			rawLanguages.forEach(checkAndAdd);
+		} else if (rawLanguages) {
+			checkAndAdd(rawLanguages);
+		}
+
+		if (rawLanguage) checkAndAdd(rawLanguage);
+		if (rawAudio) checkAndAdd(rawAudio);
+		if (rawSubtitles) checkAndAdd(rawSubtitles);
+
+		if (Array.isArray(rawAudio)) {
+			rawAudio.forEach((a) => {
+				const label =
+					typeof a === "string" ? a : a?.name || a?.language;
+				if (label && !options.includes(label)) options.push(label);
+			});
+		}
+		if (Array.isArray(rawSubtitles)) {
+			rawSubtitles.forEach((s) => {
+				const label =
+					typeof s === "string" ? s : s?.name || s?.language;
+				if (label && !options.includes(label)) options.push(label);
+			});
+		}
+
+		return options;
+	}, [pluginDetail, passedMovie, content]);
+
+	// Favori ve Kitaplık / İzleme Listesi Durumları
 	const [isFav, setIsFav] = useState(false);
 	const [inWatchlist, setInWatchlist] = useState(false);
 
@@ -287,8 +393,12 @@ export default function MovieDetailsScreen() {
 	useEffect(() => {
 		const targetId = content?.id || content?.url;
 		if (targetId) {
-			isFavorite(targetId).then(setIsFav).catch(() => {});
-			isInWatchlist(targetId).then(setInWatchlist).catch(() => {});
+			isFavorite(targetId)
+				.then(setIsFav)
+				.catch(() => {});
+			isInWatchlist(targetId)
+				.then(setInWatchlist)
+				.catch(() => {});
 		}
 	}, [content?.id, content?.url]);
 
@@ -327,7 +437,10 @@ export default function MovieDetailsScreen() {
 	const handleOpenTrailer = async () => {
 		const trailerUrl = content?.trailer_url;
 		if (!trailerUrl) {
-			Alert.alert("Bilgi", "Bu içerik için fragman bağlantısı bulunamadı.");
+			Alert.alert(
+				"Bilgi",
+				"Bu içerik için fragman bağlantısı bulunamadı.",
+			);
 			return;
 		}
 		try {
@@ -338,12 +451,12 @@ export default function MovieDetailsScreen() {
 		}
 	};
 
-	// Loading state - Sadece elimizde hiçbir veri yoksa yükleniyor göster
+	// Loading state
 	if (loading && !content) {
 		return <LoadingState />;
 	}
 
-	// Error state - Sadece elimizde hiçbir veri yoksa hata göster
+	// Error state
 	if (error && !content) {
 		return <ErrorState error={error} onRetry={apiRefetch} />;
 	}
@@ -353,6 +466,9 @@ export default function MovieDetailsScreen() {
 		return <ErrorState error="İçerik bulunamadı" onRetry={apiRefetch} />;
 	}
 
+	const surfaceBg = theme === "dark" ? "#161B24" : "#ffffff";
+	const surfaceBorder = theme === "dark" ? "#232A36" : "#E2E8F0";
+
 	return (
 		<View style={[styles.rootContainer, { backgroundColor: colors.bg }]}>
 			<Stack.Screen options={{ headerShown: false }} />
@@ -360,242 +476,202 @@ export default function MovieDetailsScreen() {
 			<ScrollView
 				style={[styles.container, { backgroundColor: colors.bg }]}
 				showsVerticalScrollIndicator={false}>
-				{/* Hero Section - Backdrop (Sağ üstte Paylaş, sol üstte Geri butonu) */}
+				{/* 1. HERO SECTION - Backdrop, başlık, rozetler, geri & paylaş */}
 				<HeroSection
-					content={isSeries ? { ...content, title: "" } : content}
+					content={content}
 					onShare={handleShare}
+					genreList={genreList}
 				/>
 
-				{/* Content Wrapper */}
+				{/* 2. ANA İÇERİK ALANI */}
 				<View style={styles.contentWrapper}>
-					{isSeries ? (
-						/* ======================================================== */
-						/* 1. DİZİ SAYFA YAPISI (Birebir Kırmızı-Siyah Tema Düzeni)   */
-						/* ======================================================== */
-						<>
-							{/* Dizi Başlığı */}
-							<Text
-								style={[styles.seriesTitle, { color: colors.text }]}>
-								{content.title}
-							</Text>
+					{/* Meta Hapları (Süre, Yıl, Yaş Sınırı, Kalite, Durum) */}
+					{DETAIL_SECTIONS_CONFIG.showMetadata && (
+						<MetadataSection content={content} />
+					)}
 
-							{/* Dizi Alt Rozetleri: [Platform] Dizi Yıl */}
-							<View style={styles.seriesMetaRow}>
-								{content.plugin && (
-									<View
-										style={[
-											styles.platformBadge,
-											{
-												backgroundColor: colors.primary, // Canlı Kırmızı (#ea2a33)
-											},
-										]}>
-										<Text style={styles.platformBadgeText}>
-											{content.plugin}
-										</Text>
-									</View>
-								)}
+					{/* Eylem Butonları (Hemen Şimdi İzle + Listem, Fragman, Favori, İndir) */}
+					{DETAIL_SECTIONS_CONFIG.showActionButtons && (
+						<ActionButtons
+							content={content}
+							inWatchlist={inWatchlist}
+							isFav={isFav}
+							onToggleWatchlist={handleToggleWatchlist}
+							onToggleFavorite={handleToggleFavorite}
+							onOpenTrailer={handleOpenTrailer}
+						/>
+					)}
+
+					{/* Ses & Altyazı Bilgi Çubuğu (Yalnızca backend sonucunda varsa gösterilir) */}
+					{audioSubtitleOptions.length > 0 && (
+						<View
+							style={[
+								styles.audioSubtitleRow,
+								{
+									backgroundColor: surfaceBg,
+									borderColor: surfaceBorder,
+								},
+							]}>
+							<View style={styles.audioLeft}>
+								<Ionicons
+									name="chatbubbles-outline"
+									size={16}
+									color="#E50914"
+								/>
 								<Text
 									style={[
-										styles.seriesMetaText,
+										styles.audioLabel,
 										{ color: colors.textSecondary },
 									]}>
-									Dizi
+									Ses & Altyazı:
 								</Text>
-								{content.release_date ? (
+							</View>
+							<View style={styles.audioChips}>
+								{audioSubtitleOptions.map((optionText, idx) => (
+									<View
+										key={idx}
+										style={[
+											styles.audioChip,
+											{
+												backgroundColor:
+													theme === "dark"
+														? "#0B0E14"
+														: "#f1f5f9",
+												borderColor: surfaceBorder,
+											},
+										]}>
+										<Text
+											style={[
+												styles.audioChipText,
+												{ color: colors.text },
+											]}>
+											{optionText}
+										</Text>
+									</View>
+								))}
+							</View>
+						</View>
+					)}
+
+					{/* 3. SEKME GEÇİŞİ (TABS SWITCHER) */}
+					<View
+						style={[
+							styles.tabBar,
+							{ borderBottomColor: surfaceBorder },
+						]}>
+						{/* Tab 1: Genel Bakış */}
+						<TouchableOpacity
+							style={[
+								styles.tabItem,
+								activeTab === "overview" &&
+									styles.tabItemActive,
+							]}
+							onPress={() => setActiveTab("overview")}
+							activeOpacity={0.7}>
+							<Text
+								style={[
+									styles.tabText,
+									{
+										color:
+											activeTab === "overview"
+												? "#E50914"
+												: colors.textSecondary,
+										fontWeight:
+											activeTab === "overview"
+												? "800"
+												: "600",
+									},
+								]}>
+								Genel Bakış
+							</Text>
+							{activeTab === "overview" && (
+								<View style={styles.tabIndicator} />
+							)}
+						</TouchableOpacity>
+
+						{/* Tab 2: Bölümler (Eğer dizi ise) */}
+						{isSeries && (
+							<TouchableOpacity
+								style={[
+									styles.tabItem,
+									activeTab === "episodes" &&
+										styles.tabItemActive,
+								]}
+								onPress={() => setActiveTab("episodes")}
+								activeOpacity={0.7}>
+								<View style={styles.tabWithBadge}>
 									<Text
 										style={[
-											styles.seriesMetaText,
-											{ color: colors.textSecondary },
+											styles.tabText,
+											{
+												color:
+													activeTab === "episodes"
+														? "#E50914"
+														: colors.textSecondary,
+												fontWeight:
+													activeTab === "episodes"
+														? "800"
+														: "600",
+											},
 										]}>
-										{String(content.release_date).slice(0, 4)}
+										Bölümler
 									</Text>
-								) : null}
-							</View>
-
-							{/* Açıklama / Özet */}
-							{DETAIL_SECTIONS_CONFIG.showOverview &&
-							content.overview ? (
-								<Text
-									style={[
-										styles.seriesOverviewText,
-										{ color: colors.textSecondary },
-									]}
-									numberOfLines={4}>
-									{content.overview}
-								</Text>
-							) : null}
-
-							{/* Tür / Kategori Rozetleri: [Dram] [Aksiyon] [Macera] */}
-							{genreList.length > 0 && (
-								<View style={styles.genreChipsRow}>
-									{genreList.map((genre, idx) => (
-										<View
-											key={idx}
-											style={[
-												styles.genreChip,
-												{
-													backgroundColor:
-														theme === "dark"
-															? "#1A1A1A"
-															: "#f1f5f9",
-													borderColor:
-														theme === "dark"
-															? "#2E2E2E"
-															: colors.border,
-												},
-											]}>
-											<Text
-												style={[
-													styles.genreChipText,
-													{ color: colors.text },
-												]}>
-												{genre}
+									{totalEpisodesCount > 0 && (
+										<View style={styles.tabCountBadge}>
+											<Text style={styles.tabCountText}>
+												{totalEpisodesCount}
 											</Text>
 										</View>
-									))}
-								</View>
-							)}
-
-							{/* Dizi Eylem Butonları: [Listem/Kitaplık] [Favori] [Paylaş] */}
-							{DETAIL_SECTIONS_CONFIG.showActionButtons && (
-								<View style={styles.seriesActionRow}>
-									{/* 1. Kitaplık / İzleme Listesi */}
-									<TouchableOpacity
-										style={[
-											styles.seriesActionButton,
-											inWatchlist
-												? {
-														backgroundColor:
-															colors.primary,
-														borderColor:
-															colors.primary,
-												  }
-												: {
-														backgroundColor:
-															theme === "dark"
-																? "#1A1A1A"
-																: "#ffffff",
-														borderColor:
-															theme === "dark"
-																? "#2E2E2E"
-																: colors.border,
-												  },
-										]}
-										onPress={handleToggleWatchlist}
-										activeOpacity={0.75}>
-										<Ionicons
-											name={
-												inWatchlist
-													? "bookmark"
-													: "bookmark-outline"
-											}
-											size={18}
-											color={
-												inWatchlist
-													? "#ffffff"
-													: colors.primary
-											}
-										/>
-										<Text
-											style={[
-												styles.seriesActionText,
-												{
-													color: inWatchlist
-														? "#ffffff"
-														: colors.text,
-												},
-											]}>
-											{inWatchlist
-												? "Listemde"
-												: "Listem"}
-										</Text>
-									</TouchableOpacity>
-
-									{/* 2. Favori */}
-									<TouchableOpacity
-										style={[
-											styles.seriesActionButton,
-											isFav
-												? {
-														backgroundColor:
-															theme === "dark"
-																? "#281214"
-																: "#fee2e2",
-														borderColor:
-															colors.primary,
-												  }
-												: {
-														backgroundColor:
-															theme === "dark"
-																? "#1A1A1A"
-																: "#ffffff",
-														borderColor:
-															theme === "dark"
-																? "#2E2E2E"
-																: colors.border,
-												  },
-										]}
-										onPress={handleToggleFavorite}
-										activeOpacity={0.75}>
-										<Ionicons
-											name={
-												isFav
-													? "heart"
-													: "heart-outline"
-											}
-											size={18}
-											color={colors.primary}
-										/>
-										<Text
-											style={[
-												styles.seriesActionText,
-												{
-													color: isFav
-														? colors.primary
-														: colors.text,
-												},
-											]}>
-											{isFav ? "Favorilerde" : "Favori"}
-										</Text>
-									</TouchableOpacity>
-
-									{/* 3. Fragman (Paylaş butonunun yerine yerleştirildi) */}
-									{Boolean(content.trailer_url) && (
-										<TouchableOpacity
-											style={[
-												styles.seriesActionButton,
-												{
-													backgroundColor:
-														theme === "dark"
-															? "#1A1A1A"
-															: "#ffffff",
-													borderColor:
-														theme === "dark"
-															? "#2E2E2E"
-															: colors.border,
-												},
-											]}
-											onPress={handleOpenTrailer}
-											activeOpacity={0.75}>
-											<Ionicons
-												name="play-circle-outline"
-												size={19}
-												color={colors.primary}
-											/>
-											<Text
-												style={[
-													styles.seriesActionText,
-													{ color: colors.text },
-												]}>
-												Fragman
-											</Text>
-										</TouchableOpacity>
 									)}
 								</View>
+								{activeTab === "episodes" && (
+									<View style={styles.tabIndicator} />
+								)}
+							</TouchableOpacity>
+						)}
+
+						{/* Tab 3: Benzerler */}
+						<TouchableOpacity
+							style={[
+								styles.tabItem,
+								activeTab === "related" && styles.tabItemActive,
+							]}
+							onPress={() => setActiveTab("related")}
+							activeOpacity={0.7}>
+							<Text
+								style={[
+									styles.tabText,
+									{
+										color:
+											activeTab === "related"
+												? "#E50914"
+												: colors.textSecondary,
+										fontWeight:
+											activeTab === "related"
+												? "800"
+												: "600",
+									},
+								]}>
+								Benzerler
+							</Text>
+							{activeTab === "related" && (
+								<View style={styles.tabIndicator} />
+							)}
+						</TouchableOpacity>
+					</View>
+
+					{/* 4. SEKMELERE GÖRE İÇERİK GÖSTERİMİ */}
+
+					{/* --- GENEL BAKIŞ SEKMESİ --- */}
+					{activeTab === "overview" && (
+						<>
+							{/* Özet Bölümü */}
+							{DETAIL_SECTIONS_CONFIG.showOverview && (
+								<OverviewSection content={content} />
 							)}
 
-							{/* Sezonlar & Bölümler */}
-							{DETAIL_SECTIONS_CONFIG.showSeasons && (
+							{/* Dizi ise Sezon ve Bölümler Bölümü */}
+							{isSeries && DETAIL_SECTIONS_CONFIG.showSeasons && (
 								<SeasonsSection
 									seasons={content.seasons}
 									episodes={content.episodes}
@@ -610,93 +686,182 @@ export default function MovieDetailsScreen() {
 								/>
 							)}
 
-							{/* Oyuncular */}
+							{/* Oyuncular Bölümü */}
 							{DETAIL_SECTIONS_CONFIG.showCast &&
 								content.cast_members &&
 								content.cast_members.length > 0 && (
 									<CastSection cast={content.cast_members} />
 								)}
 
-							{/* Ekip Bilgisi (Kullanıcı İsteği: Devre Dışı) */}
+							{/* Ekip Bilgisi (Gerektiğinde açılabilir) */}
 							{DETAIL_SECTIONS_CONFIG.showCrew && (
 								<CrewSection content={content} />
 							)}
 
-							{/* Benzer İçerikler */}
-							{DETAIL_SECTIONS_CONFIG.showRelated && (
-								<RelatedContent
-									contentType={content.content_type}
-									currentId={content.id}
-								/>
-							)}
-						</>
-					) : (
-						/* ======================================================== */
-						/* 2. FİLM SAYFA YAPISI                                      */
-						/* ======================================================== */
-						<>
-							{/* Action Buttons - İzle, Listem, Fragman, Favori */}
-							{DETAIL_SECTIONS_CONFIG.showActionButtons && (
-								<ActionButtons
-									content={content}
-									inWatchlist={inWatchlist}
-									isFav={isFav}
-									onToggleWatchlist={handleToggleWatchlist}
-									onToggleFavorite={handleToggleFavorite}
-									onOpenTrailer={handleOpenTrailer}
-								/>
+							{/* Detay Bilgileri Tablosu (Yönetmen, Orijinal Dil, Yayıncı Ağ - Yalnızca varsa gösterilir) */}
+							{Boolean(
+								content.director ||
+								content.language ||
+								content.production_co,
+							) && (
+								<View
+									style={[
+										styles.detailsTableCard,
+										{
+											backgroundColor: surfaceBg,
+											borderColor: surfaceBorder,
+										},
+									]}>
+									{Boolean(content.director) && (
+										<View style={styles.detailsRow}>
+											<Text
+												style={[
+													styles.detailsLabel,
+													{
+														color: colors.textSecondary,
+													},
+												]}>
+												Yönetmen
+											</Text>
+											<Text
+												style={[
+													styles.detailsValue,
+													{ color: colors.text },
+												]}>
+												{content.director}
+											</Text>
+										</View>
+									)}
+
+									{Boolean(
+										content.director &&
+										(content.language ||
+											content.production_co),
+									) && (
+										<View
+											style={[
+												styles.detailsDivider,
+												{
+													backgroundColor:
+														surfaceBorder,
+												},
+											]}
+										/>
+									)}
+
+									{Boolean(content.language) && (
+										<View style={styles.detailsRow}>
+											<Text
+												style={[
+													styles.detailsLabel,
+													{
+														color: colors.textSecondary,
+													},
+												]}>
+												Orijinal Dil
+											</Text>
+											<Text
+												style={[
+													styles.detailsValue,
+													{ color: colors.text },
+												]}>
+												{content.language}
+											</Text>
+										</View>
+									)}
+
+									{Boolean(
+										content.language &&
+										content.production_co,
+									) && (
+										<View
+											style={[
+												styles.detailsDivider,
+												{
+													backgroundColor:
+														surfaceBorder,
+												},
+											]}
+										/>
+									)}
+
+									{Boolean(content.production_co) && (
+										<View style={styles.detailsRow}>
+											<Text
+												style={[
+													styles.detailsLabel,
+													{
+														color: colors.textSecondary,
+													},
+												]}>
+												Yayıncı Ağ
+											</Text>
+											<Text
+												style={[
+													styles.detailsValue,
+													{ color: colors.text },
+												]}>
+												{content.production_co}
+											</Text>
+										</View>
+									)}
+								</View>
 							)}
 
-							{/* Metadata - Rating, Runtime, Year, Country, etc. */}
-							{DETAIL_SECTIONS_CONFIG.showMetadata && (
-								<MetadataSection content={content} />
-							)}
-
-							{/* Overview - Description */}
-							{DETAIL_SECTIONS_CONFIG.showOverview && (
-								<OverviewSection content={content} />
-							)}
-
-							{/* Cast - Actors */}
-							{DETAIL_SECTIONS_CONFIG.showCast &&
-								content.cast_members &&
-								content.cast_members.length > 0 && (
-									<CastSection cast={content.cast_members} />
+							{/* Film ise veya benzer içerikler varsa göster */}
+							{!isSeries &&
+								DETAIL_SECTIONS_CONFIG.showRelated && (
+									<RelatedContent
+										contentType={content.content_type}
+										currentId={content.id}
+										pluginRelated={content.related}
+									/>
 								)}
-
-							{/* Crew - Director, Creator, Production Company (Devre Dışı) */}
-							{DETAIL_SECTIONS_CONFIG.showCrew && (
-								<CrewSection content={content} />
-							)}
-
-							{/* Related Content */}
-							{DETAIL_SECTIONS_CONFIG.showRelated && (
-								<RelatedContent
-									contentType={content.content_type}
-									currentId={content.id}
-								/>
-							)}
 						</>
+					)}
+
+					{/* --- BÖLÜMLER SEKMESİ --- */}
+					{activeTab === "episodes" && isSeries && (
+						<View style={styles.episodesTabContainer}>
+							<SeasonsSection
+								seasons={content.seasons}
+								episodes={content.episodes}
+								loading={pluginLoading && !content.seasons}
+								initialSeason={passedMovie?.initialSeason}
+								seriesTitle={content.title}
+								posterUrl={
+									content.poster_url || content.backdrop_url
+								}
+								content={content}
+							/>
+						</View>
+					)}
+
+					{/* --- BENZERLER SEKMESİ --- */}
+					{activeTab === "related" && (
+						<View style={styles.relatedTabContainer}>
+							<RelatedContent
+								contentType={content.content_type}
+								currentId={content.id}
+								pluginRelated={content.related}
+							/>
+						</View>
 					)}
 				</View>
 			</ScrollView>
 
-			{/* Sağ Altta Kayan Hızlı Kitaplık / İzleme Listesi Butonu (Floating Bookmark) */}
+			{/* 5. SAĞ ALTTA KAYAN HIZLI KİTAPLIK / LİSTEM BUTONU (FAB) */}
 			{DETAIL_SECTIONS_CONFIG.showFloatingBookmark && (
 				<TouchableOpacity
 					style={[
 						styles.floatingBookmark,
 						{
 							backgroundColor: inWatchlist
-								? colors.primary
-								: theme === "dark"
-									? "#1A1A1A"
-									: "#ffffff",
+								? "#E50914"
+								: surfaceBg,
 							borderColor: inWatchlist
-								? colors.primary
-								: theme === "dark"
-									? "#333333"
-									: colors.border,
+								? "#E50914"
+								: surfaceBorder,
 						},
 					]}
 					onPress={handleToggleWatchlist}
@@ -705,7 +870,7 @@ export default function MovieDetailsScreen() {
 					<Ionicons
 						name={inWatchlist ? "bookmark" : "bookmark-outline"}
 						size={22}
-						color={inWatchlist ? "#ffffff" : colors.primary}
+						color={inWatchlist ? "#ffffff" : "#E50914"}
 					/>
 				</TouchableOpacity>
 			)}
@@ -722,95 +887,137 @@ const styles = StyleSheet.create({
 	},
 	contentWrapper: {
 		paddingHorizontal: 20,
-		paddingBottom: 60,
+		paddingTop: 8,
+		paddingBottom: 70,
 	},
-	/* Dizi Sayfa Yapısı Stilleri */
-	seriesTitle: {
-		fontSize: 22,
-		fontWeight: "800",
-		letterSpacing: -0.4,
-		marginBottom: 8,
-		marginTop: 2,
-	},
-	seriesMetaRow: {
+
+	/* Ses & Altyazı Bilgi Çubuğu */
+	audioSubtitleRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 10,
-		marginBottom: 14,
-	},
-	platformBadge: {
-		paddingHorizontal: 9,
-		paddingVertical: 3,
-		borderRadius: 6,
-	},
-	platformBadgeText: {
-		fontSize: 11,
-		fontWeight: "800",
-		color: "#ffffff",
-	},
-	seriesMetaText: {
-		fontSize: 13,
-		fontWeight: "600",
-	},
-	topTrailerSection: {
-		marginBottom: 16,
-	},
-	seriesOverviewText: {
-		fontSize: 13,
-		lineHeight: 19,
-		marginBottom: 14,
-	},
-	genreChipsRow: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		gap: 8,
-		marginBottom: 16,
-	},
-	genreChip: {
+		justifyContent: "space-between",
 		paddingHorizontal: 14,
-		paddingVertical: 6,
-		borderRadius: 8,
+		paddingVertical: 10,
+		borderRadius: 14,
 		borderWidth: 1,
+		marginBottom: 18,
 	},
-	genreChipText: {
+	audioLeft: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+	},
+	audioLabel: {
 		fontSize: 12,
 		fontWeight: "600",
 	},
-	seriesActionRow: {
+	audioChips: {
 		flexDirection: "row",
-		alignItems: "center",
-		gap: 10,
-		marginBottom: 20,
-	},
-	seriesActionButton: {
-		flex: 1,
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
 		gap: 6,
-		paddingVertical: 12,
-		borderRadius: 12,
+	},
+	audioChip: {
+		paddingHorizontal: 8,
+		paddingVertical: 4,
+		borderRadius: 8,
 		borderWidth: 1,
 	},
-	seriesActionText: {
+	audioChipText: {
+		fontSize: 11,
+		fontWeight: "600",
+	},
+
+	/* Sekmeler (Tab Bar) */
+	tabBar: {
+		flexDirection: "row",
+		borderBottomWidth: 1,
+		marginBottom: 20,
+		gap: 24,
+	},
+	tabItem: {
+		paddingBottom: 12,
+		position: "relative",
+	},
+	tabItemActive: {},
+	tabWithBadge: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+	},
+	tabText: {
+		fontSize: 15,
+	},
+	tabCountBadge: {
+		backgroundColor: "rgba(100, 116, 139, 0.25)",
+		paddingHorizontal: 6,
+		paddingVertical: 1,
+		borderRadius: 10,
+	},
+	tabCountText: {
+		fontSize: 11,
+		fontWeight: "700",
+		color: "#94a3b8",
+	},
+	tabIndicator: {
+		position: "absolute",
+		bottom: -1,
+		left: 0,
+		right: 0,
+		height: 3,
+		borderRadius: 2,
+		backgroundColor: "#E50914",
+	},
+
+	/* Sekme İçi Özel Alanlar */
+	episodesTabContainer: {
+		paddingTop: 4,
+	},
+	relatedTabContainer: {
+		paddingTop: 4,
+	},
+
+	/* Detay Bilgileri Tablosu */
+	detailsTableCard: {
+		borderRadius: 16,
+		borderWidth: 1,
+		paddingHorizontal: 16,
+		paddingVertical: 12,
+		marginBottom: 22,
+	},
+	detailsRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingVertical: 8,
+	},
+	detailsLabel: {
+		fontSize: 13,
+		fontWeight: "500",
+	},
+	detailsValue: {
 		fontSize: 13,
 		fontWeight: "700",
 	},
+	detailsDivider: {
+		height: 1,
+		width: "100%",
+	},
+
+	/* Kayan Liste/Kitaplık Butonu (FAB) */
 	floatingBookmark: {
 		position: "absolute",
 		bottom: 24,
 		right: 20,
-		width: 50,
-		height: 50,
-		borderRadius: 16,
-		borderWidth: 1.5,
+		width: 48,
+		height: 48,
+		borderRadius: 24,
+		borderWidth: 1,
 		justifyContent: "center",
 		alignItems: "center",
-		shadowColor: "#000",
+		shadowColor: "#E50914",
 		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.4,
+		shadowOpacity: 0.35,
 		shadowRadius: 8,
-		elevation: 10,
+		elevation: 8,
 		zIndex: 99,
 	},
 });

@@ -4,22 +4,30 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useThemeContext } from "@context/ThemeContext";
 
 /**
- * Oyuncular Bölümü
+ * CastSection – Mockup tasarımındaki "Oyuncular" bölümü.
+ * Kırmızı accent bar + başlık ve yatay scroll chip'ler.
+ *
  * İleride resimli versiyona dönülmek istenirse SHOW_AVATARS = true yapılabilir.
- * Kullanıcı isteği doğrultusunda şu an sadece oyuncu isimleri (chipler) gösterilmektedir.
  */
 const SHOW_AVATARS = false;
 
 export default function CastSection({ cast }) {
-	const { colors } = useThemeContext();
+	const { colors, theme } = useThemeContext();
 
 	if (!cast || cast.length === 0) return null;
 
+	const surfaceBg = theme === "dark" ? "#161B24" : "#ffffff";
+	const surfaceBorder = theme === "dark" ? "#232A36" : "#E2E8F0";
+
 	return (
 		<View style={styles.container}>
-			<Text style={[styles.sectionTitle, { color: colors.text }]}>
-				Oyuncular
-			</Text>
+			{/* Section Title with red accent bar */}
+			<View style={styles.titleRow}>
+				<View style={styles.accentBar} />
+				<Text style={[styles.sectionTitle, { color: colors.text }]}>
+					Oyuncular
+				</Text>
+			</View>
 
 			{SHOW_AVATARS ? (
 				/* ======================================================== */
@@ -35,14 +43,14 @@ export default function CastSection({ cast }) {
 							style={[
 								styles.castCard,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: surfaceBg,
+									borderColor: surfaceBorder,
 								},
 							]}>
 							<View
 								style={[
 									styles.avatar,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: surfaceBorder },
 								]}>
 								<Ionicons
 									name="person"
@@ -72,18 +80,22 @@ export default function CastSection({ cast }) {
 							style={[
 								styles.actorChip,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: surfaceBg,
+									borderColor: surfaceBorder,
 								},
 							]}>
-							<Ionicons
-								name="person-outline"
-								size={13}
-								color={colors.primary}
-								style={styles.actorChipIcon}
-							/>
+							<View style={styles.chipAvatarSmall}>
+								<Ionicons
+									name="person"
+									size={12}
+									color={colors.textSecondary}
+								/>
+							</View>
 							<Text
-								style={[styles.actorChipText, { color: colors.text }]}>
+								style={[
+									styles.actorChipText,
+									{ color: colors.text },
+								]}>
 								{actor}
 							</Text>
 						</View>
@@ -96,12 +108,24 @@ export default function CastSection({ cast }) {
 
 const styles = StyleSheet.create({
 	container: {
-		marginBottom: 24,
+		marginBottom: 20,
+	},
+	titleRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 10,
+		marginBottom: 12,
+	},
+	accentBar: {
+		width: 4,
+		height: 22,
+		borderRadius: 2,
+		backgroundColor: "#E50914",
 	},
 	sectionTitle: {
 		fontSize: 18,
 		fontWeight: "700",
-		marginBottom: 12,
+		letterSpacing: -0.2,
 	},
 	/* Sadece isim (chip) stilleri */
 	chipsScrollContent: {
@@ -111,16 +135,22 @@ const styles = StyleSheet.create({
 	actorChip: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: 12,
+		paddingHorizontal: 10,
 		paddingVertical: 7,
-		borderRadius: 20,
+		borderRadius: 12,
 		borderWidth: 1,
+		gap: 6,
 	},
-	actorChipIcon: {
-		marginRight: 6,
+	chipAvatarSmall: {
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		backgroundColor: "rgba(148,163,184,0.15)",
+		justifyContent: "center",
+		alignItems: "center",
 	},
 	actorChipText: {
-		fontSize: 13,
+		fontSize: 12,
 		fontWeight: "600",
 	},
 	/* Resimli / Avatarlı versiyon stilleri (ilerisi için korundu) */

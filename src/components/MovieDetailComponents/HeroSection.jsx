@@ -12,35 +12,46 @@ import {
 	useWindowDimensions,
 } from "react-native";
 
-const POSTER_WIDTH = 120;
-const POSTER_HEIGHT = 180;
-
-export default function HeroSection({ content, onShare }) {
+/**
+ * HeroSection – mockup tasarıma uygun backdrop bölümü.
+ *
+ * Props:
+ * - content: { title, original_title, tagline, backdrop_url, poster_url, rating, vote_count, plugin, ... }
+ * - onShare: () => void  — sağ üst paylaş butonu
+ * - genreList: string[]  — tür listesi (Dram, Aksiyon, vb.)
+ */
+export default function HeroSection({ content, onShare, genreList = [] }) {
 	const { colors, theme } = useThemeContext();
 	const router = useRouter();
 	const { width, height } = useWindowDimensions();
 
-	let BACKDROP_HEIGHT = height * 0.4;
-	let resizeMode = "cover";
-	if (width > 768) {
-		BACKDROP_HEIGHT = height * 0.85;
-		resizeMode = "cover";
-	}
+	const BACKDROP_HEIGHT = width > 768 ? height * 0.65 : height * 0.48;
 
-	// Dynamic styles that depend on current dimensions
-	const dynamicStyles = {
-		container: {
-			width: width,
-			height: BACKDROP_HEIGHT,
-		},
-		backdropContainer: {
-			width: width,
-			height: BACKDROP_HEIGHT,
-		},
-	};
+	const ratingText =
+		content.rating != null
+			? typeof content.rating === "number"
+				? content.rating.toFixed(1)
+				: parseFloat(content.rating)
+					? parseFloat(content.rating).toFixed(1)
+					: content.rating
+			: null;
+
+	const voteText =
+		content.vote_count != null
+			? content.vote_count >= 1000
+				? `(${(content.vote_count / 1000).toFixed(1)}K)`
+				: `(${content.vote_count})`
+			: null;
+
+	const genreTagline =
+		genreList.length > 0
+			? `"${genreList.join(" • ")}"`
+			: content.tagline
+				? `"${content.tagline}"`
+				: null;
 
 	return (
-		<View style={[styles.container, dynamicStyles.container]}>
+		<View style={[styles.container, { width, height: BACKDROP_HEIGHT }]}>
 			<StatusBar
 				barStyle="light-content"
 				backgroundColor="transparent"
@@ -48,12 +59,11 @@ export default function HeroSection({ content, onShare }) {
 			/>
 
 			{/* Backdrop Image */}
-			<View
-				style={[
-					styles.backdropContainer,
-					dynamicStyles.backdropContainer,
-				]}>
-				{content.backdrop_url || content.poster_url || content.poster || content.image ? (
+			<View style={[styles.backdropContainer, { width, height: BACKDROP_HEIGHT }]}>
+				{content.backdrop_url ||
+				content.poster_url ||
+				content.poster ||
+				content.image ? (
 					<Image
 						source={{
 							uri:
@@ -77,112 +87,104 @@ export default function HeroSection({ content, onShare }) {
 					/>
 				)}
 
-				{/* Gradient Overlay */}
+				{/* Top Gradient (butonlar için) */}
+				<LinearGradient
+					colors={["rgba(0,0,0,0.7)", "transparent"]}
+					locations={[0, 0.45]}
+					style={styles.topGradient}
+				/>
+
+				{/* Bottom Gradient (içerik bilgisi için) */}
 				<LinearGradient
 					colors={[
-						"rgba(0,0,0,0.3)",
-						"rgba(0,0,0,0.6)",
-						theme === "dark" ? "#121212" : "#f8f6f6",
+						"transparent",
+						"rgba(11,14,20,0.6)",
+						theme === "dark" ? "#0B0E14" : "#F8FAFC",
 					]}
 					locations={[0, 0.5, 1]}
-					style={styles.gradient}
+					style={styles.bottomGradient}
 				/>
 			</View>
 
-			{/* Back Button */}
+			{/* Back Button (Sol üst) */}
 			<TouchableOpacity
-				style={[
-					styles.backButton,
-					{ backgroundColor: "rgba(0,0,0,0.5)" },
-				]}
+				style={styles.headerButton}
 				onPress={() => router.back()}
 				activeOpacity={0.8}>
-				<Ionicons name="arrow-back" size={24} color="#ffffff" />
+				<View style={styles.headerButtonInner}>
+					<Ionicons name="arrow-back" size={22} color="#ffffff" />
+				</View>
 			</TouchableOpacity>
 
-			{/* Share Button (Sağ üst köşe - geri butonu gibi) */}
+			{/* Share Button (Sağ üst) */}
 			{onShare && (
 				<TouchableOpacity
-					style={[
-						styles.shareButton,
-						{ backgroundColor: "rgba(0,0,0,0.5)" },
-					]}
+					style={[styles.headerButton, styles.headerButtonRight]}
 					onPress={onShare}
 					activeOpacity={0.8}>
-					<Ionicons
-						name="share-social-outline"
-						size={20}
-						color="#ffffff"
-					/>
+					<View style={styles.headerButtonInner}>
+						<Ionicons
+							name="share-social-outline"
+							size={20}
+							color="#ffffff"
+						/>
+					</View>
 				</TouchableOpacity>
 			)}
 
-			{/* Content Info */}
+			{/* Content Info (backdrop alt kısmı) */}
 			<View style={styles.contentInfo}>
-				{/* Poster */}
-				{/* <View style={styles.posterContainer}>
-					{content.poster_url ? (
-						<Image
-							source={{ uri: content.poster_url }}
-							style={styles.poster}
-							contentFit="cover"
-							transition={200}
-							cachePolicy="memory-disk"
-						/>
-					) : (
-						<View
-							style={[
-								styles.posterPlaceholder,
-								{ backgroundColor: colors.cardBg },
-							]}>
-							<Ionicons
-								name="film-outline"
-								size={40}
-								color={colors.textSecondary}
-							/>
+				{/* Badges Row: [Platform] [★ Rating] */}
+				<View style={styles.badgesRow}>
+					{content.plugin && (
+						<View style={styles.pluginBadge}>
+							<Text style={styles.pluginBadgeText}>
+								{content.plugin.toUpperCase()}
+							</Text>
 						</View>
 					)}
-				</View> */}
-
-				{/* Text Info */}
-				<View style={styles.textInfo}>
-					<Text
-						style={[styles.title, { color: colors.text }]}
-						numberOfLines={2}>
-						{content.title}
-					</Text>
-
-					{content.original_title &&
-						content.original_title !== content.title && (
-							<Text
-								style={[
-									styles.originalTitle,
-									{ color: colors.textSecondary },
-								]}
-								numberOfLines={1}>
-								{content.original_title}
+					{ratingText && (
+						<View style={styles.ratingBadge}>
+							<Ionicons
+								name="star"
+								size={12}
+								color="#FBBF24"
+							/>
+							<Text style={styles.ratingText}>
+								{ratingText} / 10
 							</Text>
-						)}
-
-					{content.tagline && (
-						<Text
-							style={[
-								styles.tagline,
-								{ color: colors.textSecondary },
-							]}
-							numberOfLines={2}>
-							"{content.tagline}"
-						</Text>
+							{voteText && (
+								<Text style={styles.ratingSubText}>
+									{voteText}
+								</Text>
+							)}
+						</View>
 					)}
 				</View>
+
+				{/* Title */}
+				<Text style={styles.title} numberOfLines={2}>
+					{content.title}
+				</Text>
+
+				{/* Genre / Tagline */}
+				{genreTagline && (
+					<Text style={styles.tagline} numberOfLines={2}>
+						{genreTagline}
+					</Text>
+				)}
 			</View>
 		</View>
 	);
 }
 
+const TOP_INSET = StatusBar.currentHeight
+	? StatusBar.currentHeight + 10
+	: 50;
+
 const styles = StyleSheet.create({
 	container: {
-		marginBottom: 20,
+		marginBottom: -2,
 		overflow: "hidden",
 	},
 	backdropContainer: {
@@ -194,88 +196,115 @@ const styles = StyleSheet.create({
 	backdrop: {
 		width: "100%",
 		height: "100%",
-		overflow: "hidden",
 	},
 	backdropPlaceholder: {
 		width: "100%",
 		height: "100%",
 	},
-	gradient: {
-		...StyleSheet.absoluteFill,
-	},
-	backButton: {
+	topGradient: {
 		position: "absolute",
-		top: StatusBar.currentHeight ? StatusBar.currentHeight + 12 : 52,
+		top: 0,
+		left: 0,
+		right: 0,
+		height: "35%",
+	},
+	bottomGradient: {
+		position: "absolute",
+		bottom: 0,
+		left: 0,
+		right: 0,
+		height: "65%",
+	},
+
+	/* Header Buttons */
+	headerButton: {
+		position: "absolute",
+		top: TOP_INSET,
 		left: 16,
-		width: 40,
-		height: 40,
-		borderRadius: 20,
-		justifyContent: "center",
-		alignItems: "center",
 		zIndex: 10,
 	},
-	shareButton: {
-		position: "absolute",
-		top: StatusBar.currentHeight ? StatusBar.currentHeight + 12 : 52,
+	headerButtonRight: {
+		left: undefined,
 		right: 16,
+	},
+	headerButtonInner: {
 		width: 40,
 		height: 40,
 		borderRadius: 20,
+		backgroundColor: "rgba(15,23,42,0.6)",
+		borderWidth: StyleSheet.hairlineWidth,
+		borderColor: "rgba(255,255,255,0.1)",
 		justifyContent: "center",
 		alignItems: "center",
-		zIndex: 10,
 	},
+
+	/* Content Info */
 	contentInfo: {
 		position: "absolute",
-		bottom: 20,
+		bottom: 24,
 		left: 20,
 		right: 20,
+		gap: 6,
+	},
+	badgesRow: {
 		flexDirection: "row",
-		gap: 16,
-	},
-	posterContainer: {
-		width: POSTER_WIDTH,
-		height: POSTER_HEIGHT,
-		borderRadius: 12,
-		overflow: "hidden",
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 8 },
-		shadowOpacity: 0.5,
-		shadowRadius: 12,
-		elevation: 10,
-	},
-	poster: {
-		width: "100%",
-		height: "100%",
-	},
-	posterPlaceholder: {
-		width: "100%",
-		height: "100%",
-		justifyContent: "center",
 		alignItems: "center",
+		gap: 8,
+		marginBottom: 2,
 	},
-	textInfo: {
-		flex: 1,
-		justifyContent: "flex-end",
-		paddingBottom: 4,
+	pluginBadge: {
+		backgroundColor: "#E50914",
+		paddingHorizontal: 8,
+		paddingVertical: 3,
+		borderRadius: 6,
+		shadowColor: "#E50914",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.4,
+		shadowRadius: 4,
+		elevation: 4,
+	},
+	pluginBadgeText: {
+		color: "#ffffff",
+		fontSize: 10,
+		fontWeight: "900",
+		letterSpacing: 0.8,
+	},
+	ratingBadge: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 4,
+		backgroundColor: "rgba(0,0,0,0.55)",
+		borderWidth: StyleSheet.hairlineWidth,
+		borderColor: "rgba(251,191,36,0.3)",
+		paddingHorizontal: 8,
+		paddingVertical: 4,
+		borderRadius: 6,
+	},
+	ratingText: {
+		color: "#FBBF24",
+		fontSize: 12,
+		fontWeight: "700",
+	},
+	ratingSubText: {
+		color: "#94a3b8",
+		fontSize: 10,
+		fontWeight: "400",
 	},
 	title: {
-		fontSize: 26,
-		fontWeight: "800",
+		fontSize: 28,
+		fontWeight: "900",
+		color: "#ffffff",
 		letterSpacing: -0.5,
-		lineHeight: 32,
-		marginBottom: 4,
-	},
-	originalTitle: {
-		fontSize: 14,
-		fontWeight: "500",
-		marginBottom: 6,
-		fontStyle: "italic",
+		lineHeight: 34,
+		textShadowColor: "rgba(0,0,0,0.4)",
+		textShadowOffset: { width: 0, height: 2 },
+		textShadowRadius: 6,
 	},
 	tagline: {
-		fontSize: 13,
+		fontSize: 12,
 		fontWeight: "500",
-		lineHeight: 18,
+		color: "#cbd5e1",
 		fontStyle: "italic",
+		letterSpacing: 0.3,
 	},
 });

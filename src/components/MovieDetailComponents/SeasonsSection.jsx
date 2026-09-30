@@ -299,8 +299,9 @@ export default function SeasonsSection({
 						styles.seasonDropdownButton,
 						{
 							backgroundColor:
-								theme === "dark" ? "#1A1A1A" : "#f3f4f6",
-							borderColor: colors.border,
+								theme === "dark" ? "#161B24" : "#ffffff",
+							borderColor:
+								theme === "dark" ? "#232A36" : "#E2E8F0",
 						},
 					]}
 					onPress={() => setIsSeasonModalOpen(true)}
@@ -326,8 +327,9 @@ export default function SeasonsSection({
 						styles.sortButton,
 						{
 							backgroundColor:
-								theme === "dark" ? "#1A1A1A" : "#f3f4f6",
-							borderColor: colors.border,
+								theme === "dark" ? "#161B24" : "#ffffff",
+							borderColor:
+								theme === "dark" ? "#232A36" : "#E2E8F0",
 						},
 					]}
 					onPress={() =>
