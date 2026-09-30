@@ -4,6 +4,7 @@ import HeroBanner from "@/components/home/HeroBanner";
 import MovieCategorySection from "@/components/home/MovieCategorySection";
 import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
 import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
+import ListSelectModal from "@/components/modal/ListSelectModal";
 import {
 	clearPluginCache,
 	fetchPlatformCategories,
@@ -19,6 +20,7 @@ import {
 	getPluginVisibilitySettings,
 	getSelectedPlatform,
 	getUserProfile,
+	getContentLibraryStatus,
 	isFavorite,
 	removeContinueWatching,
 	saveSelectedPlatform,
@@ -58,6 +60,7 @@ export default function Index() {
 	const [visibleCount, setVisibleCount] = useState(6);
 	const [previewMovie, setPreviewMovie] = useState(null);
 	const [isPreviewModalVisible, setIsPreviewModalVisible] = useState(false);
+	const [isHeroListSelectVisible, setIsHeroListSelectVisible] = useState(false);
 
 	const isNoneMode =
 		!selectedPlatform ||
@@ -117,7 +120,9 @@ export default function Index() {
 				const heroItem = Array.isArray(cachedHero) && cachedHero.length > 0 ? cachedHero[0] : cachedHero;
 				if (heroItem) {
 					setFeaturedMovie(heroItem);
-					isFavorite(heroItem.id || heroItem.url).then(fav => setIsInList(fav));
+					getContentLibraryStatus(heroItem.id || heroItem.url).then((st) =>
+						setIsInList(Boolean(st?.currentList || st?.isFav)),
+					);
 				}
 				return;
 			}
@@ -140,10 +145,10 @@ export default function Index() {
 
 			if (randomItem) {
 				setFeaturedMovie(randomItem);
-				const fav = await isFavorite(
+				const status = await getContentLibraryStatus(
 					randomItem.id || randomItem.url,
 				);
-				setIsInList(fav);
+				setIsInList(Boolean(status?.currentList || status?.isFav));
 			}
 		} catch (error) {
 			console.error("Platform içeriği yüklenirken hata:", error);
@@ -383,7 +388,10 @@ export default function Index() {
 							onPlayPress={() => handleMoviePress(featuredMovie)}
 							onInfoPress={() => handleMoviePress(featuredMovie)}
 							onLongPress={() => handleMovieLongPress(featuredMovie)}
-							onToggleList={handleToggleFavorite}
+							onToggleList={() => {
+								if (!featuredMovie || featuredMovie.id === "offline-placeholder") return;
+								setIsHeroListSelectVisible(true);
+							}}
 							onPlatformPress={() =>
 								setIsPlatformModalVisible(true)
 							}
@@ -608,6 +616,16 @@ export default function Index() {
 					onDetailsPress={(item) => {
 						setIsPreviewModalVisible(false);
 						handleMoviePress(item);
+					}}
+				/>
+
+				{/* Hero Movie List Select Modal */}
+				<ListSelectModal
+					visible={isHeroListSelectVisible}
+					movie={featuredMovie}
+					onClose={() => setIsHeroListSelectVisible(false)}
+					onStatusChanged={(newStatus, newFav) => {
+						setIsInList(Boolean(newStatus || newFav));
 					}}
 				/>
 			</View>

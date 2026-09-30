@@ -1,10 +1,13 @@
 import BottomNavigation from "@/components/BottomNavigation";
+import LibraryItemActionModal from "@/components/modal/LibraryItemActionModal";
+import ListSelectModal from "@/components/modal/ListSelectModal";
 import {
 	getContinueWatching,
 	getFavorites,
 	getWatchHistory,
 	getWatchlist,
 	removeContinueWatching,
+	removeFromWatchHistory,
 	toggleFavorite,
 	toggleWatchlist,
 } from "@/utils/storage";
@@ -20,6 +23,7 @@ import {
 	Modal,
 	Pressable,
 	ScrollView,
+	Share,
 	StatusBar,
 	StyleSheet,
 	Text,
@@ -56,8 +60,8 @@ export default function LibraryScreen() {
 	const router = useRouter();
 	const { colors, theme } = useThemeContext();
 
-	// Durum Sekmeleri
-	const [activeTab, setActiveTab] = useState("watching"); // 'watching' | 'completed' | 'on_hold' | 'dropped' | 'planned' | 'favorites'
+	// Durum Sekmeleri (Beklemede ve Bırakıldı kaldırıldı)
+	const [activeTab, setActiveTab] = useState("watching"); // 'watching' | 'completed' | 'planned' | 'favorites'
 
 	// Filtreler & Sıralama
 	const [searchQuery, setSearchQuery] = useState("");
@@ -66,6 +70,12 @@ export default function LibraryScreen() {
 	const [progressFilter, setProgressFilter] = useState("all"); // 'all' | 'in_progress' | 'not_started'
 	const [isSortModalVisible, setIsSortModalVisible] = useState(false);
 	const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'list'
+
+	// Özel Seçenekler & Liste Değiştirme Modalları
+	const [selectedActionItem, setSelectedActionItem] = useState(null);
+	const [isActionModalVisible, setIsActionModalVisible] = useState(false);
+	const [listSelectTargetItem, setListSelectTargetItem] = useState(null);
+	const [isListSelectModalVisible, setIsListSelectModalVisible] = useState(false);
 
 	// Veri Listeleri
 	const [continueWatchingList, setContinueWatchingList] = useState([]);
@@ -111,10 +121,6 @@ export default function LibraryScreen() {
 				return watchHistoryList.filter(
 					(i) => i.isCompleted || (i.progress && i.progress >= 0.9),
 				);
-			case "on_hold":
-				return [];
-			case "dropped":
-				return [];
 			case "planned":
 				return watchlist;
 			case "favorites":
@@ -195,33 +201,35 @@ export default function LibraryScreen() {
 		return list;
 	}, [rawTabItems, searchQuery, typeFilter, progressFilter, sortBy]);
 
-	// Seçenekler Menüsü (Kart Menüsü)
+	// Seçenekler Menüsü (Kart Menüsü) - Artık Alert yerine şık modal açılıyor
 	const handleItemOptions = (item) => {
-		Alert.alert(
-			item.title || item.seriesTitle || "Seçenekler",
-			"Bu içerik için yapmak istediğiniz işlemi seçin:",
-			[
-				{
-					text: "Detay Sayfasına Git",
-					onPress: () => handleOpenDetails(item),
-				},
-				{
-					text: "Kitaplıktan Kaldır",
-					style: "destructive",
-					onPress: async () => {
-						if (activeTab === "watching") {
-							await removeContinueWatching(item.id);
-						} else if (activeTab === "planned") {
-							await toggleWatchlist(item);
-						} else if (activeTab === "favorites") {
-							await toggleFavorite(item);
-						}
-						loadLibraryData();
-					},
-				},
-				{ text: "Vazgeç", style: "cancel" },
-			],
-		);
+		setSelectedActionItem(item);
+		setIsActionModalVisible(true);
+	};
+
+	// Kitaplıktan Kaldır (Tamamlananlar dahil tüm sekmeler için çalışır)
+	const handleRemoveItem = async (item) => {
+		if (!item) return;
+		try {
+			if (activeTab === "watching") {
+				await removeContinueWatching(item);
+			} else if (activeTab === "planned") {
+				await toggleWatchlist(item);
+			} else if (activeTab === "completed") {
+				await removeFromWatchHistory(item);
+			} else if (activeTab === "favorites") {
+				await toggleFavorite(item);
+			}
+			await loadLibraryData();
+		} catch (error) {
+			console.error("Kitaplıktan kaldırılırken hata:", error);
+		}
+	};
+
+	// Listeyi Değiştir Modalı Aç
+	const handleChangeList = (item) => {
+		setListSelectTargetItem(item);
+		setIsListSelectModalVisible(true);
 	};
 
 	// Oynatıcıyı Başlat
@@ -274,6 +282,9 @@ export default function LibraryScreen() {
 			key: "completed",
 			label: "Tamamlandı",
 			icon: "checkmark-circle",
+			count: watchHistoryList.filter(
+				(i) => i.isCompleted || (i.progress && i.progress >= 0.9),
+			).length,
 			iconColor: "#34d399",
 		},
 		{
@@ -289,18 +300,6 @@ export default function LibraryScreen() {
 			icon: "heart",
 			count: favoritesList.length,
 			iconColor: "#f43f5e",
-		},
-		{
-			key: "on_hold",
-			label: "Beklemede",
-			icon: "pause-circle",
-			iconColor: "#fbbf24",
-		},
-		{
-			key: "dropped",
-			label: "Bırakıldı",
-			icon: "close-circle",
-			iconColor: "#fb7185",
 		},
 	];
 
@@ -1023,6 +1022,43 @@ export default function LibraryScreen() {
 						</Pressable>
 					</Pressable>
 				</Modal>
+
+				{/* 8. KART EYLEM SEÇENEKLERİ MODALI (Alert yerine şık alt sayfa) */}
+				<LibraryItemActionModal
+					visible={isActionModalVisible}
+					item={selectedActionItem}
+					activeTab={activeTab}
+					onClose={() => setIsActionModalVisible(false)}
+					onGoDetails={() => {
+						if (selectedActionItem) handleOpenDetails(selectedActionItem);
+					}}
+					onChangeList={() => {
+						if (selectedActionItem) handleChangeList(selectedActionItem);
+					}}
+					onRemove={() => {
+						if (selectedActionItem) handleRemoveItem(selectedActionItem);
+					}}
+					onShare={async () => {
+						if (selectedActionItem) {
+							try {
+								await Share.share({
+									title: selectedActionItem.title || "StreamPulse",
+									message: `StreamPulse'da "${selectedActionItem.title}" izle! ${selectedActionItem.url || ""}`,
+								});
+							} catch (e) {}
+						}
+					}}
+				/>
+
+				{/* 9. LİSTE SEÇİM / TAŞIMA MODALI */}
+				<ListSelectModal
+					visible={isListSelectModalVisible}
+					movie={listSelectTargetItem}
+					onClose={() => setIsListSelectModalVisible(false)}
+					onStatusChanged={async () => {
+						await loadLibraryData();
+					}}
+				/>
 
 				{/* 7. ALT GEZİNTİ ÇUBUĞU */}
 				<BottomNavigation activeRoute="/(app)/library" />
