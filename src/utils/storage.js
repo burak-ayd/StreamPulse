@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
 	PLAYER_SETTINGS: "app_player_settings",
 	SELECTED_PLATFORM: "user_selected_platform",
 	DOWNLOADS: "streampulse_downloads_list",
+	CONTINUE_WATCHING: "user_continue_watching",
 };
 
 export const NONE_PLATFORM = {
@@ -381,6 +382,139 @@ export async function deleteDownloadItem(itemId) {
 	}
 }
 
+/**
+ * Kaldığın yerden devam et listesini getirir (en son izlenen üstte)
+ */
+export async function getContinueWatching() {
+	try {
+		const data = await AsyncStorage.getItem(STORAGE_KEYS.CONTINUE_WATCHING);
+		if (!data) return [];
+		const list = JSON.parse(data);
+		if (!Array.isArray(list)) return [];
+		return list.sort(
+			(a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0),
+		);
+	} catch (error) {
+		console.error("Kaldığın yerden devam et listesi okunurken hata:", error);
+		return [];
+	}
+}
+
+/**
+ * Kaldığın yerden devam et verisini kaydeder
+ * - currentTime < 10 ise threshold altı olduğu için kaydetmez
+ * - progress >= 0.90 ise tamamlandı sayıp listeden kaldırır
+ * - Aksi halde en başa ekler veya günceller (en fazla 50 kayıt)
+ */
+export async function saveContinueWatching(item) {
+	try {
+		if (!item || !item.id) return [];
+
+		// Threshold kontrolü: 10 saniyeden az izlendiyse kaydetme
+		if ((item.currentTime || 0) < 10) {
+			return await getContinueWatching();
+		}
+
+		const duration = item.duration || 0;
+		const progress =
+			duration > 0 ? item.currentTime / duration : item.progress || 0;
+
+		// %90 veya daha fazlası izlendiyse tamamlandı kabul et ve listeden kaldır
+		if (progress >= 0.9) {
+			return await removeContinueWatching(item.id);
+		}
+
+		const currentList = await getContinueWatching();
+		const filtered = currentList.filter((i) => i.id !== item.id);
+
+		const updatedItem = {
+			...item,
+			progress,
+			updatedAt: new Date().toISOString(),
+		};
+
+		const newList = [updatedItem, ...filtered].slice(0, 50);
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.CONTINUE_WATCHING,
+			JSON.stringify(newList),
+		);
+		return newList;
+	} catch (error) {
+		console.error("Kaldığın yerden devam et kaydedilirken hata:", error);
+		return [];
+	}
+}
+
+/**
+ * İçeriği devam et listesinden siler
+ */
+export async function removeContinueWatching(id) {
+	try {
+		if (!id) return [];
+		const currentList = await getContinueWatching();
+		const updated = currentList.filter((i) => i.id !== id);
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.CONTINUE_WATCHING,
+			JSON.stringify(updated),
+		);
+		return updated;
+	} catch (error) {
+		console.error("Kaldığın yerden devam et silinirken hata:", error);
+		return [];
+	}
+}
+
+/**
+ * Bölüm tamamlandığında sonraki bölümü listeye otomatik ekler
+ */
+export async function markEpisodeComplete(
+	seriesId,
+	season,
+	episode,
+	nextEpisode,
+	currentItem = {},
+) {
+	try {
+		// Önce mevcut bölümü listeden kaldır
+		if (currentItem?.id) {
+			await removeContinueWatching(currentItem.id);
+		}
+
+		// Eğer sonraki bölüm varsa devam et listesine 0 saniye ile ekle
+		if (nextEpisode && (nextEpisode.id || nextEpisode.url)) {
+			const nextItem = {
+				id: nextEpisode.id || `${seriesId || "series"}_s${nextEpisode.season || season}_e${nextEpisode.episode || (episode ? episode + 1 : 1)}`,
+				title: currentItem.seriesTitle || currentItem.title || "Dizi",
+				poster: nextEpisode.poster || currentItem.poster,
+				type: "episode",
+				currentTime: 0,
+				duration: nextEpisode.duration || 0,
+				progress: 0,
+				seriesId: seriesId || currentItem.seriesId,
+				seriesTitle: currentItem.seriesTitle || currentItem.title,
+				season: nextEpisode.season || season,
+				episode: nextEpisode.episode || (episode ? episode + 1 : 1),
+				episodeTitle: nextEpisode.title || nextEpisode.episodeTitle || `Bölüm ${nextEpisode.episode || (episode ? episode + 1 : 1)}`,
+				url: nextEpisode.url || currentItem.url,
+				updatedAt: new Date().toISOString(),
+			};
+
+			const currentList = await getContinueWatching();
+			const filtered = currentList.filter((i) => i.id !== nextItem.id);
+			const newList = [nextItem, ...filtered].slice(0, 50);
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.CONTINUE_WATCHING,
+				JSON.stringify(newList),
+			);
+			return newList;
+		}
+		return await getContinueWatching();
+	} catch (error) {
+		console.error("markEpisodeComplete hata:", error);
+		return [];
+	}
+}
+
 export default {
 	getUserProfile,
 	saveUserProfile,
@@ -402,5 +536,9 @@ export default {
 	getDownloads,
 	saveDownloadItem,
 	deleteDownloadItem,
+	getContinueWatching,
+	saveContinueWatching,
+	removeContinueWatching,
+	markEpisodeComplete,
 	NONE_PLATFORM,
 };

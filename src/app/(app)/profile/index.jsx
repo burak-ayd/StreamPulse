@@ -1,13 +1,16 @@
-import { WATCH_HISTORY } from "@constants/data";
-import { useThemeContext } from "@context/ThemeContext";
+import { WATCH_HISTORY } from "@/constants/data";
+import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import {
+	getContinueWatching,
 	getFavorites,
 	getUserProfile,
 	getWatchHistory,
-} from "@utils/storage";
+	removeContinueWatching,
+} from "@/utils/storage";
+import ContinueWatchingCard from "@/components/content/ContinueWatchingCard";
 import { Image } from "expo-image";
-import { Stack, useFocusEffect, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
 	Dimensions,
@@ -26,22 +29,35 @@ const { width } = Dimensions.get("window");
 export default function ProfileScreen() {
 	const { theme, colors } = useThemeContext();
 	const router = useRouter();
+	const params = useLocalSearchParams();
 
 	const [profile, setProfile] = useState(null);
-	const [activeTab, setActiveTab] = useState("history");
+	const [activeTab, setActiveTab] = useState(
+		params?.tab === "continue" ? "continue" : "history",
+	);
+	const [prevTab, setPrevTab] = useState(params?.tab);
+	if (params?.tab !== prevTab) {
+		setPrevTab(params?.tab);
+		if (params?.tab) {
+			setActiveTab(params.tab);
+		}
+	}
 	const [favorites, setFavorites] = useState([]);
 	const [history, setHistory] = useState([]);
+	const [continueWatching, setContinueWatching] = useState([]);
 
 	const loadData = useCallback(async () => {
 		try {
-			const [userProf, favs, hist] = await Promise.all([
+			const [userProf, favs, hist, cont] = await Promise.all([
 				getUserProfile(),
 				getFavorites(),
 				getWatchHistory(),
+				getContinueWatching(),
 			]);
 			setProfile(userProf);
 			setFavorites(favs);
 			setHistory(hist.length > 0 ? hist : WATCH_HISTORY);
+			setContinueWatching(cont || []);
 		} catch (error) {
 			console.error("Profil bilgileri yüklenirken hata:", error);
 		}
@@ -221,14 +237,14 @@ export default function ProfileScreen() {
 									styles.statNumber,
 									{ color: colors.text },
 								]}>
-								{profile?.language || "Türkçe"}
+								{continueWatching.length}
 							</Text>
 							<Text
 								style={[
 									styles.statLabel,
 									{ color: colors.textSecondary },
 								]}>
-								Dil
+								Devam Eden
 							</Text>
 						</View>
 					</View>
@@ -239,6 +255,37 @@ export default function ProfileScreen() {
 							styles.tabsContainer,
 							{ borderBottomColor: colors.border },
 						]}>
+						<TouchableOpacity
+							onPress={() => setActiveTab("continue")}
+							style={[
+								styles.tab,
+								{
+									borderBottomColor:
+										activeTab === "continue"
+											? colors.primary
+											: "transparent",
+								},
+							]}>
+							<Text
+								style={[
+									styles.tabText,
+									{
+										color:
+											activeTab === "continue"
+												? colors.primary
+												: colors.textSecondary,
+										fontWeight:
+											activeTab === "continue"
+												? "bold"
+												: "600",
+									},
+								]}>
+								Devam Et
+								{continueWatching.length > 0
+									? ` (${continueWatching.length})`
+									: ""}
+							</Text>
+						</TouchableOpacity>
 						<TouchableOpacity
 							onPress={() => setActiveTab("history")}
 							style={[
@@ -297,67 +344,131 @@ export default function ProfileScreen() {
 						</TouchableOpacity>
 					</View>
 
-					{/* Image Grid */}
-					<View style={styles.gridContainer}>
-						{displayList.length === 0 ? (
-							<View style={styles.emptyState}>
-								<Ionicons
-									name={
-										activeTab === "favorites"
-											? "heart-outline"
-											: "film-outline"
-									}
-									size={48}
-									color={colors.textSecondary}
-								/>
-								<Text
-									style={[
-										styles.emptyText,
-										{ color: colors.textSecondary },
-									]}>
-									{activeTab === "favorites"
-										? "Henüz favori içerik eklenmedi"
-										: "İzleme geçmişiniz henüz boş"}
-								</Text>
-							</View>
-						) : (
-							<FlatList
-								data={displayList}
-								keyExtractor={(item) => String(item.id)}
-								numColumns={3}
-								scrollEnabled={false}
-								columnWrapperStyle={styles.gridRow}
-								renderItem={({ item }) => (
-									<TouchableOpacity
+					{/* Tab Content */}
+					{activeTab === "continue" ? (
+						<View style={styles.continueListContainer}>
+							{continueWatching.length === 0 ? (
+								<View style={styles.emptyState}>
+									<Ionicons
+										name="play-circle-outline"
+										size={48}
+										color={colors.textSecondary}
+									/>
+									<Text
 										style={[
-											styles.gridItem,
-											{ backgroundColor: colors.cardBg },
-										]}
-										onPress={() =>
-											router.push(
-												`/(app)/MovieDetails/${item.id}`,
-											)
+											styles.emptyText,
+											{ color: colors.textSecondary },
+										]}>
+										Kaldığınız yerden devam edebileceğiniz içerik bulunmuyor
+									</Text>
+								</View>
+							) : (
+								continueWatching.map((item) => (
+									<ContinueWatchingCard
+										key={item.id}
+										item={item}
+										width="100%"
+										style={styles.profileContinueCard}
+										onPress={(it) => {
+											if (it.url) {
+												router.push({
+													pathname: "/player",
+													params: {
+														url: it.url,
+														title: it.title,
+														subtitle:
+															it.episodeTitle ||
+															it.seriesTitle ||
+															"",
+														poster: it.poster,
+														id: it.id,
+														type: it.type || "movie",
+														seriesId: it.seriesId,
+														season: it.season,
+														episode: it.episode,
+														episodeTitle:
+															it.episodeTitle,
+														currentTime:
+															it.currentTime,
+													},
+												});
+											} else if (it.id) {
+												router.push(
+													`/(app)/MovieDetails/${it.id}`,
+												);
+											}
+										}}
+										onRemove={async (id) => {
+											const updated =
+												await removeContinueWatching(id);
+											setContinueWatching(updated);
+										}}
+									/>
+								))
+							)}
+						</View>
+					) : (
+						<View style={styles.gridContainer}>
+							{displayList.length === 0 ? (
+								<View style={styles.emptyState}>
+									<Ionicons
+										name={
+											activeTab === "favorites"
+												? "heart-outline"
+												: "film-outline"
 										}
-										activeOpacity={0.8}>
-										<Image
-											source={{
-												uri:
-													item.poster ||
-													item.poster_url ||
-													item.image ||
-													item.backdrop_url,
-											}}
-											style={styles.gridImage}
-											contentFit="cover"
-											contentPosition="center"
-											transition={150}
-											cachePolicy="memory-disk"
-										/>
-									</TouchableOpacity>
-								)}
-							/>
-						)}
-					</View>
+										size={48}
+										color={colors.textSecondary}
+									/>
+									<Text
+										style={[
+											styles.emptyText,
+											{ color: colors.textSecondary },
+										]}>
+										{activeTab === "favorites"
+											? "Henüz favori içerik eklenmedi"
+											: "İzleme geçmişiniz henüz boş"}
+									</Text>
+								</View>
+							) : (
+								<FlatList
+									data={displayList}
+									keyExtractor={(item) => String(item.id)}
+									numColumns={3}
+									scrollEnabled={false}
+									columnWrapperStyle={styles.gridRow}
+									renderItem={({ item }) => (
+										<TouchableOpacity
+											style={[
+												styles.gridItem,
+												{ backgroundColor: colors.cardBg },
+											]}
+											onPress={() =>
+												router.push(
+													`/(app)/MovieDetails/${item.id}`,
+												)
+											}
+											activeOpacity={0.8}>
+											<Image
+												source={{
+													uri:
+														item.poster ||
+														item.poster_url ||
+														item.image ||
+														item.backdrop_url,
+												}}
+												style={styles.gridImage}
+												contentFit="cover"
+												contentPosition="center"
+												transition={150}
+												cachePolicy="memory-disk"
+											/>
+										</TouchableOpacity>
+									)}
+								/>
+							)}
+						</View>
+					)}
 				</ScrollView>
 			</SafeAreaView>
 		</>
@@ -510,5 +621,15 @@ const styles = StyleSheet.create({
 	},
 	emptyText: {
 		fontSize: 14,
+	},
+	continueListContainer: {
+		paddingHorizontal: 16,
+		paddingTop: 8,
+		paddingBottom: 24,
+		gap: 16,
+	},
+	profileContinueCard: {
+		marginRight: 0,
+		marginBottom: 4,
 	},
 });
