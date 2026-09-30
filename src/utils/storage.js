@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
 	DOWNLOADS: "streampulse_downloads_list",
 	CONTINUE_WATCHING: "user_continue_watching",
 	PLUGIN_VISIBILITY: "streampulse_plugin_visibility",
+	CATEGORY_VISIBILITY: "streampulse_category_visibility",
 };
 
 export const NONE_PLATFORM = {
@@ -583,6 +584,99 @@ export async function isPluginVisible(pluginName) {
 	}
 }
 
+/**
+ * Kategori görünürlük ayarlarını getirir.
+ * - pluginName verilirse: o eklentiye ait { "KategoriAdı": boolean } objesini döner.
+ * - pluginName verilmezse: tüm eklentilerin kategori görünürlük objesini döner ({ [pluginName]: { [categoryKey]: boolean } }).
+ */
+export async function getCategoryVisibilitySettings(pluginName = null) {
+	try {
+		const data = await AsyncStorage.getItem(STORAGE_KEYS.CATEGORY_VISIBILITY);
+		const parsed = data ? JSON.parse(data) : {};
+		if (pluginName) {
+			return parsed[pluginName] || {};
+		}
+		return parsed;
+	} catch (error) {
+		console.error("Kategori görünürlük ayarları okunurken hata:", error);
+		return pluginName ? {} : {};
+	}
+}
+
+/**
+ * Belirli bir eklentinin tek bir kategorisinin görünürlük durumunu günceller ve kaydeder.
+ */
+export async function saveCategoryVisibility(pluginName, categoryKey, isVisible) {
+	try {
+		if (!pluginName || !categoryKey) return {};
+		const allSettings = await getCategoryVisibilitySettings();
+		const pluginSettings = allSettings[pluginName] || {};
+
+		const updatedPluginSettings = {
+			...pluginSettings,
+			[categoryKey]: Boolean(isVisible),
+		};
+
+		const updatedAllSettings = {
+			...allSettings,
+			[pluginName]: updatedPluginSettings,
+		};
+
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.CATEGORY_VISIBILITY,
+			JSON.stringify(updatedAllSettings),
+		);
+		return updatedPluginSettings;
+	} catch (error) {
+		console.error("Kategori görünürlüğü kaydedilirken hata:", error);
+		throw error;
+	}
+}
+
+/**
+ * Bir eklentiye ait tüm kategorilerin görünürlük haritasını topluca günceller ve kaydeder.
+ */
+export async function setPluginCategoriesVisibility(pluginName, categoryMap) {
+	try {
+		if (!pluginName) return {};
+		const allSettings = await getCategoryVisibilitySettings();
+		const updatedAllSettings = {
+			...allSettings,
+			[pluginName]: categoryMap || {},
+		};
+
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.CATEGORY_VISIBILITY,
+			JSON.stringify(updatedAllSettings),
+		);
+		return updatedAllSettings[pluginName];
+	} catch (error) {
+		console.error(
+			"Eklenti kategori görünürlükleri topluca kaydedilirken hata:",
+			error,
+		);
+		throw error;
+	}
+}
+
+/**
+ * Belirli bir eklentinin belirli bir kategorisinin görünür olup olmadığını kontrol eder.
+ * Varsayılan: true (görünür)
+ */
+export async function isCategoryVisible(pluginName, categoryKey) {
+	try {
+		if (!pluginName || !categoryKey) return true;
+		const settings = await getCategoryVisibilitySettings(pluginName);
+		if (categoryKey in settings) {
+			return Boolean(settings[categoryKey]);
+		}
+		return true; // Varsayılan: Görünür
+	} catch (error) {
+		console.error("Kategori görünürlüğü kontrol edilirken hata:", error);
+		return true;
+	}
+}
+
 export default {
 	getUserProfile,
 	saveUserProfile,
@@ -613,4 +707,8 @@ export default {
 	savePluginVisibility,
 	setAllPluginsVisibility,
 	isPluginVisible,
+	getCategoryVisibilitySettings,
+	saveCategoryVisibility,
+	setPluginCategoriesVisibility,
+	isCategoryVisible,
 };

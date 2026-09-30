@@ -1,3 +1,5 @@
+import { getCategoryVisibilitySettings } from "@/utils/storage";
+
 const API_BASE_URL =
 	process.env.EXPO_PUBLIC_API_URL || "https://api.example.com";
 // Default fallback platforms list
@@ -192,32 +194,72 @@ export async function fetchPlatformMainPage(platformName, categoryURL, force = f
 
 /**
  * Fetch Platform Categories
+ * @param {string} platformName
+ * @param {boolean} force - Force cache refresh
+ * @param {boolean} includeHidden - If true, returns all categories without filtering hidden ones
  */
-export async function fetchPlatformCategories(platformName, force = false) {
+export async function fetchPlatformCategories(
+	platformName,
+	force = false,
+	includeHidden = false,
+) {
+	let rawData = null;
+
 	if (!force && apiCache.categories.has(platformName)) {
-		return apiCache.categories.get(platformName);
+		rawData = apiCache.categories.get(platformName);
+	} else {
+		try {
+			const response = await fetch(
+				`${API_BASE_URL}/plugins/${platformName}/categories`,
+				{
+					headers: { "Content-Type": "application/json" },
+				},
+			);
+			if (response.ok) {
+				rawData = await response.json();
+				apiCache.categories.set(platformName, rawData);
+			}
+		} catch (error) {
+			console.warn(
+				"API platform categories request failed, using fallback:",
+				error.message,
+			);
+		}
+	}
+
+	if (!rawData) {
+		return [];
+	}
+
+	if (includeHidden) {
+		return rawData;
 	}
 
 	try {
-		const response = await fetch(
-			`${API_BASE_URL}/plugins/${platformName}/categories`,
-			{
-				headers: { "Content-Type": "application/json" },
-			},
-		);
-		if (response.ok) {
-			const data = await response.json();
-			apiCache.categories.set(platformName, data);
-			return data;
+		const visibilityMap = await getCategoryVisibilitySettings(platformName);
+		if (!visibilityMap || Object.keys(visibilityMap).length === 0) {
+			return rawData;
 		}
-	} catch (error) {
-		console.warn(
-			"API platform categories request failed, using fallback:",
-			error.message,
-		);
+
+		const isCatVisible = (cat) => {
+			const key = cat?.name || cat?.title || cat?.url || cat?.id;
+			return !key || visibilityMap[key] !== false;
+		};
+
+		if (Array.isArray(rawData)) {
+			return rawData.filter(isCatVisible);
+		}
+		if (rawData?.categories && Array.isArray(rawData.categories)) {
+			return {
+				...rawData,
+				categories: rawData.categories.filter(isCatVisible),
+			};
+		}
+	} catch (filterError) {
+		console.warn("Kategori görünürlük filtresi hatası:", filterError);
 	}
 
-	return [];
+	return rawData;
 }
 
 /**

@@ -1,9 +1,16 @@
 import { useThemeContext } from "@/context/ThemeContext";
-import { clearPluginCache, fetchPlatforms } from "@/services/api";
 import {
+	clearPluginCache,
+	fetchPlatformCategories,
+	fetchPlatforms,
+} from "@/services/api";
+import {
+	getCategoryVisibilitySettings,
 	getPluginVisibilitySettings,
+	saveCategoryVisibility,
 	savePluginVisibility,
 	setAllPluginsVisibility,
+	setPluginCategoriesVisibility,
 } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -32,18 +39,24 @@ export default function PluginSettingsScreen() {
 	const [refreshing, setRefreshing] = useState(false);
 	const [plugins, setPlugins] = useState([]);
 	const [visibilityMap, setVisibilityMap] = useState({});
+	const [categoryVisibilityMap, setCategoryVisibilityMap] = useState({});
+	const [expandedPlugins, setExpandedPlugins] = useState({});
+	const [pluginCategories, setPluginCategories] = useState({});
+	const [loadingCategories, setLoadingCategories] = useState({});
 	const [searchQuery, setSearchQuery] = useState("");
 
-	// Load plugins and visibility settings
+	// Load plugins, plugin visibility and category visibility settings
 	const loadData = useCallback(async (forceRefresh = false) => {
 		try {
 			if (forceRefresh) {
 				clearPluginCache();
 			}
-			const [platformsData, savedVisibility] = await Promise.all([
-				fetchPlatforms(forceRefresh),
-				getPluginVisibilitySettings(),
-			]);
+			const [platformsData, savedVisibility, savedCatVisibility] =
+				await Promise.all([
+					fetchPlatforms(forceRefresh),
+					getPluginVisibilitySettings(),
+					getCategoryVisibilitySettings(),
+				]);
 
 			const list = Array.isArray(platformsData) ? platformsData : [];
 			setPlugins(list);
@@ -57,6 +70,7 @@ export default function PluginSettingsScreen() {
 				}
 			});
 			setVisibilityMap(initialMap);
+			setCategoryVisibilityMap(savedCatVisibility || {});
 		} catch (error) {
 			console.error("Eklentiler yüklenirken hata:", error);
 			Alert.alert("Hata", "Eklentiler yüklenemedi.");
@@ -91,7 +105,7 @@ export default function PluginSettingsScreen() {
 
 		try {
 			await savePluginVisibility(key, nextVal);
-			clearPluginCache(); // Invalidate cache so changes reflect globally
+			clearPluginCache(plugin.name); // Invalidate cache so changes reflect globally
 		} catch (error) {
 			console.error("Görünürlük kaydedilemedi:", error);
 			// Rollback state on error
@@ -118,17 +132,166 @@ export default function PluginSettingsScreen() {
 		}
 	};
 
+	// Toggle category accordion expansion and lazy load categories
+	const togglePluginExpanded = useCallback(
+		async (plugin) => {
+			const pluginKey = plugin.name || plugin.id;
+			if (!pluginKey) return;
+
+			const isCurrentlyExpanded = Boolean(expandedPlugins[pluginKey]);
+			const nextExpanded = !isCurrentlyExpanded;
+
+			setExpandedPlugins((prev) => ({
+				...prev,
+				[pluginKey]: nextExpanded,
+			}));
+
+			if (nextExpanded && !pluginCategories[pluginKey]) {
+				try {
+					setLoadingCategories((prev) => ({
+						...prev,
+						[pluginKey]: true,
+					}));
+					const catRes = await fetchPlatformCategories(
+						plugin.name,
+						false,
+						true,
+					);
+					const catList =
+						catRes?.categories || (Array.isArray(catRes) ? catRes : []);
+					setPluginCategories((prev) => ({
+						...prev,
+						[pluginKey]: catList,
+					}));
+				} catch (catErr) {
+					console.error(
+						`[${plugin.name}] kategorileri yüklenirken hata:`,
+						catErr,
+					);
+				} finally {
+					setLoadingCategories((prev) => ({
+						...prev,
+						[pluginKey]: false,
+					}));
+				}
+			}
+		},
+		[expandedPlugins, pluginCategories],
+	);
+
+	// Toggle single category visibility for a plugin
+	const handleToggleCategory = async (plugin, category) => {
+		const pluginKey = plugin.name || plugin.id;
+		const catKey =
+			category.name || category.title || category.url || category.id;
+		if (!pluginKey || !catKey) return;
+
+		const currentPluginCats = categoryVisibilityMap[pluginKey] || {};
+		const currentVal = currentPluginCats[catKey] !== false;
+		const nextVal = !currentVal;
+
+		const updatedPluginCats = {
+			...currentPluginCats,
+			[catKey]: nextVal,
+		};
+
+		const updatedMap = {
+			...categoryVisibilityMap,
+			[pluginKey]: updatedPluginCats,
+		};
+
+		setCategoryVisibilityMap(updatedMap);
+
+		try {
+			await saveCategoryVisibility(pluginKey, catKey, nextVal);
+			clearPluginCache(plugin.name);
+		} catch (error) {
+			console.error("Kategori görünürlüğü kaydedilemedi:", error);
+			setCategoryVisibilityMap(categoryVisibilityMap);
+			Alert.alert("Hata", "Kategori ayarı kaydedilemedi.");
+		}
+	};
+
+	// Bulk toggle categories of a plugin
+	const handleToggleAllCategories = async (plugin, makeVisible) => {
+		const pluginKey = plugin.name || plugin.id;
+		if (!pluginKey) return;
+
+		const catList = pluginCategories[pluginKey] || [];
+		if (catList.length === 0) return;
+
+		const newPluginCatMap = {};
+		catList.forEach((c) => {
+			const key = c.name || c.title || c.url || c.id;
+			if (key) newPluginCatMap[key] = makeVisible;
+		});
+
+		const updatedMap = {
+			...categoryVisibilityMap,
+			[pluginKey]: newPluginCatMap,
+		};
+
+		setCategoryVisibilityMap(updatedMap);
+
+		try {
+			await setPluginCategoriesVisibility(pluginKey, newPluginCatMap);
+			clearPluginCache(plugin.name);
+		} catch (error) {
+			console.error("Toplu kategori görünürlüğü kaydedilemedi:", error);
+			Alert.alert("Hata", "Kategori ayarları kaydedilemedi.");
+		}
+	};
+
+	// Reload categories of a plugin
+	const handleReloadCategories = async (plugin) => {
+		const pluginKey = plugin.name || plugin.id;
+		if (!pluginKey) return;
+
+		try {
+			setLoadingCategories((prev) => ({ ...prev, [pluginKey]: true }));
+			clearPluginCache(plugin.name);
+			const catRes = await fetchPlatformCategories(
+				plugin.name,
+				true,
+				true,
+			);
+			const catList =
+				catRes?.categories || (Array.isArray(catRes) ? catRes : []);
+			setPluginCategories((prev) => ({
+				...prev,
+				[pluginKey]: catList,
+			}));
+		} catch (catErr) {
+			console.error(
+				`[${plugin.name}] kategorileri yenilenirken hata:`,
+				catErr,
+			);
+			Alert.alert("Hata", "Kategoriler yüklenemedi.");
+		} finally {
+			setLoadingCategories((prev) => ({ ...prev, [pluginKey]: false }));
+		}
+	};
+
 	// Filtered plugins based on search query
 	const filteredPlugins = useMemo(() => {
 		if (!searchQuery.trim()) return plugins;
 		const q = searchQuery.toLowerCase().trim();
-		return plugins.filter(
-			(p) =>
-				p.name?.toLowerCase().includes(q) ||
-				p.description?.toLowerCase().includes(q) ||
-				p.main_url?.toLowerCase().includes(q),
-		);
-	}, [plugins, searchQuery]);
+		return plugins.filter((p) => {
+			const key = p.name || p.id;
+			const nameMatch = p.name?.toLowerCase().includes(q);
+			const descMatch = p.description?.toLowerCase().includes(q);
+			const urlMatch = p.main_url?.toLowerCase().includes(q);
+			const cats = pluginCategories[key];
+			const catMatch =
+				Array.isArray(cats) &&
+				cats.some(
+					(c) =>
+						c.name?.toLowerCase().includes(q) ||
+						c.title?.toLowerCase().includes(q),
+				);
+			return nameMatch || descMatch || urlMatch || catMatch;
+		});
+	}, [plugins, searchQuery, pluginCategories]);
 
 	// Counts
 	const totalCount = plugins.length;
@@ -229,8 +392,10 @@ export default function PluginSettingsScreen() {
 								styles.infoBannerText,
 								{ color: colors.textSecondary },
 							]}>
-							Kapattığınız eklentiler ana sayfa sekmelerinde, kategori
-							listelerinde ve sağlayıcı seçimlerinde gizlenir.
+							Kapattığınız eklentiler veya gizlediğiniz kategoriler ana
+							sayfa akışında ve sağlayıcı ekranında gösterilmez.
+							Eklenti kartlarındaki "Kategoriler" bölümünü genişleterek
+							kategorileri tek tek yönetebilirsiniz.
 						</Text>
 
 						{/* Stats Chips */}
@@ -437,6 +602,20 @@ export default function PluginSettingsScreen() {
 								const key = plugin.name || plugin.id;
 								const isVisible = visibilityMap[key] !== false;
 								const isLast = index === filteredPlugins.length - 1;
+								const isExpanded = Boolean(expandedPlugins[key]);
+								const isLoadingCats = Boolean(loadingCategories[key]);
+								const catsList = pluginCategories[key];
+								const visibleCatsCount = catsList
+									? catsList.filter(
+											(c) =>
+												categoryVisibilityMap[key]?.[
+													c.name ||
+														c.title ||
+														c.url ||
+														c.id
+												] !== false,
+										).length
+									: 0;
 
 								return (
 									<View key={key || index}>
@@ -576,6 +755,457 @@ export default function PluginSettingsScreen() {
 												</Text>
 											</View>
 										</View>
+
+										{/* Category Accordion Header Button */}
+										<TouchableOpacity
+											style={[
+												styles.categoryAccordionTrigger,
+												{
+													backgroundColor:
+														theme === "dark"
+															? isExpanded
+																? "rgba(37, 99, 235, 0.14)"
+																: "rgba(255, 255, 255, 0.03)"
+															: isExpanded
+																? "rgba(37, 99, 235, 0.08)"
+																: "rgba(0, 0, 0, 0.02)",
+													borderColor: isExpanded
+														? "rgba(37, 99, 235, 0.3)"
+														: colors.border,
+												},
+											]}
+											onPress={() => togglePluginExpanded(plugin)}
+											activeOpacity={0.7}>
+											<View style={styles.categoryAccordionLeft}>
+												<Ionicons
+													name="layers-outline"
+													size={15}
+													color={
+														isExpanded
+															? colors.primary
+															: colors.textSecondary
+													}
+												/>
+												<Text
+													style={[
+														styles.categoryAccordionTitle,
+														{
+															color: isExpanded
+																? colors.primary
+																: colors.text,
+														},
+													]}>
+													Kategoriler
+												</Text>
+												{catsList && catsList.length > 0 && (
+													<View
+														style={[
+															styles.categoryCountBadge,
+															{
+																backgroundColor:
+																	theme === "dark"
+																		? "#1e293b"
+																		: "#e2e8f0",
+															},
+														]}>
+														<Text
+															style={[
+																styles.categoryCountBadgeText,
+																{
+																	color:
+																		visibleCatsCount ===
+																		0
+																			? "#ef4444"
+																			: visibleCatsCount <
+																					catsList.length
+																				? "#f59e0b"
+																				: "#10b981",
+																},
+															]}>
+															{visibleCatsCount}/
+															{catsList.length} Görünür
+														</Text>
+													</View>
+												)}
+											</View>
+											<View style={styles.categoryAccordionRight}>
+												{isLoadingCats ? (
+													<ActivityIndicator
+														size="small"
+														color={colors.primary}
+													/>
+												) : (
+													<Ionicons
+														name={
+															isExpanded
+																? "chevron-up"
+																: "chevron-down"
+														}
+														size={16}
+														color={colors.textSecondary}
+													/>
+												)}
+											</View>
+										</TouchableOpacity>
+
+										{/* Expanded Categories Section */}
+										{isExpanded && (
+											<View
+												style={[
+													styles.categoriesContainer,
+													{
+														backgroundColor:
+															theme === "dark"
+																? "rgba(15, 23, 42, 0.55)"
+																: "rgba(248, 250, 252, 0.95)",
+														borderColor: colors.border,
+													},
+												]}>
+												{!isVisible && (
+													<View
+														style={[
+															styles.pluginDisabledWarning,
+															{
+																backgroundColor:
+																	theme === "dark"
+																		? "rgba(239, 68, 68, 0.12)"
+																		: "rgba(239, 68, 68, 0.08)",
+																borderColor:
+																	theme === "dark"
+																		? "rgba(239, 68, 68, 0.3)"
+																		: "rgba(239, 68, 68, 0.2)",
+															},
+														]}>
+														<Ionicons
+															name="information-circle-outline"
+															size={15}
+															color="#ef4444"
+														/>
+														<Text
+															style={
+																styles.pluginDisabledWarningText
+															}>
+															Eklenti kapalı olduğu için
+															kategorileri de ana sayfada
+															gizlidir.
+														</Text>
+													</View>
+												)}
+
+												{isLoadingCats ? (
+													<View
+														style={
+															styles.categoriesLoadingBox
+														}>
+														<ActivityIndicator
+															size="small"
+															color={colors.primary}
+														/>
+														<Text
+															style={[
+																styles.categoriesLoadingText,
+																{
+																	color:
+																		colors.textSecondary,
+																},
+															]}>
+															Kategoriler yükleniyor...
+														</Text>
+													</View>
+												) : !catsList ||
+												  catsList.length === 0 ? (
+													<View
+														style={styles.categoriesEmptyBox}>
+														<Ionicons
+															name="folder-open-outline"
+															size={26}
+															color={colors.textSecondary}
+														/>
+														<Text
+															style={[
+																styles.categoriesEmptyText,
+																{
+																	color:
+																		colors.textSecondary,
+																},
+															]}>
+															Bu eklentiye ait kategori
+															bulunamadı.
+														</Text>
+														<TouchableOpacity
+															style={[
+																styles.reloadCatsButton,
+																{
+																	borderColor:
+																		colors.border,
+																},
+															]}
+															onPress={() =>
+																handleReloadCategories(
+																	plugin,
+																)
+															}>
+															<Ionicons
+																name="refresh"
+																size={13}
+																color={colors.primary}
+															/>
+															<Text
+																style={[
+																	styles.reloadCatsText,
+																	{
+																		color:
+																			colors.primary,
+																	},
+																]}>
+																Yeniden Dene
+															</Text>
+														</TouchableOpacity>
+													</View>
+												) : (
+													<>
+														{/* Categories Header & Actions */}
+														<View
+															style={
+																styles.categoriesHeaderRow
+															}>
+															<Text
+																style={[
+																	styles.categoriesSubTitle,
+																	{
+																		color:
+																			colors.textSecondary,
+																	},
+																]}>
+																KATEGORİLER (
+																{catsList.length})
+															</Text>
+															<View
+																style={
+																	styles.categoriesBulkActions
+																}>
+																<TouchableOpacity
+																	style={[
+																		styles.catBulkButton,
+																		{
+																			backgroundColor:
+																				theme === "dark"
+																					? "#1e293b"
+																					: "#e2e8f0",
+																		},
+																	]}
+																	onPress={() =>
+																		handleToggleAllCategories(
+																			plugin,
+																			true,
+																		)
+																	}
+																	activeOpacity={0.7}>
+																	<Ionicons
+																		name="checkmark-done"
+																		size={12}
+																		color="#10b981"
+																	/>
+																	<Text
+																		style={[
+																			styles.catBulkButtonText,
+																			{
+																				color: "#10b981",
+																			},
+																		]}>
+																		Tümünü Aç
+																	</Text>
+																</TouchableOpacity>
+																<TouchableOpacity
+																	style={[
+																		styles.catBulkButton,
+																		{
+																			backgroundColor:
+																				theme === "dark"
+																					? "#1e293b"
+																					: "#e2e8f0",
+																		},
+																	]}
+																	onPress={() =>
+																		handleToggleAllCategories(
+																			plugin,
+																			false,
+																		)
+																	}
+																	activeOpacity={0.7}>
+																	<Ionicons
+																		name="eye-off-outline"
+																		size={12}
+																		color="#ef4444"
+																	/>
+																	<Text
+																		style={[
+																			styles.catBulkButtonText,
+																			{
+																				color: "#ef4444",
+																			},
+																		]}>
+																		Tümünü Gizle
+																	</Text>
+																</TouchableOpacity>
+															</View>
+														</View>
+
+														{/* Category Items */}
+														<View
+															style={
+																styles.categoryItemsList
+															}>
+															{catsList.map(
+																(category, catIdx) => {
+																	const catKey =
+																		category.name ||
+																		category.title ||
+																		category.url ||
+																		category.id;
+																	const isCatVisible =
+																		categoryVisibilityMap[
+																			key
+																		]?.[catKey] !==
+																		false;
+																	const isCatLast =
+																		catIdx ===
+																		catsList.length - 1;
+
+																	return (
+																		<View
+																			key={
+																				catKey ||
+																				catIdx
+																			}>
+																			<View
+																				style={[
+																					styles.categoryItemRow,
+																					!isCatVisible &&
+																						styles.categoryItemRowDisabled,
+																				]}>
+																				<View
+																					style={
+																						styles.categoryItemInfo
+																					}>
+																					<Ionicons
+																						name={
+																							isCatVisible
+																								? "film-outline"
+																								: "eye-off-outline"
+																						}
+																						size={
+																							16
+																						}
+																						color={
+																							isCatVisible
+																								? colors.primary
+																								: colors.textSecondary
+																						}
+																					/>
+																					<View
+																						style={
+																							styles.categoryTextWrapper
+																						}>
+																						<Text
+																							style={[
+																								styles.categoryItemName,
+																								{
+																									color: isCatVisible
+																										? colors.text
+																										: colors.textSecondary,
+																								},
+																							]}
+																							numberOfLines={
+																								1
+																							}>
+																							{category.name ||
+																								category.title ||
+																								"Kategori"}
+																						</Text>
+																						{category.url ? (
+																							<Text
+																								style={
+																									styles.categoryItemSub
+																								}
+																								numberOfLines={
+																									1
+																								}>
+																								{
+																									category.url
+																								}
+																							</Text>
+																						) : null}
+																					</View>
+																				</View>
+
+																				<View
+																					style={
+																						styles.categoryItemSwitchWrapper
+																					}>
+																					<Switch
+																						value={
+																							isCatVisible
+																						}
+																						onValueChange={() =>
+																							handleToggleCategory(
+																								plugin,
+																								category,
+																							)
+																						}
+																						trackColor={{
+																							false: "#374151",
+																							true: colors.primary,
+																						}}
+																						thumbColor="#ffffff"
+																						ios_backgroundColor="#374151"
+																						style={{
+																							transform:
+																								[
+																									{
+																										scaleX: 0.8,
+																									},
+																									{
+																										scaleY: 0.8,
+																									},
+																								],
+																						}}
+																					/>
+																					<Text
+																						style={[
+																							styles.categoryItemSwitchLabel,
+																							{
+																								color: isCatVisible
+																									? colors.primary
+																									: "#ef4444",
+																							},
+																						]}>
+																						{isCatVisible
+																							? "Görünür"
+																							: "Gizli"}
+																					</Text>
+																				</View>
+																			</View>
+																			{!isCatLast && (
+																				<View
+																					style={[
+																						styles.categoryDivider,
+																						{
+																							backgroundColor:
+																								colors.border,
+																						},
+																					]}
+																				/>
+																			)}
+																		</View>
+																	);
+																},
+															)}
+														</View>
+													</>
+												)}
+											</View>
+										)}
 
 										{/* Divider */}
 										{!isLast && (
@@ -852,5 +1482,172 @@ const styles = StyleSheet.create({
 	cardDivider: {
 		height: 1,
 		marginLeft: 72,
+	},
+	categoryAccordionTrigger: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		marginHorizontal: 12,
+		marginBottom: 10,
+		paddingHorizontal: 12,
+		paddingVertical: 8,
+		borderRadius: 9,
+		borderWidth: 1,
+	},
+	categoryAccordionLeft: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+	},
+	categoryAccordionTitle: {
+		fontSize: 12,
+		fontWeight: "600",
+	},
+	categoryCountBadge: {
+		paddingHorizontal: 7,
+		paddingVertical: 2,
+		borderRadius: 5,
+	},
+	categoryCountBadgeText: {
+		fontSize: 10,
+		fontWeight: "700",
+	},
+	categoryAccordionRight: {
+		justifyContent: "center",
+		alignItems: "center",
+		width: 20,
+	},
+	categoriesContainer: {
+		marginHorizontal: 12,
+		marginBottom: 12,
+		padding: 12,
+		borderRadius: 10,
+		borderWidth: 1,
+	},
+	pluginDisabledWarning: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+		paddingHorizontal: 10,
+		paddingVertical: 6,
+		borderRadius: 6,
+		borderWidth: 1,
+		marginBottom: 10,
+	},
+	pluginDisabledWarningText: {
+		fontSize: 11,
+		color: "#ef4444",
+		flex: 1,
+		fontWeight: "500",
+	},
+	categoriesLoadingBox: {
+		paddingVertical: 16,
+		alignItems: "center",
+		justifyContent: "center",
+		gap: 8,
+	},
+	categoriesLoadingText: {
+		fontSize: 12,
+	},
+	categoriesEmptyBox: {
+		paddingVertical: 14,
+		alignItems: "center",
+		justifyContent: "center",
+		gap: 6,
+	},
+	categoriesEmptyText: {
+		fontSize: 12,
+		textAlign: "center",
+	},
+	reloadCatsButton: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 5,
+		paddingHorizontal: 10,
+		paddingVertical: 5,
+		borderRadius: 6,
+		borderWidth: 1,
+		marginTop: 4,
+	},
+	reloadCatsText: {
+		fontSize: 11,
+		fontWeight: "600",
+	},
+	categoriesHeaderRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		marginBottom: 10,
+		paddingBottom: 6,
+		borderBottomWidth: StyleSheet.hairlineWidth,
+		borderBottomColor: "rgba(100, 116, 139, 0.2)",
+	},
+	categoriesSubTitle: {
+		fontSize: 10,
+		fontWeight: "700",
+		letterSpacing: 0.8,
+	},
+	categoriesBulkActions: {
+		flexDirection: "row",
+		gap: 6,
+	},
+	catBulkButton: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 4,
+		paddingHorizontal: 8,
+		paddingVertical: 4,
+		borderRadius: 6,
+	},
+	catBulkButtonText: {
+		fontSize: 10,
+		fontWeight: "700",
+	},
+	categoryItemsList: {
+		gap: 2,
+	},
+	categoryItemRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingVertical: 6,
+	},
+	categoryItemRowDisabled: {
+		opacity: 0.6,
+	},
+	categoryItemInfo: {
+		flexDirection: "row",
+		alignItems: "center",
+		flex: 1,
+		gap: 8,
+		paddingRight: 8,
+	},
+	categoryTextWrapper: {
+		flex: 1,
+	},
+	categoryItemName: {
+		fontSize: 13,
+		fontWeight: "600",
+	},
+	categoryItemSub: {
+		fontSize: 10,
+		color: "#64748b",
+		marginTop: 1,
+	},
+	categoryItemSwitchWrapper: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 4,
+	},
+	categoryItemSwitchLabel: {
+		fontSize: 10,
+		fontWeight: "600",
+		minWidth: 38,
+		textAlign: "right",
+	},
+	categoryDivider: {
+		height: StyleSheet.hairlineWidth,
+		marginLeft: 24,
+		marginVertical: 2,
 	},
 });

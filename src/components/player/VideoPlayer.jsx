@@ -22,6 +22,11 @@ import {
 } from "@/utils/storage";
 import TrackSelectionModal from "./TrackSelectionModal";
 
+// Altyazı CDN'leri (örn. Dizilla -> pichive) User-Agent + Referer olmadan 403 döner.
+// Kaynak bu header'ları döndürmüyorsa yedek olarak tarayıcı UA'sı kullanılır.
+const DEFAULT_SUBTITLE_UA =
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+
 
 
 function formatTime(seconds) {
@@ -259,12 +264,36 @@ export default function VideoPlayer({
 		);
 	}, [userSubtitleChoice, settings?.defaultSubtitleLanguage, allSubtitles]);
 
+	// Altyazı istekleri için header'lar: video ile AYNI olmalı.
+	// Dizilla (pichive) gibi kaynaklarda User-Agent + Referer eksikse CDN 403 döner.
+	const subtitleHeaders = useMemo(() => {
+		const result = currentSourceData?.result || {};
+		const headers = { ...(result.headers || {}) };
+
+		if (result.referer && !headers.Referer) {
+			headers.Referer = result.referer;
+		}
+
+		// Cookie nesnesi fetch'te string bekler
+		if (headers.Cookie && typeof headers.Cookie === "object") {
+			headers.Cookie = Object.entries(headers.Cookie)
+				.map(([k, v]) => `${k}=${v}`)
+				.join("; ");
+		}
+
+		if (!headers["User-Agent"]) {
+			headers["User-Agent"] = DEFAULT_SUBTITLE_UA;
+		}
+
+		return headers;
+	}, [currentSourceData]);
+
 	// Altyazı dosyası değiştiğinde VTT/SRT içeriğini indirip ayrıştır
 	useEffect(() => {
 		if (!selectedSubtitle?.uri) return;
 
 		let isMounted = true;
-		fetch(selectedSubtitle.uri)
+		fetch(selectedSubtitle.uri, { headers: subtitleHeaders })
 			.then((res) => {
 				if (!res.ok) throw new Error("HTTP " + res.status);
 				return res.text();
@@ -283,7 +312,7 @@ export default function VideoPlayer({
 		return () => {
 			isMounted = false;
 		};
-	}, [selectedSubtitle?.uri]);
+	}, [selectedSubtitle?.uri, subtitleHeaders]);
 
 	// Anlık altyazı metni (subtitleOffset ile gecikme/ilerleme eklenmiş)
 	const currentSubtitleText = useMemo(() => {
@@ -374,9 +403,13 @@ export default function VideoPlayer({
 			uri: streamUrl,
 			headers,
 			type,
-			textTracks: externalSubtitles,
+			// NOT: Harici altyazılar buraya verilmiyor.
+			// react-native-video v6'nın TextTrack tipi header alanı desteklemiyor
+			// ({ title, language, type, uri }), bu yüzden header gerektiren CDN'lerde
+			// (Dizilla/pichive gibi) native istek 403 alır. Altyazılar zaten
+			// subtitleHeaders ile fetch edilip kendi overlay'imizde çiziliyor.
 		};
-	}, [currentSourceData, externalSubtitles]);
+	}, [currentSourceData]);
 
 	// Orientation handling - varsayılan olarak her zaman yatay
 	const toggleOrientation = async () => {
