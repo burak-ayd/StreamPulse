@@ -15,7 +15,7 @@ import {
 const POSTER_WIDTH = 120;
 const POSTER_HEIGHT = 180;
 
-export default function HeroSection({ content }) {
+export default function HeroSection({ content, onShare }) {
 	const { colors, theme } = useThemeContext();
 	const router = useRouter();
 	const { width, height } = useWindowDimensions();
@@ -99,6 +99,23 @@ export default function HeroSection({ content }) {
 				activeOpacity={0.8}>
 				<Ionicons name="arrow-back" size={24} color="#ffffff" />
 			</TouchableOpacity>
+
+			{/* Share Button (Sağ üst köşe - geri butonu gibi) */}
+			{onShare && (
+				<TouchableOpacity
+					style={[
+						styles.shareButton,
+						{ backgroundColor: "rgba(0,0,0,0.5)" },
+					]}
+					onPress={onShare}
+					activeOpacity={0.8}>
+					<Ionicons
+						name="share-social-outline"
+						size={20}
+						color="#ffffff"
+					/>
+				</TouchableOpacity>
+			)}
 
 			{/* Content Info */}
 			<View style={styles.contentInfo}>
@@ -190,6 +207,17 @@ const styles = StyleSheet.create({
 		position: "absolute",
 		top: StatusBar.currentHeight ? StatusBar.currentHeight + 12 : 52,
 		left: 16,
+		width: 40,
+		height: 40,
+		borderRadius: 20,
+		justifyContent: "center",
+		alignItems: "center",
+		zIndex: 10,
+	},
+	shareButton: {
+		position: "absolute",
+		top: StatusBar.currentHeight ? StatusBar.currentHeight + 12 : 52,
+		right: 16,
 		width: 40,
 		height: 40,
 		borderRadius: 20,
