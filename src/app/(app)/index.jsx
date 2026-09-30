@@ -15,6 +15,7 @@ import {
 	NONE_PLATFORM,
 	getContinueWatching,
 	getDownloads,
+	getPluginVisibilitySettings,
 	getSelectedPlatform,
 	getUserProfile,
 	isFavorite,
@@ -152,15 +153,31 @@ export default function Index() {
 
 		async function initPlatform() {
 			try {
-				let platform = await getSelectedPlatform();
+				const [savedPlatform, platforms, visibility] = await Promise.all([
+					getSelectedPlatform(),
+					fetchPlatforms(),
+					getPluginVisibilitySettings(),
+				]);
 
-				if (!platform) {
-					const platforms = await fetchPlatforms();
-					if (Array.isArray(platforms) && platforms.length > 0) {
-						platform = platforms[0];
+				const list = Array.isArray(platforms) ? platforms : [];
+				const visiblePlatforms = list.filter(
+					(p) => visibility?.[p.name || p.id] !== false,
+				);
+
+				let platform = savedPlatform;
+				// If currently saved platform is hidden, fallback to first visible or NONE_PLATFORM
+				if (
+					platform &&
+					platform.id !== "none" &&
+					visibility?.[platform.name || platform.id] === false
+				) {
+					platform = visiblePlatforms.length > 0 ? visiblePlatforms[0] : NONE_PLATFORM;
+					await saveSelectedPlatform(platform);
+				} else if (!platform) {
+					if (visiblePlatforms.length > 0) {
+						platform = visiblePlatforms[0];
 						await saveSelectedPlatform(platform);
 					} else {
-						// API'den platform dönmüyorsa None(Hiçbiri) seçili gelmeli
 						platform = NONE_PLATFORM;
 						await saveSelectedPlatform(platform);
 					}

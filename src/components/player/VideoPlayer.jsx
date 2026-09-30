@@ -366,7 +366,7 @@ export default function VideoPlayer({
 
 		// Detect type from URL or force m3u8 for known HLS endpoints
 		let type = undefined;
-		if (streamUrl.includes('.m3u8') || streamUrl.includes('/q/') || streamUrl.includes('molystream')) {
+		if (streamUrl.includes('.m3u8') || streamUrl.includes('/q/') || streamUrl.includes('molystream') || streamUrl.includes('/hls/') || streamUrl.includes('master.txt')) {
 			type = 'm3u8';
 		}
 

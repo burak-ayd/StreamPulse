@@ -1,5 +1,5 @@
+import ContinueWatchingCard from "@/components/content/ContinueWatchingCard";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import React from "react";
 import {
 	FlatList,
 	StyleSheet,
@@ -7,7 +7,6 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import ContinueWatchingCard from "@/components/content/ContinueWatchingCard";
 
 export default function ContinueWatchingSection({
 	items = [],
@@ -25,7 +24,9 @@ export default function ContinueWatchingSection({
 			<View style={styles.header}>
 				<View style={styles.headerLeft}>
 					<View style={styles.headerAccent} />
-					<Text style={styles.headerTitle}>Kaldığın Yerden Devam Et</Text>
+					<Text style={styles.headerTitle}>
+						Kaldığın Yerden Devam Et
+					</Text>
 				</View>
 				{onSeeAllPress && (
 					<TouchableOpacity
@@ -33,7 +34,11 @@ export default function ContinueWatchingSection({
 						style={styles.seeAllButton}
 						activeOpacity={0.7}>
 						<Text style={styles.seeAllText}>Tümü</Text>
-						<Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+						<Ionicons
+							name="chevron-forward"
+							size={16}
+							color="#9CA3AF"
+						/>
 					</TouchableOpacity>
 				)}
 			</View>
