@@ -140,6 +140,7 @@ function PosterImage({ uri, accentColor }) {
 					source={{ uri }}
 					style={styles.poster}
 					contentFit="cover"
+					contentPosition="center"
 					transition={300}
 					cachePolicy="memory-disk"
 					onLoad={onLoad}
@@ -182,7 +183,12 @@ const MovieCard = React.memo(
 					style={styles.card}
 					onPress={() => onPress?.(item)}>
 					<PosterImage
-						uri={item.poster}
+						uri={
+							item.poster ||
+							item.poster_url ||
+							item.image ||
+							item.backdrop_url
+						}
 						accentColor={item.accentColor}
 					/>
 
@@ -452,7 +458,11 @@ const styles = StyleSheet.create({
 		shadowRadius: 24,
 		elevation: 18,
 	},
-	poster: { ...StyleSheet.absoluteFill, borderRadius: BORDER_RADIUS },
+	poster: {
+		...StyleSheet.absoluteFill,
+		borderRadius: BORDER_RADIUS,
+		overflow: "hidden",
+	},
 	gradient: { ...StyleSheet.absoluteFill, borderRadius: BORDER_RADIUS },
 
 	skeleton: {

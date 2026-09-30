@@ -74,10 +74,68 @@ const FALLBACK_CONTENT_DETAILS = {
 	},
 };
 
+// In-memory cache store to prevent repeated API calls
+const apiCache = {
+	platforms: null,
+	categories: new Map(), // platformName -> categories list
+	randomHero: new Map(), // platformName -> hero contents
+	categoryContents: new Map(), // `${platformName}::${categoryURL}` -> contents array
+	pluginDetails: new Map(), // `${pluginName}::${url}` -> detail
+};
+
+/**
+ * Synchronous cache getters
+ */
+export function getCachedPlatforms() {
+	return apiCache.platforms;
+}
+
+export function getCachedCategories(platformName) {
+	if (!platformName) return null;
+	return apiCache.categories.get(platformName) || null;
+}
+
+export function getCachedHeroMovie(platformName) {
+	if (!platformName) return null;
+	return apiCache.randomHero.get(platformName) || null;
+}
+
+export function getCachedCategoryMovies(platformName, categoryURL) {
+	if (!platformName || !categoryURL) return null;
+	const key = `${platformName}::${categoryURL}`;
+	return apiCache.categoryContents.get(key) || null;
+}
+
+/**
+ * Cache invalidation
+ */
+export function clearPluginCache(pluginName) {
+	if (pluginName) {
+		apiCache.categories.delete(pluginName);
+		apiCache.randomHero.delete(pluginName);
+		for (const key of Array.from(apiCache.categoryContents.keys())) {
+			if (key.startsWith(`${pluginName}::`)) {
+				apiCache.categoryContents.delete(key);
+			}
+		}
+	} else {
+		apiCache.platforms = null;
+		apiCache.categories.clear();
+		apiCache.randomHero.clear();
+		apiCache.categoryContents.clear();
+		apiCache.pluginDetails.clear();
+	}
+}
+
 /**
  * Fetch plugin content detail
  */
-export async function fetchPluginDetail(pluginName, url) {
+export async function fetchPluginDetail(pluginName, url, force = false) {
+	const cacheKey = `${pluginName}::${url}`;
+	if (!force && apiCache.pluginDetails.has(cacheKey)) {
+		return apiCache.pluginDetails.get(cacheKey);
+	}
+
 	try {
 		const response = await fetch(
 			`${API_BASE_URL}/plugins/${pluginName}/detail?url=${encodeURIComponent(url)}`,
@@ -87,7 +145,9 @@ export async function fetchPluginDetail(pluginName, url) {
 		);
 		if (response.ok) {
 			const data = await response.json();
-			return data?.detail || data;
+			const result = data?.detail || data;
+			apiCache.pluginDetails.set(cacheKey, result);
+			return result;
 		}
 	} catch (error) {
 		console.warn("API plugin detail request failed:", error.message);
@@ -99,7 +159,12 @@ export async function fetchPluginDetail(pluginName, url) {
 /**
  * Fetch Platform Main Page
  */
-export async function fetchPlatformMainPage(platformName, categoryURL) {
+export async function fetchPlatformMainPage(platformName, categoryURL, force = false) {
+	const cacheKey = `${platformName}::${categoryURL}`;
+	if (!force && apiCache.categoryContents.has(cacheKey)) {
+		return apiCache.categoryContents.get(cacheKey);
+	}
+
 	try {
 		const response = await fetch(
 			`${API_BASE_URL}/plugins/${platformName}/main-page?url=${encodeURIComponent(categoryURL)}`,
@@ -108,7 +173,12 @@ export async function fetchPlatformMainPage(platformName, categoryURL) {
 			},
 		);
 		if (response.ok) {
-			return await response.json();
+			const data = await response.json();
+			const result = Array.isArray(data)
+				? data
+				: data?.results || data?.data || [];
+			apiCache.categoryContents.set(cacheKey, result);
+			return result;
 		}
 	} catch (error) {
 		console.warn(
@@ -123,7 +193,11 @@ export async function fetchPlatformMainPage(platformName, categoryURL) {
 /**
  * Fetch Platform Categories
  */
-export async function fetchPlatformCategories(platformName) {
+export async function fetchPlatformCategories(platformName, force = false) {
+	if (!force && apiCache.categories.has(platformName)) {
+		return apiCache.categories.get(platformName);
+	}
+
 	try {
 		const response = await fetch(
 			`${API_BASE_URL}/plugins/${platformName}/categories`,
@@ -132,7 +206,9 @@ export async function fetchPlatformCategories(platformName) {
 			},
 		);
 		if (response.ok) {
-			return await response.json();
+			const data = await response.json();
+			apiCache.categories.set(platformName, data);
+			return data;
 		}
 	} catch (error) {
 		console.warn(
@@ -147,7 +223,11 @@ export async function fetchPlatformCategories(platformName) {
 /**
  * Fetch streaming platforms
  */
-export async function fetchPlatforms() {
+export async function fetchPlatforms(force = false) {
+	if (!force && apiCache.platforms) {
+		return apiCache.platforms;
+	}
+
 	try {
 		const response = await fetch(`${API_BASE_URL}/plugins`, {
 			headers: { "Content-Type": "application/json" },
@@ -155,7 +235,10 @@ export async function fetchPlatforms() {
 		if (response.ok) {
 			const data = await response.json();
 			const plugins = Array.isArray(data) ? data : data?.plugins;
-			if (Array.isArray(plugins) && plugins.length > 0) return plugins;
+			if (Array.isArray(plugins) && plugins.length > 0) {
+				apiCache.platforms = plugins;
+				return plugins;
+			}
 		}
 	} catch (error) {
 		console.warn(
@@ -164,13 +247,17 @@ export async function fetchPlatforms() {
 		);
 	}
 
-	return [];
+	return DEFAULT_PLATFORMS;
 }
 
 /**
  * Fetch random contents
  */
-export async function fetchRandomContents(platformName, count = 1) {
+export async function fetchRandomContents(platformName, count = 1, force = false) {
+	if (!force && apiCache.randomHero.has(platformName)) {
+		return apiCache.randomHero.get(platformName);
+	}
+
 	try {
 		const response = await fetch(
 			`${API_BASE_URL}/plugins/${platformName}/random?count=${count}`,
@@ -181,7 +268,10 @@ export async function fetchRandomContents(platformName, count = 1) {
 		if (response.ok) {
 			const data = await response.json();
 			const contents = Array.isArray(data) ? data : data?.results;
-			if (Array.isArray(contents) && contents.length > 0) return contents;
+			if (Array.isArray(contents) && contents.length > 0) {
+				apiCache.randomHero.set(platformName, contents);
+				return contents;
+			}
 		}
 	} catch (error) {
 		console.warn(
@@ -216,7 +306,7 @@ export async function fetchRelatedContent(contentType, currentId) {
 }
 
 /**
- * Search content
+ * Search content in all plugins
  */
 export async function searchContent(query) {
 	try {
@@ -233,6 +323,28 @@ export async function searchContent(query) {
 		}
 	} catch (error) {
 		console.warn("API searchContent error:", error.message);
+	}
+	return [];
+}
+
+/**
+ * Search content in a specific plugin
+ */
+export async function searchPluginContent(pluginName, query) {
+	try {
+		const response = await fetch(
+			`${API_BASE_URL}/plugins/${encodeURIComponent(pluginName)}/search?q=${encodeURIComponent(query)}`,
+			{
+				headers: { "Content-Type": "application/json" },
+			},
+		);
+		if (response.ok) {
+			const data = await response.json();
+			const contents = Array.isArray(data) ? data : data?.results;
+			if (Array.isArray(contents)) return contents;
+		}
+	} catch (error) {
+		console.warn("API searchPluginContent error:", error.message);
 	}
 	return [];
 }
@@ -270,5 +382,11 @@ export default {
 	fetchContentDetails,
 	fetchRelatedContent,
 	searchContent,
+	searchPluginContent,
 	extractVideoSources,
+	getCachedPlatforms,
+	getCachedCategories,
+	getCachedHeroMovie,
+	getCachedCategoryMovies,
+	clearPluginCache,
 };

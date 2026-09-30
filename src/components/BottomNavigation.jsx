@@ -1,23 +1,22 @@
-import { useThemeContext } from "@context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 
-export default function BottomNavigation({ activeRoute }) {
+export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 	const router = useRouter();
-	const { theme, colors } = useThemeContext();
 
 	const navItems = [
-		{ name: "Ana Sayfa", icon: "home", route: "/(app)" },
-		// { name: "Filmler", icon: "film", route: "/(app)/movies" },
-		{ name: "Arama", icon: "search", route: "/(app)/search" },
-
-		// { name: "Diziler", icon: "tv", route: "/(app)/series" },
-		{ name: "Keşfet", icon: "compass", route: "/(app)/discover" },
+		{ id: "home", icon: "home", route: "/(app)" },
+		{ id: "search", icon: "search", route: "/(app)/search" },
+		{ id: "library", icon: "folder", route: "/(app)/library" },
+		{ id: "downloads", icon: "download", route: "/(app)/downloads" },
+		{ id: "settings", icon: "settings", route: "/(app)/settings" },
 	];
 
-	const handleNavigation = (route) => {
-		router.push(route);
+	const handleAction = (item) => {
+		if (item.route) {
+			router.push(item.route);
+		}
 	};
 
 	return (
@@ -25,38 +24,33 @@ export default function BottomNavigation({ activeRoute }) {
 			style={[
 				styles.container,
 				{
-					backgroundColor: colors.bg,
-					borderTopColor: colors.border,
+					backgroundColor: "#0d0e12",
+					borderTopColor: "rgba(255, 255, 255, 0.08)",
 				},
 			]}>
 			{navItems.map((item) => {
-				const isActive = activeRoute === item.route;
-				const iconName = isActive ? item.icon : `${item.icon}-outline`;
+				const isActive = item.route && activeRoute === item.route;
 				return (
 					<TouchableOpacity
-						key={item.route}
-						onPress={() => handleNavigation(item.route)}
+						key={item.id}
+						onPress={() => handleAction(item)}
 						style={styles.navItem}
 						activeOpacity={0.7}>
-						<Ionicons
-							name={iconName}
-							size={22}
-							color={
-								isActive ? colors.primary : colors.textSecondary
-							}
-						/>
-						<Text
-							style={[
-								styles.navLabel,
-								{
-									color: isActive
-										? colors.primary
-										: colors.textSecondary,
-									fontWeight: isActive ? "bold" : "500",
-								},
-							]}>
-							{item.name}
-						</Text>
+						{isActive ? (
+							<View style={styles.activePill}>
+								<Ionicons
+									name={item.icon}
+									size={21}
+									color="#ffffff"
+								/>
+							</View>
+						) : (
+							<Ionicons
+								name={`${item.icon}-outline`}
+								size={22}
+								color="#8E8E93"
+							/>
+						)}
 					</TouchableOpacity>
 				);
 			})}
@@ -68,20 +62,23 @@ const styles = StyleSheet.create({
 	container: {
 		flexDirection: "row",
 		borderTopWidth: 1,
-		paddingBottom: 8,
-		paddingTop: 8,
-		paddingHorizontal: 8,
-		gap: 8,
+		paddingVertical: 10,
+		paddingHorizontal: 12,
+		alignItems: "center",
+		justifyContent: "space-around",
 	},
 	navItem: {
 		flex: 1,
 		alignItems: "center",
 		justifyContent: "center",
-		paddingVertical: 8,
+		height: 40,
 	},
-	navLabel: {
-		fontSize: 11,
-		marginTop: 4,
-		letterSpacing: 0.015,
+	activePill: {
+		backgroundColor: "#2563EB",
+		paddingHorizontal: 18,
+		paddingVertical: 7,
+		borderRadius: 12,
+		justifyContent: "center",
+		alignItems: "center",
 	},
 });

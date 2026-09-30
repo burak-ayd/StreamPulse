@@ -73,31 +73,38 @@ const HorizontalMovieCard = ({ colors, movies, title, onMoviePress }) => {
 				contentContainerStyle={styles.horizontalList}
 				initialNumToRender={4}
 				maxToRenderPerBatch={4}
-				windowSize={3}
-				renderItem={({ item }) => (
-					<TouchableOpacity
-						style={[
-							styles.movieCard,
-							{ backgroundColor: colors.cardBg },
-						]}
-						activeOpacity={0.8}
-						onPress={() => handlePress(item)}>
-						{item.poster ? (
-							<Image
-								source={{ uri: item.poster }}
-								style={styles.moviePoster}
-								contentFit="cover"
-								transition={150}
-								cachePolicy="memory-disk"
-							/>
-						) : (
-							<View
-								style={[
-									styles.moviePoster,
-									{ backgroundColor: colors.border },
-								]}
-							/>
-						)}
+				renderItem={({ item }) => {
+					const posterUri =
+						item.poster ||
+						item.poster_url ||
+						item.image ||
+						item.backdrop_url;
+
+					return (
+						<TouchableOpacity
+							style={[
+								styles.movieCard,
+								{ backgroundColor: colors.cardBg },
+							]}
+							activeOpacity={0.8}
+							onPress={() => handlePress(item)}>
+							{posterUri ? (
+								<Image
+									source={{ uri: posterUri }}
+									style={styles.moviePoster}
+									contentFit="cover"
+									contentPosition="center"
+									transition={150}
+									cachePolicy="memory-disk"
+								/>
+							) : (
+								<View
+									style={[
+										styles.moviePoster,
+										{ backgroundColor: colors.border },
+									]}
+								/>
+							)}
 						{item.rating ? (
 							<View style={styles.ratingBadge}>
 								<Ionicons
@@ -128,7 +135,8 @@ const HorizontalMovieCard = ({ colors, movies, title, onMoviePress }) => {
 							</Text>
 						</View>
 					</TouchableOpacity>
-				)}
+				);
+			}}
 			/>
 		</View>
 	);
@@ -147,7 +155,14 @@ const styles = StyleSheet.create({
 		shadowRadius: 6,
 		elevation: 4,
 	},
-	moviePoster: { width: "100%", height: 200, backgroundColor: "#333" },
+	moviePoster: {
+		width: "100%",
+		height: 220,
+		borderTopLeftRadius: 16,
+		borderTopRightRadius: 16,
+		overflow: "hidden",
+		backgroundColor: "#333",
+	},
 	ratingBadge: {
 		position: "absolute",
 		top: 10,

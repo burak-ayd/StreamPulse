@@ -71,6 +71,7 @@ export default function RelatedContent({ contentType, currentId }) {
 									}}
 									style={styles.poster}
 									contentFit="cover"
+									contentPosition="center"
 									transition={150}
 									cachePolicy="memory-disk"
 								/>
@@ -148,10 +149,14 @@ const styles = StyleSheet.create({
 	poster: {
 		width: "100%",
 		height: "100%",
+		borderRadius: 12,
+		overflow: "hidden",
 	},
 	posterPlaceholder: {
 		width: "100%",
 		height: "100%",
+		borderRadius: 12,
+		overflow: "hidden",
 		justifyContent: "center",
 		alignItems: "center",
 	},

@@ -1,9 +1,8 @@
 import PlatformScreenComponent from "@components/platformScreen/PlatformScreenComponent";
-import { useThemeContext } from "@context/ThemeContext";
+import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
-	Dimensions,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -13,10 +12,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const { width } = Dimensions.get("window");
-
 export default function PlatformScreen() {
-	const { theme, colors, toggleTheme } = useThemeContext();
+	const { theme, colors } = useThemeContext();
 
 	const { platformData } = useLocalSearchParams();
 	const Platform = platformData ? JSON.parse(platformData) : null;

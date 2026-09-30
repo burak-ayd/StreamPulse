@@ -7,6 +7,16 @@ const STORAGE_KEYS = {
 	SETTINGS: "app_settings",
 	SEARCH_HISTORY: "user_search_history",
 	PLAYER_SETTINGS: "app_player_settings",
+	SELECTED_PLATFORM: "user_selected_platform",
+	DOWNLOADS: "streampulse_downloads_list",
+};
+
+export const NONE_PLATFORM = {
+	id: "none",
+	name: "None",
+	displayName: "None (Hiçbiri)",
+	description: "Sadece indirilen içerikleri gösterir",
+	is_offline: true,
 };
 
 export const DEFAULT_PLAYER_SETTINGS = {
@@ -288,6 +298,89 @@ export async function resetPlayerSettings() {
 	}
 }
 
+/**
+ * Son seçilen platform/eklenti bilgisini getirir
+ */
+export async function getSelectedPlatform() {
+	try {
+		const data = await AsyncStorage.getItem(STORAGE_KEYS.SELECTED_PLATFORM);
+		return data ? JSON.parse(data) : null;
+	} catch (error) {
+		console.error("Seçili platform okunurken hata:", error);
+		return null;
+	}
+}
+
+/**
+ * Seçilen platform/eklentiyi kaydeder
+ */
+export async function saveSelectedPlatform(platform) {
+	try {
+		if (!platform) {
+			await AsyncStorage.removeItem(STORAGE_KEYS.SELECTED_PLATFORM);
+			return null;
+		}
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.SELECTED_PLATFORM,
+			JSON.stringify(platform),
+		);
+		return platform;
+	} catch (error) {
+		console.error("Seçili platform kaydedilirken hata:", error);
+		throw error;
+	}
+}
+
+/**
+ * İndirilen içerikleri getirir
+ */
+export async function getDownloads() {
+	try {
+		const data = await AsyncStorage.getItem(STORAGE_KEYS.DOWNLOADS);
+		return data ? JSON.parse(data) : [];
+	} catch (error) {
+		console.error("İndirilenler okunurken hata:", error);
+		return [];
+	}
+}
+
+/**
+ * İndirilen içeriği kaydeder/günceller
+ */
+export async function saveDownloadItem(item) {
+	try {
+		const list = await getDownloads();
+		const filtered = list.filter((i) => i.id !== item.id);
+		const updated = [item, ...filtered];
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.DOWNLOADS,
+			JSON.stringify(updated),
+		);
+		return updated;
+	} catch (error) {
+		console.error("İndirme kaydedilirken hata:", error);
+		throw error;
+	}
+}
+
+/**
+ * İndirilen içeriği siler
+ */
+export async function deleteDownloadItem(itemId) {
+	try {
+		const list = await getDownloads();
+		const updated = list.filter((i) => i.id !== itemId);
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.DOWNLOADS,
+			JSON.stringify(updated),
+		);
+		return updated;
+	} catch (error) {
+		console.error("İndirme silinirken hata:", error);
+		throw error;
+	}
+}
+
 export default {
 	getUserProfile,
 	saveUserProfile,
@@ -304,4 +397,10 @@ export default {
 	savePlayerSettings,
 	resetPlayerSettings,
 	DEFAULT_PLAYER_SETTINGS,
+	getSelectedPlatform,
+	saveSelectedPlatform,
+	getDownloads,
+	saveDownloadItem,
+	deleteDownloadItem,
+	NONE_PLATFORM,
 };

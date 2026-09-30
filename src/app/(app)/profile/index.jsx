@@ -342,12 +342,14 @@ export default function ProfileScreen() {
 										<Image
 											source={{
 												uri:
-													item.image ||
 													item.poster ||
-													item.poster_url,
+													item.poster_url ||
+													item.image ||
+													item.backdrop_url,
 											}}
 											style={styles.gridImage}
 											contentFit="cover"
+											contentPosition="center"
 											transition={150}
 											cachePolicy="memory-disk"
 										/>
@@ -405,6 +407,7 @@ const styles = StyleSheet.create({
 		width: 100,
 		height: 100,
 		borderRadius: 50,
+		overflow: "hidden",
 		justifyContent: "center",
 		alignItems: "center",
 		marginBottom: 12,
@@ -489,13 +492,15 @@ const styles = StyleSheet.create({
 	},
 	gridItem: {
 		width: (width - 48) / 3,
-		aspectRatio: 3 / 4,
+		aspectRatio: 2 / 3,
 		borderRadius: 8,
 		overflow: "hidden",
 	},
 	gridImage: {
 		width: "100%",
 		height: "100%",
+		borderRadius: 8,
+		overflow: "hidden",
 	},
 	emptyState: {
 		alignItems: "center",

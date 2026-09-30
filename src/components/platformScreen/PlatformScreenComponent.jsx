@@ -5,7 +5,7 @@ import {
 } from "@/services/api";
 import FeaturedCarousel from "@components/FeaturedCarousel";
 import HorizontalMovieCard from "@components/HorizontalMovieCard";
-import { useThemeContext } from "@context/ThemeContext";
+import { useThemeContext } from "@/context/ThemeContext";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
