@@ -102,7 +102,7 @@ export default function MovieCategorySection({
 			<FlatList
 				data={movies}
 				keyExtractor={(item, index) =>
-					item.id || item.url || `${category.name}-${index}`
+					`${item.id || item.url || category?.name || "movie"}-${index}`
 				}
 				horizontal
 				showsHorizontalScrollIndicator={false}

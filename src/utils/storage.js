@@ -12,6 +12,7 @@ const STORAGE_KEYS = {
 	CONTINUE_WATCHING: "user_continue_watching",
 	PLUGIN_VISIBILITY: "streampulse_plugin_visibility",
 	CATEGORY_VISIBILITY: "streampulse_category_visibility",
+	WATCHLIST: "user_watchlist",
 };
 
 export const NONE_PLATFORM = {
@@ -677,6 +678,59 @@ export async function isCategoryVisible(pluginName, categoryKey) {
 	}
 }
 
+/**
+ * Kitaplık / İzleme Listesi (Listem) öğelerini getirir
+ */
+export async function getWatchlist() {
+	try {
+		const data = await AsyncStorage.getItem(STORAGE_KEYS.WATCHLIST);
+		return data ? JSON.parse(data) : [];
+	} catch (error) {
+		console.error("Kitaplık listesi okunurken hata:", error);
+		return [];
+	}
+}
+
+/**
+ * İçeriği kitaplığa (Listem) ekler veya çıkarır (toggle)
+ */
+export async function toggleWatchlist(item) {
+	try {
+		if (!item || (!item.id && !item.url)) return false;
+		const itemId = item.id || item.url;
+		const list = await getWatchlist();
+		const exists = list.some((i) => (i.id || i.url) === itemId);
+		let updated;
+		if (exists) {
+			updated = list.filter((i) => (i.id || i.url) !== itemId);
+		} else {
+			updated = [{ ...item, id: itemId }, ...list];
+		}
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.WATCHLIST,
+			JSON.stringify(updated),
+		);
+		return !exists;
+	} catch (error) {
+		console.error("Kitaplık listesi güncellenirken hata:", error);
+		throw error;
+	}
+}
+
+/**
+ * İçeriğin kitaplıkta (Listem) olup olmadığını sorgular
+ */
+export async function isInWatchlist(itemId) {
+	try {
+		if (!itemId) return false;
+		const list = await getWatchlist();
+		return list.some((i) => (i.id || i.url) === itemId);
+	} catch (error) {
+		console.error("Kitaplık sorgulanırken hata:", error);
+		return false;
+	}
+}
+
 export default {
 	getUserProfile,
 	saveUserProfile,
@@ -711,4 +765,7 @@ export default {
 	saveCategoryVisibility,
 	setPluginCategoriesVisibility,
 	isCategoryVisible,
+	getWatchlist,
+	toggleWatchlist,
+	isInWatchlist,
 };
