@@ -380,6 +380,9 @@ export default function MovieDetailsScreen() {
 	const [inWatchlist, setInWatchlist] = useState(false);
 	const [watchlistStatus, setWatchlistStatus] = useState(null); // 'watching' | 'planned' | 'completed' | null
 	const [isListSelectModalVisible, setIsListSelectModalVisible] = useState(false);
+	const [selectedSeason, setSelectedSeason] = useState(
+		passedMovie?.initialSeason ? String(passedMovie.initialSeason) : null,
+	);
 
 	const movieItem = useMemo(() => {
 		if (!content) return null;
@@ -686,6 +689,8 @@ export default function MovieDetailsScreen() {
 									episodes={content.episodes}
 									loading={pluginLoading && !content.seasons}
 									initialSeason={passedMovie?.initialSeason}
+									selectedSeason={selectedSeason}
+									onSeasonChange={setSelectedSeason}
 									seriesTitle={content.title}
 									posterUrl={
 										content.poster_url ||
@@ -837,6 +842,8 @@ export default function MovieDetailsScreen() {
 								episodes={content.episodes}
 								loading={pluginLoading && !content.seasons}
 								initialSeason={passedMovie?.initialSeason}
+								selectedSeason={selectedSeason}
+								onSeasonChange={setSelectedSeason}
 								seriesTitle={content.title}
 								posterUrl={
 									content.poster_url || content.backdrop_url

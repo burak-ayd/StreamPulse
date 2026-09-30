@@ -21,6 +21,8 @@ export default function SeasonsSection({
 	onEpisodePress,
 	loading = false,
 	initialSeason,
+	selectedSeason: controlledSelectedSeason,
+	onSeasonChange,
 	seriesTitle = "",
 	posterUrl = null,
 	content = null,
@@ -81,17 +83,56 @@ export default function SeasonsSection({
 		});
 	}, [normalizedSeasons]);
 
-	const [selectedSeason, setSelectedSeason] = useState(
+	const isControlled =
+		controlledSelectedSeason !== undefined &&
+		controlledSelectedSeason !== null;
+
+	const [internalSelectedSeason, setInternalSelectedSeason] = useState(
 		initialSeason ? String(initialSeason) : seasonKeys[0] || "1",
 	);
 
+	const selectedSeason = isControlled
+		? String(controlledSelectedSeason)
+		: internalSelectedSeason;
+
+	const handleSeasonSelect = useCallback(
+		(sKey) => {
+			const sKeyStr = String(sKey);
+			setInternalSelectedSeason(sKeyStr);
+			if (onSeasonChange) {
+				onSeasonChange(sKeyStr);
+			}
+		},
+		[onSeasonChange],
+	);
+
+	// initialSeason yalnızca ilk açılışta veya prop değiştiğinde uygulanmalı;
+	// kullanıcının seçtiği sezonu ezmemelidir.
+	const hasInitializedRef = React.useRef(false);
+	const prevInitialSeasonRef = React.useRef(initialSeason);
+
 	useEffect(() => {
-		if (initialSeason && seasonKeys.includes(String(initialSeason))) {
-			setSelectedSeason(String(initialSeason));
-		} else if (seasonKeys.length > 0 && !seasonKeys.includes(selectedSeason)) {
-			setSelectedSeason(seasonKeys[0]);
+		if (prevInitialSeasonRef.current !== initialSeason) {
+			prevInitialSeasonRef.current = initialSeason;
+			hasInitializedRef.current = false;
 		}
-	}, [initialSeason, seasonKeys, selectedSeason]);
+
+		if (seasonKeys.length === 0) return;
+
+		if (!hasInitializedRef.current) {
+			if (initialSeason && seasonKeys.includes(String(initialSeason))) {
+				handleSeasonSelect(String(initialSeason));
+			} else if (!selectedSeason || !seasonKeys.includes(String(selectedSeason))) {
+				handleSeasonSelect(seasonKeys[0]);
+			}
+			hasInitializedRef.current = true;
+			return;
+		}
+
+		if (selectedSeason && !seasonKeys.includes(String(selectedSeason))) {
+			handleSeasonSelect(seasonKeys[0]);
+		}
+	}, [initialSeason, seasonKeys, handleSeasonSelect]);
 
 	// Mevcut indirmeleri kontrol et
 	const syncDownloads = useCallback(async () => {
@@ -487,7 +528,7 @@ export default function SeasonsSection({
 											},
 										]}
 										onPress={() => {
-											setSelectedSeason(sKey);
+											handleSeasonSelect(sKey);
 											setIsSeasonModalOpen(false);
 										}}
 										activeOpacity={0.7}>
