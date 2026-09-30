@@ -1,15 +1,16 @@
 import BottomNavigation from "@components/BottomNavigation";
 import { useThemeContext } from "@context/ThemeContext";
-import { searchContent } from "@/services/api";
+import { searchContent, searchPluginContent } from "@/services/api";
 import {
 	addToSearchHistory,
 	clearSearchHistory,
 	getSearchHistory,
+	getSelectedPlatform,
 	removeFromSearchHistory,
 } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
@@ -51,7 +52,13 @@ export const resetSearchMemoryCache = () => {
 export default function SearchScreen() {
 	const { theme, colors } = useThemeContext();
 	const router = useRouter();
+	const params = useLocalSearchParams();
 	const scrollViewRef = useRef(null);
+
+	const [activePlugin, setActivePlugin] = useState(params?.plugin || "");
+	const [searchScope, setSearchScope] = useState(
+		params?.plugin ? "plugin" : "all",
+	);
 
 	const [searchQuery, setSearchQuery] = useState(
 		searchMemoryCache.searchQuery,
@@ -65,6 +72,20 @@ export default function SearchScreen() {
 		searchMemoryCache.hasSearched,
 	);
 	const [searchHistory, setSearchHistory] = useState([]);
+
+	useEffect(() => {
+		if (params?.plugin) {
+			// eslint-disable-next-line react-hooks/set-state-in-effect
+			setActivePlugin(params.plugin);
+			setSearchScope("plugin");
+		} else {
+			getSelectedPlatform().then((p) => {
+				if (p && p.name && p.name !== "None") {
+					setActivePlugin(p.name);
+				}
+			});
+		}
+	}, [params?.plugin]);
 
 	// Ekran yaşam döngüsü yönetimi:
 	// Arama sayfasından çıkıldığında, eğer bir film/dizi detayına gidilmediyse
@@ -96,7 +117,7 @@ export default function SearchScreen() {
 	};
 
 	// Aramayı başlatan fonksiyon (Buton, Enter veya geçmiş öğesine basınca)
-	const handleSearch = async (queryOverride) => {
+	const handleSearch = async (queryOverride, scopeOverride) => {
 		const target = (
 			typeof queryOverride === "string" ? queryOverride : searchQuery
 		).trim();
@@ -120,8 +141,15 @@ export default function SearchScreen() {
 		searchMemoryCache.hasSearched = true;
 		searchMemoryCache.scrollPosition = 0; // Yeni aramada scroll'u başa al
 
+		const targetScope = scopeOverride || searchScope;
+
 		try {
-			const data = await searchContent(target);
+			let data;
+			if (targetScope === "plugin" && activePlugin) {
+				data = await searchPluginContent(activePlugin, target);
+			} else {
+				data = await searchContent(target);
+			}
 			const list = Array.isArray(data) ? data : [];
 			setResults(list);
 			searchMemoryCache.results = list;
@@ -131,6 +159,13 @@ export default function SearchScreen() {
 			searchMemoryCache.results = [];
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	const handleScopeChange = (newScope) => {
+		setSearchScope(newScope);
+		if (searchQuery.trim().length > 0) {
+			handleSearch(searchQuery, newScope);
 		}
 	};
 
@@ -243,7 +278,11 @@ export default function SearchScreen() {
 									styles.searchInput,
 									{ color: colors.text },
 								]}
-								placeholder="Film veya dizi ara..."
+								placeholder={
+									searchScope === "plugin" && activePlugin
+										? `${activePlugin} içinde ara...`
+										: "Tüm eklentilerde ara..."
+								}
 								placeholderTextColor={colors.textSecondary}
 								value={searchQuery}
 								onChangeText={(text) => {
@@ -297,6 +336,88 @@ export default function SearchScreen() {
 								</>
 							)}
 						</TouchableOpacity>
+					</View>
+
+					{/* Arama Kapsamı (Genel vs Eklenti İçi) */}
+					<View style={styles.scopeRow}>
+						<TouchableOpacity
+							style={[
+								styles.scopePill,
+								searchScope === "all"
+									? styles.scopePillActive
+									: {
+											backgroundColor: colors.cardBg,
+											borderColor: colors.border,
+										},
+							]}
+							onPress={() => handleScopeChange("all")}
+							activeOpacity={0.7}>
+							<Ionicons
+								name="globe-outline"
+								size={13}
+								color={
+									searchScope === "all"
+										? "#ffffff"
+										: colors.textSecondary
+								}
+							/>
+							<Text
+								style={[
+									styles.scopeText,
+									{
+										color:
+											searchScope === "all"
+												? "#ffffff"
+												: colors.textSecondary,
+										fontWeight:
+											searchScope === "all" ? "700" : "500",
+									},
+								]}>
+								Genel Arama
+							</Text>
+						</TouchableOpacity>
+
+						{activePlugin ? (
+							<TouchableOpacity
+								style={[
+									styles.scopePill,
+									searchScope === "plugin"
+										? styles.scopePillActive
+										: {
+												backgroundColor: colors.cardBg,
+												borderColor: colors.border,
+											},
+								]}
+								onPress={() => handleScopeChange("plugin")}
+								activeOpacity={0.7}>
+								<Ionicons
+									name="film-outline"
+									size={13}
+									color={
+										searchScope === "plugin"
+											? "#ffffff"
+											: colors.textSecondary
+									}
+								/>
+								<Text
+									style={[
+										styles.scopeText,
+										{
+											color:
+												searchScope === "plugin"
+													? "#ffffff"
+													: colors.textSecondary,
+											fontWeight:
+												searchScope === "plugin"
+													? "700"
+													: "500",
+										},
+									]}
+									numberOfLines={1}>
+									{activePlugin}
+								</Text>
+							</TouchableOpacity>
+						) : null}
 					</View>
 				</View>
 
@@ -538,7 +659,8 @@ export default function SearchScreen() {
 												const posterUri =
 													item.poster ||
 													item.poster_url ||
-													item.image;
+													item.image ||
+													item.backdrop_url;
 
 												return (
 													<TouchableOpacity
@@ -569,6 +691,7 @@ export default function SearchScreen() {
 																	styles.posterImage
 																}
 																contentFit="cover"
+																contentPosition="center"
 																transition={150}
 																cachePolicy="memory-disk"
 															/>
@@ -878,13 +1001,15 @@ const styles = StyleSheet.create({
 	},
 	posterImage: {
 		width: 58,
-		height: 82,
+		height: 86,
 		borderRadius: 8,
+		overflow: "hidden",
 	},
 	posterPlaceholder: {
 		width: 58,
-		height: 82,
+		height: 86,
 		borderRadius: 8,
+		overflow: "hidden",
 		justifyContent: "center",
 		alignItems: "center",
 	},
@@ -929,5 +1054,27 @@ const styles = StyleSheet.create({
 	},
 	chevron: {
 		paddingRight: 4,
+	},
+	scopeRow: {
+		flexDirection: "row",
+		gap: 8,
+		marginTop: 10,
+	},
+	scopePill: {
+		flexDirection: "row",
+		alignItems: "center",
+		paddingHorizontal: 12,
+		paddingVertical: 6,
+		borderRadius: 16,
+		borderWidth: 1,
+		borderColor: "transparent",
+		gap: 5,
+	},
+	scopePillActive: {
+		backgroundColor: "#2563EB",
+		borderColor: "#2563EB",
+	},
+	scopeText: {
+		fontSize: 12,
 	},
 });

@@ -53,11 +53,18 @@ export default function HeroSection({ content }) {
 					styles.backdropContainer,
 					dynamicStyles.backdropContainer,
 				]}>
-				{content.backdrop_url ? (
+				{content.backdrop_url || content.poster_url || content.poster || content.image ? (
 					<Image
-						source={{ uri: content.backdrop_url }}
+						source={{
+							uri:
+								content.backdrop_url ||
+								content.poster_url ||
+								content.poster ||
+								content.image,
+						}}
 						style={styles.backdrop}
 						contentFit="cover"
+						contentPosition="center"
 						transition={200}
 						cachePolicy="memory-disk"
 					/>
@@ -159,15 +166,18 @@ export default function HeroSection({ content }) {
 const styles = StyleSheet.create({
 	container: {
 		marginBottom: 20,
+		overflow: "hidden",
 	},
 	backdropContainer: {
 		position: "absolute",
 		top: 0,
 		left: 0,
+		overflow: "hidden",
 	},
 	backdrop: {
 		width: "100%",
 		height: "100%",
+		overflow: "hidden",
 	},
 	backdropPlaceholder: {
 		width: "100%",

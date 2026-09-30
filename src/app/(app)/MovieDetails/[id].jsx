@@ -101,6 +101,8 @@ export default function MovieDetailsScreen() {
 					passedMovie?.poster,
 				backdrop_url:
 					pluginDetail.backdrop_url ||
+					passedMovie?.backdrop_url ||
+					passedMovie?.backdrop ||
 					pluginDetail.poster_url ||
 					pluginDetail.poster ||
 					passedMovie?.poster,
@@ -171,8 +173,16 @@ export default function MovieDetailsScreen() {
 				overview:
 					passedMovie.description ||
 					`${passedMovie.seriesTitle || passedMovie.title} detayları yükleniyor...`,
-				poster_url: passedMovie.poster || passedMovie.image,
-				backdrop_url: passedMovie.poster || passedMovie.image,
+				poster_url:
+					passedMovie.poster ||
+					passedMovie.poster_url ||
+					passedMovie.image,
+				backdrop_url:
+					passedMovie.backdrop_url ||
+					passedMovie.backdrop ||
+					passedMovie.poster ||
+					passedMovie.poster_url ||
+					passedMovie.image,
 				rating: passedMovie.rating
 					? typeof passedMovie.rating === "number"
 						? passedMovie.rating

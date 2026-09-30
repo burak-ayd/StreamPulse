@@ -76,9 +76,16 @@ const VerticalMovieCard = ({ title, colors, movies, onMoviePress }) => {
 					activeOpacity={0.8}
 					onPress={() => handlePress(item)}>
 					<Image
-						source={{ uri: item.poster || item.image }}
+						source={{
+							uri:
+								item.poster ||
+								item.poster_url ||
+								item.image ||
+								item.backdrop_url,
+						}}
 						style={styles.horizontalPoster}
 						contentFit="cover"
+						contentPosition="center"
 						transition={150}
 						cachePolicy="memory-disk"
 					/>
@@ -170,8 +177,9 @@ const styles = StyleSheet.create({
 	},
 	horizontalPoster: {
 		width: 70,
-		height: 90,
+		height: 100,
 		borderRadius: 8,
+		overflow: "hidden",
 		backgroundColor: "#333",
 	},
 	horizontalMovieInfo: { flex: 1, marginLeft: 16, justifyContent: "center" },
