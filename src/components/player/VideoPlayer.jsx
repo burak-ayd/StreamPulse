@@ -163,6 +163,8 @@ export default function VideoPlayer({
 		useState(null);
 	const [userSubtitleChoice, setUserSubtitleChoice] = useState(undefined);
 	const [streamTextTracks, setStreamTextTracks] = useState([]);
+	const [overrideType, setOverrideType] = useState(null);
+	const formatRetryRef = useRef(false);
 
 	// Altyazı Cueleri & Senkronizasyon (Gecikme) Ayarı
 	const [parsedCues, setParsedCues] = useState([]);
@@ -386,17 +388,45 @@ export default function VideoPlayer({
 			headers.Referer = currentSourceData.result.referer;
 		}
 
-		// Convert Cookie object to string (react-native-video only accepts string)
-		if (headers.Cookie && typeof headers.Cookie === 'object') {
-			headers.Cookie = Object.entries(headers.Cookie)
-				.map(([k, v]) => `${k}=${v}`)
-				.join('; ');
+		// Altyazı veya video CDN'leri User-Agent olmadan 403 / engelleme dönebilir
+		if (!headers["User-Agent"]) {
+			headers["User-Agent"] = DEFAULT_SUBTITLE_UA;
 		}
 
-		// Detect type from URL or force m3u8 for known HLS endpoints
+		// Convert Cookie object to string (react-native-video only accepts string)
+		if (headers.Cookie && typeof headers.Cookie === "object") {
+			headers.Cookie = Object.entries(headers.Cookie)
+				.map(([k, v]) => `${k}=${v}`)
+				.join("; ");
+		}
+
+		// Detect type from URL or force m3u8 for known HLS endpoints / extractors
 		let type = undefined;
-		if (streamUrl.includes('.m3u8') || streamUrl.includes('/q/') || streamUrl.includes('molystream') || streamUrl.includes('/hls/') || streamUrl.includes('master.txt')) {
-			type = 'm3u8';
+		if (overrideType !== null) {
+			type = overrideType;
+		} else {
+			const isExplicitProgressive =
+				/\.(mp4|mkv|webm|avi|flv|mov)(\?.*)?$/i.test(streamUrl);
+			const isExplicitHls =
+				streamUrl.includes(".m3u8") ||
+				streamUrl.includes("/q/") ||
+				streamUrl.includes("molystream") ||
+				streamUrl.includes("/hls/") ||
+				streamUrl.includes("master.txt") ||
+				streamUrl.includes("cdnimage") ||
+				streamUrl.includes("/m2/") ||
+				streamUrl.includes("/mm/") ||
+				streamUrl.includes("/ms/") ||
+				streamUrl.includes("/mo/") ||
+				currentSourceData?.extractor?.toLowerCase()?.includes("rapidvid") ||
+				currentSourceData?.result?.name?.toLowerCase()?.includes("rapidvid") ||
+				currentSourceData?.result?.is_hls ||
+				currentSourceData?.result?.type === "m3u8" ||
+				currentSourceData?.result?.type === "hls";
+
+			if (isExplicitHls || !isExplicitProgressive) {
+				type = "m3u8";
+			}
 		}
 
 		return {
@@ -409,7 +439,7 @@ export default function VideoPlayer({
 			// (Dizilla/pichive gibi) native istek 403 alır. Altyazılar zaten
 			// subtitleHeaders ile fetch edilip kendi overlay'imizde çiziliyor.
 		};
-	}, [currentSourceData]);
+	}, [currentSourceData, overrideType]);
 
 	// Orientation handling - varsayılan olarak her zaman yatay
 	const toggleOrientation = async () => {
@@ -456,6 +486,8 @@ export default function VideoPlayer({
 		} else {
 			pendingSeekTimeRef.current = 0;
 		}
+		formatRetryRef.current = false;
+		setOverrideType(null);
 		setIsLoading(true);
 		setHasError(false);
 		setActiveSourceIndex(index);
@@ -503,6 +535,7 @@ export default function VideoPlayer({
 	const handleLoad = (data) => {
 		setIsLoading(false);
 		setHasError(false);
+		formatRetryRef.current = false;
 		const dur = data.duration || 0;
 		setDuration(dur);
 		durationRef.current = dur;
@@ -596,20 +629,39 @@ export default function VideoPlayer({
 		console.warn("Video playback error:", error);
 		setIsLoading(false);
 		setIsBuffering(false);
-		
-		// Auto-try next source on format/network errors
+
 		const errorCode = error?.error?.errorCode;
-		const isFormatError = errorCode === "23003" || error?.error?.errorString?.includes("PARSING_CONTAINER");
+		const isFormatError =
+			errorCode === "23003" ||
+			error?.error?.errorString?.includes("PARSING_CONTAINER") ||
+			error?.error?.errorException?.includes("UnrecognizedInputFormatException");
+
+		// Eğer konteyner tanınamadı hatası aldıysak ve bu kaynak için tip denemesi yapmadıysak, alternatif tiple tekrar dene
+		if (isFormatError && !formatRetryRef.current) {
+			formatRetryRef.current = true;
+			const nextType = videoSource?.type === "m3u8" ? undefined : "m3u8";
+			console.log(
+				`Format hatası tespit edildi, kaynak ${activeSourceIndex} için type=${nextType} ile tekrar deneniyor...`,
+			);
+			setOverrideType(nextType);
+			setHasError(false);
+			setIsLoading(true);
+			return;
+		}
+
+		// Auto-try next source on format/network errors
 		const hasMoreSources = activeSourceIndex < sources.length - 1;
-		
+
 		if ((isFormatError || errorCode?.startsWith("2")) && hasMoreSources) {
 			console.log(`Source ${activeSourceIndex} failed, trying next...`);
+			formatRetryRef.current = false;
+			setOverrideType(null);
 			setActiveSourceIndex((prev) => prev + 1);
 			setHasError(false);
 			setIsLoading(true);
 			return;
 		}
-		
+
 		setHasError(true);
 		setErrorMessage(
 			error?.error?.errorString ||
