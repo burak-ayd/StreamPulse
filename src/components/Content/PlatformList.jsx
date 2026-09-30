@@ -7,7 +7,6 @@ import {
 } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
@@ -20,7 +19,6 @@ import {
 } from "react-native";
 
 export default function PlatformList({ onSelectPlatform }) {
-	const router = useRouter();
 	const [selectedPlatformId, setSelectedPlatformId] = useState("none");
 	const [platformList, setPlatformList] = useState([]);
 	const [loading, setLoading] = useState(true);
@@ -85,11 +83,6 @@ export default function PlatformList({ onSelectPlatform }) {
 
 		if (onSelectPlatform) {
 			onSelectPlatform(platform);
-		} else {
-			router.push({
-				pathname: "/(app)/platforms",
-				params: { platformData: JSON.stringify(platform) },
-			});
 		}
 	};
 
