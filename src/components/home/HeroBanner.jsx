@@ -21,6 +21,7 @@ export default function HeroBanner({
 	userAvatarUrl,
 	onPlayPress,
 	onInfoPress,
+	onLongPress,
 	onToggleList,
 	onPlatformPress,
 	onSearchPress,
@@ -137,7 +138,10 @@ export default function HeroBanner({
 			</View>
 
 			{/* Bottom Details Section */}
-			<View style={styles.bottomContent}>
+			<TouchableOpacity
+				activeOpacity={0.95}
+				onLongPress={onLongPress}
+				style={styles.bottomContent}>
 				{/* Movie Title */}
 				<Text style={styles.movieTitle} numberOfLines={2}>
 					{title}
@@ -192,7 +196,7 @@ export default function HeroBanner({
 						<Text style={styles.actionLabel}>Bilgi</Text>
 					</TouchableOpacity>
 				</View>
-			</View>
+			</TouchableOpacity>
 		</View>
 	);
 }

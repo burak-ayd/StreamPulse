@@ -11,6 +11,7 @@ import {
 export default function ContinueWatchingSection({
 	items = [],
 	onItemPress,
+	onItemLongPress,
 	onRemoveItem,
 	onSeeAllPress,
 }) {
@@ -56,6 +57,7 @@ export default function ContinueWatchingSection({
 					<ContinueWatchingCard
 						item={item}
 						onPress={onItemPress}
+						onLongPress={onItemLongPress}
 						onRemove={onRemoveItem}
 					/>
 				)}
