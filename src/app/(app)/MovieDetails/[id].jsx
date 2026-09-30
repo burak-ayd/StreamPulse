@@ -1,5 +1,6 @@
 import { fetchPluginDetail } from "@/services/api";
 import {
+	getContentLibraryStatus,
 	isFavorite,
 	isInWatchlist,
 	toggleFavorite,
@@ -8,6 +9,7 @@ import {
 import { useThemeContext } from "@context/ThemeContext";
 import { useContentDetails } from "@hooks/useContentDetails";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
+import ListSelectModal from "@components/modal/ListSelectModal";
 import { Stack, useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useMemo, useState } from "react";
@@ -376,6 +378,8 @@ export default function MovieDetailsScreen() {
 	// Favori ve Kitaplık / İzleme Listesi Durumları
 	const [isFav, setIsFav] = useState(false);
 	const [inWatchlist, setInWatchlist] = useState(false);
+	const [watchlistStatus, setWatchlistStatus] = useState(null); // 'watching' | 'planned' | 'completed' | null
+	const [isListSelectModalVisible, setIsListSelectModalVisible] = useState(false);
 
 	const movieItem = useMemo(() => {
 		if (!content) return null;
@@ -393,11 +397,12 @@ export default function MovieDetailsScreen() {
 	useEffect(() => {
 		const targetId = content?.id || content?.url;
 		if (targetId) {
-			isFavorite(targetId)
-				.then(setIsFav)
-				.catch(() => {});
-			isInWatchlist(targetId)
-				.then(setInWatchlist)
+			getContentLibraryStatus(targetId)
+				.then((status) => {
+					setIsFav(Boolean(status?.isFav));
+					setInWatchlist(Boolean(status?.currentList));
+					setWatchlistStatus(status?.currentList || null);
+				})
 				.catch(() => {});
 		}
 	}, [content?.id, content?.url]);
@@ -412,13 +417,16 @@ export default function MovieDetailsScreen() {
 		}
 	};
 
-	const handleToggleWatchlist = async () => {
+	const handleToggleWatchlist = () => {
 		if (!movieItem) return;
-		try {
-			const updated = await toggleWatchlist(movieItem);
-			setInWatchlist(Boolean(updated));
-		} catch (e) {
-			console.error("İzleme listesi (kitaplık) değiştirme hatası:", e);
+		setIsListSelectModalVisible(true);
+	};
+
+	const handleListStatusChanged = (newList, newFav) => {
+		setWatchlistStatus(newList);
+		setInWatchlist(Boolean(newList));
+		if (newFav !== undefined) {
+			setIsFav(newFav);
 		}
 	};
 
@@ -495,6 +503,7 @@ export default function MovieDetailsScreen() {
 						<ActionButtons
 							content={content}
 							inWatchlist={inWatchlist}
+							watchlistStatus={watchlistStatus}
 							isFav={isFav}
 							onToggleWatchlist={handleToggleWatchlist}
 							onToggleFavorite={handleToggleFavorite}
@@ -857,10 +866,10 @@ export default function MovieDetailsScreen() {
 						styles.floatingBookmark,
 						{
 							backgroundColor: inWatchlist
-								? "#E50914"
+								? (watchlistStatus === "completed" ? "#10b981" : watchlistStatus === "planned" ? "#0284c7" : "#E50914")
 								: surfaceBg,
 							borderColor: inWatchlist
-								? "#E50914"
+								? (watchlistStatus === "completed" ? "#10b981" : watchlistStatus === "planned" ? "#0284c7" : "#E50914")
 								: surfaceBorder,
 						},
 					]}
@@ -868,12 +877,28 @@ export default function MovieDetailsScreen() {
 					activeOpacity={0.8}
 					hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
 					<Ionicons
-						name={inWatchlist ? "bookmark" : "bookmark-outline"}
+						name={
+							watchlistStatus === "watching"
+								? "play-circle"
+								: watchlistStatus === "completed"
+									? "checkmark-circle"
+									: inWatchlist
+										? "bookmark"
+										: "bookmark-outline"
+						}
 						size={22}
 						color={inWatchlist ? "#ffffff" : "#E50914"}
 					/>
 				</TouchableOpacity>
 			)}
+
+			{/* List Selection Modal */}
+			<ListSelectModal
+				visible={isListSelectModalVisible}
+				movie={movieItem}
+				onClose={() => setIsListSelectModalVisible(false)}
+				onStatusChanged={handleListStatusChanged}
+			/>
 		</View>
 	);
 }

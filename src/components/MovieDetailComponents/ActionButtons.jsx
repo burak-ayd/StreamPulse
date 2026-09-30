@@ -22,6 +22,7 @@ export default function ActionButtons({
 	content,
 	inWatchlist = false,
 	isFav = false,
+	watchlistStatus = null,
 	onToggleWatchlist,
 	onToggleFavorite,
 	onOpenTrailer,
@@ -90,14 +91,36 @@ export default function ActionButtons({
 		Alert.alert("İndirme", "İndirme özelliği yakında eklenecek!");
 	};
 
+	// Determine watchlist display config based on watchlistStatus or inWatchlist
+	const effectiveWatchlistStatus = watchlistStatus || (inWatchlist ? "planned" : null);
+	let watchlistIcon = "bookmark-outline";
+	let watchlistLabel = "Listem";
+	let watchlistColor = colors.textSecondary;
+
+	if (effectiveWatchlistStatus === "watching") {
+		watchlistIcon = "play-circle";
+		watchlistLabel = "İzleniyor";
+		watchlistColor = "#E50914";
+	} else if (effectiveWatchlistStatus === "completed") {
+		watchlistIcon = "checkmark-circle";
+		watchlistLabel = "Tamamlandı";
+		watchlistColor = "#10b981";
+	} else if (effectiveWatchlistStatus === "planned") {
+		watchlistIcon = "bookmark";
+		watchlistLabel = "Planlandı";
+		watchlistColor = "#38bdf8";
+	}
+
+	const isWatchlistActive = Boolean(effectiveWatchlistStatus);
+
 	const gridActions = [
 		{
 			key: "watchlist",
-			icon: inWatchlist ? "bookmark" : "bookmark-outline",
-			label: inWatchlist ? "Listemde" : "Listem",
-			color: "#E50914",
+			icon: watchlistIcon,
+			label: watchlistLabel,
+			color: watchlistColor,
 			onPress: onToggleWatchlist,
-			active: inWatchlist,
+			active: isWatchlistActive,
 		},
 		{
 			key: "trailer",
@@ -111,7 +134,7 @@ export default function ActionButtons({
 			key: "favorite",
 			icon: isFav ? "heart" : "heart-outline",
 			label: isFav ? "Favorilerde" : "Favori",
-			color: "#fb7185",
+			color: isFav ? "#fb7185" : colors.textSecondary,
 			onPress: onToggleFavorite,
 			active: isFav,
 		},

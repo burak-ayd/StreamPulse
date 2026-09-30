@@ -181,6 +181,32 @@ export async function addToWatchHistory(movie) {
 }
 
 /**
+ * İzleme geçmişinden (tamamlananlardan) içerik siler
+ */
+export async function removeFromWatchHistory(target) {
+	try {
+		if (!target) return [];
+		const targetId = typeof target === "object" ? (target.id || target.url) : target;
+		const targetUrl = typeof target === "object" ? target.url : null;
+		const history = await getWatchHistory();
+		const updated = history.filter((item) => {
+			if (targetId && (item.id === targetId || item.url === targetId)) return false;
+			if (targetUrl && (item.id === targetUrl || item.url === targetUrl)) return false;
+			if (typeof target === "object" && target.title && item.title && target.title === item.title) return false;
+			return true;
+		});
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.WATCH_HISTORY,
+			JSON.stringify(updated),
+		);
+		return updated;
+	} catch (error) {
+		console.error("İzleme geçmişinden silinirken hata:", error);
+		return [];
+	}
+}
+
+/**
  * Arama geçmişini getirir
  */
 export async function getSearchHistory() {
@@ -451,11 +477,17 @@ export async function saveContinueWatching(item) {
 /**
  * İçeriği devam et listesinden siler
  */
-export async function removeContinueWatching(id) {
+export async function removeContinueWatching(target) {
 	try {
-		if (!id) return [];
+		if (!target) return [];
+		const targetId = typeof target === "object" ? (target.id || target.url) : target;
+		const targetUrl = typeof target === "object" ? target.url : null;
 		const currentList = await getContinueWatching();
-		const updated = currentList.filter((i) => i.id !== id);
+		const updated = currentList.filter((i) => {
+			if (targetId && (i.id === targetId || i.url === targetId)) return false;
+			if (targetUrl && (i.id === targetUrl || i.url === targetUrl)) return false;
+			return true;
+		});
 		await AsyncStorage.setItem(
 			STORAGE_KEYS.CONTINUE_WATCHING,
 			JSON.stringify(updated),
@@ -731,6 +763,123 @@ export async function isInWatchlist(itemId) {
 	}
 }
 
+/**
+ * Bir içeriğin kitaplık durumunu (izleniyor, planlandı, tamamlandı, favori) topluca döner
+ */
+export async function getContentLibraryStatus(itemId) {
+	try {
+		if (!itemId) {
+			return {
+				inWatching: false,
+				inPlanned: false,
+				inCompleted: false,
+				isFav: false,
+				currentList: null,
+			};
+		}
+		const [watchingList, plannedList, historyList, favList] =
+			await Promise.all([
+				getContinueWatching(),
+				getWatchlist(),
+				getWatchHistory(),
+				getFavorites(),
+			]);
+
+		const inWatching = watchingList.some(
+			(i) => i.id === itemId || i.url === itemId,
+		);
+		const inPlanned = plannedList.some(
+			(i) => i.id === itemId || i.url === itemId,
+		);
+		const inCompleted = historyList.some(
+			(i) =>
+				(i.id === itemId || i.url === itemId) &&
+				(i.isCompleted || (i.progress && i.progress >= 0.9)),
+		);
+		const isFav = favList.some(
+			(i) => i.id === itemId || i.url === itemId,
+		);
+
+		let currentList = null;
+		if (inWatching) currentList = "watching";
+		else if (inPlanned) currentList = "planned";
+		else if (inCompleted) currentList = "completed";
+
+		return { inWatching, inPlanned, inCompleted, isFav, currentList };
+	} catch (error) {
+		console.error("getContentLibraryStatus hata:", error);
+		return {
+			inWatching: false,
+			inPlanned: false,
+			inCompleted: false,
+			isFav: false,
+			currentList: null,
+		};
+	}
+}
+
+/**
+ * İçeriği belirli bir listeye atar veya tüm izleme listelerinden çıkarır
+ * targetList: 'watching' | 'planned' | 'completed' | null | 'remove'
+ */
+export async function setContentLibraryList(movie, targetList) {
+	try {
+		if (!movie) return null;
+		const itemId = movie.id || movie.url;
+		if (!itemId) return null;
+
+		// 1. Önce mevcut izleme listelerinden temizle
+		await Promise.all([
+			removeContinueWatching(itemId),
+			(async () => {
+				const wl = await getWatchlist();
+				const filtered = wl.filter((i) => (i.id || i.url) !== itemId);
+				await AsyncStorage.setItem(
+					STORAGE_KEYS.WATCHLIST,
+					JSON.stringify(filtered),
+				);
+			})(),
+			removeFromWatchHistory(itemId),
+		]);
+
+		// 2. Hedef listeye ekle
+		if (targetList === "watching") {
+			await saveContinueWatching({
+				...movie,
+				id: itemId,
+				progress: movie.progress || 0.1,
+				currentTime: movie.currentTime || 10,
+				duration: movie.duration || 100,
+			});
+			return "watching";
+		} else if (targetList === "planned") {
+			const wl = await getWatchlist();
+			const updated = [
+				{ ...movie, id: itemId },
+				...wl.filter((i) => (i.id || i.url) !== itemId),
+			];
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.WATCHLIST,
+				JSON.stringify(updated),
+			);
+			return "planned";
+		} else if (targetList === "completed") {
+			await addToWatchHistory({
+				...movie,
+				id: itemId,
+				isCompleted: true,
+				progress: 1.0,
+			});
+			return "completed";
+		}
+
+		return null; // kaldırıldı
+	} catch (error) {
+		console.error("setContentLibraryList hata:", error);
+		throw error;
+	}
+}
+
 export default {
 	getUserProfile,
 	saveUserProfile,
@@ -739,6 +888,7 @@ export default {
 	isFavorite,
 	getWatchHistory,
 	addToWatchHistory,
+	removeFromWatchHistory,
 	getSearchHistory,
 	addToSearchHistory,
 	removeFromSearchHistory,
@@ -768,4 +918,6 @@ export default {
 	getWatchlist,
 	toggleWatchlist,
 	isInWatchlist,
+	getContentLibraryStatus,
+	setContentLibraryList,
 };

@@ -1,14 +1,9 @@
+import ListSelectModal from "@/components/modal/ListSelectModal";
 import { fetchPluginDetail } from "@/services/api";
 import {
-	addToWatchHistory,
-	getFavorites,
-	getWatchlist,
-	isFavorite,
-	isInWatchlist,
-	removeContinueWatching,
-	saveContinueWatching,
+	getContentLibraryStatus,
+	setContentLibraryList,
 	toggleFavorite,
-	toggleWatchlist,
 } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -33,11 +28,9 @@ import {
 const { width } = Dimensions.get("window");
 
 const STATUS_CHIPS = [
-	{ key: "watching", label: "İzleniyor" },
-	{ key: "planned", label: "Planlandı" },
-	{ key: "completed", label: "Tamamlandı" },
-	{ key: "on_hold", label: "Beklemede" },
-	{ key: "dropped", label: "Bırakıldı" },
+	{ key: "watching", label: "İzleniyor", color: "#E50914" },
+	{ key: "planned", label: "Planlandı", color: "#38bdf8" },
+	{ key: "completed", label: "Tamamlandı", color: "#10b981" },
 ];
 
 export default function QuickPreviewModal({
@@ -59,6 +52,7 @@ export default function QuickPreviewModal({
 	const [isNotificationOn, setIsNotificationOn] = useState(false);
 	const [showTrailerPreview, setShowTrailerPreview] = useState(false);
 	const [isMuted, setIsMuted] = useState(true);
+	const [isListSelectVisible, setIsListSelectVisible] = useState(false);
 
 	const movieId = movie?.id || movie?.url || movie?.title;
 
@@ -84,20 +78,11 @@ export default function QuickPreviewModal({
 		// Favori ve liste durumlarını sorgula
 		async function checkStates() {
 			try {
-				const [fav, wl] = await Promise.all([
-					isFavorite(movieId),
-					isInWatchlist(movieId),
-				]);
+				const status = await getContentLibraryStatus(movieId);
 				if (isMounted) {
-					setIsFav(fav);
-					setInList(wl);
-					if (wl) {
-						setActiveStatus("planned");
-					} else if (movie.isCompleted) {
-						setActiveStatus("completed");
-					} else {
-						setActiveStatus("watching");
-					}
+					setIsFav(status.isFav);
+					setInList(status.inPlanned);
+					setActiveStatus(status.currentList);
 				}
 			} catch (e) {
 				console.warn("Durum kontrolü hatası:", e);
@@ -188,33 +173,13 @@ export default function QuickPreviewModal({
 	// Durum değiştirme (Status Chips)
 	const handleStatusSelect = async (statusKey) => {
 		const prev = activeStatus;
-		setActiveStatus(statusKey);
-
 		const selectedChip = STATUS_CHIPS.find((c) => c.key === statusKey);
 		const label = selectedChip ? selectedChip.label : statusKey;
 
 		try {
-			if (statusKey === "watching") {
-				await saveContinueWatching({
-					...currentItem,
-					id: movieId,
-					progress: 0.1,
-					currentTime: 10,
-					duration: 100,
-				});
-			} else if (statusKey === "planned") {
-				await toggleWatchlist({ ...currentItem, id: movieId });
-				setInList(true);
-			} else if (statusKey === "completed") {
-				await addToWatchHistory({
-					...currentItem,
-					id: movieId,
-					isCompleted: true,
-				});
-				await removeContinueWatching(movieId);
-			} else if (statusKey === "on_hold" || statusKey === "dropped") {
-				await removeContinueWatching(movieId);
-			}
+			const res = await setContentLibraryList(currentItem, statusKey);
+			setActiveStatus(res);
+			setInList(res === "planned");
 
 			setToastInfo({
 				text: `Kitaplığınıza eklendi ("${label}" listesi)`,
@@ -226,9 +191,11 @@ export default function QuickPreviewModal({
 	};
 
 	// Geri Al işlemi
-	const handleUndoToast = () => {
+	const handleUndoToast = async () => {
 		if (toastInfo?.prevStatus) {
+			await setContentLibraryList(currentItem, toastInfo.prevStatus);
 			setActiveStatus(toastInfo.prevStatus);
+			setInList(toastInfo.prevStatus === "planned");
 		}
 		setToastInfo(null);
 	};
@@ -243,21 +210,9 @@ export default function QuickPreviewModal({
 		}
 	};
 
-	// Listeme Ekle Değiştir
-	const handleToggleList = async () => {
-		try {
-			const res = await toggleWatchlist({ ...currentItem, id: movieId });
-			setInList(res);
-			if (res) {
-				setActiveStatus("planned");
-				setToastInfo({
-					text: `Kitaplığınıza eklendi ("Planlandı" listesi)`,
-					prevStatus: activeStatus,
-				});
-			}
-		} catch (e) {
-			console.error("Watchlist toggle hata:", e);
-		}
+	// Listeme Ekle / Liste Seçim Modalı Aç (Hangi listeye ekleneceğini sorar)
+	const handleToggleList = () => {
+		setIsListSelectVisible(true);
 	};
 
 	// Bildirim Butonu
@@ -589,21 +544,43 @@ export default function QuickPreviewModal({
 
 						{/* 6. Ana Eylem Butonları Izgarası (Screen 1 & 2) */}
 						<View style={styles.actionButtonsGrid}>
-							{/* Listeme Ekle / Listeye Eklendi Butonu */}
+							{/* Listeme Ekle / Liste Seçim Butonu */}
 							<TouchableOpacity
 								style={[
 									styles.actionBtnSecondary,
-									inList && styles.actionBtnInList,
+									activeStatus && styles.actionBtnInList,
 								]}
 								onPress={handleToggleList}
 								activeOpacity={0.85}>
 								<Ionicons
-									name={inList ? "checkmark" : "add"}
+									name={
+										activeStatus === "watching"
+											? "play-circle"
+											: activeStatus === "planned"
+												? "bookmark"
+												: activeStatus === "completed"
+													? "checkmark-circle"
+													: "add"
+									}
 									size={18}
-									color={inList ? "#10B981" : "#ffffff"}
+									color={
+										activeStatus === "watching"
+											? "#E50914"
+											: activeStatus === "planned"
+												? "#38bdf8"
+												: activeStatus === "completed"
+													? "#10B981"
+													: "#ffffff"
+									}
 								/>
 								<Text style={styles.actionBtnSecondaryText}>
-									{inList ? "Listeye Eklendi" : "Listeme Ekle"}
+									{activeStatus === "watching"
+										? "İzleniyor"
+										: activeStatus === "planned"
+											? "Planlandı"
+											: activeStatus === "completed"
+												? "Tamamlandı"
+												: "Listeme Ekle"}
 								</Text>
 							</TouchableOpacity>
 
@@ -695,6 +672,18 @@ export default function QuickPreviewModal({
 					</ScrollView>
 				</Pressable>
 			</Pressable>
+
+			{/* Liste Seçim Modalı */}
+			<ListSelectModal
+				visible={isListSelectVisible}
+				movie={currentItem}
+				onClose={() => setIsListSelectVisible(false)}
+				onStatusChanged={(newStatus, newFav) => {
+					setActiveStatus(newStatus);
+					setInList(newStatus === "planned");
+					if (newFav !== undefined) setIsFav(newFav);
+				}}
+			/>
 		</Modal>
 	);
 }
