@@ -229,15 +229,24 @@ export async function fetchPlatforms(force = false) {
 	}
 
 	try {
-		const response = await fetch(`${API_BASE_URL}/plugins`, {
+		let response = await fetch(`${API_BASE_URL}/plugins`, {
 			headers: { "Content-Type": "application/json" },
 		});
+		if (!response.ok) {
+			response = await fetch(`${API_BASE_URL}/api/plugins`, {
+				headers: { "Content-Type": "application/json" },
+			});
+		}
 		if (response.ok) {
 			const data = await response.json();
 			const plugins = Array.isArray(data) ? data : data?.plugins;
 			if (Array.isArray(plugins) && plugins.length > 0) {
-				apiCache.platforms = plugins;
-				return plugins;
+				const formatted = plugins.map((p, idx) => ({
+					...p,
+					id: p.id || p.name || String(idx + 1),
+				}));
+				apiCache.platforms = formatted;
+				return formatted;
 			}
 		}
 	} catch (error) {

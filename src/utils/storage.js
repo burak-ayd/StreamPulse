@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
 	SELECTED_PLATFORM: "user_selected_platform",
 	DOWNLOADS: "streampulse_downloads_list",
 	CONTINUE_WATCHING: "user_continue_watching",
+	PLUGIN_VISIBILITY: "streampulse_plugin_visibility",
 };
 
 export const NONE_PLATFORM = {
@@ -515,6 +516,73 @@ export async function markEpisodeComplete(
 	}
 }
 
+/**
+ * Eklenti görünürlük ayarlarını getirir (örn: { "DiziBox": true, "Dizilla": false })
+ * Bir eklenti bu objede yoksa varsayılan olarak true (görünür) kabul edilir.
+ */
+export async function getPluginVisibilitySettings() {
+	try {
+		const data = await AsyncStorage.getItem(STORAGE_KEYS.PLUGIN_VISIBILITY);
+		return data ? JSON.parse(data) : {};
+	} catch (error) {
+		console.error("Eklenti görünürlük ayarları okunurken hata:", error);
+		return {};
+	}
+}
+
+/**
+ * Tek bir eklentinin görünürlük durumunu günceller ve kaydeder
+ */
+export async function savePluginVisibility(pluginName, isVisible) {
+	try {
+		const currentSettings = await getPluginVisibilitySettings();
+		const updatedSettings = {
+			...currentSettings,
+			[pluginName]: Boolean(isVisible),
+		};
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.PLUGIN_VISIBILITY,
+			JSON.stringify(updatedSettings),
+		);
+		return updatedSettings;
+	} catch (error) {
+		console.error("Eklenti görünürlüğü kaydedilirken hata:", error);
+		throw error;
+	}
+}
+
+/**
+ * Tüm eklentilerin görünürlük haritasını topluca kaydeder
+ */
+export async function setAllPluginsVisibility(visibilityMap) {
+	try {
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.PLUGIN_VISIBILITY,
+			JSON.stringify(visibilityMap || {}),
+		);
+		return visibilityMap;
+	} catch (error) {
+		console.error("Tüm eklenti görünürlüğü kaydedilirken hata:", error);
+		throw error;
+	}
+}
+
+/**
+ * Belirli bir eklentinin görünür olup olmadığını kontrol eder
+ */
+export async function isPluginVisible(pluginName) {
+	try {
+		const settings = await getPluginVisibilitySettings();
+		if (pluginName in settings) {
+			return Boolean(settings[pluginName]);
+		}
+		return true; // Varsayılan: Görünür
+	} catch (error) {
+		console.error("Eklenti görünürlüğü kontrol edilirken hata:", error);
+		return true;
+	}
+}
+
 export default {
 	getUserProfile,
 	saveUserProfile,
@@ -541,4 +609,8 @@ export default {
 	removeContinueWatching,
 	markEpisodeComplete,
 	NONE_PLATFORM,
+	getPluginVisibilitySettings,
+	savePluginVisibility,
+	setAllPluginsVisibility,
+	isPluginVisible,
 };

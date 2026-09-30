@@ -1,6 +1,5 @@
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
-import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 function formatTime(seconds) {
@@ -16,13 +15,7 @@ function formatTime(seconds) {
 	return `${mins < 10 ? "0" : ""}${mins}:${secs < 10 ? "0" : ""}${secs}`;
 }
 
-export default function ContinueWatchingCard({
-	item,
-	onPress,
-	onRemove,
-	style,
-	width = 170,
-}) {
+export default function ContinueWatchingCard({ item, onPress, onRemove }) {
 	if (!item) return null;
 
 	const progressPercent = Math.min(
@@ -48,11 +41,12 @@ export default function ContinueWatchingCard({
 		item.thumbnail ||
 		"https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=60";
 
-	const isEpisode = item.type === "episode" || Boolean(item.season || item.episode);
+	const isEpisode =
+		item.type === "episode" || Boolean(item.season || item.episode);
 
 	return (
 		<TouchableOpacity
-			style={[styles.card, { width }, style]}
+			style={[styles.card]}
 			onPress={() => onPress?.(item)}
 			activeOpacity={0.82}>
 			{/* Thumbnail Wrapper */}
@@ -131,12 +125,13 @@ export default function ContinueWatchingCard({
 
 const styles = StyleSheet.create({
 	card: {
-		marginRight: 14,
+		marginRight: 4,
+		width: 124,
 	},
 	thumbnailWrapper: {
-		width: "100%",
-		aspectRatio: 16 / 9.5,
-		borderRadius: 12,
+		width: 124,
+		height: 182,
+		borderRadius: 4,
 		overflow: "hidden",
 		position: "relative",
 		backgroundColor: "#161922",
@@ -146,9 +141,11 @@ const styles = StyleSheet.create({
 	thumbnail: {
 		width: "100%",
 		height: "100%",
+		borderRadius: 4,
+		overflow: "hidden",
 	},
 	overlay: {
-		...StyleSheet.absoluteFillObject,
+		...StyleSheet.absoluteFill,
 		backgroundColor: "rgba(0, 0, 0, 0.28)",
 	},
 	playButtonCircle: {

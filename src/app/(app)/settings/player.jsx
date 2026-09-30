@@ -22,10 +22,10 @@ const FONT_SIZE_OPTIONS = [
 ];
 
 const COLOR_OPTIONS = [
-	{ label: "Beyaz", value: "#FFFFFF", textColor: "#000000" },
-	{ label: "Sarı", value: "#FFD600", textColor: "#000000" },
-	{ label: "Yeşil", value: "#00E676", textColor: "#000000" },
-	{ label: "Camgöbeği", value: "#00E5FF", textColor: "#000000" },
+	{ label: "Beyaz", value: "#FFFFFF", color: "#FFFFFF", textColor: "#000000" },
+	{ label: "Sarı", value: "#FFD600", color: "#FFD600", textColor: "#000000" },
+	{ label: "Yeşil", value: "#00E676", color: "#00E676", textColor: "#000000" },
+	{ label: "Camgöbeği", value: "#00E5FF", color: "#00E5FF", textColor: "#000000" },
 ];
 
 const BG_STYLE_OPTIONS = [
@@ -319,7 +319,7 @@ export default function PlayerSettingsScreen() {
 												<View
 													style={[
 														styles.colorCircle,
-														{ backgroundColor: item.value },
+														{ backgroundColor: item.color },
 													]}>
 													{isSelected && (
 														<Ionicons

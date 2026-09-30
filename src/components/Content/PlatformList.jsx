@@ -1,6 +1,7 @@
 import { fetchPlatforms } from "@/services/api";
 import {
 	NONE_PLATFORM,
+	getPluginVisibilitySettings,
 	getSelectedPlatform,
 	saveSelectedPlatform,
 } from "@/utils/storage";
@@ -31,20 +32,33 @@ export default function PlatformList({ onSelectPlatform }) {
 		async function loadPlatforms() {
 			try {
 				setLoading(true);
-				const [data, saved] = await Promise.all([
+				const [data, saved, visibility] = await Promise.all([
 					fetchPlatforms(),
 					getSelectedPlatform(),
+					getPluginVisibilitySettings(),
 				]);
 
 				if (!isMounted) return;
 
 				const list = Array.isArray(data) ? data : [];
-				setPlatformList(list);
+				const visibleList = list.filter(
+					(p) => visibility?.[p.name || p.id] !== false,
+				);
+				setPlatformList(visibleList);
 
-				if (saved) {
+				if (
+					saved &&
+					visibleList.some(
+						(p) =>
+							(p.id && p.id === saved.id) ||
+							(p.name && p.name === saved.name),
+					)
+				) {
 					setSelectedPlatformId(saved.id || saved.name);
-				} else if (list.length > 0) {
-					setSelectedPlatformId(list[0].id || list[0].name);
+				} else if (visibleList.length > 0) {
+					setSelectedPlatformId(
+						visibleList[0].id || visibleList[0].name,
+					);
 				} else {
 					setSelectedPlatformId("none");
 				}

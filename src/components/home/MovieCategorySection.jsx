@@ -1,7 +1,7 @@
 import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
@@ -19,13 +19,18 @@ export default function MovieCategorySection({
 }) {
 	const initialCached = getCachedCategoryMovies(platformName, category?.url);
 	const [movies, setMovies] = useState(initialCached || []);
-	const [loading, setLoading] = useState(!initialCached || initialCached.length === 0);
+	const [loading, setLoading] = useState(
+		!initialCached || initialCached.length === 0,
+	);
 
 	useEffect(() => {
 		let isMounted = true;
 
 		async function loadCategoryMovies() {
-			const currentCached = getCachedCategoryMovies(platformName, category?.url);
+			const currentCached = getCachedCategoryMovies(
+				platformName,
+				category?.url,
+			);
 			if (currentCached && currentCached.length > 0) {
 				if (isMounted) {
 					setMovies(currentCached);
@@ -179,7 +184,7 @@ const styles = StyleSheet.create({
 	},
 	horizontalList: {
 		paddingHorizontal: 18,
-		gap: 12,
+		gap: 4,
 	},
 	cardContainer: {
 		width: 124,
