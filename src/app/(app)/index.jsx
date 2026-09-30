@@ -3,6 +3,7 @@ import ContinueWatchingSection from "@/components/home/ContinueWatchingSection";
 import HeroBanner from "@/components/home/HeroBanner";
 import MovieCategorySection from "@/components/home/MovieCategorySection";
 import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
+import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
 import {
 	clearPluginCache,
 	fetchPlatformCategories,
@@ -55,6 +56,8 @@ export default function Index() {
 	const [isPlatformModalVisible, setIsPlatformModalVisible] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 	const [visibleCount, setVisibleCount] = useState(6);
+	const [previewMovie, setPreviewMovie] = useState(null);
+	const [isPreviewModalVisible, setIsPreviewModalVisible] = useState(false);
 
 	const isNoneMode =
 		!selectedPlatform ||
@@ -285,6 +288,16 @@ export default function Index() {
 		});
 	};
 
+	// Uzun basma ile Hızlı Önizleme Modalı aç
+	const handleMovieLongPress = (movie) => {
+		if (!movie || movie.id === "offline-placeholder") return;
+		setPreviewMovie({
+			...movie,
+			plugin: movie.plugin || selectedPlatform?.name,
+		});
+		setIsPreviewModalVisible(true);
+	};
+
 	const handleContinueWatchingPress = (item) => {
 		if (item.url) {
 			router.push({
@@ -369,6 +382,7 @@ export default function Index() {
 							userAvatarUrl={userAvatarUrl}
 							onPlayPress={() => handleMoviePress(featuredMovie)}
 							onInfoPress={() => handleMoviePress(featuredMovie)}
+							onLongPress={() => handleMovieLongPress(featuredMovie)}
 							onToggleList={handleToggleFavorite}
 							onPlatformPress={() =>
 								setIsPlatformModalVisible(true)
@@ -485,6 +499,7 @@ export default function Index() {
 									<ContinueWatchingSection
 										items={continueWatching}
 										onItemPress={handleContinueWatchingPress}
+										onItemLongPress={handleMovieLongPress}
 										onRemoveItem={handleRemoveContinueWatching}
 										onSeeAllPress={() =>
 											router.push({
@@ -503,6 +518,7 @@ export default function Index() {
 									<ContinueWatchingSection
 										items={continueWatching}
 										onItemPress={handleContinueWatchingPress}
+										onItemLongPress={handleMovieLongPress}
 										onRemoveItem={handleRemoveContinueWatching}
 										onSeeAllPress={() =>
 											router.push({
@@ -528,6 +544,7 @@ export default function Index() {
 											}
 											category={category}
 											onMoviePress={handleMoviePress}
+											onMovieLongPress={handleMovieLongPress}
 											onSeeAll={(cat) => {
 												// Optional see all
 											}}
@@ -577,6 +594,22 @@ export default function Index() {
 						onSelectPlatform={handleSelectPlatform}
 					/>
 				</BottomSheetModal>
+
+				{/* Quick Preview Modal (Long-press) */}
+				<QuickPreviewModal
+					visible={isPreviewModalVisible}
+					movie={previewMovie}
+					platformName={selectedPlatform?.name}
+					onClose={() => setIsPreviewModalVisible(false)}
+					onPlayPress={(item) => {
+						setIsPreviewModalVisible(false);
+						handleMoviePress(item);
+					}}
+					onDetailsPress={(item) => {
+						setIsPreviewModalVisible(false);
+						handleMoviePress(item);
+					}}
+				/>
 			</View>
 		</>
 	);

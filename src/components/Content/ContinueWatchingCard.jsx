@@ -15,7 +15,7 @@ function formatTime(seconds) {
 	return `${mins < 10 ? "0" : ""}${mins}:${secs < 10 ? "0" : ""}${secs}`;
 }
 
-export default function ContinueWatchingCard({ item, onPress, onRemove }) {
+export default function ContinueWatchingCard({ item, onPress, onLongPress, onRemove }) {
 	if (!item) return null;
 
 	const progressPercent = Math.min(
@@ -48,6 +48,7 @@ export default function ContinueWatchingCard({ item, onPress, onRemove }) {
 		<TouchableOpacity
 			style={[styles.card]}
 			onPress={() => onPress?.(item)}
+			onLongPress={() => onLongPress?.(item)}
 			activeOpacity={0.82}>
 			{/* Thumbnail Wrapper */}
 			<View style={styles.thumbnailWrapper}>

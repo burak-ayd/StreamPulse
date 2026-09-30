@@ -15,6 +15,7 @@ export default function MovieCategorySection({
 	platformName,
 	category,
 	onMoviePress,
+	onMovieLongPress,
 	onSeeAll,
 }) {
 	const initialCached = getCachedCategoryMovies(platformName, category?.url);
@@ -123,7 +124,8 @@ export default function MovieCategorySection({
 						<TouchableOpacity
 							style={styles.cardContainer}
 							activeOpacity={0.8}
-							onPress={() => onMoviePress(item)}>
+							onPress={() => onMoviePress(item)}
+							onLongPress={() => onMovieLongPress?.(item)}>
 							{/* Poster Image Container */}
 							<View style={styles.posterWrapper}>
 								<Image
