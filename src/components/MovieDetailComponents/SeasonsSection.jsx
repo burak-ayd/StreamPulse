@@ -340,6 +340,7 @@ export default function SeasonsSection({
 						ep.id ||
 						ep.url ||
 						`${content?.id || content?.url || "series"}_s${selectedSeason}_e${epNumber}`,
+					plugin: content?.plugin,
 					seriesId: content?.id || content?.url,
 					seriesTitle: seriesTitle || content?.title || "Dizi",
 					season: selectedSeason,

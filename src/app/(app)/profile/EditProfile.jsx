@@ -1,11 +1,12 @@
-import { useThemeContext } from "@context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
+import { useThemeContext } from "@/context/ThemeContext";
+import { getUserProfile, saveUserProfile } from "@/utils/storage";
 import DateTimePicker from "@expo/ui/community/datetime-picker";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { getUserProfile, saveUserProfile } from "@utils/storage";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
@@ -24,6 +25,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function EditProfile() {
 	const { theme, colors } = useThemeContext();
+	const { user, isLoggedIn } = useAuth();
 	const router = useRouter();
 	const [isLoading, setIsLoading] = useState(false);
 
@@ -54,30 +56,46 @@ export default function EditProfile() {
 	];
 
 	// Load user data on mount
-	const loadUserData = useCallback(async () => {
-		try {
-			setIsLoading(true);
-			const data = await getUserProfile();
-			if (data) {
-				setEmail(data.email || "");
-				setUsername(data.username || "");
-				setDisplayName(data.displayName || "");
-				setAvatarUrl(data.avatarUrl || "");
-				setBio(data.bio || "");
-				setLanguage(data.language || "Türkçe");
-				setIsPrivate(data.isPrivate || false);
-				setBirthDate(data.birthDate || "");
-			}
-		} catch (error) {
-			console.error("Profil bilgisi alınamadı:", error);
-		} finally {
-			setIsLoading(false);
-		}
-	}, []);
-
 	useEffect(() => {
-		loadUserData();
-	}, [loadUserData]);
+		let isMounted = true;
+		const loadData = async () => {
+			try {
+				setIsLoading(true);
+				const data = await getUserProfile();
+				if (!isMounted) return;
+				if (isLoggedIn && user) {
+					setEmail(user.email || data?.email || "");
+					setUsername(user.username || data?.username || "");
+					setDisplayName(user.display_name || data?.displayName || "");
+					setAvatarUrl(user.avatar_url || data?.avatarUrl || "");
+					setBio(user.bio || data?.bio || "");
+				} else if (data) {
+					setEmail(data.email || "");
+					setUsername(data.username || "");
+					setDisplayName(data.displayName || "");
+					setAvatarUrl(data.avatarUrl || "");
+					setBio(data.bio || "");
+				}
+				if (data && isMounted) {
+					setLanguage(data.language || "Türkçe");
+					setIsPrivate(data.isPrivate || false);
+					setBirthDate(data.birthDate || "");
+				}
+			} catch (error) {
+				console.error("Profil bilgisi alınamadı:", error);
+			} finally {
+				if (isMounted) {
+					setIsLoading(false);
+				}
+			}
+		};
+
+		loadData();
+
+		return () => {
+			isMounted = false;
+		};
+	}, [isLoggedIn, user]);
 
 	const handleBack = () => {
 		if (router.canGoBack()) {
@@ -377,6 +395,44 @@ export default function EditProfile() {
 										}
 										autoCapitalize="none"
 										maxLength={30}
+									/>
+								</View>
+							</View>
+
+							{/* Email */}
+							<View style={styles.inputGroup}>
+								<Text
+									style={[
+										styles.inputLabel,
+										{ color: colors.text },
+									]}>
+									E-posta
+								</Text>
+								<View
+									style={[
+										styles.inputWrapper,
+										{
+											backgroundColor: colors.bg,
+											borderColor: colors.border,
+											opacity: 0.8,
+										},
+									]}>
+									<Ionicons
+										name="mail-outline"
+										size={20}
+										color={colors.textSecondary}
+										style={styles.inputIcon}
+									/>
+									<TextInput
+										style={[
+											styles.textInput,
+											{
+												color: colors.textSecondary,
+												paddingLeft: 0,
+											},
+										]}
+										value={email || "Giriş Yapılmadı"}
+										editable={false}
 									/>
 								</View>
 							</View>

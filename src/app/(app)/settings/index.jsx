@@ -1,4 +1,5 @@
 import BottomNavigation from "@/components/BottomNavigation";
+import { useAuth } from "@/context/AuthContext";
 import LanguageBadge from "@/components/common/LanguageBadge";
 import {
 	LANGUAGE_DISPLAY_MODES,
@@ -7,6 +8,7 @@ import {
 import { useThemeContext } from "@/context/ThemeContext";
 import { fetchPlatforms } from "@/services/api";
 import {
+	clearAllUserData,
 	getPluginVisibilitySettings,
 	getSelectedPlatform,
 	getUserProfile,
@@ -162,6 +164,7 @@ function SettingsSection({ title, children }) {
 
 export default function SettingsScreen() {
 	const { theme, toggleTheme, colors } = useThemeContext();
+	const { isLoggedIn } = useAuth();
 	const router = useRouter();
 
 	const [userProfile, setUserProfile] = useState(null);
@@ -228,7 +231,7 @@ export default function SettingsScreen() {
 					style: "destructive",
 					onPress: async () => {
 						try {
-							await AsyncStorage.clear();
+							await clearAllUserData();
 							Alert.alert(
 								"Başarılı",
 								"Tüm yerel veriler temizlendi.",
@@ -444,6 +447,23 @@ export default function SettingsScreen() {
 
 					{/* KATEGORİ 4: SİSTEM VE YEDEKLEME */}
 					<SettingsSection title="SİSTEM VE VERİ">
+						{/* Cihazlar ve Senkronizasyon */}
+						<SettingRow
+							icon="phone-portrait-outline"
+							iconBg="#7C3AED"
+							label="Cihazlar ve Senkronizasyon"
+							subtitle={
+								isLoggedIn
+									? "Favoriler ve listeler diğer cihazlarınızla paylaşılıyor"
+									: "Giriş yapın, verileriniz cihazlar arasında eşitlensin"
+							}
+							onPress={() =>
+								isLoggedIn
+									? router.push("/(app)/settings/sync")
+									: router.push("/(auth)/login")
+							}
+						/>
+
 						{/* Güncellemeler ve Yedekleme */}
 						<SettingRow
 							icon="cloud-upload-outline"
