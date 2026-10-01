@@ -1,7 +1,7 @@
+import LanguageBadge from "@/components/common/LanguageBadge";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
 import {
 	Dimensions,
 	StyleSheet,
@@ -30,10 +30,18 @@ export default function HeroBanner({
 	const insets = useSafeAreaInsets();
 
 	const title = movie?.title || "StreamPulse";
+	const rawGenres = movie?.category || movie?.genres;
 	const genres =
-		movie?.category ||
-		movie?.genres ||
-		(movie?.language ? `${movie.language} • ${movie.release_date || ""}` : "Aksiyon • Macera • Bilim Kurgu");
+		(Array.isArray(rawGenres) ? rawGenres.join(" • ") : rawGenres) ||
+		(movie?.release_date
+			? `${movie.release_date} • Film`
+			: "Aksiyon • Macera • Bilim Kurgu");
+	const movieRawLang =
+		movie?.language ||
+		movie?.languages ||
+		movie?.lang ||
+		movie?.audio ||
+		movie?.subtitles;
 	const posterUri =
 		movie?.poster ||
 		movie?.poster_url ||
@@ -55,7 +63,11 @@ export default function HeroBanner({
 
 			{/* Top Gradient for Header Readability */}
 			<LinearGradient
-				colors={["rgba(13, 14, 18, 0.85)", "rgba(13, 14, 18, 0.4)", "transparent"]}
+				colors={[
+					"rgba(13, 14, 18, 0.85)",
+					"rgba(13, 14, 18, 0.4)",
+					"transparent",
+				]}
 				locations={[0, 0.6, 1]}
 				style={styles.topGradient}
 			/>
@@ -127,11 +139,7 @@ export default function HeroBanner({
 						/>
 					) : (
 						<View style={styles.avatarPlaceholder}>
-							<Ionicons
-								name="person"
-								size={16}
-								color="#38bdf8"
-							/>
+							<Ionicons name="person" size={16} color="#38bdf8" />
 						</View>
 					)}
 				</TouchableOpacity>
@@ -148,9 +156,25 @@ export default function HeroBanner({
 				</Text>
 
 				{/* Genres / Metadata */}
-				<Text style={styles.genresText} numberOfLines={1}>
-					{genres}
-				</Text>
+				{genres ? (
+					<Text
+						style={[
+							styles.genresText,
+							!movieRawLang && styles.genresTextWithoutBadge,
+						]}
+						numberOfLines={1}>
+						{genres}
+					</Text>
+				) : null}
+
+				{/* Language Badge (Altta / Underneath) */}
+				{movieRawLang ? (
+					<LanguageBadge
+						language={movieRawLang}
+						size="normal"
+						style={styles.heroLanguageBadge}
+					/>
+				) : null}
 
 				{/* 3 Buttons Row */}
 				<View style={styles.buttonsRow}>
@@ -317,10 +341,18 @@ const styles = StyleSheet.create({
 		fontSize: 13,
 		fontWeight: "500",
 		textAlign: "center",
-		marginBottom: 18,
 		textShadowColor: "rgba(0, 0, 0, 0.8)",
 		textShadowOffset: { width: 0, height: 1 },
 		textShadowRadius: 4,
+		marginBottom: 6,
+		maxWidth: width * 0.88,
+	},
+	genresTextWithoutBadge: {
+		marginBottom: 18,
+	},
+	heroLanguageBadge: {
+		marginBottom: 16,
+		alignSelf: "center",
 	},
 	buttonsRow: {
 		flexDirection: "row",

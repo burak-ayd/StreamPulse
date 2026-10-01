@@ -1,3 +1,4 @@
+import { LanguageDisplayProvider } from "@/context/LanguageDisplayContext";
 import { PlayerSettingsProvider } from "@/context/PlayerSettingsContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { Slot } from "expo-router";
@@ -7,9 +8,11 @@ export default function RootLayout() {
 	return (
 		<ThemeProvider>
 			<PlayerSettingsProvider>
-				<SafeAreaProvider>
-					<Slot />
-				</SafeAreaProvider>
+				<LanguageDisplayProvider>
+					<SafeAreaProvider>
+						<Slot />
+					</SafeAreaProvider>
+				</LanguageDisplayProvider>
 			</PlayerSettingsProvider>
 		</ThemeProvider>
 	);
