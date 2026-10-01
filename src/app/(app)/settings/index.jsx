@@ -1,4 +1,9 @@
 import BottomNavigation from "@/components/BottomNavigation";
+import LanguageBadge from "@/components/common/LanguageBadge";
+import {
+	LANGUAGE_DISPLAY_MODES,
+	useLanguageDisplay,
+} from "@/context/LanguageDisplayContext";
 import { useThemeContext } from "@/context/ThemeContext";
 import { fetchPlatforms } from "@/services/api";
 import {
@@ -163,6 +168,9 @@ export default function SettingsScreen() {
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
 	const [activePluginsCount, setActivePluginsCount] = useState(0);
 	const [totalPluginsCount, setTotalPluginsCount] = useState(0);
+
+	const { languageDisplayMode, setLanguageDisplayMode } = useLanguageDisplay();
+	const [languageModalVisible, setLanguageModalVisible] = useState(false);
 
 	// Modals for sub-settings
 	const [generalModalVisible, setGeneralModalVisible] = useState(false);
@@ -389,6 +397,23 @@ export default function SettingsScreen() {
 							label="Düzen"
 							subtitle="Ana sayfa yerleşimi ve kart boyutları"
 							onPress={() => setLayoutModalVisible(true)}
+						/>
+
+						{/* Dil Gösterimi */}
+						<SettingRow
+							icon="language-outline"
+							iconBg="#3B82F6"
+							label="Dil Bilgisi Gösterimi"
+							subtitle="İçeriklerde dil ve altyazı rozeti stili"
+							badgeText={
+								languageDisplayMode === LANGUAGE_DISPLAY_MODES.ICON
+									? "Simge"
+									: languageDisplayMode ===
+											LANGUAGE_DISPLAY_MODES.ICON_TEXT
+										? "Simge + Yazı"
+										: "Yazı"
+							}
+							onPress={() => setLanguageModalVisible(true)}
 						/>
 					</SettingsSection>
 
@@ -809,6 +834,153 @@ export default function SettingsScreen() {
 					</View>
 				</Modal>
 
+				{/* DİL BİLGİSİ GÖSTERİMİ MODAL */}
+				<Modal
+					visible={languageModalVisible}
+					animationType="slide"
+					transparent={true}
+					onRequestClose={() => setLanguageModalVisible(false)}>
+					<View style={styles.modalOverlay}>
+						<View
+							style={[
+								styles.modalContent,
+								{
+									backgroundColor: colors.cardBg,
+									borderColor: colors.border,
+								},
+							]}>
+							<View style={styles.modalHeader}>
+								<Text
+									style={[
+										styles.modalTitle,
+										{ color: colors.text },
+									]}>
+									Dil Bilgisi Gösterimi
+								</Text>
+								<TouchableOpacity
+									onPress={() =>
+										setLanguageModalVisible(false)
+									}>
+									<Ionicons
+										name="close"
+										size={24}
+										color={colors.text}
+									/>
+								</TouchableOpacity>
+							</View>
+
+							{/* Options */}
+							{[
+								{
+									key: LANGUAGE_DISPLAY_MODES.ICON,
+									title: "Sadece Simge",
+									desc: "İçeriklerde bayrak ve altyazı simgeleri gösterilir",
+									sample: "Dublaj & Altyazılı",
+								},
+								{
+									key: LANGUAGE_DISPLAY_MODES.ICON_TEXT,
+									title: "Simge + Yazı",
+									desc: "Simgeler ve dil metni birlikte gösterilir",
+									sample: "Dublaj & Altyazılı",
+								},
+								{
+									key: LANGUAGE_DISPLAY_MODES.TEXT,
+									title: "Sadece Yazı",
+									desc: "Yalnızca dil metni etiketi gösterilir",
+									sample: "Dublaj & Altyazılı",
+								},
+							].map((opt) => {
+								const isSelected =
+									languageDisplayMode === opt.key;
+								return (
+									<TouchableOpacity
+										key={opt.key}
+										style={[
+											styles.modalOptionCard,
+											{
+												backgroundColor:
+													theme === "dark"
+														? "#161b22"
+														: "#f1f5f9",
+												borderColor: isSelected
+													? colors.primary
+													: colors.border,
+											},
+										]}
+										activeOpacity={0.7}
+										onPress={() => {
+											setLanguageDisplayMode(opt.key);
+										}}>
+										<View style={styles.modalOptionInfo}>
+											<View
+												style={
+													styles.modalOptionHeader
+												}>
+												<Text
+													style={[
+														styles.modalOptionTitle,
+														{
+															color: isSelected
+																? colors.primary
+																: colors.text,
+														},
+													]}>
+													{opt.title}
+												</Text>
+												<LanguageBadge
+													language={opt.sample}
+													mode={opt.key}
+													size="small"
+												/>
+											</View>
+											<Text
+												style={[
+													styles.modalOptionDesc,
+													{
+														color: colors.textSecondary,
+													},
+												]}>
+												{opt.desc}
+											</Text>
+										</View>
+										<View
+											style={[
+												styles.radioOuter,
+												isSelected && {
+													borderColor:
+														colors.primary,
+												},
+											]}>
+											{isSelected && (
+												<View
+													style={[
+														styles.radioInner,
+														{
+															backgroundColor:
+																colors.primary,
+														},
+													]}
+												/>
+											)}
+										</View>
+									</TouchableOpacity>
+								);
+							})}
+
+							<TouchableOpacity
+								style={[
+									styles.modalCloseButton,
+									{ backgroundColor: colors.primary },
+								]}
+								onPress={() => setLanguageModalVisible(false)}>
+								<Text style={styles.modalCloseButtonText}>
+									Tamam
+								</Text>
+							</TouchableOpacity>
+						</View>
+					</View>
+				</Modal>
+
 				{/* Bottom Navigation */}
 				<BottomNavigation activeRoute="/(app)/settings" />
 			</SafeAreaView>
@@ -1021,5 +1193,46 @@ const styles = StyleSheet.create({
 		color: "#ffffff",
 		fontSize: 15,
 		fontWeight: "700",
+	},
+	modalOptionCard: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		padding: 14,
+		borderRadius: 12,
+		borderWidth: 1.5,
+		marginBottom: 10,
+	},
+	modalOptionInfo: {
+		flex: 1,
+		paddingRight: 12,
+	},
+	modalOptionHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+		marginBottom: 3,
+	},
+	modalOptionTitle: {
+		fontSize: 15,
+		fontWeight: "600",
+	},
+	modalOptionDesc: {
+		fontSize: 12,
+		lineHeight: 16,
+	},
+	radioOuter: {
+		width: 20,
+		height: 20,
+		borderRadius: 10,
+		borderWidth: 2,
+		borderColor: "#6b7280",
+		justifyContent: "center",
+		alignItems: "center",
+	},
+	radioInner: {
+		width: 10,
+		height: 10,
+		borderRadius: 5,
 	},
 });

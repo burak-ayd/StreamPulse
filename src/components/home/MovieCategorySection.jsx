@@ -1,3 +1,4 @@
+import LanguageBadge from "@/components/common/LanguageBadge";
 import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -119,6 +120,12 @@ export default function MovieCategorySection({
 						item.backdrop_url ||
 						"https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=60";
 					const rating = item.rating ? String(item.rating) : null;
+					const movieRawLang =
+						item.language ||
+						item.languages ||
+						item.lang ||
+						item.audio ||
+						item.subtitles;
 
 					return (
 						<TouchableOpacity
@@ -150,6 +157,15 @@ export default function MovieCategorySection({
 										</Text>
 									</View>
 								)}
+
+								{/* Bottom-right Language Badge */}
+								{movieRawLang ? (
+									<LanguageBadge
+										language={movieRawLang}
+										size="small"
+										style={styles.languageBadge}
+									/>
+								) : null}
 							</View>
 
 							{/* Title */}
@@ -223,6 +239,11 @@ const styles = StyleSheet.create({
 		color: "#ffffff",
 		fontSize: 10,
 		fontWeight: "700",
+	},
+	languageBadge: {
+		position: "absolute",
+		bottom: 6,
+		right: 6,
 	},
 	movieTitle: {
 		color: "#ffffff",

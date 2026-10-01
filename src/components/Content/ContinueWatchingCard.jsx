@@ -1,3 +1,4 @@
+import LanguageBadge from "@/components/common/LanguageBadge";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -44,6 +45,13 @@ export default function ContinueWatchingCard({ item, onPress, onLongPress, onRem
 	const isEpisode =
 		item.type === "episode" || Boolean(item.season || item.episode);
 
+	const movieRawLang =
+		item.language ||
+		item.languages ||
+		item.lang ||
+		item.audio ||
+		item.subtitles;
+
 	return (
 		<TouchableOpacity
 			style={[styles.card]}
@@ -62,6 +70,15 @@ export default function ContinueWatchingCard({ item, onPress, onLongPress, onRem
 
 				{/* Subtle Dark Gradient Overlay */}
 				<View style={styles.overlay} />
+
+				{/* Top Left Language Badge */}
+				{movieRawLang ? (
+					<LanguageBadge
+						language={movieRawLang}
+						size="small"
+						style={styles.languageBadge}
+					/>
+				) : null}
 
 				{/* Play Button Icon */}
 				<View style={styles.playButtonCircle}>
@@ -178,6 +195,11 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(0, 0, 0, 0.65)",
 		justifyContent: "center",
 		alignItems: "center",
+	},
+	languageBadge: {
+		position: "absolute",
+		top: 6,
+		left: 6,
 	},
 	timeBadge: {
 		position: "absolute",
