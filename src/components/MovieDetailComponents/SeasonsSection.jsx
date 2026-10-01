@@ -1,4 +1,4 @@
-import { useThemeContext } from "@context/ThemeContext";
+import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -14,6 +14,7 @@ import {
 	View,
 } from "react-native";
 import { getDownloads, saveDownloadItem } from "@/utils/storage";
+import { formatTime } from "@/utils/formatters";
 
 export default function SeasonsSection({
 	seasons,
@@ -26,6 +27,8 @@ export default function SeasonsSection({
 	seriesTitle = "",
 	posterUrl = null,
 	content = null,
+	episodesProgress = {},
+	totalEpisodes = 0,
 }) {
 	const { colors, theme } = useThemeContext();
 	const router = useRouter();
@@ -88,12 +91,15 @@ export default function SeasonsSection({
 		controlledSelectedSeason !== null;
 
 	const [internalSelectedSeason, setInternalSelectedSeason] = useState(
-		initialSeason ? String(initialSeason) : seasonKeys[0] || "1",
+		initialSeason ? String(initialSeason) : "1",
 	);
 
-	const selectedSeason = isControlled
-		? String(controlledSelectedSeason)
-		: internalSelectedSeason;
+	const selectedSeason = useMemo(() => {
+		if (isControlled) return String(controlledSelectedSeason);
+		if (seasonKeys.includes(internalSelectedSeason)) return internalSelectedSeason;
+		if (initialSeason && seasonKeys.includes(String(initialSeason))) return String(initialSeason);
+		return seasonKeys[0] || "1";
+	}, [isControlled, controlledSelectedSeason, seasonKeys, internalSelectedSeason, initialSeason]);
 
 	const handleSeasonSelect = useCallback(
 		(sKey) => {
@@ -106,52 +112,26 @@ export default function SeasonsSection({
 		[onSeasonChange],
 	);
 
-	// initialSeason yalnızca ilk açılışta veya prop değiştiğinde uygulanmalı;
-	// kullanıcının seçtiği sezonu ezmemelidir.
-	const hasInitializedRef = React.useRef(false);
-	const prevInitialSeasonRef = React.useRef(initialSeason);
-
-	useEffect(() => {
-		if (prevInitialSeasonRef.current !== initialSeason) {
-			prevInitialSeasonRef.current = initialSeason;
-			hasInitializedRef.current = false;
-		}
-
-		if (seasonKeys.length === 0) return;
-
-		if (!hasInitializedRef.current) {
-			if (initialSeason && seasonKeys.includes(String(initialSeason))) {
-				handleSeasonSelect(String(initialSeason));
-			} else if (!selectedSeason || !seasonKeys.includes(String(selectedSeason))) {
-				handleSeasonSelect(seasonKeys[0]);
-			}
-			hasInitializedRef.current = true;
-			return;
-		}
-
-		if (selectedSeason && !seasonKeys.includes(String(selectedSeason))) {
-			handleSeasonSelect(seasonKeys[0]);
-		}
-	}, [initialSeason, seasonKeys, handleSeasonSelect]);
-
 	// Mevcut indirmeleri kontrol et
-	const syncDownloads = useCallback(async () => {
-		try {
-			const downloads = await getDownloads();
-			const map = {};
-			(downloads || []).forEach((item) => {
-				if (item.id) map[item.id] = true;
-				if (item.url) map[item.url] = true;
-			});
-			setDownloadQueueMap(map);
-		} catch (e) {
-			console.warn("İndirmeler kontrol edilemedi:", e);
-		}
-	}, []);
-
 	useEffect(() => {
-		syncDownloads();
-	}, [syncDownloads]);
+		let isMounted = true;
+		getDownloads()
+			.then((downloads) => {
+				if (!isMounted) return;
+				const map = {};
+				(downloads || []).forEach((item) => {
+					if (item.id) map[item.id] = true;
+					if (item.url) map[item.url] = true;
+				});
+				setDownloadQueueMap(map);
+			})
+			.catch((e) => {
+				console.warn("İndirmeler kontrol edilemedi:", e);
+			});
+		return () => {
+			isMounted = false;
+		};
+	}, []);
 
 	// Seçili sezonun bölümleri (sıralama filtresi uygulanmış)
 	const sortedEpisodes = useMemo(() => {
@@ -287,16 +267,50 @@ export default function SeasonsSection({
 
 		if (ep.url) {
 			const epNumber = ep.episode || ep.episode_number || index + 1;
+			const epKey = `s${selectedSeason}_e${epNumber}`;
+			const epProgress =
+				episodesProgress?.[ep.url] ||
+				episodesProgress?.[epKey] ||
+				(ep.id && episodesProgress?.[ep.id]);
+
+			// Sonraki bölümü tespit et (eğer varsa)
+			const nextEp = sortedEpisodes[index + 1] || null;
+
 			router.push({
 				pathname: "/player",
 				params: {
 					url: ep.url,
-					title: seriesTitle || ep.title || "Dizi",
+					title: seriesTitle || content?.title || ep.title || "Dizi",
 					subtitle: `${selectedSeason}. Sezon ${epNumber}. Bölüm${ep.title ? ` - ${ep.title}` : ""}`,
 					poster: ep.poster || posterUrl || null,
-					contentType: "series",
+					type: "episode",
+					id:
+						ep.id ||
+						ep.url ||
+						`${content?.id || content?.url || "series"}_s${selectedSeason}_e${epNumber}`,
+					seriesId: content?.id || content?.url,
+					seriesTitle: seriesTitle || content?.title || "Dizi",
 					season: selectedSeason,
 					episode: epNumber,
+					episodeTitle: ep.title || `Bölüm ${epNumber}`,
+					totalEpisodes: totalEpisodes || undefined,
+					currentTime:
+						epProgress?.status === "in_progress"
+							? epProgress.currentTime
+							: 0,
+					nextEpisode: nextEp
+						? JSON.stringify({
+								id: nextEp.id || nextEp.url,
+								url: nextEp.url,
+								title: nextEp.title,
+								season: selectedSeason,
+								episode:
+									nextEp.episode ||
+									nextEp.episode_number ||
+									epNumber + 1,
+								poster: nextEp.poster || posterUrl,
+							})
+						: undefined,
 				},
 			});
 		}
@@ -421,31 +435,83 @@ export default function SeasonsSection({
 							(ep.url && downloadQueueMap[ep.url]),
 					);
 
+					const epKey = `s${selectedSeason}_e${epNumber}`;
+					const epProgress =
+						episodesProgress?.[ep.url] ||
+						episodesProgress?.[epKey] ||
+						(ep.id && episodesProgress?.[ep.id]);
+
+					const isCompleted = epProgress?.status === "completed";
+					const isInProgress = epProgress?.status === "in_progress";
+
 					return (
 						<TouchableOpacity
 							key={ep.url || `${selectedSeason}-${epNumber}-${index}`}
 							style={styles.episodeRow}
 							onPress={() => handleEpisodeClick(ep, index)}
 							activeOpacity={0.7}>
-							{/* Sol: Play İkonu (Kırmızı Canlı Vurgu) */}
-							<View style={styles.playIconContainer}>
+							{/* Sol: Play / Tik İkonu */}
+							<View
+								style={[
+									styles.playIconContainer,
+									isCompleted && styles.completedIconContainer,
+									isInProgress && styles.inProgressIconContainer,
+								]}>
 								<Ionicons
-									name="play"
-									size={12}
-									color={colors.primary}
+									name={
+										isCompleted
+											? "checkmark"
+											: "play"
+									}
+									size={isCompleted ? 13 : 12}
+									color={
+										isCompleted
+											? "#10b981"
+											: isInProgress
+												? "#38bdf8"
+												: colors.primary
+									}
 								/>
 							</View>
 
-							{/* Orta: Bölüm Başlığı */}
+							{/* Orta: Bölüm Başlığı & Devam Durumu */}
 							<View style={styles.episodeTitleContainer}>
-								<Text
-									style={[
-										styles.episodeTitleText,
-										{ color: colors.text },
-									]}
-									numberOfLines={1}>
-									{epDisplayTitle}
-								</Text>
+								<View style={styles.episodeTitleRow}>
+									<Text
+										style={[
+											styles.episodeTitleText,
+											{ color: isCompleted ? colors.textSecondary : colors.text },
+										]}
+										numberOfLines={1}>
+										{epDisplayTitle}
+									</Text>
+									{isCompleted && (
+										<View style={styles.completedBadge}>
+											<Text style={styles.completedBadgeText}>İzlendi</Text>
+										</View>
+									)}
+								</View>
+
+								{isInProgress && epProgress.currentTime > 0 && (
+									<View style={styles.episodeProgressRow}>
+										<View style={styles.miniProgressBarTrack}>
+											<View
+												style={[
+													styles.miniProgressBarFill,
+													{
+														width: `${Math.min(100, Math.max(8, Math.round((epProgress.progress || 0) * 100)))}%`,
+													},
+												]}
+											/>
+										</View>
+										<Text style={styles.episodeProgressText}>
+											{formatTime(epProgress.currentTime)}
+											{epProgress.duration > 0
+												? ` / ${formatTime(epProgress.duration)}`
+												: ""}
+										</Text>
+									</View>
+								)}
 							</View>
 
 							{/* Sağ: İndir Butonu (Gelecek özellik için hazırlık) */}
@@ -654,14 +720,75 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		marginRight: 10,
 	},
+	completedIconContainer: {
+		alignItems: "center",
+		justifyContent: "center",
+		width: 20,
+		height: 20,
+		borderRadius: 10,
+		backgroundColor: "rgba(16, 185, 129, 0.15)",
+		marginRight: 10,
+	},
+	inProgressIconContainer: {
+		alignItems: "center",
+		justifyContent: "center",
+		width: 20,
+		height: 20,
+		borderRadius: 10,
+		backgroundColor: "rgba(56, 189, 248, 0.15)",
+		marginRight: 10,
+	},
 	episodeTitleContainer: {
 		flex: 1,
 		justifyContent: "center",
+	},
+	episodeTitleRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
 	},
 	episodeTitleText: {
 		fontSize: 14,
 		fontWeight: "500",
 		letterSpacing: -0.2,
+		flexShrink: 1,
+	},
+	completedBadge: {
+		backgroundColor: "rgba(16, 185, 129, 0.15)",
+		paddingHorizontal: 6,
+		paddingVertical: 1,
+		borderRadius: 6,
+		borderWidth: 0.5,
+		borderColor: "rgba(16, 185, 129, 0.35)",
+	},
+	completedBadgeText: {
+		color: "#10b981",
+		fontSize: 10,
+		fontWeight: "700",
+		letterSpacing: 0.2,
+	},
+	episodeProgressRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+		marginTop: 4,
+	},
+	miniProgressBarTrack: {
+		width: 50,
+		height: 3,
+		borderRadius: 2,
+		backgroundColor: "rgba(255, 255, 255, 0.15)",
+		overflow: "hidden",
+	},
+	miniProgressBarFill: {
+		height: "100%",
+		borderRadius: 2,
+		backgroundColor: "#38bdf8",
+	},
+	episodeProgressText: {
+		fontSize: 11,
+		fontWeight: "600",
+		color: "#38bdf8",
 	},
 	downloadButton: {
 		paddingLeft: 12,

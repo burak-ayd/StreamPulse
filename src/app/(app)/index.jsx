@@ -21,10 +21,8 @@ import {
 	getSelectedPlatform,
 	getUserProfile,
 	getContentLibraryStatus,
-	isFavorite,
 	removeContinueWatching,
 	saveSelectedPlatform,
-	toggleFavorite,
 } from "@/utils/storage";
 import BottomNavigation from "@components/BottomNavigation";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -315,10 +313,19 @@ export default function Index() {
 					id: item.id,
 					type: item.type || "movie",
 					seriesId: item.seriesId,
+					seriesUrl: item.seriesUrl,
+					seriesTitle: item.seriesTitle || item.title,
+					plugin: item.plugin || selectedPlatform?.name,
 					season: item.season,
 					episode: item.episode,
 					episodeTitle: item.episodeTitle,
+					totalEpisodes: item.totalEpisodes,
 					currentTime: item.currentTime,
+					nextEpisode: item.nextEpisode
+						? typeof item.nextEpisode === "string"
+							? item.nextEpisode
+							: JSON.stringify(item.nextEpisode)
+						: undefined,
 				},
 			});
 		} else if (item.id) {
@@ -329,16 +336,6 @@ export default function Index() {
 	const handleRemoveContinueWatching = async (id) => {
 		const updated = await removeContinueWatching(id);
 		setContinueWatching(updated);
-	};
-
-	const handleToggleFavorite = async () => {
-		if (!featuredMovie || featuredMovie.id === "offline-placeholder") return;
-		try {
-			const updated = await toggleFavorite(featuredMovie);
-			setIsInList(updated);
-		} catch (error) {
-			console.error("Favori güncellenirken hata:", error);
-		}
 	};
 
 	// Search handler: Eklenti içi arama (Header'dan tetiklenince)

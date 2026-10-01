@@ -1,10 +1,10 @@
 import VideoPlayer from "@/components/player/VideoPlayer";
-import { extractVideoSources } from "@/services/api";
+import { extractVideoSources, fetchPluginDetail } from "@/services/api";
 import { addToWatchHistory, getContinueWatching } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
 	StyleSheet,
@@ -23,25 +23,146 @@ export default function PlayerScreen() {
 	const poster = params.poster || null;
 	const contentId = params.id || null;
 	const contentType = params.type || (params.episode ? "episode" : "movie");
+	const [dynamicNextEpisode, setDynamicNextEpisode] = useState(null);
 
-	const seriesInfo = params.seriesInfo
-		? typeof params.seriesInfo === "string"
-			? JSON.parse(params.seriesInfo)
-			: params.seriesInfo
-		: params.seriesId
-			? {
-					seriesId: params.seriesId,
-					seriesTitle: params.seriesTitle,
-					season: params.season ? Number(params.season) : undefined,
-					episode: params.episode ? Number(params.episode) : undefined,
-					episodeTitle: params.episodeTitle,
-					nextEpisode: params.nextEpisode
-						? typeof params.nextEpisode === "string"
-							? JSON.parse(params.nextEpisode)
-							: params.nextEpisode
-						: undefined,
-				}
-			: null;
+	const seriesInfo = useMemo(() => {
+		let base = null;
+		if (params.seriesInfo) {
+			base =
+				typeof params.seriesInfo === "string"
+					? JSON.parse(params.seriesInfo)
+					: params.seriesInfo;
+		} else if (params.seriesId || params.season || params.episode) {
+			base = {
+				seriesId: params.seriesId || params.id,
+				seriesTitle: params.seriesTitle || params.title,
+				seriesUrl:
+					params.seriesUrl ||
+					(params.seriesId &&
+					(String(params.seriesId).startsWith("http") ||
+						String(params.seriesId).startsWith("/"))
+						? params.seriesId
+						: undefined),
+				plugin: params.plugin,
+				season: params.season ? Number(params.season) : undefined,
+				episode: params.episode ? Number(params.episode) : undefined,
+				episodeTitle: params.episodeTitle,
+				totalEpisodes: params.totalEpisodes
+					? Number(params.totalEpisodes)
+					: undefined,
+				nextEpisode: params.nextEpisode
+					? typeof params.nextEpisode === "string"
+						? JSON.parse(params.nextEpisode)
+						: params.nextEpisode
+					: undefined,
+			};
+		}
+		if (base && !base.nextEpisode && dynamicNextEpisode) {
+			return { ...base, nextEpisode: dynamicNextEpisode };
+		}
+		return base;
+	}, [
+		params.seriesInfo,
+		params.seriesId,
+		params.seriesUrl,
+		params.plugin,
+		params.season,
+		params.episode,
+		params.id,
+		params.title,
+		params.seriesTitle,
+		params.episodeTitle,
+		params.totalEpisodes,
+		params.nextEpisode,
+		dynamicNextEpisode,
+	]);
+
+	// Eğer sonraki bölüm bilgisi gelmediyse, dizi detayından otomatik hesapla
+	useEffect(() => {
+		if (contentType !== "episode") return;
+		if (params.nextEpisode) return;
+
+		const sUrl =
+			params.seriesUrl ||
+			(params.seriesId && String(params.seriesId).startsWith("http")
+				? params.seriesId
+				: null) ||
+			(targetUrl && String(targetUrl).includes("/dizi/")
+				? targetUrl.replace(/\/sezon-\d+\/bolum-\d+.*$/, "")
+				: null);
+		const pName = params.plugin;
+		const currSeason = params.season ? Number(params.season) : 1;
+		const currEpisode = params.episode ? Number(params.episode) : 1;
+
+		if (sUrl && pName) {
+			fetchPluginDetail(pName, sUrl)
+				.then((detail) => {
+					const seasons = detail?.seasons;
+					if (seasons && typeof seasons === "object") {
+						const currList =
+							seasons[String(currSeason)] ||
+							seasons[currSeason] ||
+							[];
+						if (Array.isArray(currList)) {
+							const idx = currList.findIndex(
+								(e) =>
+									Number(e.episode || e.episode_number) ===
+									currEpisode,
+							);
+							if (idx !== -1 && idx + 1 < currList.length) {
+								const nextObj = currList[idx + 1];
+								setDynamicNextEpisode({
+									id: nextObj.id || nextObj.url,
+									url: nextObj.url,
+									title: nextObj.title,
+									season: currSeason,
+									episode: Number(
+										nextObj.episode ||
+											nextObj.episode_number ||
+											currEpisode + 1,
+									),
+									poster: nextObj.poster || poster,
+								});
+							} else {
+								const nextSeasonList =
+									seasons[String(currSeason + 1)];
+								if (
+									Array.isArray(nextSeasonList) &&
+									nextSeasonList.length > 0
+								) {
+									const nextObj = nextSeasonList[0];
+									setDynamicNextEpisode({
+										id: nextObj.id || nextObj.url,
+										url: nextObj.url,
+										title: nextObj.title,
+										season: currSeason + 1,
+										episode: Number(
+											nextObj.episode ||
+												nextObj.episode_number ||
+												1,
+										),
+										poster: nextObj.poster || poster,
+									});
+								}
+							}
+						}
+					}
+				})
+				.catch((err) => {
+					console.warn("player.jsx nextEpisode çözme hatası:", err);
+				});
+		}
+	}, [
+		contentType,
+		params.nextEpisode,
+		params.seriesUrl,
+		params.seriesId,
+		params.plugin,
+		params.season,
+		params.episode,
+		targetUrl,
+		poster,
+	]);
 
 	const [initialTime, setInitialTime] = useState(
 		params.currentTime ? Number(params.currentTime) : 0,
@@ -89,14 +210,33 @@ export default function PlayerScreen() {
 
 			if (Array.isArray(extracted) && extracted.length > 0) {
 				setSources(extracted);
-				// Add to watch history
+				// Add to watch history (recent play)
 				if (contentId || title) {
-					addToWatchHistory({
-						id: contentId || targetUrl,
-						title,
-						poster,
-						overview: subtitle,
-					}).catch(() => {});
+					if (contentType === "episode") {
+						addToWatchHistory({
+							id: contentId || targetUrl,
+							title: seriesInfo?.seriesTitle || title,
+							seriesTitle: seriesInfo?.seriesTitle || title,
+							seriesId: seriesInfo?.seriesId,
+							season: seriesInfo?.season,
+							episode: seriesInfo?.episode,
+							episodeTitle: seriesInfo?.episodeTitle,
+							poster,
+							type: "episode",
+							url: targetUrl,
+							totalEpisodes: seriesInfo?.totalEpisodes,
+							overview: subtitle,
+						}).catch(() => {});
+					} else {
+						addToWatchHistory({
+							id: contentId || targetUrl,
+							title,
+							poster,
+							type: "movie",
+							url: targetUrl,
+							overview: subtitle,
+						}).catch(() => {});
+					}
 				}
 			} else {
 				setError("Bu içerik için video kaynağı bulunamadı.");
@@ -107,7 +247,7 @@ export default function PlayerScreen() {
 		} finally {
 			setLoading(false);
 		}
-	}, [targetUrl, contentId, title, subtitle, poster]);
+	}, [targetUrl, contentId, title, subtitle, poster, contentType, seriesInfo]);
 
 	useEffect(() => {
 		// Video oynatıcı açıldığında her zaman doğrudan yatay moda kilitlen
@@ -218,6 +358,7 @@ export default function PlayerScreen() {
 					contentType={contentType}
 					seriesInfo={seriesInfo}
 					targetUrl={targetUrl}
+					plugin={params.plugin || seriesInfo?.plugin}
 				/>
 			)}
 		</View>

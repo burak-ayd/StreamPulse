@@ -378,3 +378,21 @@ export function formatLanguageDetailed(rawLang) {
 
 	return text;
 }
+
+/**
+ * Saniye cinsinden süreyi mm:ss veya hh:mm:ss formatına dönüştürür
+ * @param {number} seconds - Saniye
+ * @returns {string} Biçimlendirilmiş süre (örn: "14:20" veya "1:15:30")
+ */
+export function formatTime(seconds) {
+	if (!seconds || isNaN(seconds) || seconds < 0) return "00:00";
+	const totalSecs = Math.floor(seconds);
+	const hrs = Math.floor(totalSecs / 3600);
+	const mins = Math.floor((totalSecs % 3600) / 60);
+	const secs = totalSecs % 60;
+
+	if (hrs > 0) {
+		return `${hrs}:${mins < 10 ? "0" : ""}${mins}:${secs < 10 ? "0" : ""}${secs}`;
+	}
+	return `${mins < 10 ? "0" : ""}${mins}:${secs < 10 ? "0" : ""}${secs}`;
+}
