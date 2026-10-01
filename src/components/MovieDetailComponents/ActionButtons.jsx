@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { formatTime } from "@/utils/formatters";
+import ContinueWatchingCard from "./ContinueWatchingCard";
 
 /**
  * ActionButtons – Mockup tasarımındaki birleşik eylem bölümü.
@@ -244,14 +245,6 @@ export default function ActionButtons({
 			active: isWatchlistActive,
 		},
 		{
-			key: "trailer",
-			icon: "play-circle",
-			label: "Fragman",
-			color: "#f43f5e",
-			onPress: handleTrailer,
-			hidden: !content?.trailer_url,
-		},
-		{
 			key: "favorite",
 			icon: isFav ? "heart" : "heart-outline",
 			label: isFav ? "Favorilerde" : "Favori",
@@ -265,6 +258,14 @@ export default function ActionButtons({
 			label: "İndir",
 			color: "#38bdf8",
 			onPress: handleDownload,
+		},
+		{
+			key: "trailer",
+			icon: "play-circle",
+			label: "Fragman",
+			color: "#f43f5e",
+			onPress: handleTrailer,
+			hidden: !content?.trailer_url,
 		},
 	].filter((a) => !a.hidden);
 
@@ -291,24 +292,33 @@ export default function ActionButtons({
 
 	return (
 		<View style={styles.container}>
-			{/* Primary CTA — Hemen Şimdi İzle / Kaldığın Yerden Devam Et / Tekrar İzle */}
-			<TouchableOpacity
-				style={[
-					styles.primaryButton,
-					isCompleted && styles.primaryButtonCompleted,
-				]}
-				onPress={handleWatch}
-				activeOpacity={0.85}>
-				<Ionicons name={buttonIcon} size={22} color="#ffffff" />
-				<View style={styles.primaryButtonTextWrapper}>
-					<Text style={styles.primaryButtonText}>{buttonTitle}</Text>
-					{buttonSubtitle ? (
-						<Text style={styles.primaryButtonSubtext}>
-							{buttonSubtitle}
-						</Text>
-					) : null}
-				</View>
-			</TouchableOpacity>
+			{/* Kaldığın Yerden Devam Et Kartı VEYA Ana CTA Butonu */}
+			{isInProgress ? (
+				<ContinueWatchingCard
+					content={content}
+					watchProgress={watchProgress}
+					isSeries={isSeries}
+					onPress={handleWatch}
+				/>
+			) : (
+				<TouchableOpacity
+					style={[
+						styles.primaryButton,
+						isCompleted && styles.primaryButtonCompleted,
+					]}
+					onPress={handleWatch}
+					activeOpacity={0.85}>
+					<Ionicons name={buttonIcon} size={22} color="#ffffff" />
+					<View style={styles.primaryButtonTextWrapper}>
+						<Text style={styles.primaryButtonText}>{buttonTitle}</Text>
+						{buttonSubtitle ? (
+							<Text style={styles.primaryButtonSubtext}>
+								{buttonSubtitle}
+							</Text>
+						) : null}
+					</View>
+				</TouchableOpacity>
+			)}
 
 			{/* 4-Column Action Grid */}
 			<View style={styles.gridRow}>
