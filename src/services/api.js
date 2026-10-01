@@ -422,7 +422,36 @@ export async function extractVideoSources(url) {
 		});
 		if (response.ok) {
 			const data = await response.json();
-			if (Array.isArray(data)) return data;
+			if (Array.isArray(data)) {
+				return data.map((item) => {
+					const streamUrl = item?.result?.url || "";
+					const isHls =
+						item?.result?.is_hls === true ||
+						item?.result?.type === "m3u8" ||
+						item?.result?.type === "hls" ||
+						streamUrl.includes(".m3u8") ||
+						streamUrl.includes("/hls/") ||
+						streamUrl.includes("/hls2/") ||
+						streamUrl.includes(".urlset") ||
+						streamUrl.includes("master.txt") ||
+						streamUrl.includes("sublist") ||
+						streamUrl.includes("/q/") ||
+						streamUrl.includes("molystream") ||
+						streamUrl.includes("cdnimage") ||
+						item?.extractor?.toLowerCase()?.includes("close") ||
+						item?.extractor?.toLowerCase()?.includes("rapidrame") ||
+						item?.extractor?.toLowerCase()?.includes("rapidvid");
+
+					return {
+						...item,
+						result: {
+							...item.result,
+							is_hls: isHls ? true : item?.result?.is_hls,
+							type: isHls ? "m3u8" : item?.result?.type || "mp4",
+						},
+					};
+				});
+			}
 		} else {
 			console.warn("API extract failed with status:", response.status);
 		}

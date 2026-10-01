@@ -1,3 +1,10 @@
+import { usePlayerSettings } from "@/context/PlayerSettingsContext";
+import {
+	addToWatchHistory,
+	markEpisodeComplete,
+	removeContinueWatching,
+	saveContinueWatching,
+} from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -14,21 +21,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Video, { TextTrackType } from "react-native-video";
-import { usePlayerSettings } from "@/context/PlayerSettingsContext";
-import {
-	addToWatchHistory,
-	markEpisodeComplete,
-	removeContinueWatching,
-	saveContinueWatching,
-} from "@/utils/storage";
 import TrackSelectionModal from "./TrackSelectionModal";
 
 // Altyazı CDN'leri (örn. Dizilla -> pichive) User-Agent + Referer olmadan 403 döner.
 // Kaynak bu header'ları döndürmüyorsa yedek olarak tarayıcı UA'sı kullanılır.
 const DEFAULT_SUBTITLE_UA =
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
-
-
 
 function formatTime(seconds) {
 	if (!seconds || isNaN(seconds) || seconds < 0) return "00:00";
@@ -315,7 +313,11 @@ export default function VideoPlayer({
 			})
 			.catch((err) => {
 				if (!isMounted) return;
-				console.warn("Altyazı dosyası okunamadı:", err);
+				console.warn(
+					"Altyazı dosyası okunamadı:",
+					err,
+					selectedSubtitle.uri,
+				);
 				setParsedCues([]);
 			});
 
@@ -383,7 +385,6 @@ export default function VideoPlayer({
 		settings?.subtitleTextShadow,
 	]);
 
-
 	// Build video source object for react-native-video
 	const videoSource = useMemo(() => {
 		if (!currentSourceData?.result?.url) return null;
@@ -412,6 +413,7 @@ export default function VideoPlayer({
 		let type = undefined;
 		if (overrideType !== null) {
 			type = overrideType;
+		} else {
 			const isExplicitProgressive =
 				/\.(mp4|mkv|webm|avi|flv|mov)(\?.*)?$/i.test(streamUrl) ||
 				streamUrl.includes("googlevideo.com") ||
@@ -420,29 +422,54 @@ export default function VideoPlayer({
 				/[?&]mime=video\/(mp4|webm)/i.test(streamUrl) ||
 				currentSourceData?.result?.type === "mp4" ||
 				currentSourceData?.result?.is_hls === false ||
-				currentSourceData?.extractor?.toLowerCase()?.includes("peacemaker") ||
-				currentSourceData?.result?.name?.toLowerCase()?.includes("peacemaker");
+				currentSourceData?.extractor
+					?.toLowerCase()
+					?.includes("peacemaker") ||
+				currentSourceData?.result?.name
+					?.toLowerCase()
+					?.includes("peacemaker");
+
 			const isExplicitHls =
 				streamUrl.includes(".m3u8") ||
 				streamUrl.includes("/q/") ||
 				streamUrl.includes("molystream") ||
 				streamUrl.includes("/hls/") ||
+				streamUrl.includes("/hls2/") ||
+				streamUrl.includes(".urlset") ||
 				streamUrl.includes("master.txt") ||
+				streamUrl.includes("sublist") ||
+				streamUrl.includes(".txt") ||
 				streamUrl.includes("cdnimage") ||
 				streamUrl.includes("/m2/") ||
 				streamUrl.includes("/mm/") ||
 				streamUrl.includes("/ms/") ||
 				streamUrl.includes("/mo/") ||
-				currentSourceData?.extractor?.toLowerCase()?.includes("rapidvid") ||
-				currentSourceData?.result?.name?.toLowerCase()?.includes("rapidvid") ||
+				currentSourceData?.extractor
+					?.toLowerCase()
+					?.includes("close") ||
+				currentSourceData?.result?.name
+					?.toLowerCase()
+					?.includes("close") ||
+				currentSourceData?.extractor
+					?.toLowerCase()
+					?.includes("rapidvid") ||
+				currentSourceData?.result?.name
+					?.toLowerCase()
+					?.includes("rapidvid") ||
+				currentSourceData?.extractor
+					?.toLowerCase()
+					?.includes("rapidrame") ||
+				currentSourceData?.result?.name
+					?.toLowerCase()
+					?.includes("rapidrame") ||
 				currentSourceData?.result?.is_hls === true ||
 				currentSourceData?.result?.type === "m3u8" ||
 				currentSourceData?.result?.type === "hls";
 
-			if (isExplicitProgressive) {
-				type = "mp4";
-			} else if (isExplicitHls || !isExplicitProgressive) {
+			if (isExplicitHls) {
 				type = "m3u8";
+			} else if (isExplicitProgressive) {
+				type = "mp4";
 			}
 		}
 
@@ -612,7 +639,9 @@ export default function VideoPlayer({
 									id,
 									title,
 									poster,
-									url: targetUrl || currentSourceData?.result?.url,
+									url:
+										targetUrl ||
+										currentSourceData?.result?.url,
 									seriesTitle: seriesInfo?.seriesTitle,
 									episodeTitle: seriesInfo?.episodeTitle,
 									totalEpisodes: seriesInfo?.totalEpisodes,
@@ -627,7 +656,8 @@ export default function VideoPlayer({
 								title,
 								poster,
 								type: "movie",
-								url: targetUrl || currentSourceData?.result?.url,
+								url:
+									targetUrl || currentSourceData?.result?.url,
 								plugin: plugin || seriesInfo?.plugin,
 								isCompleted: true,
 								progress: 1.0,
@@ -714,7 +744,9 @@ export default function VideoPlayer({
 			errorCode === "23003" ||
 			error?.error?.errorString?.includes("PARSING_CONTAINER") ||
 			error?.error?.errorString?.includes("PARSING_MANIFEST") ||
-			error?.error?.errorException?.includes("UnrecognizedInputFormatException") ||
+			error?.error?.errorException?.includes(
+				"UnrecognizedInputFormatException",
+			) ||
 			error?.error?.errorStackTrace?.includes("HlsPlaylistParser") ||
 			error?.error?.errorStackTrace?.includes("#EXTM3U");
 
@@ -942,6 +974,7 @@ export default function VideoPlayer({
 			{videoSource ? (
 				<View style={StyleSheet.absoluteFill} pointerEvents="none">
 					<Video
+						key={`${videoSource.uri}_${videoSource.type || "auto"}_${overrideType || "none"}`}
 						ref={videoRef}
 						source={videoSource}
 						style={StyleSheet.absoluteFill}
@@ -983,8 +1016,7 @@ export default function VideoPlayer({
 							: "transparent",
 					},
 				]}
-				onPress={handleScreenTouch}
-			>
+				onPress={handleScreenTouch}>
 				{/* 3. KATMAN: Arayüz Elemanları (Yalnızca showControls true iken çizilir) */}
 				{showControls && (
 					<View
@@ -997,8 +1029,7 @@ export default function VideoPlayer({
 								paddingRight: Math.max(insets.right, 16),
 							},
 						]}
-						pointerEvents="box-none"
-					>
+						pointerEvents="box-none">
 						{/* TOP BAR */}
 						<View style={styles.topBar} pointerEvents="box-none">
 							<TouchableOpacity
@@ -1007,23 +1038,34 @@ export default function VideoPlayer({
 									startHideTimer();
 									onClose?.();
 								}}
-								activeOpacity={0.7}
-							>
-								<Ionicons name="chevron-back" size={26} color="#FFFFFF" />
+								activeOpacity={0.7}>
+								<Ionicons
+									name="chevron-back"
+									size={26}
+									color="#FFFFFF"
+								/>
 							</TouchableOpacity>
 
-							<View style={styles.titleContainer} pointerEvents="none">
-								<Text style={styles.movieTitle} numberOfLines={1}>
+							<View
+								style={styles.titleContainer}
+								pointerEvents="none">
+								<Text
+									style={styles.movieTitle}
+									numberOfLines={1}>
 									{title || "Video Oynatıcı"}
 								</Text>
 								{subtitle ? (
-									<Text style={styles.movieSubtitle} numberOfLines={1}>
+									<Text
+										style={styles.movieSubtitle}
+										numberOfLines={1}>
 										{subtitle}
 									</Text>
 								) : null}
 							</View>
 
-							<View style={styles.topActions} pointerEvents="box-none">
+							<View
+								style={styles.topActions}
+								pointerEvents="box-none">
 								{sources.length > 0 && (
 									<TouchableOpacity
 										style={styles.pillButton}
@@ -1031,10 +1073,15 @@ export default function VideoPlayer({
 											startHideTimer();
 											setModalType("sources");
 										}}
-										activeOpacity={0.7}
-									>
-										<Ionicons name="server" size={13} color="#FF3B30" />
-										<Text style={styles.pillText} numberOfLines={1}>
+										activeOpacity={0.7}>
+										<Ionicons
+											name="server"
+											size={13}
+											color="#FF3B30"
+										/>
+										<Text
+											style={styles.pillText}
+											numberOfLines={1}>
 											{sourceDisplayName}
 										</Text>
 									</TouchableOpacity>
@@ -1043,36 +1090,44 @@ export default function VideoPlayer({
 								<TouchableOpacity
 									style={[
 										styles.iconButton,
-										selectedAudioTrackIndex !== null && styles.iconButtonActive,
+										selectedAudioTrackIndex !== null &&
+											styles.iconButtonActive,
 									]}
 									onPress={() => {
 										startHideTimer();
 										setModalType("audio");
 									}}
-									activeOpacity={0.7}
-								>
+									activeOpacity={0.7}>
 									<Ionicons
 										name="volume-high-outline"
 										size={20}
-										color={selectedAudioTrackIndex !== null ? "#FF3B30" : "#FFFFFF"}
+										color={
+											selectedAudioTrackIndex !== null
+												? "#FF3B30"
+												: "#FFFFFF"
+										}
 									/>
 								</TouchableOpacity>
 
 								<TouchableOpacity
 									style={[
 										styles.iconButton,
-										selectedSubtitle && styles.iconButtonActive,
+										selectedSubtitle &&
+											styles.iconButtonActive,
 									]}
 									onPress={() => {
 										startHideTimer();
 										setModalType("subtitles");
 									}}
-									activeOpacity={0.7}
-								>
+									activeOpacity={0.7}>
 									<Ionicons
 										name="chatbubble-ellipses-outline"
 										size={20}
-										color={selectedSubtitle ? "#FF3B30" : "#FFFFFF"}
+										color={
+											selectedSubtitle
+												? "#FF3B30"
+												: "#FFFFFF"
+										}
 									/>
 								</TouchableOpacity>
 
@@ -1082,10 +1137,13 @@ export default function VideoPlayer({
 										startHideTimer();
 										setIsLocked((prev) => !prev);
 									}}
-									activeOpacity={0.7}
-								>
+									activeOpacity={0.7}>
 									<Ionicons
-										name={isLocked ? "lock-closed" : "lock-open-outline"}
+										name={
+											isLocked
+												? "lock-closed"
+												: "lock-open-outline"
+										}
 										size={20}
 										color={isLocked ? "#FF3B30" : "#FFFFFF"}
 									/>
@@ -1097,10 +1155,13 @@ export default function VideoPlayer({
 										startHideTimer();
 										toggleOrientation();
 									}}
-									activeOpacity={0.7}
-								>
+									activeOpacity={0.7}>
 									<Ionicons
-										name={isLandscape ? "phone-portrait-outline" : "scan-outline"}
+										name={
+											isLandscape
+												? "phone-portrait-outline"
+												: "scan-outline"
+										}
 										size={20}
 										color="#FFFFFF"
 									/>
@@ -1110,17 +1171,24 @@ export default function VideoPlayer({
 
 						{/* ORTA OYNATMA BUTONLARI */}
 						{!isLocked && (
-							<View style={styles.centerControls} pointerEvents="box-none">
+							<View
+								style={styles.centerControls}
+								pointerEvents="box-none">
 								<TouchableOpacity
 									style={styles.seekButton}
 									onPress={() => {
 										handleSeekBy(-seekDuration);
 										startHideTimer();
 									}}
-									activeOpacity={0.7}
-								>
-									<Ionicons name="play-back-outline" size={24} color="#FFFFFF" />
-									<Text style={styles.seekButtonText}>-{seekDuration}s</Text>
+									activeOpacity={0.7}>
+									<Ionicons
+										name="play-back-outline"
+										size={24}
+										color="#FFFFFF"
+									/>
+									<Text style={styles.seekButtonText}>
+										-{seekDuration}s
+									</Text>
 								</TouchableOpacity>
 
 								<TouchableOpacity
@@ -1129,8 +1197,7 @@ export default function VideoPlayer({
 										setPaused((prev) => !prev);
 										startHideTimer();
 									}}
-									activeOpacity={0.8}
-								>
+									activeOpacity={0.8}>
 									<Ionicons
 										name={paused ? "play" : "pause"}
 										size={38}
@@ -1144,22 +1211,32 @@ export default function VideoPlayer({
 										handleSeekBy(seekDuration);
 										startHideTimer();
 									}}
-									activeOpacity={0.7}
-								>
-									<Ionicons name="play-forward-outline" size={24} color="#FFFFFF" />
-									<Text style={styles.seekButtonText}>+{seekDuration}s</Text>
+									activeOpacity={0.7}>
+									<Ionicons
+										name="play-forward-outline"
+										size={24}
+										color="#FFFFFF"
+									/>
+									<Text style={styles.seekButtonText}>
+										+{seekDuration}s
+									</Text>
 								</TouchableOpacity>
 							</View>
 						)}
 
 						{/* ALT ÇUBUK (PROGRESS BAR) */}
 						{!isLocked && (
-							<View style={styles.bottomBar} pointerEvents="box-none">
-								<View style={styles.bottomBarHeader} pointerEvents="box-none">
+							<View
+								style={styles.bottomBar}
+								pointerEvents="box-none">
+								<View
+									style={styles.bottomBarHeader}
+									pointerEvents="box-none">
 									<Text style={styles.timeText}>
 										{formatTime(currentTime)}
 										<Text style={styles.durationText}>
-											{" "} / {formatTime(duration)}
+											{" "}
+											/ {formatTime(duration)}
 										</Text>
 									</Text>
 
@@ -1168,10 +1245,11 @@ export default function VideoPlayer({
 										onPress={() => {
 											startHideTimer();
 											setResizeMode((prev) =>
-												prev === "contain" ? "cover" : "contain"
+												prev === "contain"
+													? "cover"
+													: "contain",
 											);
-										}}
-									>
+										}}>
 										<Ionicons
 											name={
 												resizeMode === "cover"
@@ -1182,7 +1260,9 @@ export default function VideoPlayer({
 											color="#E5E5EA"
 										/>
 										<Text style={styles.resizeButtonText}>
-											{resizeMode === "cover" ? "Sığdır" : "Doldur"}
+											{resizeMode === "cover"
+												? "Sığdır"
+												: "Doldur"}
 										</Text>
 									</TouchableOpacity>
 								</View>
@@ -1190,21 +1270,25 @@ export default function VideoPlayer({
 								<View
 									style={styles.progressContainer}
 									onLayout={(e) => {
-										progressBarLayoutRef.current = e.nativeEvent.layout;
+										progressBarLayoutRef.current =
+											e.nativeEvent.layout;
 									}}
-									{...panResponder.panHandlers}
-								>
+									{...panResponder.panHandlers}>
 									<View style={styles.progressTrack}>
 										<View
 											style={[
 												styles.progressBuffer,
-												{ width: `${bufferRatio * 100}%` },
+												{
+													width: `${bufferRatio * 100}%`,
+												},
 											]}
 										/>
 										<View
 											style={[
 												styles.progressPlayed,
-												{ width: `${progressRatio * 100}%` },
+												{
+													width: `${progressRatio * 100}%`,
+												},
 											]}
 										/>
 									</View>
@@ -1246,8 +1330,7 @@ export default function VideoPlayer({
 							? styles.doubleTapLeft
 							: styles.doubleTapRight,
 					]}
-					pointerEvents="none"
-				>
+					pointerEvents="none">
 					<Ionicons
 						name={
 							doubleTapInfo.type === "rewind"
@@ -1270,7 +1353,9 @@ export default function VideoPlayer({
 				<View style={styles.centerLoading} pointerEvents="none">
 					<ActivityIndicator size="large" color="#FF3B30" />
 					<Text style={styles.loadingText}>
-						{isLoading ? "Kaynak yükleniyor..." : "Ara belleğe alınıyor..."}
+						{isLoading
+							? "Kaynak yükleniyor..."
+							: "Ara belleğe alınıyor..."}
 					</Text>
 				</View>
 			)}
@@ -1338,7 +1423,9 @@ export default function VideoPlayer({
 				onUpdateSubtitleOffset={handleUpdateSubtitleOffset}
 				audioTracks={availableAudioTracks}
 				selectedAudioTrack={selectedAudioTrackIndex}
-				onSelectAudioTrack={(index) => setSelectedAudioTrackIndex(index)}
+				onSelectAudioTrack={(index) =>
+					setSelectedAudioTrackIndex(index)
+				}
 			/>
 		</View>
 	);
