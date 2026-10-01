@@ -905,6 +905,7 @@ export async function getContentWatchProgress(content) {
 					duration: continueEpisode.duration || 0,
 					progress: continueEpisode.progress || 0,
 					url: continueEpisode.url,
+					updatedAt: continueEpisode.updatedAt || continueEpisode.watchedAt,
 				};
 			}
 
@@ -982,6 +983,7 @@ export async function getContentWatchProgress(content) {
 					duration: continueMovie.duration,
 					progress: continueMovie.progress,
 					url: continueMovie.url,
+					updatedAt: continueMovie.updatedAt || continueMovie.watchedAt,
 				};
 			}
 
@@ -999,6 +1001,8 @@ export async function getContentWatchProgress(content) {
 					status: "completed",
 					completedItem: completedMovie,
 					progress: 1.0,
+					duration: completedMovie.duration || 0,
+					updatedAt: completedMovie.watchedAt || completedMovie.updatedAt,
 				};
 			}
 
@@ -1034,7 +1038,11 @@ export async function getSeriesEpisodesProgress(seriesId, seriesTitle) {
 				(titleLower && item.title?.toLowerCase().trim() === titleLower);
 
 			if (matchesSeries && (item.isCompleted || (item.progress && item.progress >= 0.9))) {
-				const info = { status: "completed", progress: 1.0 };
+				const info = {
+					status: "completed",
+					progress: 1.0,
+					duration: item.duration || 0,
+				};
 				if (item.url) {
 					result[item.url] = info;
 				}

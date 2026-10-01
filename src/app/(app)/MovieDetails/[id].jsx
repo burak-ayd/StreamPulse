@@ -1,6 +1,5 @@
 import { useThemeContext } from "@/context/ThemeContext";
 import { fetchPluginDetail } from "@/services/api";
-import { formatTime } from "@/utils/formatters";
 import {
 	getContentLibraryStatus,
 	getContentWatchProgress,
@@ -606,63 +605,7 @@ export default function MovieDetailsScreen() {
 						<MetadataSection content={content} />
 					)}
 
-					{/* Kaldığın Yerden Devam Et Bilgi Çubuğu */}
-					{watchProgress?.status === "in_progress" && (
-						<View
-							style={[
-								styles.continueWatchingBanner,
-								{
-									backgroundColor: surfaceBg,
-									borderColor: "rgba(229, 9, 20, 0.4)",
-								},
-							]}>
-							<View style={styles.continueBannerLeft}>
-								<View style={styles.continueBannerIconWrapper}>
-									<Ionicons
-										name="time"
-										size={17}
-										color="#E50914"
-									/>
-								</View>
-								<View style={styles.continueBannerTexts}>
-									<Text
-										style={[
-											styles.continueBannerTitle,
-											{ color: colors.text },
-										]}
-										numberOfLines={1}>
-										{isSeries &&
-										watchProgress.season &&
-										watchProgress.episode
-											? `${watchProgress.season}. Sezon ${watchProgress.episode}. Bölüm${watchProgress.episodeTitle ? ` - ${watchProgress.episodeTitle}` : ""}`
-											: "İzlemeye Devam Et"}
-									</Text>
-									<Text
-										style={[
-											styles.continueBannerSubtext,
-											{ color: colors.textSecondary },
-										]}>
-										{formatTime(watchProgress.currentTime)}
-										{watchProgress.duration > 0
-											? ` / ${formatTime(watchProgress.duration)} (%${Math.round((watchProgress.progress || 0) * 100)})`
-											: ""}
-									</Text>
-								</View>
-							</View>
-							<View style={styles.continueBannerTrack}>
-								<View
-									style={[
-										styles.continueBannerFill,
-										{
-											width: `${Math.min(100, Math.max(6, Math.round((watchProgress.progress || 0) * 100)))}%`,
-										},
-									]}
-								/>
-							</View>
-						</View>
-					)}
-
-					{/* Eylem Butonları (Hemen Şimdi İzle / Kaldığın Yerden Devam Et / Tekrar İzle + Listem, Fragman, Favori, İndir) */}
+					{/* Eylem Butonları (Kaldığın Yerden Devam Et Kartı / Hemen Şimdi İzle + Listem, Favori, İndir, Fragman) */}
 					{DETAIL_SECTIONS_CONFIG.showActionButtons && (
 						<ActionButtons
 							content={content}
@@ -1217,52 +1160,5 @@ const styles = StyleSheet.create({
 		shadowRadius: 8,
 		elevation: 8,
 		zIndex: 99,
-	},
-
-	/* Kaldığın Yerden Devam Et Bilgi Çubuğu */
-	continueWatchingBanner: {
-		borderRadius: 14,
-		borderWidth: 1,
-		padding: 12,
-		marginBottom: 14,
-	},
-	continueBannerLeft: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 10,
-		marginBottom: 8,
-	},
-	continueBannerIconWrapper: {
-		width: 30,
-		height: 30,
-		borderRadius: 15,
-		backgroundColor: "rgba(229, 9, 20, 0.15)",
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	continueBannerTexts: {
-		flex: 1,
-	},
-	continueBannerTitle: {
-		fontSize: 13,
-		fontWeight: "700",
-		letterSpacing: -0.2,
-	},
-	continueBannerSubtext: {
-		fontSize: 11,
-		fontWeight: "500",
-		marginTop: 2,
-	},
-	continueBannerTrack: {
-		width: "100%",
-		height: 4,
-		borderRadius: 2,
-		backgroundColor: "rgba(255, 255, 255, 0.12)",
-		overflow: "hidden",
-	},
-	continueBannerFill: {
-		height: "100%",
-		borderRadius: 2,
-		backgroundColor: "#E50914",
 	},
 });

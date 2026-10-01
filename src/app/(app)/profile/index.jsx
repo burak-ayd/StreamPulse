@@ -1,6 +1,6 @@
+import ContinueWatchingCard from "@/components/content/ContinueWatchingCard";
 import { WATCH_HISTORY } from "@/constants/data";
 import { useThemeContext } from "@/context/ThemeContext";
-import { Ionicons } from "@react-native-vector-icons/ionicons";
 import {
 	getContinueWatching,
 	getFavorites,
@@ -8,9 +8,14 @@ import {
 	getWatchHistory,
 	removeContinueWatching,
 } from "@/utils/storage";
-import ContinueWatchingCard from "@/components/content/ContinueWatchingCard";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
-import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import {
+	Stack,
+	useFocusEffect,
+	useLocalSearchParams,
+	useRouter,
+} from "expo-router";
 import { useCallback, useState } from "react";
 import {
 	Dimensions,
@@ -109,15 +114,6 @@ export default function ProfileScreen() {
 					<Text style={[styles.topBarTitle, { color: colors.text }]}>
 						Profil
 					</Text>
-					<TouchableOpacity
-						onPress={() => router.push("/settings")}
-						style={styles.settingsButton}>
-						<Ionicons
-							name="settings-outline"
-							size={22}
-							color={colors.text}
-						/>
-					</TouchableOpacity>
 				</View>
 
 				<ScrollView
@@ -359,7 +355,8 @@ export default function ProfileScreen() {
 											styles.emptyText,
 											{ color: colors.textSecondary },
 										]}>
-										Kaldığınız yerden devam edebileceğiniz içerik bulunmuyor
+										Kaldığınız yerden devam edebileceğiniz
+										içerik bulunmuyor
 									</Text>
 								</View>
 							) : (
@@ -382,7 +379,8 @@ export default function ProfileScreen() {
 															"",
 														poster: it.poster,
 														id: it.id,
-														type: it.type || "movie",
+														type:
+															it.type || "movie",
 														seriesId: it.seriesId,
 														season: it.season,
 														episode: it.episode,
@@ -400,7 +398,9 @@ export default function ProfileScreen() {
 										}}
 										onRemove={async (id) => {
 											const updated =
-												await removeContinueWatching(id);
+												await removeContinueWatching(
+													id,
+												);
 											setContinueWatching(updated);
 										}}
 									/>
@@ -441,7 +441,10 @@ export default function ProfileScreen() {
 										<TouchableOpacity
 											style={[
 												styles.gridItem,
-												{ backgroundColor: colors.cardBg },
+												{
+													backgroundColor:
+														colors.cardBg,
+												},
 											]}
 											onPress={() =>
 												router.push(

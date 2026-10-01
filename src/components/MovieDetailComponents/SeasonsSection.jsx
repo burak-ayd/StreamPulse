@@ -16,6 +16,58 @@ import {
 import { getDownloads, saveDownloadItem } from "@/utils/storage";
 import { formatTime } from "@/utils/formatters";
 
+/**
+ * Format episode duration to Turkish string (e.g., "2 saat 21 dakika" or "45 dakika")
+ */
+function getEpisodeDurationTurkish(ep, epProgress, fallbackMinutes) {
+	if (ep?.duration && typeof ep.duration === "string") {
+		if (
+			ep.duration.includes("saat") ||
+			ep.duration.includes("dakika") ||
+			ep.duration.includes("dk")
+		) {
+			return ep.duration;
+		}
+	}
+
+	const raw =
+		ep?.duration ||
+		ep?.runtime ||
+		ep?.time ||
+		epProgress?.duration ||
+		(fallbackMinutes ? fallbackMinutes * 60 : null);
+
+	if (!raw) return null;
+
+	if (typeof raw === "number") {
+		const totalSecs = raw > 300 ? raw : raw * 60;
+		const hours = Math.floor(totalSecs / 3600);
+		const mins = Math.floor((totalSecs % 3600) / 60);
+		if (hours > 0) {
+			return `${hours} saat ${mins < 10 ? "0" : ""}${mins} dakika`;
+		}
+		return `${mins} dakika`;
+	}
+
+	if (typeof raw === "string") {
+		if (raw.includes(":")) {
+			const parts = raw.split(":").map(Number);
+			if (parts.length === 3) {
+				const hours = parts[0];
+				const mins = parts[1];
+				if (hours > 0) {
+					return `${hours} saat ${mins < 10 ? "0" : ""}${mins} dakika`;
+				}
+				return `${mins} dakika`;
+			} else if (parts.length === 2) {
+				return `${parts[0]} dakika`;
+			}
+		}
+	}
+
+	return null;
+}
+
 export default function SeasonsSection({
 	seasons,
 	episodes,
@@ -444,33 +496,63 @@ export default function SeasonsSection({
 					const isCompleted = epProgress?.status === "completed";
 					const isInProgress = epProgress?.status === "in_progress";
 
+					const isDark = theme === "dark";
+					const epDurationFormatted = getEpisodeDurationTurkish(
+						ep,
+						epProgress,
+						content?.runtime_minutes,
+					);
+
 					return (
 						<TouchableOpacity
 							key={ep.url || `${selectedSeason}-${epNumber}-${index}`}
-							style={styles.episodeRow}
+							style={[
+								styles.episodeCard,
+								{
+									backgroundColor: isDark
+										? isInProgress
+											? "#131823"
+											: "#10141D"
+										: isInProgress
+											? "#fff5f5"
+											: "#ffffff",
+									borderColor: isInProgress
+										? "rgba(229, 9, 20, 0.55)"
+										: isDark
+											? "rgba(255, 255, 255, 0.08)"
+											: "rgba(0, 0, 0, 0.08)",
+									borderWidth: isInProgress ? 1.5 : 1,
+								},
+								isInProgress && styles.episodeCardActive,
+							]}
 							onPress={() => handleEpisodeClick(ep, index)}
-							activeOpacity={0.7}>
-							{/* Sol: Play / Tik İkonu */}
+							activeOpacity={0.75}>
+							{/* Sol: Play / Tik İkonu (w-7 h-7 rounded-full) */}
 							<View
 								style={[
 									styles.playIconContainer,
-									isCompleted && styles.completedIconContainer,
-									isInProgress && styles.inProgressIconContainer,
+									{
+										backgroundColor: isInProgress
+											? "#E50914"
+											: isDark
+												? "#1e293b"
+												: "#f1f5f9",
+									},
+									isInProgress && styles.playIconActiveGlow,
 								]}>
 								<Ionicons
 									name={
 										isCompleted
-											? "checkmark"
+											? "checkmark-circle"
 											: "play"
 									}
-									size={isCompleted ? 13 : 12}
+									size={isCompleted ? 17 : 13}
 									color={
-										isCompleted
-											? "#10b981"
-											: isInProgress
-												? "#38bdf8"
-												: colors.primary
+										isInProgress
+											? "#ffffff"
+											: "#E50914"
 									}
+									style={!isCompleted ? styles.playIconOffset : null}
 								/>
 							</View>
 
@@ -480,26 +562,67 @@ export default function SeasonsSection({
 									<Text
 										style={[
 											styles.episodeTitleText,
-											{ color: isCompleted ? colors.textSecondary : colors.text },
+											{
+												color: isDark ? "#ffffff" : "#0f172a",
+												fontWeight: isInProgress ? "700" : "600",
+											},
 										]}
 										numberOfLines={1}>
 										{epDisplayTitle}
 									</Text>
 									{isCompleted && (
-										<View style={styles.completedBadge}>
-											<Text style={styles.completedBadgeText}>İzlendi</Text>
+										<View
+											style={[
+												styles.completedBadge,
+												{
+													backgroundColor: isDark
+														? "rgba(56, 189, 248, 0.16)"
+														: "rgba(56, 189, 248, 0.12)",
+													borderColor: isDark
+														? "rgba(56, 189, 248, 0.3)"
+														: "rgba(56, 189, 248, 0.25)",
+													borderWidth: 0.5,
+												},
+											]}>
+											<Text
+												style={[
+													styles.completedBadgeText,
+													{
+														color: isDark
+															? "#38bdf8"
+															: "#0284c7",
+													},
+												]}>
+												TAMAMLANDI
+											</Text>
+										</View>
+									)}
+									{isInProgress && (
+										<View style={styles.inProgressBadge}>
+											<Text style={styles.inProgressBadgeText}>
+												İZLENİYOR
+											</Text>
 										</View>
 									)}
 								</View>
 
-								{isInProgress && epProgress.currentTime > 0 && (
+								{/* Süre / İlerleme Satırı */}
+								{isInProgress ? (
 									<View style={styles.episodeProgressRow}>
-										<View style={styles.miniProgressBarTrack}>
+										<View
+											style={[
+												styles.miniProgressBarTrack,
+												{
+													backgroundColor: isDark
+														? "#334155"
+														: "#e2e8f0",
+												},
+											]}>
 											<View
 												style={[
 													styles.miniProgressBarFill,
 													{
-														width: `${Math.min(100, Math.max(8, Math.round((epProgress.progress || 0) * 100)))}%`,
+														width: `${Math.min(100, Math.max(8, Math.round((epProgress.progress || (epProgress.duration > 0 ? epProgress.currentTime / epProgress.duration : 0.18)) * 100)))}%`,
 													},
 												]}
 											/>
@@ -511,25 +634,49 @@ export default function SeasonsSection({
 												: ""}
 										</Text>
 									</View>
+								) : (
+									<Text
+										style={[
+											styles.episodeDurationText,
+											{ color: isDark ? "#94a3b8" : "#64748b" },
+										]}
+										numberOfLines={1}>
+										{epDurationFormatted || `${selectedSeason}. Sezon ${epNumber}. Bölüm`}
+									</Text>
 								)}
 							</View>
 
-							{/* Sağ: İndir Butonu (Gelecek özellik için hazırlık) */}
+							{/* Sağ: İndir Butonu (w-8 h-8 rounded-full) */}
 							<TouchableOpacity
-								style={styles.downloadButton}
+								style={[
+									styles.downloadButton,
+									{
+										backgroundColor: isDark
+											? "#1e293b"
+											: "#f1f5f9",
+									},
+								]}
 								onPress={() =>
 									handleDownloadEpisode(ep, epNumber, epDisplayTitle)
 								}
-								activeOpacity={0.6}
-								hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+								activeOpacity={0.65}
+								hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
 								<Ionicons
 									name={
 										isQueued
-											? "checkmark-circle"
+											? "checkmark"
 											: "download-outline"
 									}
-									size={21}
-									color={isQueued ? "#10b981" : colors.textSecondary}
+									size={15}
+									color={
+										isQueued
+											? "#10b981"
+											: isInProgress
+												? colors.text
+												: isDark
+													? "#94a3b8"
+													: "#64748b"
+									}
 								/>
 							</TouchableOpacity>
 						</TouchableOpacity>
@@ -704,42 +851,47 @@ const styles = StyleSheet.create({
 		fontSize: 13,
 		fontWeight: "600",
 	},
-	/* Bölüm Listesi (Minimalist, tam ekran görüntüsü stili) */
+	/* Bölüm Listesi (Card tabanlı, stitch_unified_cinema_ui_redesigna stili) */
 	episodesList: {
-		gap: 4,
+		gap: 8,
 	},
-	episodeRow: {
+	episodeCard: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingVertical: 14,
-		paddingHorizontal: 4,
+		paddingVertical: 12,
+		paddingHorizontal: 12,
+		borderRadius: 14,
+		justifyContent: "space-between",
+		gap: 12,
+	},
+	episodeCardActive: {
+		shadowColor: "#E50914",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.18,
+		shadowRadius: 6,
+		elevation: 3,
 	},
 	playIconContainer: {
-		width: 20,
-		alignItems: "flex-start",
-		justifyContent: "center",
-		marginRight: 10,
-	},
-	completedIconContainer: {
+		width: 28,
+		height: 28,
+		borderRadius: 14,
 		alignItems: "center",
 		justifyContent: "center",
-		width: 20,
-		height: 20,
-		borderRadius: 10,
-		backgroundColor: "rgba(16, 185, 129, 0.15)",
-		marginRight: 10,
+		flexShrink: 0,
 	},
-	inProgressIconContainer: {
-		alignItems: "center",
-		justifyContent: "center",
-		width: 20,
-		height: 20,
-		borderRadius: 10,
-		backgroundColor: "rgba(56, 189, 248, 0.15)",
-		marginRight: 10,
+	playIconActiveGlow: {
+		shadowColor: "#E50914",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.4,
+		shadowRadius: 4,
+		elevation: 3,
+	},
+	playIconOffset: {
+		marginLeft: 1.5,
 	},
 	episodeTitleContainer: {
 		flex: 1,
+		minWidth: 0,
 		justifyContent: "center",
 	},
 	episodeTitleRow: {
@@ -748,24 +900,33 @@ const styles = StyleSheet.create({
 		gap: 8,
 	},
 	episodeTitleText: {
-		fontSize: 14,
-		fontWeight: "500",
+		fontSize: 12.5,
 		letterSpacing: -0.2,
 		flexShrink: 1,
 	},
 	completedBadge: {
-		backgroundColor: "rgba(16, 185, 129, 0.15)",
 		paddingHorizontal: 6,
-		paddingVertical: 1,
-		borderRadius: 6,
-		borderWidth: 0.5,
-		borderColor: "rgba(16, 185, 129, 0.35)",
+		paddingVertical: 1.5,
+		borderRadius: 4,
 	},
 	completedBadgeText: {
-		color: "#10b981",
-		fontSize: 10,
-		fontWeight: "700",
-		letterSpacing: 0.2,
+		fontSize: 9,
+		fontWeight: "800",
+		letterSpacing: 0.4,
+		textTransform: "uppercase",
+	},
+	inProgressBadge: {
+		backgroundColor: "#E50914",
+		paddingHorizontal: 6,
+		paddingVertical: 1.5,
+		borderRadius: 4,
+	},
+	inProgressBadgeText: {
+		color: "#ffffff",
+		fontSize: 9,
+		fontWeight: "800",
+		letterSpacing: 0.4,
+		textTransform: "uppercase",
 	},
 	episodeProgressRow: {
 		flexDirection: "row",
@@ -774,27 +935,33 @@ const styles = StyleSheet.create({
 		marginTop: 4,
 	},
 	miniProgressBarTrack: {
-		width: 50,
-		height: 3,
+		width: 75,
+		height: 4,
 		borderRadius: 2,
-		backgroundColor: "rgba(255, 255, 255, 0.15)",
 		overflow: "hidden",
 	},
 	miniProgressBarFill: {
 		height: "100%",
 		borderRadius: 2,
-		backgroundColor: "#38bdf8",
+		backgroundColor: "#E50914",
 	},
 	episodeProgressText: {
-		fontSize: 11,
-		fontWeight: "600",
-		color: "#38bdf8",
+		fontSize: 10,
+		fontWeight: "700",
+		color: "#E50914",
+	},
+	episodeDurationText: {
+		fontSize: 10.5,
+		fontWeight: "500",
+		marginTop: 2,
 	},
 	downloadButton: {
-		paddingLeft: 12,
-		paddingRight: 4,
+		width: 32,
+		height: 32,
+		borderRadius: 16,
 		justifyContent: "center",
 		alignItems: "center",
+		flexShrink: 0,
 	},
 	/* Modal (Dropdown Açılır Menü) */
 	modalOverlay: {
