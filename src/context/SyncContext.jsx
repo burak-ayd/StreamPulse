@@ -167,6 +167,16 @@ export function SyncProvider({ children }) {
 	}, [isLoggedIn]);
 
 	// ─── 7. Yerel Veri Değişikliklerinde Debounce'lu Push ────────
+	//
+	// ⚠️ Yalnızca KULLANICI kaynaklı değişiklikler push tetikler.
+	// `applyPullData()` uzak veriyi AsyncStorage'a yazdıktan sonra
+	// `{ source: "sync" }` ile bildirim yayınlar. O bildirimi de tetikleyici
+	// kabul edersek döngü kapanmaz:
+	//
+	//     pull → yaz → bildirim → schedulePush → pull → yaz → ...
+	//
+	// Sonsuz döngü (birim zamanda tam döküm + push) hem pili hem veritabanını
+	// yakar, hem de UI'ın veri geldikten sonra hiç güncellenmemesine yol açar.
 	useEffect(() => {
 		if (!isLoggedIn) return;
 
@@ -179,7 +189,8 @@ export function SyncProvider({ children }) {
 			"user_search_history",
 		];
 
-		const unsub = subscribeStorage(syncableKeys, () => {
+		const unsub = subscribeStorage(syncableKeys, (_key, _data, meta) => {
+			if (meta?.source === "sync") return; // uzak veri uygulandı, geri itme
 			schedulePush();
 		});
 

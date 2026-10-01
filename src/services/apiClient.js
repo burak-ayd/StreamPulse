@@ -11,10 +11,10 @@
  */
 
 import {
+	clearTokens,
 	getAccessToken,
 	getRefreshToken,
 	saveTokens,
-	clearTokens,
 } from "./token";
 
 const API_BASE_URL =
@@ -69,7 +69,7 @@ async function refreshSession() {
 /**
  * Kimlik doğrulamalı fetch isteği.
  *
- * @param {string} path - URL yolu (örn: "/api/sync/push")
+ * @param {string} path - URL yolu (örn: "/sync/push")
  * @param {RequestInit} options - fetch seçenekleri
  * @param {object} config - Ek yapılandırma
  * @param {boolean} config.skipAuth - Token ekleme (public endpoint)
@@ -159,10 +159,7 @@ export async function login(data) {
 	const body = await response.json();
 
 	if (!response.ok) {
-		throw new AuthError(
-			body.detail || "Giriş başarısız.",
-			response.status,
-		);
+		throw new AuthError(body.detail || "Giriş başarısız.", response.status);
 	}
 
 	await saveTokens({

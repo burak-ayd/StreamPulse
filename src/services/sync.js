@@ -271,7 +271,7 @@ async function applyPullData(pullData) {
 			const localList = localRaw ? JSON.parse(localRaw) : [];
 			const merged = mergeFavorites(localList, favRecords);
 			await AsyncStorage.setItem("user_favorites", JSON.stringify(merged));
-			notifyStorageChange("user_favorites", merged);
+			notifyStorageChange("user_favorites", merged, { source: "sync" });
 		} catch (e) {
 			console.error("Pull favori birleştirme hatası:", e);
 		}
@@ -284,7 +284,7 @@ async function applyPullData(pullData) {
 			const localList = localRaw ? JSON.parse(localRaw) : [];
 			const merged = mergeLibraryList(localList, wlRecords, "watchlist");
 			await AsyncStorage.setItem("user_watchlist", JSON.stringify(merged));
-			notifyStorageChange("user_watchlist", merged);
+			notifyStorageChange("user_watchlist", merged, { source: "sync" });
 		} catch (e) {
 			console.error("Pull watchlist birleştirme hatası:", e);
 		}
@@ -297,7 +297,7 @@ async function applyPullData(pullData) {
 			const localList = localRaw ? JSON.parse(localRaw) : [];
 			const merged = mergeLibraryList(localList, whRecords, "watch_history");
 			await AsyncStorage.setItem("user_watch_history", JSON.stringify(merged));
-			notifyStorageChange("user_watch_history", merged);
+			notifyStorageChange("user_watch_history", merged, { source: "sync" });
 		} catch (e) {
 			console.error("Pull izleme geçmişi birleştirme hatası:", e);
 		}
@@ -310,7 +310,7 @@ async function applyPullData(pullData) {
 			const localList = localRaw ? JSON.parse(localRaw) : [];
 			const merged = mergeLibraryList(localList, cwRecords, "continue_watching");
 			await AsyncStorage.setItem("user_continue_watching", JSON.stringify(merged));
-			notifyStorageChange("user_continue_watching", merged);
+			notifyStorageChange("user_continue_watching", merged, { source: "sync" });
 		} catch (e) {
 			console.error("Pull devam et birleştirme hatası:", e);
 		}
@@ -325,7 +325,7 @@ async function applyPullData(pullData) {
 			const payload = merged?.payload || merged;
 			if (payload) {
 				await AsyncStorage.setItem("app_player_settings", JSON.stringify(payload));
-				notifyStorageChange("app_player_settings", payload);
+				notifyStorageChange("app_player_settings", payload, { source: "sync" });
 			}
 		} catch (e) {
 			console.error("Pull player_settings birleştirme hatası:", e);
@@ -339,7 +339,7 @@ async function applyPullData(pullData) {
 			const remoteHistory = documents.search_history?.payload || [];
 			const merged = mergeSearchHistory(localHistory, remoteHistory);
 			await AsyncStorage.setItem("user_search_history", JSON.stringify(merged));
-			notifyStorageChange("user_search_history", merged);
+			notifyStorageChange("user_search_history", merged, { source: "sync" });
 		} catch (e) {
 			console.error("Pull search_history birleştirme hatası:", e);
 		}

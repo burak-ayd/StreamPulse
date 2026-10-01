@@ -8,6 +8,7 @@ import {
 	saveSeriesTotalEpisodes,
 	toggleFavorite,
 } from "@/utils/storage";
+import { useReactiveData } from "@/utils/storageListener";
 import ListSelectModal from "@components/modal/ListSelectModal";
 import { useContentDetails } from "@hooks/useContentDetails";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -356,6 +357,16 @@ export default function MovieDetailsScreen() {
 				cleanup?.();
 			};
 		}, [loadWatchProgress]),
+	);
+
+	// Sync gelen izleme durumunu odak değişimi olmadan da ekrana yansıt.
+	// (loadWatchProgress bir temizleme fonksiyonu döndürür; burada yalnızca
+	//  yükleme tarafı çağrılır, cleanup useFocusEffect'ın işidir.)
+	useReactiveData(
+		useCallback(() => {
+			loadWatchProgress()?.();
+		}, [loadWatchProgress]),
+		["user_watch_history", "user_watchlist", "user_continue_watching"],
 	);
 
 	// Tür / Kategori listesi (Dram, Tarih, Epik Savaş vb.)

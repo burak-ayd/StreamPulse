@@ -9,7 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useState } from "react";
 import {
 	ActivityIndicator,
 	KeyboardAvoidingView,
@@ -76,9 +76,12 @@ export default function RegisterScreen() {
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
-			<SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+			<SafeAreaView
+				style={[styles.container, { backgroundColor: colors.bg }]}>
 				<StatusBar
-					barStyle={theme === "dark" ? "light-content" : "dark-content"}
+					barStyle={
+						theme === "dark" ? "light-content" : "dark-content"
+					}
 					backgroundColor={colors.bg}
 				/>
 				<KeyboardAvoidingView
@@ -91,28 +94,57 @@ export default function RegisterScreen() {
 						{/* Geri düğmesi */}
 						<TouchableOpacity
 							style={styles.backButton}
-							onPress={() => router.canGoBack() ? router.back() : router.replace("/(app)")}
+							onPress={() =>
+								router.canGoBack()
+									? router.back()
+									: router.replace("/(app)")
+							}
 							activeOpacity={0.7}>
-							<Ionicons name="close" size={28} color={colors.text} />
+							<Ionicons
+								name="close"
+								size={28}
+								color={colors.text}
+							/>
 						</TouchableOpacity>
 
 						{/* Başlık */}
 						<View style={styles.headerSection}>
-							<View style={[styles.iconCircle, { backgroundColor: "rgba(56, 189, 248, 0.12)" }]}>
-								<Ionicons name="person-add-outline" size={36} color="#38bdf8" />
+							<View
+								style={[
+									styles.iconCircle,
+									{
+										backgroundColor:
+											"rgba(56, 189, 248, 0.12)",
+									},
+								]}>
+								<Ionicons
+									name="person-add-outline"
+									size={36}
+									color="#38bdf8"
+								/>
 							</View>
-							<Text style={[styles.title, { color: colors.text }]}>
+							<Text
+								style={[styles.title, { color: colors.text }]}>
 								Hesap Oluştur
 							</Text>
-							<Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-								Favori ve listelerini tüm cihazlarında senkronize et
+							<Text
+								style={[
+									styles.subtitle,
+									{ color: colors.textSecondary },
+								]}>
+								Favori ve listelerini tüm cihazlarında
+								senkronize et
 							</Text>
 						</View>
 
 						{/* Hata mesajı */}
 						{error ? (
 							<View style={styles.errorContainer}>
-								<Ionicons name="alert-circle" size={18} color="#ef4444" />
+								<Ionicons
+									name="alert-circle"
+									size={18}
+									color="#ef4444"
+								/>
 								<Text style={styles.errorText}>{error}</Text>
 							</View>
 						) : null}
@@ -120,7 +152,11 @@ export default function RegisterScreen() {
 						{/* Form */}
 						<View style={styles.formSection}>
 							<View style={styles.inputGroup}>
-								<Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+								<Text
+									style={[
+										styles.inputLabel,
+										{ color: colors.textSecondary },
+									]}>
 									E-posta
 								</Text>
 								<View
@@ -138,9 +174,14 @@ export default function RegisterScreen() {
 										style={styles.inputIcon}
 									/>
 									<TextInput
-										style={[styles.input, { color: colors.text }]}
+										style={[
+											styles.input,
+											{ color: colors.text },
+										]}
 										placeholder="ornek@email.com"
-										placeholderTextColor={colors.textSecondary}
+										placeholderTextColor={
+											colors.textSecondary
+										}
 										value={email}
 										onChangeText={setEmail}
 										keyboardType="email-address"
@@ -152,7 +193,11 @@ export default function RegisterScreen() {
 							</View>
 
 							<View style={styles.inputGroup}>
-								<Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+								<Text
+									style={[
+										styles.inputLabel,
+										{ color: colors.textSecondary },
+									]}>
 									Kullanıcı Adı
 								</Text>
 								<View
@@ -170,9 +215,14 @@ export default function RegisterScreen() {
 										style={styles.inputIcon}
 									/>
 									<TextInput
-										style={[styles.input, { color: colors.text }]}
+										style={[
+											styles.input,
+											{ color: colors.text },
+										]}
 										placeholder="sinemasever"
-										placeholderTextColor={colors.textSecondary}
+										placeholderTextColor={
+											colors.textSecondary
+										}
 										value={username}
 										onChangeText={setUsername}
 										autoCapitalize="none"
@@ -182,7 +232,11 @@ export default function RegisterScreen() {
 							</View>
 
 							<View style={styles.inputGroup}>
-								<Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+								<Text
+									style={[
+										styles.inputLabel,
+										{ color: colors.textSecondary },
+									]}>
 									Görünen Ad (isteğe bağlı)
 								</Text>
 								<View
@@ -200,9 +254,14 @@ export default function RegisterScreen() {
 										style={styles.inputIcon}
 									/>
 									<TextInput
-										style={[styles.input, { color: colors.text }]}
+										style={[
+											styles.input,
+											{ color: colors.text },
+										]}
 										placeholder="Sinema Sever"
-										placeholderTextColor={colors.textSecondary}
+										placeholderTextColor={
+											colors.textSecondary
+										}
 										value={displayName}
 										onChangeText={setDisplayName}
 										autoCorrect={false}
@@ -211,7 +270,11 @@ export default function RegisterScreen() {
 							</View>
 
 							<View style={styles.inputGroup}>
-								<Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+								<Text
+									style={[
+										styles.inputLabel,
+										{ color: colors.textSecondary },
+									]}>
 									Parola
 								</Text>
 								<View
@@ -229,9 +292,14 @@ export default function RegisterScreen() {
 										style={styles.inputIcon}
 									/>
 									<TextInput
-										style={[styles.input, { color: colors.text }]}
+										style={[
+											styles.input,
+											{ color: colors.text },
+										]}
 										placeholder="En az 6 karakter"
-										placeholderTextColor={colors.textSecondary}
+										placeholderTextColor={
+											colors.textSecondary
+										}
 										value={password}
 										onChangeText={setPassword}
 										secureTextEntry={!showPassword}
@@ -239,10 +307,16 @@ export default function RegisterScreen() {
 										autoComplete="new-password"
 									/>
 									<TouchableOpacity
-										onPress={() => setShowPassword(!showPassword)}
+										onPress={() =>
+											setShowPassword(!showPassword)
+										}
 										style={styles.eyeButton}>
 										<Ionicons
-											name={showPassword ? "eye-off-outline" : "eye-outline"}
+											name={
+												showPassword
+													? "eye-off-outline"
+													: "eye-outline"
+											}
 											size={20}
 											color={colors.textSecondary}
 										/>
@@ -260,16 +334,25 @@ export default function RegisterScreen() {
 								disabled={isSubmitting}
 								activeOpacity={0.8}>
 								{isSubmitting ? (
-									<ActivityIndicator color="#fff" size="small" />
+									<ActivityIndicator
+										color="#fff"
+										size="small"
+									/>
 								) : (
-									<Text style={styles.primaryButtonText}>Hesap Oluştur</Text>
+									<Text style={styles.primaryButtonText}>
+										Hesap Oluştur
+									</Text>
 								)}
 							</TouchableOpacity>
 						</View>
 
 						{/* Alt link */}
 						<View style={styles.footerSection}>
-							<Text style={[styles.footerText, { color: colors.textSecondary }]}>
+							<Text
+								style={[
+									styles.footerText,
+									{ color: colors.textSecondary },
+								]}>
 								Zaten hesabın var mı?{" "}
 							</Text>
 							<TouchableOpacity
