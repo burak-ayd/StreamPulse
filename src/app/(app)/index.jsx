@@ -24,6 +24,7 @@ import {
 	removeContinueWatching,
 	saveSelectedPlatform,
 } from "@/utils/storage";
+import { useReactiveData } from "@/utils/storageListener";
 import BottomNavigation from "@components/BottomNavigation";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
@@ -88,6 +89,13 @@ export default function Index() {
 			fetchUserData();
 		}, [fetchUserData]),
 	);
+
+	// Sync gelen veriyi odak değişimi olmadan da ekrana yansıt
+	useReactiveData(fetchUserData, [
+		"user_continue_watching",
+		"user_watch_history",
+		"user_favorites",
+	]);
 
 	const fetchPlatformData = useCallback(async (platform, force = false) => {
 		if (!platform || platform.id === "none" || platform.name === "None") {

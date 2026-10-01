@@ -140,7 +140,7 @@ export async function fetchPluginDetail(pluginName, url, force = false) {
 
 	try {
 		const response = await fetch(
-			`${API_BASE_URL}/plugins/${pluginName}/detail?url=${encodeURIComponent(url)}`,
+			`${API_BASE_URL}/api/plugins/${pluginName}/detail?url=${encodeURIComponent(url)}`,
 			{
 				headers: { "Content-Type": "application/json" },
 			},
@@ -173,7 +173,7 @@ export async function fetchPlatformMainPage(
 
 	try {
 		const response = await fetch(
-			`${API_BASE_URL}/plugins/${platformName}/main-page?url=${encodeURIComponent(categoryURL)}`,
+			`${API_BASE_URL}/api/plugins/${platformName}/main-page?url=${encodeURIComponent(categoryURL)}`,
 			{
 				headers: { "Content-Type": "application/json" },
 			},
@@ -214,7 +214,7 @@ export async function fetchPlatformCategories(
 	} else {
 		try {
 			const response = await fetch(
-				`${API_BASE_URL}/plugins/${platformName}/categories`,
+				`${API_BASE_URL}/api/plugins/${platformName}/categories`,
 				{
 					headers: { "Content-Type": "application/json" },
 				},
@@ -275,7 +275,7 @@ export async function fetchPlatforms(force = false) {
 	}
 
 	try {
-		let response = await fetch(`${API_BASE_URL}/plugins`, {
+		let response = await fetch(`${API_BASE_URL}/api/plugins`, {
 			headers: { "Content-Type": "application/json" },
 		});
 		if (!response.ok) {
@@ -319,7 +319,7 @@ export async function fetchRandomContents(
 
 	try {
 		const response = await fetch(
-			`${API_BASE_URL}/plugins/${platformName}/random?count=${count}`,
+			`${API_BASE_URL}/api/plugins/${platformName}/random?count=${count}`,
 			{
 				headers: { "Content-Type": "application/json" },
 			},
@@ -370,7 +370,7 @@ export async function fetchRelatedContent(contentType, currentId) {
 export async function searchContent(query) {
 	try {
 		const response = await fetch(
-			`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`,
+			`${API_BASE_URL}/api/search?q=${encodeURIComponent(query)}`,
 			{
 				headers: { "Content-Type": "application/json" },
 			},
@@ -392,7 +392,7 @@ export async function searchContent(query) {
 export async function searchPluginContent(pluginName, query) {
 	try {
 		const response = await fetch(
-			`${API_BASE_URL}/plugins/${encodeURIComponent(pluginName)}/search?q=${encodeURIComponent(query)}`,
+			`${API_BASE_URL}/api/plugins/${encodeURIComponent(pluginName)}/search?q=${encodeURIComponent(query)}`,
 			{
 				headers: { "Content-Type": "application/json" },
 			},
@@ -415,7 +415,7 @@ export async function searchPluginContent(pluginName, query) {
  */
 export async function extractVideoSources(url) {
 	try {
-		const response = await fetch(`${API_BASE_URL}/extract`, {
+		const response = await fetch(`${API_BASE_URL}/api/extract`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ url }),

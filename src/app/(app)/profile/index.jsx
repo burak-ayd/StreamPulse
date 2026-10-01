@@ -10,6 +10,7 @@ import {
 	removeContinueWatching,
 	resolvePluginName,
 } from "@/utils/storage";
+import { useReactiveData } from "@/utils/storageListener";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import {
@@ -79,6 +80,14 @@ export default function ProfileScreen() {
 			loadData();
 		}, [loadData]),
 	);
+
+	// Sync gelen veriyi odak değişimi olmadan da ekrana yansıt
+	useReactiveData(loadData, [
+		"user_favorites",
+		"user_watchlist",
+		"user_watch_history",
+		"user_continue_watching",
+	]);
 
 	const handleBack = () => {
 		router.back();

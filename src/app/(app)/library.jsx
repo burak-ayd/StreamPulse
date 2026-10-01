@@ -13,6 +13,7 @@ import {
 	toggleFavorite,
 	toggleWatchlist,
 } from "@/utils/storage";
+import { useReactiveData } from "@/utils/storageListener";
 import { fetchPluginDetail } from "@/services/api";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -117,6 +118,14 @@ export default function LibraryScreen() {
 			loadLibraryData();
 		}, [loadLibraryData]),
 	);
+
+	// Sync gelen veriyi odak değişimi olmadan da ekrana yansıt
+	useReactiveData(loadLibraryData, [
+		"user_favorites",
+		"user_watchlist",
+		"user_watch_history",
+		"user_continue_watching",
+	]);
 
 	// Tamamlanan içerikleri grupla (Diziler için bölümleri toplayıp x/y bölüm olarak sun)
 	const completedItemsGrouped = useMemo(() => {
