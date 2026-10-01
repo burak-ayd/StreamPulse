@@ -1,18 +1,20 @@
+import { useThemeContext } from "@/context/ThemeContext";
 import { fetchPluginDetail } from "@/services/api";
+import { formatTime } from "@/utils/formatters";
 import {
 	getContentLibraryStatus,
-	isFavorite,
-	isInWatchlist,
+	getContentWatchProgress,
+	getSelectedPlatform,
+	getSeriesEpisodesProgress,
+	saveSeriesTotalEpisodes,
 	toggleFavorite,
-	toggleWatchlist,
 } from "@/utils/storage";
-import { useThemeContext } from "@context/ThemeContext";
+import ListSelectModal from "@components/modal/ListSelectModal";
 import { useContentDetails } from "@hooks/useContentDetails";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import ListSelectModal from "@components/modal/ListSelectModal";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	Alert,
 	Linking,
@@ -59,21 +61,67 @@ export const DETAIL_SECTIONS_CONFIG = {
 export default function MovieDetailsScreen() {
 	const params = useLocalSearchParams();
 	const id = params.id;
-	const passedMovie = params.movieData
-		? typeof params.movieData === "string"
-			? JSON.parse(params.movieData)
-			: params.movieData
-		: null;
+	const passedMovie = useMemo(() => {
+		if (!params.movieData) return null;
+		try {
+			return typeof params.movieData === "string"
+				? JSON.parse(params.movieData)
+				: params.movieData;
+		} catch (_e) {
+			return null;
+		}
+	}, [params.movieData]);
 
 	const { colors, theme } = useThemeContext();
 
-	const pluginName = passedMovie?.plugin || params.plugin;
-	const movieUrl = passedMovie?.url || params.url;
-	const isPlugin = Boolean(pluginName && movieUrl);
+	const [selectedPlatformName, setSelectedPlatformName] = useState(null);
+
+	useEffect(() => {
+		getSelectedPlatform()
+			.then((p) => {
+				if (p?.name) setSelectedPlatformName(p.name);
+			})
+			.catch(() => {});
+	}, []);
+
+	// Dizi için passedMovie'deki seriesUrl veya seriesId, yoksa normal url
+	const movieUrl = useMemo(() => {
+		if (passedMovie?.seriesUrl) return passedMovie.seriesUrl;
+		if (
+			passedMovie?.type === "episode" &&
+			passedMovie?.seriesId &&
+			(String(passedMovie.seriesId).startsWith("http") ||
+				String(passedMovie.seriesId).startsWith("/"))
+		) {
+			return passedMovie.seriesId;
+		}
+		if (passedMovie?.url) return passedMovie.url;
+		if (params.url) return params.url;
+		if (
+			id &&
+			(String(id).startsWith("http") || String(id).startsWith("/"))
+		) {
+			return id;
+		}
+		return null;
+	}, [passedMovie, params.url, id]);
+
+	const pluginName =
+		passedMovie?.plugin || params.plugin || selectedPlatformName;
 
 	const [pluginDetail, setPluginDetail] = useState(null);
-	const [pluginLoading, setPluginLoading] = useState(isPlugin);
+	const [pluginLoading, setPluginLoading] = useState(Boolean(movieUrl));
 	const [activeTab, setActiveTab] = useState("overview"); // 'overview' | 'episodes' | 'related'
+
+	// Sadece ve sadece statik mock kimlikler için useContentDetails çağrılır
+	const isPureStaticContent = Boolean(
+		!movieUrl &&
+			!passedMovie &&
+			id &&
+			!String(id).startsWith("http") &&
+			!String(id).includes("/") &&
+			!String(id).includes("_"),
+	);
 
 	// Normal statik / CMS içerikleri için hook (plugin değilse çağrılır)
 	const {
@@ -81,13 +129,15 @@ export default function MovieDetailsScreen() {
 		loading: apiLoading,
 		error: apiError,
 		refetch: apiRefetch,
-	} = useContentDetails(isPlugin ? null : id);
+	} = useContentDetails(isPureStaticContent ? id : null);
 
 	// Plugin içerik detayını backend'den çek (/api/plugins/{name}/detail?url=...)
 	useEffect(() => {
 		let isMounted = true;
-		if (isPlugin) {
-			setPluginLoading(true);
+		if (movieUrl && pluginName) {
+			queueMicrotask(() => {
+				if (isMounted) setPluginLoading(true);
+			});
 			fetchPluginDetail(pluginName, movieUrl)
 				.then((res) => {
 					if (isMounted && res) {
@@ -100,11 +150,15 @@ export default function MovieDetailsScreen() {
 				.finally(() => {
 					if (isMounted) setPluginLoading(false);
 				});
+		} else if (!movieUrl) {
+			queueMicrotask(() => {
+				if (isMounted) setPluginLoading(false);
+			});
 		}
 		return () => {
 			isMounted = false;
 		};
-	}, [pluginName, movieUrl, isPlugin]);
+	}, [pluginName, movieUrl]);
 
 	// Tüm verileri birleştir: pluginDetail > apiContent > passedMovie
 	const content = useMemo(() => {
@@ -253,8 +307,10 @@ export default function MovieDetailsScreen() {
 		return null;
 	}, [pluginDetail, apiContent, passedMovie, id, pluginName, movieUrl]);
 
-	const loading = isPlugin ? pluginLoading && !content : apiLoading;
-	const error = isPlugin ? null : apiError;
+	const loading = isPureStaticContent
+		? apiLoading
+		: pluginLoading && !content && !passedMovie;
+	const error = isPureStaticContent ? apiError : null;
 
 	const isSeries = Boolean(
 		content?.content_type === "series" ||
@@ -263,6 +319,44 @@ export default function MovieDetailsScreen() {
 		passedMovie?.is_series ||
 		passedMovie?.category?.toLowerCase()?.includes("dizi") ||
 		content?.title?.toLowerCase()?.includes("sezon"),
+	);
+
+	// Kaldığın Yerden Devam Et ve Bölüm Tamamlanma Durumları
+	const [watchProgress, setWatchProgress] = useState(null);
+	const [episodesProgress, setEpisodesProgress] = useState({});
+
+	const loadWatchProgress = useCallback(() => {
+		if (!content) return;
+		let isMounted = true;
+		getContentWatchProgress(content)
+			.then((res) => {
+				if (isMounted) setWatchProgress(res);
+			})
+			.catch((err) =>
+				console.warn("Watch progress yükleme hatası:", err),
+			);
+
+		if (isSeries) {
+			getSeriesEpisodesProgress(content.id || content.url, content.title)
+				.then((res) => {
+					if (isMounted) setEpisodesProgress(res || {});
+				})
+				.catch((err) =>
+					console.warn("Bölüm ilerleme yükleme hatası:", err),
+				);
+		}
+		return () => {
+			isMounted = false;
+		};
+	}, [content, isSeries]);
+
+	useFocusEffect(
+		useCallback(() => {
+			const cleanup = loadWatchProgress();
+			return () => {
+				cleanup?.();
+			};
+		}, [loadWatchProgress]),
 	);
 
 	// Tür / Kategori listesi (Dram, Tarih, Epik Savaş vb.)
@@ -305,7 +399,15 @@ export default function MovieDetailsScreen() {
 			);
 		}
 		return 0;
-	}, [content?.seasons]);
+	}, [content]);
+
+	useEffect(() => {
+		if (totalEpisodesCount > 0) {
+			if (content?.id) saveSeriesTotalEpisodes(content.id, totalEpisodesCount);
+			if (content?.url) saveSeriesTotalEpisodes(content.url, totalEpisodesCount);
+			if (content?.title) saveSeriesTotalEpisodes(content.title, totalEpisodesCount);
+		}
+	}, [totalEpisodesCount, content?.id, content?.url, content?.title]);
 
 	// Backend'den gelen Ses ve Altyazı seçeneklerini tespit et (varsa gösterilecek)
 	const audioSubtitleOptions = useMemo(() => {
@@ -379,23 +481,26 @@ export default function MovieDetailsScreen() {
 	const [isFav, setIsFav] = useState(false);
 	const [inWatchlist, setInWatchlist] = useState(false);
 	const [watchlistStatus, setWatchlistStatus] = useState(null); // 'watching' | 'planned' | 'completed' | null
-	const [isListSelectModalVisible, setIsListSelectModalVisible] = useState(false);
+	const [isListSelectModalVisible, setIsListSelectModalVisible] =
+		useState(false);
 	const [selectedSeason, setSelectedSeason] = useState(
 		passedMovie?.initialSeason ? String(passedMovie.initialSeason) : null,
 	);
 
 	const movieItem = useMemo(() => {
 		if (!content) return null;
-		const targetId = content.id || content.url;
+		const targetId = content.id || content.url || id;
+		const targetUrl = content.url || movieUrl;
 		return {
 			id: targetId,
 			title: content.title,
 			poster: content.poster_url || content.backdrop_url,
 			type: isSeries ? "series" : "movie",
-			plugin: content.plugin,
-			url: content.url,
+			plugin: content.plugin || pluginName,
+			url: targetUrl,
+			seriesUrl: isSeries ? targetUrl : undefined,
 		};
-	}, [content, isSeries]);
+	}, [content, isSeries, id, movieUrl, pluginName]);
 
 	useEffect(() => {
 		const targetId = content?.id || content?.url;
@@ -501,13 +606,71 @@ export default function MovieDetailsScreen() {
 						<MetadataSection content={content} />
 					)}
 
-					{/* Eylem Butonları (Hemen Şimdi İzle + Listem, Fragman, Favori, İndir) */}
+					{/* Kaldığın Yerden Devam Et Bilgi Çubuğu */}
+					{watchProgress?.status === "in_progress" && (
+						<View
+							style={[
+								styles.continueWatchingBanner,
+								{
+									backgroundColor: surfaceBg,
+									borderColor: "rgba(229, 9, 20, 0.4)",
+								},
+							]}>
+							<View style={styles.continueBannerLeft}>
+								<View style={styles.continueBannerIconWrapper}>
+									<Ionicons
+										name="time"
+										size={17}
+										color="#E50914"
+									/>
+								</View>
+								<View style={styles.continueBannerTexts}>
+									<Text
+										style={[
+											styles.continueBannerTitle,
+											{ color: colors.text },
+										]}
+										numberOfLines={1}>
+										{isSeries &&
+										watchProgress.season &&
+										watchProgress.episode
+											? `${watchProgress.season}. Sezon ${watchProgress.episode}. Bölüm${watchProgress.episodeTitle ? ` - ${watchProgress.episodeTitle}` : ""}`
+											: "İzlemeye Devam Et"}
+									</Text>
+									<Text
+										style={[
+											styles.continueBannerSubtext,
+											{ color: colors.textSecondary },
+										]}>
+										{formatTime(watchProgress.currentTime)}
+										{watchProgress.duration > 0
+											? ` / ${formatTime(watchProgress.duration)} (%${Math.round((watchProgress.progress || 0) * 100)})`
+											: ""}
+									</Text>
+								</View>
+							</View>
+							<View style={styles.continueBannerTrack}>
+								<View
+									style={[
+										styles.continueBannerFill,
+										{
+											width: `${Math.min(100, Math.max(6, Math.round((watchProgress.progress || 0) * 100)))}%`,
+										},
+									]}
+								/>
+							</View>
+						</View>
+					)}
+
+					{/* Eylem Butonları (Hemen Şimdi İzle / Kaldığın Yerden Devam Et / Tekrar İzle + Listem, Fragman, Favori, İndir) */}
 					{DETAIL_SECTIONS_CONFIG.showActionButtons && (
 						<ActionButtons
 							content={content}
 							inWatchlist={inWatchlist}
 							watchlistStatus={watchlistStatus}
 							isFav={isFav}
+							watchProgress={watchProgress}
+							totalEpisodesCount={totalEpisodesCount}
 							onToggleWatchlist={handleToggleWatchlist}
 							onToggleFavorite={handleToggleFavorite}
 							onOpenTrailer={handleOpenTrailer}
@@ -697,6 +860,8 @@ export default function MovieDetailsScreen() {
 										content.backdrop_url
 									}
 									content={content}
+									episodesProgress={episodesProgress}
+									totalEpisodes={totalEpisodesCount}
 								/>
 							)}
 
@@ -849,6 +1014,7 @@ export default function MovieDetailsScreen() {
 									content.poster_url || content.backdrop_url
 								}
 								content={content}
+								episodesProgress={episodesProgress}
 							/>
 						</View>
 					)}
@@ -867,7 +1033,7 @@ export default function MovieDetailsScreen() {
 			</ScrollView>
 
 			{/* 5. SAĞ ALTTA KAYAN HIZLI KİTAPLIK / LİSTEM BUTONU (FAB) */}
-			{DETAIL_SECTIONS_CONFIG.showFloatingBookmark && (
+			{/* {DETAIL_SECTIONS_CONFIG.showFloatingBookmark && (
 				<TouchableOpacity
 					style={[
 						styles.floatingBookmark,
@@ -897,7 +1063,7 @@ export default function MovieDetailsScreen() {
 						color={inWatchlist ? "#ffffff" : "#E50914"}
 					/>
 				</TouchableOpacity>
-			)}
+			)} */}
 
 			{/* List Selection Modal */}
 			<ListSelectModal
@@ -1051,5 +1217,52 @@ const styles = StyleSheet.create({
 		shadowRadius: 8,
 		elevation: 8,
 		zIndex: 99,
+	},
+
+	/* Kaldığın Yerden Devam Et Bilgi Çubuğu */
+	continueWatchingBanner: {
+		borderRadius: 14,
+		borderWidth: 1,
+		padding: 12,
+		marginBottom: 14,
+	},
+	continueBannerLeft: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 10,
+		marginBottom: 8,
+	},
+	continueBannerIconWrapper: {
+		width: 30,
+		height: 30,
+		borderRadius: 15,
+		backgroundColor: "rgba(229, 9, 20, 0.15)",
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	continueBannerTexts: {
+		flex: 1,
+	},
+	continueBannerTitle: {
+		fontSize: 13,
+		fontWeight: "700",
+		letterSpacing: -0.2,
+	},
+	continueBannerSubtext: {
+		fontSize: 11,
+		fontWeight: "500",
+		marginTop: 2,
+	},
+	continueBannerTrack: {
+		width: "100%",
+		height: 4,
+		borderRadius: 2,
+		backgroundColor: "rgba(255, 255, 255, 0.12)",
+		overflow: "hidden",
+	},
+	continueBannerFill: {
+		height: "100%",
+		borderRadius: 2,
+		backgroundColor: "#E50914",
 	},
 });

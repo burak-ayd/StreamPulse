@@ -4,6 +4,8 @@ import ListSelectModal from "@/components/modal/ListSelectModal";
 import {
 	getContinueWatching,
 	getFavorites,
+	getSelectedPlatform,
+	getSeriesTotalEpisodesMap,
 	getWatchHistory,
 	getWatchlist,
 	removeContinueWatching,
@@ -11,13 +13,13 @@ import {
 	toggleFavorite,
 	toggleWatchlist,
 } from "@/utils/storage";
-import { useThemeContext } from "@context/ThemeContext";
+import { fetchPluginDetail } from "@/services/api";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
-	Alert,
+	ActivityIndicator,
 	Dimensions,
 	FlatList,
 	Modal,
@@ -58,7 +60,6 @@ function formatRelativeTime(dateString) {
 
 export default function LibraryScreen() {
 	const router = useRouter();
-	const { colors, theme } = useThemeContext();
 
 	// Durum Sekmeleri (Beklemede ve Bırakıldı kaldırıldı)
 	const [activeTab, setActiveTab] = useState("watching"); // 'watching' | 'completed' | 'planned' | 'favorites'
@@ -82,26 +83,31 @@ export default function LibraryScreen() {
 	const [watchlist, setWatchlist] = useState([]);
 	const [favoritesList, setFavoritesList] = useState([]);
 	const [watchHistoryList, setWatchHistoryList] = useState([]);
-	const [loading, setLoading] = useState(true);
+	const [seriesTotalsMap, setSeriesTotalsMap] = useState({});
+	const [activePlatformName, setActivePlatformName] = useState(null);
+	const [playingItemId, setPlayingItemId] = useState(null);
 
 	// Verileri AsyncStorage'dan yükle
 	const loadLibraryData = useCallback(async () => {
 		try {
-			setLoading(true);
-			const [cw, wl, fav, hist] = await Promise.all([
+			const [cw, wl, fav, hist, totals, platform] = await Promise.all([
 				getContinueWatching(),
 				getWatchlist(),
 				getFavorites(),
 				getWatchHistory(),
+				getSeriesTotalEpisodesMap(),
+				getSelectedPlatform(),
 			]);
 			setContinueWatchingList(Array.isArray(cw) ? cw : []);
 			setWatchlist(Array.isArray(wl) ? wl : []);
 			setFavoritesList(Array.isArray(fav) ? fav : []);
 			setWatchHistoryList(Array.isArray(hist) ? hist : []);
+			setSeriesTotalsMap(
+				totals && typeof totals === "object" ? totals : {},
+			);
+			setActivePlatformName(platform?.name || null);
 		} catch (error) {
 			console.error("Kitaplık yükleme hatası:", error);
-		} finally {
-			setLoading(false);
 		}
 	}, []);
 
@@ -112,15 +118,134 @@ export default function LibraryScreen() {
 		}, [loadLibraryData]),
 	);
 
+	// Tamamlanan içerikleri grupla (Diziler için bölümleri toplayıp x/y bölüm olarak sun)
+	const completedItemsGrouped = useMemo(() => {
+		const completedRaw = watchHistoryList.filter(
+			(i) => i.isCompleted || (i.progress && i.progress >= 0.9),
+		);
+
+		const seriesGroupMap = new Map();
+		const result = [];
+
+		for (const item of completedRaw) {
+			const isEpisode =
+				item.type === "episode" || Boolean(item.season && item.episode);
+			const isSeries = item.type === "series" || isEpisode;
+
+			if (isSeries) {
+				const seriesKey = (
+					item.seriesId ||
+					item.seriesTitle ||
+					item.title ||
+					item.id ||
+					""
+				)
+					.toString()
+					.toLowerCase()
+					.trim();
+
+				if (!seriesGroupMap.has(seriesKey)) {
+					const totalFromMap =
+						seriesTotalsMap[seriesKey] ||
+						(item.seriesTitle
+							? seriesTotalsMap[item.seriesTitle.toLowerCase().trim()]
+							: 0) ||
+						(item.title
+							? seriesTotalsMap[item.title.toLowerCase().trim()]
+							: 0) ||
+						0;
+
+					const group = {
+						id: item.seriesId || item.id || item.url,
+						seriesId: item.seriesId || item.id,
+						seriesUrl: item.seriesUrl || item.seriesId || item.url,
+						title: item.seriesTitle || item.title || "Dizi",
+						seriesTitle: item.seriesTitle || item.title || "Dizi",
+						poster:
+							item.poster ||
+							item.poster_url ||
+							item.image ||
+							item.backdrop_url,
+						poster_url:
+							item.poster ||
+							item.poster_url ||
+							item.image ||
+							item.backdrop_url,
+						backdrop_url: item.backdrop_url,
+						url: item.seriesUrl || item.seriesId || item.url,
+						type: "series",
+						content_type: "series",
+						plugin: item.plugin || activePlatformName,
+						rating: item.rating,
+						genre: item.genre || item.tagline,
+						updatedAt: item.updatedAt || item.watchedAt,
+						watchedAt: item.watchedAt,
+						completedEpisodesMap: new Map(),
+						totalEpisodes:
+							item.totalEpisodes ||
+							item.totalEpisodesCount ||
+							totalFromMap ||
+							0,
+					};
+					seriesGroupMap.set(seriesKey, group);
+					result.push(group);
+				}
+
+				const group = seriesGroupMap.get(seriesKey);
+				if (item.totalEpisodes && !group.totalEpisodes) {
+					group.totalEpisodes = item.totalEpisodes;
+				}
+
+				if (isEpisode) {
+					const epKey =
+						item.season && item.episode
+							? `s${item.season}_e${item.episode}`
+							: item.url || item.id;
+					group.completedEpisodesMap.set(epKey, item);
+				}
+
+				const itemDate = new Date(
+					item.watchedAt || item.updatedAt || 0,
+				).getTime();
+				const groupDate = new Date(
+					group.watchedAt || group.updatedAt || 0,
+				).getTime();
+				if (itemDate > groupDate) {
+					group.watchedAt = item.watchedAt || item.updatedAt;
+					group.updatedAt = item.updatedAt || item.watchedAt;
+				}
+			} else {
+				// Film
+				result.push(item);
+			}
+		}
+
+		return result.map((item) => {
+			if (item.completedEpisodesMap) {
+				const completedCount = item.completedEpisodesMap.size;
+				const totalCount = item.totalEpisodes || 0;
+				const progress =
+					totalCount > 0 ? completedCount / totalCount : 1.0;
+				return {
+					...item,
+					completedEpisodesCount: completedCount,
+					totalEpisodesCount: totalCount,
+					progress,
+					isCompleted:
+						totalCount > 0 ? completedCount >= totalCount : true,
+				};
+			}
+			return item;
+		});
+	}, [watchHistoryList, seriesTotalsMap, activePlatformName]);
+
 	// Aktif sekmeye göre ham liste seçimi
 	const rawTabItems = useMemo(() => {
 		switch (activeTab) {
 			case "watching":
 				return continueWatchingList;
 			case "completed":
-				return watchHistoryList.filter(
-					(i) => i.isCompleted || (i.progress && i.progress >= 0.9),
-				);
+				return completedItemsGrouped;
 			case "planned":
 				return watchlist;
 			case "favorites":
@@ -131,7 +256,7 @@ export default function LibraryScreen() {
 	}, [
 		activeTab,
 		continueWatchingList,
-		watchHistoryList,
+		completedItemsGrouped,
 		watchlist,
 		favoritesList,
 	]);
@@ -233,8 +358,183 @@ export default function LibraryScreen() {
 	};
 
 	// Oynatıcıyı Başlat
-	const handlePlayItem = (item) => {
-		const targetUrl = item.url;
+	const handlePlayItem = async (item) => {
+		if (!item) return;
+
+		const isDizi =
+			item.type === "series" ||
+			item.type === "tv" ||
+			item.content_type === "series" ||
+			item.content_type === "tv" ||
+			item.completedEpisodesCount !== undefined ||
+			(item.url && item.url.includes("/dizi/")) ||
+			(item.id && String(item.id).includes("/dizi/")) ||
+			Boolean(item.season && !item.url);
+
+		let resolvedPlugin = item.plugin || activePlatformName;
+		if (!resolvedPlugin) {
+			try {
+				const activePlat = await getSelectedPlatform();
+				resolvedPlugin = activePlat?.name || "hdfilmcehennemi";
+			} catch {
+				resolvedPlugin = "hdfilmcehennemi";
+			}
+		}
+
+		// 1. Zaten tekil bir bölüm ise (İzleniyor sekmesindeki devam eden bölüm)
+		if (
+			item.type === "episode" &&
+			item.url &&
+			item.season &&
+			item.episode
+		) {
+			router.push({
+				pathname: "/player",
+				params: {
+					url: item.url,
+					title: item.seriesTitle || item.title || "Dizi",
+					subtitle: `${item.season}. Sezon ${item.episode}. Bölüm${item.episodeTitle ? ` - ${item.episodeTitle}` : ""}`,
+					poster: item.poster || item.poster_url || item.image,
+					id: item.id || item.url,
+					type: "episode",
+					seriesId: item.seriesId,
+					seriesUrl: item.seriesUrl || item.seriesId,
+					seriesTitle: item.seriesTitle || item.title,
+					season: item.season,
+					episode: item.episode,
+					episodeTitle: item.episodeTitle,
+					totalEpisodes:
+						item.totalEpisodes || item.totalEpisodesCount,
+					currentTime: item.currentTime || 0,
+					plugin: resolvedPlugin,
+					nextEpisode: item.nextEpisode
+						? typeof item.nextEpisode === "string"
+							? item.nextEpisode
+							: JSON.stringify(item.nextEpisode)
+						: undefined,
+				},
+			});
+			return;
+		}
+
+		// 2. Dizi ise (Planlanan, Favoriler, Tamamlanan veya genel dizi kartı):
+		// İlk bölümden başlat (1. Sezon 1. Bölüm)
+		if (isDizi) {
+			const seriesUrl =
+				item.seriesUrl ||
+				item.url ||
+				(String(item.id).startsWith("http") ? item.id : null);
+
+			if (!seriesUrl) {
+				handleOpenDetails(item);
+				return;
+			}
+
+			const itemIdKey = item.id || item.url;
+			try {
+				setPlayingItemId(itemIdKey);
+				// Bölüm listesini almak için plugin detayını çek
+				let detail = item;
+				if (!detail.seasons) {
+					const res = await fetchPluginDetail(resolvedPlugin, seriesUrl);
+					if (res) {
+						detail = res;
+					}
+				}
+
+				const seasons = detail?.seasons;
+				if (seasons && typeof seasons === "object") {
+					const seasonKeys = Object.keys(seasons).sort(
+						(a, b) => Number(a) - Number(b),
+					);
+					const firstSeasonKey = seasonKeys[0] || "1";
+					const firstEpList = seasons[firstSeasonKey];
+					if (Array.isArray(firstEpList) && firstEpList.length > 0) {
+						const firstEp = firstEpList[0];
+						const nextEp = firstEpList[1]
+							? {
+									id: firstEpList[1].id || firstEpList[1].url,
+									url: firstEpList[1].url,
+									title: firstEpList[1].title,
+									season: Number(firstSeasonKey),
+									episode: Number(
+										firstEpList[1].episode ||
+											firstEpList[1].episode_number ||
+											2,
+									),
+									poster:
+										firstEpList[1].poster ||
+										item.poster ||
+										item.poster_url,
+								}
+							: undefined;
+
+						let totalEpCount = 0;
+						seasonKeys.forEach((k) => {
+							if (Array.isArray(seasons[k])) {
+								totalEpCount += seasons[k].length;
+							}
+						});
+
+						if (firstEp?.url) {
+							router.push({
+								pathname: "/player",
+								params: {
+									url: firstEp.url,
+									title:
+										item.title ||
+										detail?.title ||
+										item.seriesTitle ||
+										"Dizi",
+									subtitle: `${firstSeasonKey}. Sezon ${firstEp.episode || 1}. Bölüm${firstEp.title ? ` - ${firstEp.title}` : ""}`,
+									poster:
+										firstEp.poster ||
+										item.poster ||
+										item.poster_url ||
+										item.image,
+									id:
+										firstEp.url ||
+										`${seriesUrl}_s${firstSeasonKey}_e${firstEp.episode || 1}`,
+									type: "episode",
+									seriesId:
+										item.seriesId || seriesUrl || item.id,
+									seriesUrl: seriesUrl,
+									seriesTitle:
+										item.title ||
+										detail?.title ||
+										item.seriesTitle,
+									season: Number(firstSeasonKey),
+									episode: Number(firstEp.episode || 1),
+									episodeTitle: firstEp.title || "",
+									totalEpisodes:
+										totalEpCount ||
+										item.totalEpisodes ||
+										item.totalEpisodesCount,
+									plugin: resolvedPlugin,
+									nextEpisode: nextEp
+										? JSON.stringify(nextEp)
+										: undefined,
+								},
+							});
+							return;
+						}
+					}
+				}
+
+				// Eğer sezon/bölüm bulunamadıysa detay sayfasına yönlendir
+				handleOpenDetails(item);
+			} catch (err) {
+				console.error("Dizi ilk bölümü başlatılırken hata:", err);
+				handleOpenDetails(item);
+			} finally {
+				setPlayingItemId(null);
+			}
+			return;
+		}
+
+		// 3. Film için: Oynatılabilir url varsa oynat, yoksa detay sayfasına git
+		const targetUrl =
+			item.url || (String(item.id).startsWith("http") ? item.id : null);
 		if (!targetUrl) {
 			handleOpenDetails(item);
 			return;
@@ -244,27 +544,49 @@ export default function LibraryScreen() {
 			pathname: "/player",
 			params: {
 				url: targetUrl,
-				title: item.seriesTitle || item.title,
-				subtitle:
-					item.season && item.episode
-						? `${item.season}. Sezon ${item.episode}. Bölüm`
-						: item.episodeTitle || "",
+				title: item.title || "Film",
+				subtitle: item.tagline || item.overview || "",
 				poster: item.poster || item.poster_url || item.image,
-				id: item.id,
+				id: item.id || targetUrl,
+				type: "movie",
 				currentTime: item.currentTime || 0,
+				plugin: resolvedPlugin,
 			},
 		});
 	};
 
 	// Detay Sayfasına Yönlendir
 	const handleOpenDetails = (item) => {
-		const itemId = item.id || item.url;
+		if (!item) return;
+
+		const targetUrl =
+			item.seriesUrl ||
+			(item.type === "episode" &&
+			item.seriesId &&
+			(String(item.seriesId).startsWith("http") ||
+				String(item.seriesId).startsWith("/"))
+				? item.seriesId
+				: null) ||
+			item.url;
+
+		const itemId = item.seriesId || item.id || targetUrl;
+		const plugin = item.plugin || activePlatformName;
+
+		const movieWithPlugin = {
+			...item,
+			id: itemId,
+			url: targetUrl || item.url,
+			seriesUrl: targetUrl || item.seriesUrl,
+			plugin,
+		};
+
 		router.push({
-			pathname: `/(app)/MovieDetails/${encodeURIComponent(itemId)}`,
+			pathname: "/(app)/MovieDetails/[id]",
 			params: {
-				movieData: JSON.stringify(item),
-				url: item.url,
-				plugin: item.plugin,
+				id: String(itemId),
+				url: targetUrl || item.url,
+				plugin,
+				movieData: JSON.stringify(movieWithPlugin),
 			},
 		});
 	};
@@ -282,9 +604,7 @@ export default function LibraryScreen() {
 			key: "completed",
 			label: "Tamamlandı",
 			icon: "checkmark-circle",
-			count: watchHistoryList.filter(
-				(i) => i.isCompleted || (i.progress && i.progress >= 0.9),
-			).length,
+			count: completedItemsGrouped.length,
 			iconColor: "#34d399",
 		},
 		{
@@ -314,9 +634,11 @@ export default function LibraryScreen() {
 
 	// Kart Render Bileşeni (Grid Modu)
 	const renderGridCard = ({ item }) => {
+		const isCompletedSeriesGroup = item.completedEpisodesCount !== undefined;
 		const isDizi =
 			item.type === "series" ||
 			item.content_type === "series" ||
+			isCompletedSeriesGroup ||
 			Boolean(item.season);
 
 		const ratingVal = item.rating
@@ -332,15 +654,23 @@ export default function LibraryScreen() {
 			Math.max(0, Math.round((item.progress || 0) * 100)),
 		);
 
-		const remainingText =
-			item.duration && item.currentTime
+		const remainingText = isCompletedSeriesGroup
+			? item.totalEpisodesCount > 0
+				? item.completedEpisodesCount >= item.totalEpisodesCount
+					? "Tamamlandı"
+					: `${item.totalEpisodesCount - item.completedEpisodesCount} bölüm kaldı`
+				: "Tamamlanan"
+			: item.duration && item.currentTime
 				? `${Math.max(1, Math.round((item.duration - item.currentTime) / 60))} dk kaldı`
 				: progressPercent > 0
 					? `%${progressPercent} izlendi`
 					: null;
 
-		const episodeText =
-			item.season && item.episode
+		const episodeText = isCompletedSeriesGroup
+			? item.totalEpisodesCount > 0
+				? `${item.completedEpisodesCount}/${item.totalEpisodesCount} Bölüm`
+				: `${item.completedEpisodesCount} Bölüm İzlendi`
+			: item.season && item.episode
 				? `${item.season}. Sezon ${item.episode}. Bölüm`
 				: item.runtime_minutes
 					? `${item.runtime_minutes} dk`
@@ -397,8 +727,13 @@ export default function LibraryScreen() {
 					<TouchableOpacity
 						style={styles.centerPlayButton}
 						onPress={() => handlePlayItem(item)}
+						disabled={playingItemId === (item.id || item.url)}
 						activeOpacity={0.8}>
-						<Ionicons name="play" size={20} color="#ffffff" />
+						{playingItemId === (item.id || item.url) ? (
+							<ActivityIndicator size="small" color="#ffffff" />
+						) : (
+							<Ionicons name="play" size={20} color="#ffffff" />
+						)}
 					</TouchableOpacity>
 
 					{/* Poster Altındaki İlerleme & Süre Bilgisi */}
@@ -1045,7 +1380,7 @@ export default function LibraryScreen() {
 									title: selectedActionItem.title || "StreamPulse",
 									message: `StreamPulse'da "${selectedActionItem.title}" izle! ${selectedActionItem.url || ""}`,
 								});
-							} catch (e) {}
+							} catch (_e) {}
 						}
 					}}
 				/>

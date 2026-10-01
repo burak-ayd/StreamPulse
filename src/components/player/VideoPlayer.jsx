@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Video, { TextTrackType } from "react-native-video";
 import { usePlayerSettings } from "@/context/PlayerSettingsContext";
 import {
+	addToWatchHistory,
 	markEpisodeComplete,
 	removeContinueWatching,
 	saveContinueWatching,
@@ -121,6 +122,7 @@ export default function VideoPlayer({
 	contentType = "movie",
 	seriesInfo = null,
 	targetUrl = "",
+	plugin = null,
 }) {
 	const insets = useSafeAreaInsets();
 	const videoRef = useRef(null);
@@ -128,6 +130,12 @@ export default function VideoPlayer({
 
 	const lastSavedTimeRef = useRef(0);
 	const currentTimeRef = useRef(0);
+	const hasMarkedCompleteRef = useRef(false);
+
+	useEffect(() => {
+		hasMarkedCompleteRef.current = false;
+		lastSavedTimeRef.current = 0;
+	}, [targetUrl, seriesInfo?.episode, seriesInfo?.season]);
 
 	const seekDuration = settings?.seekDuration || 10;
 	const hideTimeoutMs = (settings?.controlsTimeout || 4) * 1000;
@@ -404,9 +412,16 @@ export default function VideoPlayer({
 		let type = undefined;
 		if (overrideType !== null) {
 			type = overrideType;
-		} else {
 			const isExplicitProgressive =
-				/\.(mp4|mkv|webm|avi|flv|mov)(\?.*)?$/i.test(streamUrl);
+				/\.(mp4|mkv|webm|avi|flv|mov)(\?.*)?$/i.test(streamUrl) ||
+				streamUrl.includes("googlevideo.com") ||
+				streamUrl.includes("videoplayback") ||
+				/[?&]mime=video%2f(mp4|webm)/i.test(streamUrl) ||
+				/[?&]mime=video\/(mp4|webm)/i.test(streamUrl) ||
+				currentSourceData?.result?.type === "mp4" ||
+				currentSourceData?.result?.is_hls === false ||
+				currentSourceData?.extractor?.toLowerCase()?.includes("peacemaker") ||
+				currentSourceData?.result?.name?.toLowerCase()?.includes("peacemaker");
 			const isExplicitHls =
 				streamUrl.includes(".m3u8") ||
 				streamUrl.includes("/q/") ||
@@ -420,11 +435,13 @@ export default function VideoPlayer({
 				streamUrl.includes("/mo/") ||
 				currentSourceData?.extractor?.toLowerCase()?.includes("rapidvid") ||
 				currentSourceData?.result?.name?.toLowerCase()?.includes("rapidvid") ||
-				currentSourceData?.result?.is_hls ||
+				currentSourceData?.result?.is_hls === true ||
 				currentSourceData?.result?.type === "m3u8" ||
 				currentSourceData?.result?.type === "hls";
 
-			if (isExplicitHls || !isExplicitProgressive) {
+			if (isExplicitProgressive) {
+				type = "mp4";
+			} else if (isExplicitHls || !isExplicitProgressive) {
 				type = "m3u8";
 			}
 		}
@@ -583,21 +600,40 @@ export default function VideoPlayer({
 				const progress = curTime / totalDuration;
 
 				if (progress >= 0.9) {
-					removeContinueWatching(id);
-					if (contentType === "episode" && seriesInfo?.nextEpisode) {
-						markEpisodeComplete(
-							seriesInfo.seriesId,
-							seriesInfo.season,
-							seriesInfo.episode,
-							seriesInfo.nextEpisode,
-							{
-								id,
+					if (!hasMarkedCompleteRef.current) {
+						hasMarkedCompleteRef.current = true;
+						if (contentType === "episode") {
+							markEpisodeComplete(
+								seriesInfo?.seriesId,
+								seriesInfo?.season,
+								seriesInfo?.episode,
+								seriesInfo?.nextEpisode,
+								{
+									id,
+									title,
+									poster,
+									url: targetUrl || currentSourceData?.result?.url,
+									seriesTitle: seriesInfo?.seriesTitle,
+									episodeTitle: seriesInfo?.episodeTitle,
+									totalEpisodes: seriesInfo?.totalEpisodes,
+									seriesUrl: seriesInfo?.seriesUrl,
+									plugin: plugin || seriesInfo?.plugin,
+								},
+							);
+						} else {
+							removeContinueWatching(id);
+							addToWatchHistory({
+								id: contentId || targetUrl,
 								title,
 								poster,
+								type: "movie",
 								url: targetUrl || currentSourceData?.result?.url,
-								seriesTitle: seriesInfo.seriesTitle,
-							},
-						);
+								plugin: plugin || seriesInfo?.plugin,
+								isCompleted: true,
+								progress: 1.0,
+								watchedAt: new Date().toISOString(),
+							});
+						}
 					}
 				} else {
 					saveContinueWatching({
@@ -611,10 +647,13 @@ export default function VideoPlayer({
 						url: targetUrl || currentSourceData?.result?.url,
 						seriesId: seriesInfo?.seriesId,
 						seriesTitle: seriesInfo?.seriesTitle,
+						seriesUrl: seriesInfo?.seriesUrl,
+						plugin: plugin || seriesInfo?.plugin,
 						season: seriesInfo?.season,
 						episode: seriesInfo?.episode,
 						episodeTitle: seriesInfo?.episodeTitle,
 						nextEpisode: seriesInfo?.nextEpisode,
+						totalEpisodes: seriesInfo?.totalEpisodes,
 					});
 				}
 			}
@@ -625,6 +664,45 @@ export default function VideoPlayer({
 		setIsBuffering(Boolean(meta.isBuffering));
 	};
 
+	const handleEnd = () => {
+		const id = contentId || targetUrl || currentSourceData?.result?.url;
+		if (id && !hasMarkedCompleteRef.current) {
+			hasMarkedCompleteRef.current = true;
+			if (contentType === "episode") {
+				markEpisodeComplete(
+					seriesInfo?.seriesId,
+					seriesInfo?.season,
+					seriesInfo?.episode,
+					seriesInfo?.nextEpisode,
+					{
+						id,
+						title,
+						poster,
+						url: targetUrl || currentSourceData?.result?.url,
+						seriesTitle: seriesInfo?.seriesTitle,
+						episodeTitle: seriesInfo?.episodeTitle,
+						totalEpisodes: seriesInfo?.totalEpisodes,
+						seriesUrl: seriesInfo?.seriesUrl,
+						plugin: plugin || seriesInfo?.plugin,
+					},
+				);
+			} else {
+				removeContinueWatching(id);
+				addToWatchHistory({
+					id: contentId || targetUrl,
+					title,
+					poster,
+					type: "movie",
+					url: targetUrl || currentSourceData?.result?.url,
+					plugin: plugin || seriesInfo?.plugin,
+					isCompleted: true,
+					progress: 1.0,
+					watchedAt: new Date().toISOString(),
+				});
+			}
+		}
+	};
+
 	const handleError = (error) => {
 		console.warn("Video playback error:", error);
 		setIsLoading(false);
@@ -632,16 +710,20 @@ export default function VideoPlayer({
 
 		const errorCode = error?.error?.errorCode;
 		const isFormatError =
+			errorCode === "23002" ||
 			errorCode === "23003" ||
 			error?.error?.errorString?.includes("PARSING_CONTAINER") ||
-			error?.error?.errorException?.includes("UnrecognizedInputFormatException");
+			error?.error?.errorString?.includes("PARSING_MANIFEST") ||
+			error?.error?.errorException?.includes("UnrecognizedInputFormatException") ||
+			error?.error?.errorStackTrace?.includes("HlsPlaylistParser") ||
+			error?.error?.errorStackTrace?.includes("#EXTM3U");
 
-		// Eğer konteyner tanınamadı hatası aldıysak ve bu kaynak için tip denemesi yapmadıysak, alternatif tiple tekrar dene
+		// Eğer konteyner veya manifest ayrıştırma hatası aldıysak (örn. HLS sanılan MP4 veya MP4 sanılan HLS), alternatif tiple tekrar dene
 		if (isFormatError && !formatRetryRef.current) {
 			formatRetryRef.current = true;
-			const nextType = videoSource?.type === "m3u8" ? undefined : "m3u8";
+			const nextType = videoSource?.type === "m3u8" ? "mp4" : "m3u8";
 			console.log(
-				`Format hatası tespit edildi, kaynak ${activeSourceIndex} için type=${nextType} ile tekrar deneniyor...`,
+				`Format/Manifest hatası tespit edildi, kaynak ${activeSourceIndex} için type=${nextType} ile tekrar deneniyor...`,
 			);
 			setOverrideType(nextType);
 			setHasError(false);
@@ -868,6 +950,7 @@ export default function VideoPlayer({
 						onLoad={handleLoad}
 						onProgress={handleProgress}
 						onBuffer={handleBuffer}
+						onEnd={handleEnd}
 						onError={handleError}
 						onAudioTracks={handleAudioTracks}
 						onTextTracks={handleTextTracks}
