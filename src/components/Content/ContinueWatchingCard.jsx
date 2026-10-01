@@ -1,4 +1,5 @@
 import LanguageBadge from "@/components/common/LanguageBadge";
+import { resolvePluginName } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -71,14 +72,22 @@ export default function ContinueWatchingCard({ item, onPress, onLongPress, onRem
 				{/* Subtle Dark Gradient Overlay */}
 				<View style={styles.overlay} />
 
-				{/* Top Left Language Badge */}
-				{movieRawLang ? (
-					<LanguageBadge
-						language={movieRawLang}
-						size="small"
-						style={styles.languageBadge}
-					/>
-				) : null}
+				{/* Top Left Badges */}
+				<View style={styles.topBadgesContainer}>
+					{movieRawLang ? (
+						<LanguageBadge
+							language={movieRawLang}
+							size="small"
+						/>
+					) : null}
+					{resolvePluginName(item) ? (
+						<View style={styles.pluginBadge}>
+							<Text style={styles.pluginBadgeText} numberOfLines={1}>
+								{resolvePluginName(item)}
+							</Text>
+						</View>
+					) : null}
+				</View>
 
 				{/* Play Button Icon */}
 				<View style={styles.playButtonCircle}>
@@ -196,10 +205,29 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		alignItems: "center",
 	},
-	languageBadge: {
+	topBadgesContainer: {
 		position: "absolute",
 		top: 6,
 		left: 6,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 4,
+		maxWidth: "70%",
+	},
+	pluginBadge: {
+		backgroundColor: "rgba(15, 23, 42, 0.82)",
+		paddingHorizontal: 5,
+		paddingVertical: 1.5,
+		borderRadius: 3,
+		borderWidth: 0.5,
+		borderColor: "rgba(255, 255, 255, 0.2)",
+	},
+	pluginBadgeText: {
+		color: "#38bdf8",
+		fontSize: 8.5,
+		fontWeight: "700",
+		textTransform: "uppercase",
+		letterSpacing: 0.3,
 	},
 	timeBadge: {
 		position: "absolute",

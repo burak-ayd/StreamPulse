@@ -92,6 +92,7 @@ export default function ActionButtons({
 						poster: content?.poster_url || content?.backdrop_url,
 						id: epUniqueId,
 						type: "episode",
+						plugin: content?.plugin || watchProgress?.plugin,
 						seriesId: content?.id || content?.url,
 						seriesTitle: content?.title,
 						season,
@@ -114,6 +115,7 @@ export default function ActionButtons({
 						poster: content?.poster_url || content?.backdrop_url,
 						id: content?.id,
 						type: "movie",
+						plugin: content?.plugin || watchProgress?.plugin,
 						currentTime: watchProgress.currentTime || 0,
 					},
 				});
@@ -178,6 +180,7 @@ export default function ActionButtons({
 				poster: content?.poster_url || content?.backdrop_url,
 				id: epUniqueId,
 				type: isSeries ? "episode" : "movie",
+				plugin: content?.plugin,
 				seriesId: isSeries ? (content?.id || content?.url) : undefined,
 				seriesTitle: isSeries ? content?.title : undefined,
 				season: isSeries ? initialSeason : undefined,

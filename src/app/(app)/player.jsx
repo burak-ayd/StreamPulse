@@ -226,6 +226,7 @@ export default function PlayerScreen() {
 							url: targetUrl,
 							totalEpisodes: seriesInfo?.totalEpisodes,
 							overview: subtitle,
+							plugin: params.plugin || seriesInfo?.plugin,
 						}).catch(() => {});
 					} else {
 						addToWatchHistory({
@@ -235,6 +236,7 @@ export default function PlayerScreen() {
 							type: "movie",
 							url: targetUrl,
 							overview: subtitle,
+							plugin: params.plugin || seriesInfo?.plugin,
 						}).catch(() => {});
 					}
 				}
@@ -247,7 +249,7 @@ export default function PlayerScreen() {
 		} finally {
 			setLoading(false);
 		}
-	}, [targetUrl, contentId, title, subtitle, poster, contentType, seriesInfo]);
+	}, [targetUrl, contentId, title, subtitle, poster, contentType, seriesInfo, params.plugin]);
 
 	useEffect(() => {
 		// Video oynatıcı açıldığında her zaman doğrudan yatay moda kilitlen
@@ -277,6 +279,7 @@ export default function PlayerScreen() {
 							title,
 							poster,
 							overview: subtitle,
+							plugin: params.plugin || seriesInfo?.plugin,
 						}).catch(() => {});
 					}
 				} else {
@@ -295,7 +298,7 @@ export default function PlayerScreen() {
 		return () => {
 			isMounted = false;
 		};
-	}, [targetUrl, contentId, title, subtitle, poster]);
+	}, [targetUrl, contentId, title, subtitle, poster, params.plugin, seriesInfo]);
 
 	const handleClose = () => {
 		ScreenOrientation.lockAsync(

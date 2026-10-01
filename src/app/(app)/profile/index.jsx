@@ -1,12 +1,14 @@
 import ContinueWatchingCard from "@/components/content/ContinueWatchingCard";
-import { WATCH_HISTORY } from "@/constants/data";
+import { useAuth } from "@/context/AuthContext";
 import { useThemeContext } from "@/context/ThemeContext";
 import {
 	getContinueWatching,
 	getFavorites,
+	getSelectedPlatform,
 	getUserProfile,
 	getWatchHistory,
 	removeContinueWatching,
+	resolvePluginName,
 } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -33,10 +35,12 @@ const { width } = Dimensions.get("window");
 
 export default function ProfileScreen() {
 	const { theme, colors } = useThemeContext();
+	const { isLoggedIn, user } = useAuth();
 	const router = useRouter();
 	const params = useLocalSearchParams();
 
 	const [profile, setProfile] = useState(null);
+	const [selectedPlatform, setSelectedPlatform] = useState(null);
 	const [activeTab, setActiveTab] = useState(
 		params?.tab === "continue" ? "continue" : "history",
 	);
@@ -53,16 +57,18 @@ export default function ProfileScreen() {
 
 	const loadData = useCallback(async () => {
 		try {
-			const [userProf, favs, hist, cont] = await Promise.all([
+			const [userProf, favs, hist, cont, platform] = await Promise.all([
 				getUserProfile(),
 				getFavorites(),
 				getWatchHistory(),
 				getContinueWatching(),
+				getSelectedPlatform(),
 			]);
 			setProfile(userProf);
-			setFavorites(favs);
-			setHistory(hist.length > 0 ? hist : WATCH_HISTORY);
+			setFavorites(favs || []);
+			setHistory(hist || []); // Mock data kaldırıldı
 			setContinueWatching(cont || []);
+			if (platform) setSelectedPlatform(platform);
 		} catch (error) {
 			console.error("Profil bilgileri yüklenirken hata:", error);
 		}
@@ -78,7 +84,81 @@ export default function ProfileScreen() {
 		router.back();
 	};
 
+	const handleItemPress = (item) => {
+		if (!item) return;
+
+		const targetPlugin =
+			resolvePluginName(item) ||
+			item.plugin ||
+			selectedPlatform?.name ||
+			"hdfilmcehennemi";
+
+		let movieWithPlugin = {
+			...item,
+			plugin: targetPlugin,
+		};
+
+		const epTitleMatch = (movieWithPlugin.title || "").match(
+			/^(.+?)\s+(\d+)\.\s*Sezon\s+(\d+)\.\s*Bölüm/i,
+		);
+
+		if (epTitleMatch) {
+			movieWithPlugin = {
+				...movieWithPlugin,
+				seriesTitle: epTitleMatch[1].trim(),
+				initialSeason: String(epTitleMatch[2]),
+				initialEpisode: String(epTitleMatch[3]),
+				is_series: true,
+				content_type: "series",
+			};
+		}
+
+		const movieId =
+			item.id ||
+			encodeURIComponent(
+				item.url || item.title || "content",
+			);
+
+		router.push({
+			pathname: "/(app)/MovieDetails/[id]",
+			params: {
+				id: String(movieId),
+				url: item.url || item.seriesUrl || "",
+				plugin: targetPlugin,
+				movieData: JSON.stringify(movieWithPlugin),
+			},
+		});
+	};
+
 	const displayList = activeTab === "history" ? history : favorites;
+
+	// Profil bilgileri: Giriş yapıldıysa AuthContext'teki gerçek kullanıcı, değilse misafir
+	const isDefaultProfile =
+		!profile ||
+		profile.username === "sinemasever" ||
+		profile.email === "kullanici@cineverse.com";
+
+	const displayName = isLoggedIn && user
+		? user.display_name || user.username || user.email?.split("@")[0] || "Kullanıcı"
+		: !isDefaultProfile && profile?.displayName
+		? profile.displayName
+		: "Misafir Kullanıcı";
+
+	const userHandle = isLoggedIn && user
+		? `@${user.username || user.email?.split("@")[0] || "kullanici"}`
+		: !isDefaultProfile && profile?.username
+		? `@${profile.username}`
+		: "@misafir";
+
+	const userBio = isLoggedIn && user
+		? user.bio || (!isDefaultProfile && profile?.bio ? profile.bio : "")
+		: !isDefaultProfile && profile?.bio && !profile.bio.includes("Sinema dünyasındaki")
+		? profile.bio
+		: "";
+
+	const avatarUri = isLoggedIn && user?.avatar_url
+		? user.avatar_url
+		: profile?.avatarUrl || null;
 
 	return (
 		<>
@@ -121,9 +201,9 @@ export default function ProfileScreen() {
 					contentContainerStyle={styles.scrollContainer}>
 					{/* Profile Header */}
 					<View style={styles.profileHeader}>
-						{profile?.avatarUrl ? (
+						{avatarUri ? (
 							<Image
-								source={{ uri: profile.avatarUrl }}
+								source={{ uri: avatarUri }}
 								style={styles.avatar}
 								contentFit="cover"
 								transition={150}
@@ -135,7 +215,7 @@ export default function ProfileScreen() {
 									{ backgroundColor: colors.primary },
 								]}>
 								<Text style={styles.avatarText}>
-									{(profile?.displayName || "S")
+									{(displayName || "K")
 										.charAt(0)
 										.toUpperCase()}
 								</Text>
@@ -143,22 +223,22 @@ export default function ProfileScreen() {
 						)}
 
 						<Text style={[styles.userName, { color: colors.text }]}>
-							{profile?.displayName || "Sinema Sever"}
+							{displayName}
 						</Text>
 						<Text
 							style={[
 								styles.userHandle,
 								{ color: colors.textSecondary },
 							]}>
-							@{profile?.username || "sinemasever"}
+							{userHandle}
 						</Text>
-						{profile?.bio ? (
+						{userBio ? (
 							<Text
 								style={[
 									styles.userBio,
 									{ color: colors.textSecondary },
 								]}>
-								{profile.bio}
+								{userBio}
 							</Text>
 						) : null}
 
@@ -179,6 +259,43 @@ export default function ProfileScreen() {
 								Profili Düzenle
 							</Text>
 						</TouchableOpacity>
+
+						{/* Sync durumu kartı */}
+						{isLoggedIn && user ? (
+							<TouchableOpacity
+								style={[
+									styles.syncCard,
+									{
+										backgroundColor: "rgba(16, 185, 129, 0.08)",
+										borderColor: "rgba(16, 185, 129, 0.2)",
+									},
+								]}
+								onPress={() => router.push("/(app)/settings/sync")}
+								activeOpacity={0.75}>
+								<Ionicons name="cloud-done-outline" size={18} color="#10B981" />
+								<Text style={[styles.syncCardText, { color: "#10B981" }]}>
+									Senkronizasyon Aktif • {user.email}
+								</Text>
+								<Ionicons name="chevron-forward" size={16} color="#10B981" />
+							</TouchableOpacity>
+						) : (
+							<TouchableOpacity
+								style={[
+									styles.syncCard,
+									{
+										backgroundColor: "rgba(56, 189, 248, 0.08)",
+										borderColor: "rgba(56, 189, 248, 0.2)",
+									},
+								]}
+								onPress={() => router.push("/(auth)/login")}
+								activeOpacity={0.75}>
+								<Ionicons name="sync-outline" size={18} color="#38bdf8" />
+								<Text style={styles.syncCardText}>
+									Giriş yap ve verilerini tüm cihazlarında senkronize et
+								</Text>
+								<Ionicons name="chevron-forward" size={16} color="#38bdf8" />
+							</TouchableOpacity>
+						)}
 					</View>
 
 					{/* Stats Component */}
@@ -433,41 +550,59 @@ export default function ProfileScreen() {
 							) : (
 								<FlatList
 									data={displayList}
-									keyExtractor={(item) => String(item.id)}
+									keyExtractor={(item, index) =>
+										String(item.id || item.url || index)
+									}
 									numColumns={3}
 									scrollEnabled={false}
 									columnWrapperStyle={styles.gridRow}
-									renderItem={({ item }) => (
-										<TouchableOpacity
-											style={[
-												styles.gridItem,
-												{
-													backgroundColor:
-														colors.cardBg,
-												},
-											]}
-											onPress={() =>
-												router.push(
-													`/(app)/MovieDetails/${item.id}`,
-												)
-											}
-											activeOpacity={0.8}>
-											<Image
-												source={{
-													uri:
-														item.poster ||
-														item.poster_url ||
-														item.image ||
-														item.backdrop_url,
-												}}
-												style={styles.gridImage}
-												contentFit="cover"
-												contentPosition="center"
-												transition={150}
-												cachePolicy="memory-disk"
-											/>
-										</TouchableOpacity>
-									)}
+									renderItem={({ item }) => {
+										const itemPlugin = resolvePluginName(item);
+										return (
+											<TouchableOpacity
+												style={[
+													styles.gridItem,
+													{
+														backgroundColor:
+															colors.cardBg,
+													},
+												]}
+												onPress={() =>
+													handleItemPress(item)
+												}
+												activeOpacity={0.8}>
+												<Image
+													source={{
+														uri:
+															item.poster ||
+															item.poster_url ||
+															item.image ||
+															item.backdrop_url,
+													}}
+													style={styles.gridImage}
+													contentFit="cover"
+													contentPosition="center"
+													transition={150}
+													cachePolicy="memory-disk"
+												/>
+												{/* Eklenti Adı Rozeti */}
+												{itemPlugin ? (
+													<View
+														style={
+															styles.pluginBadge
+														}>
+														<Text
+															style={
+																styles.pluginBadgeText
+															}
+															numberOfLines={1}>
+															{itemPlugin}
+														</Text>
+													</View>
+												) : null}
+											</TouchableOpacity>
+										);
+									}}
 								/>
 							)}
 						</View>
@@ -634,5 +769,41 @@ const styles = StyleSheet.create({
 	profileContinueCard: {
 		marginRight: 0,
 		marginBottom: 4,
+	},
+	pluginBadge: {
+		position: "absolute",
+		top: 6,
+		left: 6,
+		backgroundColor: "rgba(15, 23, 42, 0.85)",
+		paddingHorizontal: 6,
+		paddingVertical: 2,
+		borderRadius: 4,
+		borderWidth: 0.5,
+		borderColor: "rgba(255, 255, 255, 0.25)",
+		maxWidth: "85%",
+	},
+	pluginBadgeText: {
+		color: "#38bdf8",
+		fontSize: 9,
+		fontWeight: "700",
+		textTransform: "uppercase",
+		letterSpacing: 0.3,
+	},
+	syncCard: {
+		flexDirection: "row",
+		alignItems: "center",
+		paddingHorizontal: 14,
+		paddingVertical: 10,
+		borderRadius: 12,
+		borderWidth: 1,
+		marginTop: 14,
+		gap: 10,
+	},
+	syncCardText: {
+		flex: 1,
+		fontSize: 13,
+		fontWeight: "600",
+		color: "#38bdf8",
+		lineHeight: 18,
 	},
 });

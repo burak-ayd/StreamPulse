@@ -1,6 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { notifyStorageChange } from "./storageListener";
+import { getDeviceId } from "./deviceId";
+import { now as getHlcNow } from "./hlc";
+import { filterPayload, capList, SIZE_CAPS } from "./fieldWhitelist";
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
 	USER_PROFILE: "user_profile",
 	FAVORITES: "user_favorites",
 	WATCH_HISTORY: "user_watch_history",
@@ -15,6 +19,53 @@ const STORAGE_KEYS = {
 	WATCHLIST: "user_watchlist",
 	SERIES_TOTAL_EPISODES: "streampulse_series_total_episodes",
 };
+
+// Sıralı yazma kuyruğu — read-modify-write yarış koşullarını önler
+const _mutationQueues = new Map();
+
+export async function mutate(key, fn) {
+	const current = _mutationQueues.get(key) || Promise.resolve();
+	const next = current
+		.then(async () => {
+			return await fn();
+		})
+		.catch((err) => {
+			console.warn(`mutate error for [${key}]:`, err);
+			throw err;
+		});
+	_mutationQueues.set(key, next);
+	return next;
+}
+
+/**
+ * Kullanıcı verilerini temizler.
+ * Oturum tokenları, cihaz kimliği ve şema sürümünü KORUR.
+ */
+export async function clearAllUserData() {
+	const userKeys = [
+		STORAGE_KEYS.USER_PROFILE,
+		STORAGE_KEYS.FAVORITES,
+		STORAGE_KEYS.WATCH_HISTORY,
+		STORAGE_KEYS.SETTINGS,
+		STORAGE_KEYS.SEARCH_HISTORY,
+		STORAGE_KEYS.PLAYER_SETTINGS,
+		STORAGE_KEYS.SELECTED_PLATFORM,
+		STORAGE_KEYS.DOWNLOADS,
+		STORAGE_KEYS.CONTINUE_WATCHING,
+		STORAGE_KEYS.PLUGIN_VISIBILITY,
+		STORAGE_KEYS.CATEGORY_VISIBILITY,
+		STORAGE_KEYS.WATCHLIST,
+		STORAGE_KEYS.SERIES_TOTAL_EPISODES,
+	];
+	try {
+		await AsyncStorage.multiRemove(userKeys);
+		userKeys.forEach((k) => notifyStorageChange(k, null));
+		return true;
+	} catch (error) {
+		console.error("clearAllUserData hatası:", error);
+		throw error;
+	}
+}
 
 export const NONE_PLATFORM = {
 	id: "none",
@@ -42,14 +93,14 @@ export const DEFAULT_PLAYER_SETTINGS = {
 };
 
 const DEFAULT_PROFILE = {
-	username: "sinemasever",
-	displayName: "Sinema Sever",
-	email: "kullanici@cineverse.com",
+	username: "misafir",
+	displayName: "Misafir Kullanıcı",
+	email: "",
 	avatarUrl: "",
-	bio: "Film ve dizi tutkunu. Sinema dünyasındaki en son yapımları keşfediyorum.",
+	bio: "",
 	language: "Türkçe",
 	isPrivate: false,
-	birthDate: "1995-05-15",
+	birthDate: "",
 };
 
 /**
@@ -77,31 +128,36 @@ export async function getUserProfile() {
  * Kullanıcı profil bilgilerini AsyncStorage'a kaydeder
  */
 export async function saveUserProfile(profileUpdates) {
-	try {
-		const currentProfile = await getUserProfile();
-		const updatedProfile = {
-			...currentProfile,
-			...profileUpdates,
-			updatedAt: new Date().toISOString(),
-		};
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.USER_PROFILE,
-			JSON.stringify(updatedProfile),
-		);
-		return updatedProfile;
-	} catch (error) {
-		console.error("Profil kaydedilirken hata:", error);
-		throw error;
-	}
+	return mutate(STORAGE_KEYS.USER_PROFILE, async () => {
+		try {
+			const currentProfile = await getUserProfile();
+			const updatedProfile = {
+				...currentProfile,
+				...profileUpdates,
+				updatedAt: new Date().toISOString(),
+			};
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.USER_PROFILE,
+				JSON.stringify(updatedProfile),
+			);
+			notifyStorageChange(STORAGE_KEYS.USER_PROFILE, updatedProfile);
+			return updatedProfile;
+		} catch (error) {
+			console.error("Profil kaydedilirken hata:", error);
+			throw error;
+		}
+	});
 }
 
 /**
- * Favori filmleri/içerikleri getirir
+ * Favori filmleri/içerikleri getirir (silinmemiş olanlar)
  */
 export async function getFavorites() {
 	try {
 		const data = await AsyncStorage.getItem(STORAGE_KEYS.FAVORITES);
-		return data ? JSON.parse(data) : [];
+		if (!data) return [];
+		const list = JSON.parse(data);
+		return Array.isArray(list) ? list.filter((item) => !item._deleted) : [];
 	} catch (error) {
 		console.error("Favoriler okunurken hata:", error);
 		return [];
@@ -110,26 +166,71 @@ export async function getFavorites() {
 
 /**
  * Bir içeriği favorilere ekler veya favorilerden çıkarır (toggle)
+ * Tombstone desteği ile senkronizasyona uygundur.
  */
 export async function toggleFavorite(movie) {
-	try {
-		const favorites = await getFavorites();
-		const exists = favorites.some((item) => item.id === movie.id);
-		let updated;
-		if (exists) {
-			updated = favorites.filter((item) => item.id !== movie.id);
-		} else {
-			updated = [movie, ...favorites];
+	return mutate(STORAGE_KEYS.FAVORITES, async () => {
+		try {
+			const data = await AsyncStorage.getItem(STORAGE_KEYS.FAVORITES);
+			const all = data ? JSON.parse(data) : [];
+			const deviceId = await getDeviceId();
+			const hlc = getHlcNow();
+			const movieId = movie.id || movie.url;
+
+			const existingIndex = all.findIndex((item) => (item.id || item.url) === movieId);
+			let updated;
+			let isNowFav = false;
+
+			if (existingIndex !== -1) {
+				const existing = all[existingIndex];
+				if (existing._deleted) {
+					isNowFav = true;
+					const revived = {
+						...existing,
+						...filterPayload(movie),
+						_hlc: hlc,
+						_deviceId: deviceId,
+						_deleted: false,
+						updatedAt: new Date().toISOString(),
+					};
+					updated = [revived, ...all.filter((_, idx) => idx !== existingIndex)];
+				} else {
+					isNowFav = false;
+					const tombstone = {
+						...existing,
+						_hlc: hlc,
+						_deviceId: deviceId,
+						_deleted: true,
+						updatedAt: new Date().toISOString(),
+					};
+					updated = [tombstone, ...all.filter((_, idx) => idx !== existingIndex)];
+				}
+			} else {
+				isNowFav = true;
+				const newItem = {
+					...filterPayload(movie),
+					id: movieId,
+					_hlc: hlc,
+					_deviceId: deviceId,
+					_deleted: false,
+					updatedAt: new Date().toISOString(),
+				};
+				updated = [newItem, ...all];
+			}
+
+			const capped = capList(updated, SIZE_CAPS.favorites || 500);
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.FAVORITES,
+				JSON.stringify(capped),
+			);
+			const activeFavs = capped.filter((i) => !i._deleted);
+			notifyStorageChange(STORAGE_KEYS.FAVORITES, activeFavs);
+			return isNowFav;
+		} catch (error) {
+			console.error("Favori güncellenirken hata:", error);
+			throw error;
 		}
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.FAVORITES,
-			JSON.stringify(updated),
-		);
-		return !exists;
-	} catch (error) {
-		console.error("Favori güncellenirken hata:", error);
-		throw error;
-	}
+	});
 }
 
 /**
@@ -138,7 +239,7 @@ export async function toggleFavorite(movie) {
 export async function isFavorite(movieId) {
 	try {
 		const favorites = await getFavorites();
-		return favorites.some((item) => item.id === movieId);
+		return favorites.some((item) => (item.id || item.url) === movieId);
 	} catch (error) {
 		console.error("Favori durumu kontrol edilirken hata:", error);
 		return false;
@@ -151,7 +252,9 @@ export async function isFavorite(movieId) {
 export async function getWatchHistory() {
 	try {
 		const data = await AsyncStorage.getItem(STORAGE_KEYS.WATCH_HISTORY);
-		return data ? JSON.parse(data) : [];
+		if (!data) return [];
+		const list = JSON.parse(data);
+		return Array.isArray(list) ? list.filter((i) => !i._deleted) : [];
 	} catch (error) {
 		console.error("İzleme geçmişi okunurken hata:", error);
 		return [];
@@ -162,121 +265,143 @@ export async function getWatchHistory() {
  * İzleme geçmişine içerik ekler
  */
 export async function addToWatchHistory(movie) {
-	try {
-		if (!movie) return [];
-		const history = await getWatchHistory();
-		const isMovieEpisode =
-			movie.type === "episode" || Boolean(movie.season && movie.episode);
+	return mutate(STORAGE_KEYS.WATCH_HISTORY, async () => {
+		try {
+			if (!movie) return [];
+			const raw = await AsyncStorage.getItem(STORAGE_KEYS.WATCH_HISTORY);
+			const history = raw ? JSON.parse(raw) : [];
+			const isMovieEpisode =
+				movie.type === "episode" || Boolean(movie.season && movie.episode);
 
-		const finalMovie = {
-			...movie,
-			id:
-				isMovieEpisode && movie.season && movie.episode
-					? movie.id && movie.id !== movie.seriesId
-						? movie.id
-						: `${movie.seriesId || movie.seriesTitle || "series"}_s${movie.season}_e${movie.episode}`
-					: movie.id || movie.url,
-			watchedAt: new Date().toISOString(),
-		};
+			const deviceId = await getDeviceId();
+			const hlc = getHlcNow();
 
-		const movieId = finalMovie.id || finalMovie.url;
+			const finalMovie = {
+				...filterPayload(movie),
+				id:
+					isMovieEpisode && movie.season && movie.episode
+						? movie.id && movie.id !== movie.seriesId
+							? movie.id
+							: `${movie.seriesId || movie.seriesTitle || "series"}_s${movie.season}_e${movie.episode}`
+						: movie.id || movie.url,
+				watchedAt: new Date().toISOString(),
+				_hlc: hlc,
+				_deviceId: deviceId,
+				_deleted: false,
+			};
 
-		// Varsa eski kaydı çıkaralım (bölümler için sadece AYNI bölüm çıkarılır)
-		const filtered = history.filter((item) => {
-			const isItemEpisode =
-				item.type === "episode" || Boolean(item.season && item.episode);
+			const movieId = finalMovie.id || finalMovie.url;
 
-			if (isMovieEpisode && isItemEpisode) {
-				const sameSeries =
-					(finalMovie.seriesId &&
-						item.seriesId &&
-						finalMovie.seriesId === item.seriesId) ||
-					(finalMovie.seriesTitle &&
-						item.seriesTitle &&
-						finalMovie.seriesTitle.toLowerCase().trim() ===
-							item.seriesTitle.toLowerCase().trim());
+			const filtered = history.filter((item) => {
+				const isItemEpisode =
+					item.type === "episode" || Boolean(item.season && item.episode);
 
-				// Aynı dizi ve aynı sezon/bölüm ise eskisini sil (güncelle)
-				if (
-					sameSeries &&
-					Number(item.season) === Number(finalMovie.season) &&
-					Number(item.episode) === Number(finalMovie.episode)
-				) {
-					return false;
+				if (isMovieEpisode && isItemEpisode) {
+					const sameSeries =
+						(finalMovie.seriesId &&
+							item.seriesId &&
+							finalMovie.seriesId === item.seriesId) ||
+						(finalMovie.seriesTitle &&
+							item.seriesTitle &&
+							finalMovie.seriesTitle.toLowerCase().trim() ===
+								item.seriesTitle.toLowerCase().trim());
+
+					if (
+						sameSeries &&
+						Number(item.season) === Number(finalMovie.season) &&
+						Number(item.episode) === Number(finalMovie.episode)
+					) {
+						return false;
+					}
+
+					if (finalMovie.url && item.url && finalMovie.url === item.url) {
+						return false;
+					}
+
+					if (movieId && item.id && movieId === item.id) {
+						return false;
+					}
+
+					return true;
 				}
 
-				// Aynı url ise eskisini sil
-				if (finalMovie.url && item.url && finalMovie.url === item.url) {
-					return false;
+				if (isMovieEpisode !== isItemEpisode) {
+					return true;
 				}
 
-				if (movieId && item.id && movieId === item.id) {
-					return false;
-				}
-
-				// Farklı bölümler ise KORU
+				const itemId = item.id || item.url;
+				if (movieId && itemId === movieId) return false;
+				if (finalMovie.url && item.url === finalMovie.url) return false;
 				return true;
+			});
+
+			const updated = [finalMovie, ...filtered].slice(0, SIZE_CAPS.watch_history || 50);
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.WATCH_HISTORY,
+				JSON.stringify(updated),
+			);
+			notifyStorageChange(STORAGE_KEYS.WATCH_HISTORY, updated.filter((i) => !i._deleted));
+
+			// Tamamlandığı için Planlanan listesinden temizle
+			if (finalMovie.isCompleted) {
+				await removeFromWatchlist(finalMovie);
 			}
 
-			// Biri dizi diğeri bölüm ise birbirlerini silmesinler
-			if (isMovieEpisode !== isItemEpisode) {
-				return true;
-			}
-
-			// Film veya genel içerik karşılaştırması
-			const itemId = item.id || item.url;
-			if (movieId && itemId === movieId) return false;
-			if (finalMovie.url && item.url === finalMovie.url) return false;
-			return true;
-		});
-
-		const updated = [finalMovie, ...filtered];
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.WATCH_HISTORY,
-			JSON.stringify(updated.slice(0, 200)), // En fazla 200 kayıt
-		);
-
-		// Tamamlandığı için Planlanan listesinden temizle
-		if (finalMovie.isCompleted) {
-			await removeFromWatchlist(finalMovie);
+			return updated;
+		} catch (error) {
+			console.error("İzleme geçmişi güncellenirken hata:", error);
+			throw error;
 		}
-
-		return updated;
-	} catch (error) {
-		console.error("İzleme geçmişi güncellenirken hata:", error);
-		throw error;
-	}
+	});
 }
 
 /**
  * İzleme geçmişinden (tamamlananlardan) içerik siler
  */
 export async function removeFromWatchHistory(target) {
-	try {
-		if (!target) return [];
-		const targetId = typeof target === "object" ? (target.id || target.url) : target;
-		const targetUrl = typeof target === "object" ? target.url : null;
-		const targetSeriesId = typeof target === "object" ? (target.seriesId || target.id) : null;
-		const targetTitle = typeof target === "object" ? (target.seriesTitle || target.title)?.toLowerCase().trim() : null;
+	return mutate(STORAGE_KEYS.WATCH_HISTORY, async () => {
+		try {
+			if (!target) return [];
+			const targetId = typeof target === "object" ? (target.id || target.url) : target;
+			const targetUrl = typeof target === "object" ? target.url : null;
+			const targetSeriesId = typeof target === "object" ? (target.seriesId || target.id) : null;
+			const targetTitle = typeof target === "object" ? (target.seriesTitle || target.title)?.toLowerCase().trim() : null;
 
-		const history = await getWatchHistory();
-		const updated = history.filter((item) => {
-			if (targetId && (item.id === targetId || item.url === targetId)) return false;
-			if (targetUrl && (item.id === targetUrl || item.url === targetUrl)) return false;
-			// Hedef bir dizi ise veya aynı diziye ait bölümler varsa onları da temizle
-			if (targetSeriesId && (item.seriesId === targetSeriesId || item.id === targetSeriesId)) return false;
-			if (targetTitle && (item.seriesTitle?.toLowerCase().trim() === targetTitle || item.title?.toLowerCase().trim() === targetTitle)) return false;
-			return true;
-		});
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.WATCH_HISTORY,
-			JSON.stringify(updated),
-		);
-		return updated;
-	} catch (error) {
-		console.error("İzleme geçmişinden silinirken hata:", error);
-		return [];
-	}
+			const raw = await AsyncStorage.getItem(STORAGE_KEYS.WATCH_HISTORY);
+			const history = raw ? JSON.parse(raw) : [];
+			const deviceId = await getDeviceId();
+			const hlc = getHlcNow();
+
+			const updated = history.map((item) => {
+				const isMatch =
+					(targetId && (item.id === targetId || item.url === targetId)) ||
+					(targetUrl && (item.id === targetUrl || item.url === targetUrl)) ||
+					(targetSeriesId && (item.seriesId === targetSeriesId || item.id === targetSeriesId)) ||
+					(targetTitle && (item.seriesTitle?.toLowerCase().trim() === targetTitle || item.title?.toLowerCase().trim() === targetTitle));
+
+				if (isMatch) {
+					return {
+						...item,
+						_hlc: hlc,
+						_deviceId: deviceId,
+						_deleted: true,
+					};
+				}
+				return item;
+			});
+
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.WATCH_HISTORY,
+				JSON.stringify(updated),
+			);
+			const activeHistory = updated.filter((i) => !i._deleted);
+			notifyStorageChange(STORAGE_KEYS.WATCH_HISTORY, activeHistory);
+			return activeHistory;
+		} catch (error) {
+			console.error("İzleme geçmişinden silinirken hata:", error);
+			return [];
+		}
+	});
 }
 
 /**
@@ -296,56 +421,65 @@ export async function getSearchHistory() {
  * Arama geçmişine yeni sorgu ekler (en fazla 20 adet)
  */
 export async function addToSearchHistory(query) {
-	try {
-		if (!query || !query.trim()) return [];
-		const trimmed = query.trim();
-		const history = await getSearchHistory();
-		const filtered = history.filter(
-			(item) => item.toLowerCase() !== trimmed.toLowerCase(),
-		);
-		const updated = [trimmed, ...filtered].slice(0, 20);
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.SEARCH_HISTORY,
-			JSON.stringify(updated),
-		);
-		return updated;
-	} catch (error) {
-		console.error("Arama geçmişi kaydedilirken hata:", error);
-		return [];
-	}
+	return mutate(STORAGE_KEYS.SEARCH_HISTORY, async () => {
+		try {
+			if (!query || !query.trim()) return [];
+			const trimmed = query.trim();
+			const history = await getSearchHistory();
+			const filtered = history.filter(
+				(item) => item.toLowerCase() !== trimmed.toLowerCase(),
+			);
+			const updated = [trimmed, ...filtered].slice(0, SIZE_CAPS.search_history || 20);
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.SEARCH_HISTORY,
+				JSON.stringify(updated),
+			);
+			notifyStorageChange(STORAGE_KEYS.SEARCH_HISTORY, updated);
+			return updated;
+		} catch (error) {
+			console.error("Arama geçmişi kaydedilirken hata:", error);
+			return [];
+		}
+	});
 }
 
 /**
  * Arama geçmişinden tek bir sorguyu siler
  */
 export async function removeFromSearchHistory(query) {
-	try {
-		const history = await getSearchHistory();
-		const updated = history.filter(
-			(item) => item.toLowerCase() !== query.toLowerCase(),
-		);
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.SEARCH_HISTORY,
-			JSON.stringify(updated),
-		);
-		return updated;
-	} catch (error) {
-		console.error("Arama geçmişinden silinirken hata:", error);
-		return [];
-	}
+	return mutate(STORAGE_KEYS.SEARCH_HISTORY, async () => {
+		try {
+			const history = await getSearchHistory();
+			const updated = history.filter(
+				(item) => item.toLowerCase() !== query.toLowerCase(),
+			);
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.SEARCH_HISTORY,
+				JSON.stringify(updated),
+			);
+			notifyStorageChange(STORAGE_KEYS.SEARCH_HISTORY, updated);
+			return updated;
+		} catch (error) {
+			console.error("Arama geçmişinden silinirken hata:", error);
+			return [];
+		}
+	});
 }
 
 /**
  * Arama geçmişini temizler
  */
 export async function clearSearchHistory() {
-	try {
-		await AsyncStorage.removeItem(STORAGE_KEYS.SEARCH_HISTORY);
-		return [];
-	} catch (error) {
-		console.error("Arama geçmişi temizlenirken hata:", error);
-		return [];
-	}
+	return mutate(STORAGE_KEYS.SEARCH_HISTORY, async () => {
+		try {
+			await AsyncStorage.removeItem(STORAGE_KEYS.SEARCH_HISTORY);
+			notifyStorageChange(STORAGE_KEYS.SEARCH_HISTORY, []);
+			return [];
+		} catch (error) {
+			console.error("Arama geçmişi temizlenirken hata:", error);
+			return [];
+		}
+	});
 }
 
 /**
@@ -368,37 +502,43 @@ export async function getPlayerSettings() {
  * Video oynatıcı ve altyazı ayarlarını günceller
  */
 export async function savePlayerSettings(updates) {
-	try {
-		const current = await getPlayerSettings();
-		const updated = {
-			...current,
-			...updates,
-		};
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.PLAYER_SETTINGS,
-			JSON.stringify(updated),
-		);
-		return updated;
-	} catch (error) {
-		console.error("Player ayarları kaydedilirken hata:", error);
-		throw error;
-	}
+	return mutate(STORAGE_KEYS.PLAYER_SETTINGS, async () => {
+		try {
+			const current = await getPlayerSettings();
+			const updated = {
+				...current,
+				...updates,
+			};
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.PLAYER_SETTINGS,
+				JSON.stringify(updated),
+			);
+			notifyStorageChange(STORAGE_KEYS.PLAYER_SETTINGS, updated);
+			return updated;
+		} catch (error) {
+			console.error("Player ayarları kaydedilirken hata:", error);
+			throw error;
+		}
+	});
 }
 
 /**
  * Video oynatıcı ayarlarını varsayılana sıfırlar
  */
 export async function resetPlayerSettings() {
-	try {
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.PLAYER_SETTINGS,
-			JSON.stringify(DEFAULT_PLAYER_SETTINGS),
-		);
-		return DEFAULT_PLAYER_SETTINGS;
-	} catch (error) {
-		console.error("Player ayarları sıfırlanırken hata:", error);
-		return DEFAULT_PLAYER_SETTINGS;
-	}
+	return mutate(STORAGE_KEYS.PLAYER_SETTINGS, async () => {
+		try {
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.PLAYER_SETTINGS,
+				JSON.stringify(DEFAULT_PLAYER_SETTINGS),
+			);
+			notifyStorageChange(STORAGE_KEYS.PLAYER_SETTINGS, DEFAULT_PLAYER_SETTINGS);
+			return DEFAULT_PLAYER_SETTINGS;
+		} catch (error) {
+			console.error("Player ayarları sıfırlanırken hata:", error);
+			return DEFAULT_PLAYER_SETTINGS;
+		}
+	});
 }
 
 /**
@@ -418,20 +558,24 @@ export async function getSelectedPlatform() {
  * Seçilen platform/eklentiyi kaydeder
  */
 export async function saveSelectedPlatform(platform) {
-	try {
-		if (!platform) {
-			await AsyncStorage.removeItem(STORAGE_KEYS.SELECTED_PLATFORM);
-			return null;
+	return mutate(STORAGE_KEYS.SELECTED_PLATFORM, async () => {
+		try {
+			if (!platform) {
+				await AsyncStorage.removeItem(STORAGE_KEYS.SELECTED_PLATFORM);
+				notifyStorageChange(STORAGE_KEYS.SELECTED_PLATFORM, null);
+				return null;
+			}
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.SELECTED_PLATFORM,
+				JSON.stringify(platform),
+			);
+			notifyStorageChange(STORAGE_KEYS.SELECTED_PLATFORM, platform);
+			return platform;
+		} catch (error) {
+			console.error("Seçili platform kaydedilirken hata:", error);
+			throw error;
 		}
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.SELECTED_PLATFORM,
-			JSON.stringify(platform),
-		);
-		return platform;
-	} catch (error) {
-		console.error("Seçili platform kaydedilirken hata:", error);
-		throw error;
-	}
+	});
 }
 
 /**
@@ -448,40 +592,46 @@ export async function getDownloads() {
 }
 
 /**
- * İndirilen içeriği kaydeder/günceller
+ * İndirilen içeriği kaydeder/günceller (en fazla 200 adet)
  */
 export async function saveDownloadItem(item) {
-	try {
-		const list = await getDownloads();
-		const filtered = list.filter((i) => i.id !== item.id);
-		const updated = [item, ...filtered];
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.DOWNLOADS,
-			JSON.stringify(updated),
-		);
-		return updated;
-	} catch (error) {
-		console.error("İndirme kaydedilirken hata:", error);
-		throw error;
-	}
+	return mutate(STORAGE_KEYS.DOWNLOADS, async () => {
+		try {
+			const list = await getDownloads();
+			const filtered = list.filter((i) => i.id !== item.id);
+			const updated = [item, ...filtered].slice(0, SIZE_CAPS.downloads || 200);
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.DOWNLOADS,
+				JSON.stringify(updated),
+			);
+			notifyStorageChange(STORAGE_KEYS.DOWNLOADS, updated);
+			return updated;
+		} catch (error) {
+			console.error("İndirme kaydedilirken hata:", error);
+			throw error;
+		}
+	});
 }
 
 /**
  * İndirilen içeriği siler
  */
 export async function deleteDownloadItem(itemId) {
-	try {
-		const list = await getDownloads();
-		const updated = list.filter((i) => i.id !== itemId);
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.DOWNLOADS,
-			JSON.stringify(updated),
-		);
-		return updated;
-	} catch (error) {
-		console.error("İndirme silinirken hata:", error);
-		throw error;
-	}
+	return mutate(STORAGE_KEYS.DOWNLOADS, async () => {
+		try {
+			const list = await getDownloads();
+			const updated = list.filter((i) => i.id !== itemId);
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.DOWNLOADS,
+				JSON.stringify(updated),
+			);
+			notifyStorageChange(STORAGE_KEYS.DOWNLOADS, updated);
+			return updated;
+		} catch (error) {
+			console.error("İndirme silinirken hata:", error);
+			throw error;
+		}
+	});
 }
 
 /**
@@ -493,9 +643,11 @@ export async function getContinueWatching() {
 		if (!data) return [];
 		const list = JSON.parse(data);
 		if (!Array.isArray(list)) return [];
-		return list.sort(
-			(a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0),
-		);
+		return list
+			.filter((i) => !i._deleted)
+			.sort(
+				(a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0),
+			);
 	} catch (error) {
 		console.error("Kaldığın yerden devam et listesi okunurken hata:", error);
 		return [];
@@ -509,71 +661,101 @@ export async function getContinueWatching() {
  * - Aksi halde en başa ekler veya günceller (en fazla 50 kayıt)
  */
 export async function saveContinueWatching(item) {
-	try {
-		if (!item || !item.id) return [];
+	return mutate(STORAGE_KEYS.CONTINUE_WATCHING, async () => {
+		try {
+			if (!item || !item.id) return [];
 
-		// Threshold kontrolü: 10 saniyeden az izlendiyse kaydetme
-		if ((item.currentTime || 0) < 10) {
-			return await getContinueWatching();
+			// Threshold kontrolü: 10 saniyeden az izlendiyse kaydetme
+			if ((item.currentTime || 0) < 10) {
+				return await getContinueWatching();
+			}
+
+			const duration = item.duration || 0;
+			const progress =
+				duration > 0 ? item.currentTime / duration : item.progress || 0;
+
+			// %90 veya daha fazlası izlendiyse tamamlandı kabul et ve listeden kaldır
+			if (progress >= 0.9) {
+				return await removeContinueWatching(item.id);
+			}
+
+			const raw = await AsyncStorage.getItem(STORAGE_KEYS.CONTINUE_WATCHING);
+			const currentList = raw ? JSON.parse(raw) : [];
+			const filtered = currentList.filter((i) => i.id !== item.id && i.url !== item.id);
+
+			const deviceId = await getDeviceId();
+			const hlc = getHlcNow();
+
+			const updatedItem = {
+				...filterPayload(item),
+				id: item.id,
+				progress,
+				_hlc: hlc,
+				_deviceId: deviceId,
+				_deleted: false,
+				updatedAt: new Date().toISOString(),
+			};
+
+			const newList = [updatedItem, ...filtered].slice(0, SIZE_CAPS.continue_watching || 50);
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.CONTINUE_WATCHING,
+				JSON.stringify(newList),
+			);
+			notifyStorageChange(STORAGE_KEYS.CONTINUE_WATCHING, newList.filter((i) => !i._deleted));
+
+			// İzlenmeye başlandığı için Planlanan (Watchlist) listesinden otomatik kaldır
+			await removeFromWatchlist(item);
+
+			return newList.filter((i) => !i._deleted);
+		} catch (error) {
+			console.error("Kaldığın yerden devam et kaydedilirken hata:", error);
+			return [];
 		}
-
-		const duration = item.duration || 0;
-		const progress =
-			duration > 0 ? item.currentTime / duration : item.progress || 0;
-
-		// %90 veya daha fazlası izlendiyse tamamlandı kabul et ve listeden kaldır
-		if (progress >= 0.9) {
-			return await removeContinueWatching(item.id);
-		}
-
-		const currentList = await getContinueWatching();
-		const filtered = currentList.filter((i) => i.id !== item.id);
-
-		const updatedItem = {
-			...item,
-			progress,
-			updatedAt: new Date().toISOString(),
-		};
-
-		const newList = [updatedItem, ...filtered].slice(0, 50);
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.CONTINUE_WATCHING,
-			JSON.stringify(newList),
-		);
-
-		// İzlenmeye başlandığı için Planlanan (Watchlist) listesinden otomatik kaldır
-		await removeFromWatchlist(item);
-
-		return newList;
-	} catch (error) {
-		console.error("Kaldığın yerden devam et kaydedilirken hata:", error);
-		return [];
-	}
+	});
 }
 
 /**
- * İçeriği devam et listesinden siler
+ * İçeriği devam et listesinden siler (tombstone desteği ile)
  */
 export async function removeContinueWatching(target) {
-	try {
-		if (!target) return [];
-		const targetId = typeof target === "object" ? (target.id || target.url) : target;
-		const targetUrl = typeof target === "object" ? target.url : null;
-		const currentList = await getContinueWatching();
-		const updated = currentList.filter((i) => {
-			if (targetId && (i.id === targetId || i.url === targetId)) return false;
-			if (targetUrl && (i.id === targetUrl || i.url === targetUrl)) return false;
-			return true;
-		});
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.CONTINUE_WATCHING,
-			JSON.stringify(updated),
-		);
-		return updated;
-	} catch (error) {
-		console.error("Kaldığın yerden devam et silinirken hata:", error);
-		return [];
-	}
+	return mutate(STORAGE_KEYS.CONTINUE_WATCHING, async () => {
+		try {
+			if (!target) return [];
+			const targetId = typeof target === "object" ? (target.id || target.url) : target;
+			const targetUrl = typeof target === "object" ? target.url : null;
+			const raw = await AsyncStorage.getItem(STORAGE_KEYS.CONTINUE_WATCHING);
+			const currentList = raw ? JSON.parse(raw) : [];
+
+			const deviceId = await getDeviceId();
+			const hlc = getHlcNow();
+
+			const updated = currentList.map((i) => {
+				const isMatch =
+					(targetId && (i.id === targetId || i.url === targetId)) ||
+					(targetUrl && (i.id === targetUrl || i.url === targetUrl));
+				if (isMatch) {
+					return {
+						...i,
+						_hlc: hlc,
+						_deviceId: deviceId,
+						_deleted: true,
+					};
+				}
+				return i;
+			});
+
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.CONTINUE_WATCHING,
+				JSON.stringify(updated),
+			);
+			const activeList = updated.filter((i) => !i._deleted);
+			notifyStorageChange(STORAGE_KEYS.CONTINUE_WATCHING, activeList);
+			return activeList;
+		} catch (error) {
+			console.error("Kaldığın yerden devam et silinirken hata:", error);
+			return [];
+		}
+	});
 }
 
 /**
@@ -1249,12 +1431,14 @@ export async function isCategoryVisible(pluginName, categoryKey) {
 }
 
 /**
- * Kitaplık / İzleme Listesi (Listem) öğelerini getirir
+ * Kitaplık / İzleme Listesi (Listem) öğelerini getirir (silinmemiş olanlar)
  */
 export async function getWatchlist() {
 	try {
 		const data = await AsyncStorage.getItem(STORAGE_KEYS.WATCHLIST);
-		return data ? JSON.parse(data) : [];
+		if (!data) return [];
+		const list = JSON.parse(data);
+		return Array.isArray(list) ? list.filter((i) => !i._deleted) : [];
 	} catch (error) {
 		console.error("Kitaplık listesi okunurken hata:", error);
 		return [];
@@ -1263,89 +1447,135 @@ export async function getWatchlist() {
 
 /**
  * İçeriği kitaplığa (Listem) ekler veya çıkarır (toggle)
+ * Tombstone desteği ve boyut kapağı ile.
  */
 export async function toggleWatchlist(item) {
-	try {
-		if (!item || (!item.id && !item.url)) return false;
-		const itemId = item.id || item.url;
-		const list = await getWatchlist();
-		const exists = list.some((i) => (i.id || i.url) === itemId);
-		let updated;
-		if (exists) {
-			updated = list.filter((i) => (i.id || i.url) !== itemId);
-		} else {
-			updated = [{ ...item, id: itemId }, ...list];
+	return mutate(STORAGE_KEYS.WATCHLIST, async () => {
+		try {
+			if (!item || (!item.id && !item.url)) return false;
+			const itemId = item.id || item.url;
+			const raw = await AsyncStorage.getItem(STORAGE_KEYS.WATCHLIST);
+			const all = raw ? JSON.parse(raw) : [];
+			const deviceId = await getDeviceId();
+			const hlc = getHlcNow();
+
+			const existingIndex = all.findIndex((i) => (i.id || i.url) === itemId);
+			let updated;
+			let isInList = false;
+
+			if (existingIndex !== -1) {
+				const existing = all[existingIndex];
+				if (existing._deleted) {
+					isInList = true;
+					const revived = {
+						...existing,
+						...filterPayload(item),
+						id: itemId,
+						_hlc: hlc,
+						_deviceId: deviceId,
+						_deleted: false,
+						updatedAt: new Date().toISOString(),
+					};
+					updated = [revived, ...all.filter((_, idx) => idx !== existingIndex)];
+				} else {
+					isInList = false;
+					const tombstone = {
+						...existing,
+						_hlc: hlc,
+						_deviceId: deviceId,
+						_deleted: true,
+						updatedAt: new Date().toISOString(),
+					};
+					updated = [tombstone, ...all.filter((_, idx) => idx !== existingIndex)];
+				}
+			} else {
+				isInList = true;
+				const newItem = {
+					...filterPayload(item),
+					id: itemId,
+					_hlc: hlc,
+					_deviceId: deviceId,
+					_deleted: false,
+					updatedAt: new Date().toISOString(),
+				};
+				updated = [newItem, ...all];
+			}
+
+			const capped = capList(updated, SIZE_CAPS.watchlist || 100);
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.WATCHLIST,
+				JSON.stringify(capped),
+			);
+			const activeList = capped.filter((i) => !i._deleted);
+			notifyStorageChange(STORAGE_KEYS.WATCHLIST, activeList);
+			return isInList;
+		} catch (error) {
+			console.error("Kitaplık listesi güncellenirken hata:", error);
+			throw error;
 		}
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.WATCHLIST,
-			JSON.stringify(updated),
-		);
-		return !exists;
-	} catch (error) {
-		console.error("Kitaplık listesi güncellenirken hata:", error);
-		throw error;
-	}
+	});
 }
 
 /**
- * İçeriği kitaplıktan (Listem / Planlanan) kaldırır
+ * İçeriği kitaplıktan (Listem / Planlanan) kaldırır (tombstone)
  */
 export async function removeFromWatchlist(target) {
-	try {
-		if (!target) return [];
-		const targetId =
-			typeof target === "object" ? target.id || target.url : target;
-		const targetUrl =
-			typeof target === "object" ? target.url || target.seriesUrl : null;
-		const targetSeriesId =
-			typeof target === "object" ? target.seriesId : null;
-		const targetSeriesUrl =
-			typeof target === "object" ? target.seriesUrl : null;
-		const targetTitle =
-			typeof target === "object"
-				? target.seriesTitle || target.title
-				: null;
+	return mutate(STORAGE_KEYS.WATCHLIST, async () => {
+		try {
+			if (!target) return [];
+			const targetId =
+				typeof target === "object" ? target.id || target.url : target;
+			const targetUrl =
+				typeof target === "object" ? target.url || target.seriesUrl : null;
+			const targetSeriesId =
+				typeof target === "object" ? target.seriesId : null;
+			const targetSeriesUrl =
+				typeof target === "object" ? target.seriesUrl : null;
+			const targetTitle =
+				typeof target === "object"
+					? target.seriesTitle || target.title
+					: null;
 
-		const list = await getWatchlist();
-		const updated = list.filter((i) => {
-			const itemId = i.id || i.url;
-			const itemUrl = i.url || i.seriesUrl;
-			const itemTitle = i.title || i.seriesTitle;
+			const raw = await AsyncStorage.getItem(STORAGE_KEYS.WATCHLIST);
+			const list = raw ? JSON.parse(raw) : [];
+			const deviceId = await getDeviceId();
+			const hlc = getHlcNow();
 
-			if (targetId && (itemId === targetId || itemUrl === targetId))
-				return false;
-			if (targetUrl && (itemId === targetUrl || itemUrl === targetUrl))
-				return false;
-			if (
-				targetSeriesId &&
-				(itemId === targetSeriesId || itemUrl === targetSeriesId)
-			)
-				return false;
-			if (
-				targetSeriesUrl &&
-				(itemId === targetSeriesUrl || itemUrl === targetSeriesUrl)
-			)
-				return false;
-			if (
-				targetTitle &&
-				itemTitle &&
-				targetTitle.trim().toLowerCase() ===
-					itemTitle.trim().toLowerCase()
-			) {
-				return false;
-			}
-			return true;
-		});
+			const updated = list.map((i) => {
+				const itemId = i.id || i.url;
+				const itemUrl = i.url || i.seriesUrl;
+				const itemTitle = i.title || i.seriesTitle;
 
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.WATCHLIST,
-			JSON.stringify(updated),
-		);
-		return updated;
-	} catch (error) {
-		console.error("Kitaplıktan kaldırılırken hata:", error);
-		return [];
-	}
+				const isMatch =
+					(targetId && (itemId === targetId || itemUrl === targetId)) ||
+					(targetUrl && (itemId === targetUrl || itemUrl === targetUrl)) ||
+					(targetSeriesId && (itemId === targetSeriesId || itemUrl === targetSeriesId)) ||
+					(targetSeriesUrl && (itemId === targetSeriesUrl || itemUrl === targetSeriesUrl)) ||
+					(targetTitle && itemTitle && targetTitle.trim().toLowerCase() === itemTitle.trim().toLowerCase());
+
+				if (isMatch) {
+					return {
+						...i,
+						_hlc: hlc,
+						_deviceId: deviceId,
+						_deleted: true,
+					};
+				}
+				return i;
+			});
+
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.WATCHLIST,
+				JSON.stringify(updated),
+			);
+			const activeList = updated.filter((i) => !i._deleted);
+			notifyStorageChange(STORAGE_KEYS.WATCHLIST, activeList);
+			return activeList;
+		} catch (error) {
+			console.error("Kitaplıktan kaldırılırken hata:", error);
+			return [];
+		}
+	});
 }
 
 /**
@@ -1526,4 +1756,42 @@ export default {
 	getSeriesTotalEpisodesMap,
 	saveSeriesTotalEpisodes,
 	getSeriesTotalEpisodes,
+	clearAllUserData,
+	resolvePluginName,
+	STORAGE_KEYS,
+	mutate,
 };
+
+/**
+ * Bir içerik nesnesinden veya URL'sinden ait olduğu eklenti (plugin) adını belirler
+ * @param {Object} item
+ * @returns {string|null}
+ */
+export function resolvePluginName(item) {
+	if (!item) return null;
+	if (item.plugin && typeof item.plugin === "string") return item.plugin;
+	const rawUrl =
+		item.url ||
+		item.seriesUrl ||
+		(typeof item.id === "string" ? item.id : "");
+	if (rawUrl) {
+		const lower = rawUrl.toLowerCase();
+		if (lower.includes("dizibox")) return "dizibox";
+		if (lower.includes("hdfilmcehennemi")) return "hdfilmcehennemi";
+		if (lower.includes("filmmodu")) return "filmmodu";
+		if (lower.includes("dizipal")) return "dizipal";
+		if (lower.includes("sezonlukdizi")) return "sezonlukdizi";
+		if (lower.includes("diziyou")) return "diziyou";
+		if (lower.includes("sinefy")) return "sinefy";
+		if (lower.includes("fullhdfilmizlesene")) return "fullhdfilmizlesene";
+		try {
+			const full = lower.startsWith("http") ? lower : `https://${lower}`;
+			const host = new URL(full).hostname.replace(/^www\./, "");
+			const parts = host.split(".");
+			if (parts.length > 0 && parts[0] && parts[0].length > 2) {
+				return parts[0];
+			}
+		} catch {}
+	}
+	return null;
+}
