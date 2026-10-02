@@ -5,13 +5,15 @@
  * "Hesabın var mı? Giriş yap" linki ile login'e yönlendirir.
  */
 
+import TVPressable from "@/components/common/TVPressable";
 import { useAuth } from "@/context/AuthContext";
 import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useRouter } from "expo-router";
-import { useState } from "react";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
 	ActivityIndicator,
+	BackHandler,
 	KeyboardAvoidingView,
 	Platform,
 	ScrollView,
@@ -36,6 +38,24 @@ export default function RegisterScreen() {
 	const [showPassword, setShowPassword] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState("");
+
+	useFocusEffect(
+		useCallback(() => {
+			const onBackPress = () => {
+				if (router.canGoBack()) {
+					router.back();
+				} else {
+					router.replace("/(app)");
+				}
+				return true;
+			};
+			const sub = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => sub.remove();
+		}, [router]),
+	);
 
 	const handleRegister = async () => {
 		if (!email.trim()) {
@@ -92,8 +112,9 @@ export default function RegisterScreen() {
 						keyboardShouldPersistTaps="handled"
 						showsVerticalScrollIndicator={false}>
 						{/* Geri düğmesi */}
-						<TouchableOpacity
+						<TVPressable
 							style={styles.backButton}
+							focusedStyle={styles.headerButtonFocused}
 							onPress={() =>
 								router.canGoBack()
 									? router.back()
@@ -105,7 +126,7 @@ export default function RegisterScreen() {
 								size={28}
 								color={colors.text}
 							/>
-						</TouchableOpacity>
+						</TVPressable>
 
 						{/* Başlık */}
 						<View style={styles.headerSection}>
@@ -306,11 +327,12 @@ export default function RegisterScreen() {
 										autoCapitalize="none"
 										autoComplete="new-password"
 									/>
-									<TouchableOpacity
+									<TVPressable
 										onPress={() =>
 											setShowPassword(!showPassword)
 										}
-										style={styles.eyeButton}>
+										style={styles.eyeButton}
+										focusedStyle={styles.eyeButtonFocused}>
 										<Ionicons
 											name={
 												showPassword
@@ -320,16 +342,17 @@ export default function RegisterScreen() {
 											size={20}
 											color={colors.textSecondary}
 										/>
-									</TouchableOpacity>
+									</TVPressable>
 								</View>
 							</View>
 
 							{/* Kayıt butonu */}
-							<TouchableOpacity
+							<TVPressable
 								style={[
 									styles.primaryButton,
 									isSubmitting && styles.disabledButton,
 								]}
+								focusedStyle={styles.primaryButtonFocused}
 								onPress={handleRegister}
 								disabled={isSubmitting}
 								activeOpacity={0.8}>
@@ -343,7 +366,7 @@ export default function RegisterScreen() {
 										Hesap Oluştur
 									</Text>
 								)}
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 
 						{/* Alt link */}
@@ -355,10 +378,11 @@ export default function RegisterScreen() {
 								]}>
 								Zaten hesabın var mı?{" "}
 							</Text>
-							<TouchableOpacity
+							<TVPressable
+								focusedStyle={styles.footerLinkFocused}
 								onPress={() => router.replace("/(auth)/login")}>
 								<Text style={styles.footerLink}>Giriş Yap</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 					</ScrollView>
 				</KeyboardAvoidingView>
@@ -488,5 +512,28 @@ const styles = StyleSheet.create({
 		fontSize: 15,
 		fontWeight: "700",
 		color: "#38bdf8",
+	},
+	headerButtonFocused: {
+		backgroundColor: "rgba(229, 9, 20, 0.2)",
+		borderRadius: 22,
+		transform: [{ scale: 1.1 }],
+	},
+	eyeButtonFocused: {
+		backgroundColor: "rgba(229, 9, 20, 0.15)",
+		borderRadius: 8,
+	},
+	primaryButtonFocused: {
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+		backgroundColor: "#0284c7",
+		transform: [{ scale: 1.02 }],
+	},
+	footerLinkFocused: {
+		borderWidth: 1,
+		borderColor: "#38bdf8",
+		backgroundColor: "rgba(56, 189, 248, 0.15)",
+		borderRadius: 6,
+		paddingHorizontal: 6,
+		paddingVertical: 2,
 	},
 });

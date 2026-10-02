@@ -1,14 +1,16 @@
 import BottomNavigation from "@/components/BottomNavigation";
+import TVPressable from "@/components/common/TVPressable";
 import { getDownloads } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
+	BackHandler,
+	Platform,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
 	Text,
-	TouchableOpacity,
 	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,6 +25,15 @@ export default function DownloadsScreen() {
 		});
 	}, []);
 
+	useEffect(() => {
+		const onBackPress = () => {
+			router.back();
+			return true;
+		};
+		const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+		return () => sub.remove();
+	}, [router]);
+
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
@@ -31,12 +42,11 @@ export default function DownloadsScreen() {
 
 				{/* Header */}
 				<View style={styles.header}>
-					<TouchableOpacity
+					<TVPressable
 						onPress={() => router.back()}
-						style={styles.backButton}
-						activeOpacity={0.7}>
+						style={styles.backButton}>
 						<Ionicons name="arrow-back" size={24} color="#ffffff" />
-					</TouchableOpacity>
+					</TVPressable>
 					<Text style={styles.headerTitle}>İndirilenler</Text>
 					<View style={{ width: 40 }} />
 				</View>
@@ -108,6 +118,7 @@ const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
 		backgroundColor: "#0d0e12",
+		paddingLeft: Platform.isTV ? 56 : 0,
 	},
 	header: {
 		height: 56,
@@ -121,6 +132,7 @@ const styles = StyleSheet.create({
 	backButton: {
 		width: 40,
 		height: 40,
+		borderRadius: 20,
 		justifyContent: "center",
 		alignItems: "center",
 	},

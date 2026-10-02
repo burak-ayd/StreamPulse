@@ -113,7 +113,8 @@
       "./scripts/withCustomApkName.js",
       "./scripts/withFileProvider.js",
       "./scripts/withBuildOptimizations.js",
-      "./scripts/withTVArch.js"
+      "./scripts/withTVArch.js",
+      "./scripts/withAndroidTV.js"
     ],
     "experiments": {
       "typedRoutes": true,

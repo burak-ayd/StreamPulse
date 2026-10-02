@@ -1,10 +1,14 @@
 import BottomNavigation from "@components/BottomNavigation";
+import TVPressable from "@/components/common/TVPressable";
 import { CATEGORIES } from "@constants/data";
 import { useThemeContext } from "@context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
+import { useEffect } from "react";
 import {
+	BackHandler,
 	FlatList,
+	Platform,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -16,6 +20,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function DiscoverScreen() {
 	const { theme, colors } = useThemeContext();
+	const router = useRouter();
+
+	useEffect(() => {
+		const onBackPress = () => {
+			router.push("/(app)");
+			return true;
+		};
+		const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+		return () => sub.remove();
+	}, [router]);
 
 	return (
 		<>
@@ -62,13 +76,20 @@ export default function DiscoverScreen() {
 							numColumns={2}
 							scrollEnabled={false}
 							columnWrapperStyle={styles.categoryRow}
-							renderItem={({ item }) => (
-								<TouchableOpacity
+							renderItem={({ item, index }) => (
+								<TVPressable
+									autoFocus={index === 0}
 									style={[
 										styles.categoryCard,
 										{ backgroundColor: colors.cardBg },
 									]}
-									activeOpacity={0.8}>
+									focusedStyle={styles.categoryCardFocused}
+									onPress={() => {
+										router.push({
+											pathname: "/(app)/search",
+											params: { category: item.name },
+										});
+									}}>
 									<Ionicons
 										name={item.icon}
 										size={36}
@@ -81,7 +102,7 @@ export default function DiscoverScreen() {
 										]}>
 										{item.name}
 									</Text>
-								</TouchableOpacity>
+								</TVPressable>
 							)}
 						/>
 					</View>
@@ -95,11 +116,15 @@ export default function DiscoverScreen() {
 							]}>
 							Şu Anda Trend
 						</Text>
-						<View
+						<TVPressable
 							style={[
 								styles.trendingCard,
 								{ backgroundColor: colors.cardBg },
-							]}>
+							]}
+							focusedStyle={styles.trendingCardFocused}
+							onPress={() => {
+								router.push("/(app)/search");
+							}}>
 							<Ionicons
 								name="stats-chart"
 								size={44}
@@ -112,7 +137,7 @@ export default function DiscoverScreen() {
 								]}>
 								Bölgenizdeki en popüler yapımları keşfedin
 							</Text>
-						</View>
+						</TVPressable>
 					</View>
 				</ScrollView>
 
@@ -125,6 +150,7 @@ export default function DiscoverScreen() {
 const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
+		paddingLeft: Platform.isTV ? 56 : 0,
 	},
 	header: {
 		height: 60,
@@ -160,6 +186,18 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		alignItems: "center",
 		gap: 8,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	categoryCardFocused: {
+		borderColor: "#FF3B30",
+		backgroundColor: "rgba(255, 59, 48, 0.15)",
+		transform: [{ scale: 1.05 }],
+		elevation: 6,
+		shadowColor: "#FF3B30",
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.5,
+		shadowRadius: 8,
 	},
 	categoryName: {
 		fontSize: 14,
@@ -172,6 +210,17 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		alignItems: "center",
 		gap: 12,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	trendingCardFocused: {
+		borderColor: "#FF3B30",
+		transform: [{ scale: 1.03 }],
+		elevation: 6,
+		shadowColor: "#FF3B30",
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.5,
+		shadowRadius: 8,
 	},
 	trendingText: {
 		fontSize: 14,

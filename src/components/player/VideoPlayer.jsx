@@ -10,8 +10,10 @@ import * as ScreenOrientation from "expo-screen-orientation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
+	BackHandler,
 	Dimensions,
 	PanResponder,
+	Platform,
 	Pressable,
 	StatusBar,
 	StyleSheet,
@@ -21,6 +23,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Video, { TextTrackType } from "react-native-video";
+import TVPressable from "../common/TVPressable";
+import { useTVRemote } from "@/hooks/useTVRemote";
 import TrackSelectionModal from "./TrackSelectionModal";
 
 // Altyazı CDN'leri (örn. Dizilla -> pichive) User-Agent + Referer olmadan 403 döner.
@@ -845,6 +849,79 @@ export default function VideoPlayer({
 		}
 	};
 
+	// Android TV Kumanda Tuş Dinleyicisi
+	useTVRemote(
+		(eventType) => {
+			if (!showControls) {
+				// Kontroller kapalıyken:
+				if (
+					eventType === "playPause" ||
+					eventType === "play" ||
+					eventType === "pause"
+				) {
+					setPaused((prev) => !prev);
+					return;
+				}
+				if (eventType === "left" || eventType === "rewind") {
+					handleSeekBy(-seekDuration);
+					setDoubleTapInfo({ type: "rewind", delta: seekDuration });
+					setTimeout(() => setDoubleTapInfo(null), 800);
+					return;
+				}
+				if (eventType === "right" || eventType === "fastForward") {
+					handleSeekBy(seekDuration);
+					setDoubleTapInfo({ type: "forward", delta: seekDuration });
+					setTimeout(() => setDoubleTapInfo(null), 800);
+					return;
+				}
+				// select, up, down, menu kontrolleri uyandırır
+				setShowControls(true);
+				startHideTimer();
+			} else {
+				// Kontroller açıkken her tuşta gizleme sayacını sıfırla
+				startHideTimer();
+
+				if (eventType === "playPause") {
+					setPaused((prev) => !prev);
+				} else if (eventType === "rewind") {
+					handleSeekBy(-seekDuration);
+				} else if (eventType === "fastForward") {
+					handleSeekBy(seekDuration);
+				}
+			}
+		},
+		true,
+	);
+
+	// Kumanda Donanım Geri (Back) Tuşu Hiyerarşisi
+	useEffect(() => {
+		const onBackPress = () => {
+			// 1. Öncelik: Açık bir modal varsa kapat
+			if (modalType !== null) {
+				setModalType(null);
+				startHideTimer();
+				return true;
+			}
+			// 2. Öncelik: Kontroller açıksa gizle
+			if (showControls) {
+				setShowControls(false);
+				return true;
+			}
+			// 3. Öncelik: Oynatıcıdan çık
+			if (onClose) {
+				onClose();
+				return true;
+			}
+			return false;
+		};
+
+		const subscription = BackHandler.addEventListener(
+			"hardwareBackPress",
+			onBackPress,
+		);
+		return () => subscription.remove();
+	}, [modalType, showControls, onClose, startHideTimer]);
+
 	// Scrub Bar touch handling
 	const [scrubPosition, setScrubPosition] = useState(null); // fraction [0, 1]
 	const progressBarLayoutRef = useRef({ width: 1, x: 0 });
@@ -1005,8 +1082,10 @@ export default function VideoPlayer({
 				</View>
 			)}
 
-			{/* 2. KATMAN: Tüm Ekranı Kaplayan Dokunma Yakalayıcı (Her zaman en üstte ve aktif) */}
+			{/* 2. KATMAN: Tüm Ekranı Kaplayan Dokunma/Kumanda Odak Yakalayıcı */}
 			<Pressable
+				focusable={!showControls}
+				hasTVPreferredFocus={!showControls && Platform.isTV}
 				style={[
 					StyleSheet.absoluteFill,
 					{
@@ -1032,19 +1111,19 @@ export default function VideoPlayer({
 						pointerEvents="box-none">
 						{/* TOP BAR */}
 						<View style={styles.topBar} pointerEvents="box-none">
-							<TouchableOpacity
+							<TVPressable
 								style={styles.iconButton}
+								focusedStyle={styles.iconButtonFocused}
 								onPress={() => {
 									startHideTimer();
 									onClose?.();
-								}}
-								activeOpacity={0.7}>
+								}}>
 								<Ionicons
 									name="chevron-back"
 									size={26}
 									color="#FFFFFF"
 								/>
-							</TouchableOpacity>
+							</TVPressable>
 
 							<View
 								style={styles.titleContainer}
@@ -1067,13 +1146,13 @@ export default function VideoPlayer({
 								style={styles.topActions}
 								pointerEvents="box-none">
 								{sources.length > 0 && (
-									<TouchableOpacity
+									<TVPressable
 										style={styles.pillButton}
+										focusedStyle={styles.pillButtonFocused}
 										onPress={() => {
 											startHideTimer();
 											setModalType("sources");
-										}}
-										activeOpacity={0.7}>
+										}}>
 										<Ionicons
 											name="server"
 											size={13}
@@ -1084,20 +1163,20 @@ export default function VideoPlayer({
 											numberOfLines={1}>
 											{sourceDisplayName}
 										</Text>
-									</TouchableOpacity>
+									</TVPressable>
 								)}
 
-								<TouchableOpacity
+								<TVPressable
 									style={[
 										styles.iconButton,
 										selectedAudioTrackIndex !== null &&
 											styles.iconButtonActive,
 									]}
+									focusedStyle={styles.iconButtonFocused}
 									onPress={() => {
 										startHideTimer();
 										setModalType("audio");
-									}}
-									activeOpacity={0.7}>
+									}}>
 									<Ionicons
 										name="volume-high-outline"
 										size={20}
@@ -1107,19 +1186,19 @@ export default function VideoPlayer({
 												: "#FFFFFF"
 										}
 									/>
-								</TouchableOpacity>
+								</TVPressable>
 
-								<TouchableOpacity
+								<TVPressable
 									style={[
 										styles.iconButton,
 										selectedSubtitle &&
 											styles.iconButtonActive,
 									]}
+									focusedStyle={styles.iconButtonFocused}
 									onPress={() => {
 										startHideTimer();
 										setModalType("subtitles");
-									}}
-									activeOpacity={0.7}>
+									}}>
 									<Ionicons
 										name="chatbubble-ellipses-outline"
 										size={20}
@@ -1129,15 +1208,15 @@ export default function VideoPlayer({
 												: "#FFFFFF"
 										}
 									/>
-								</TouchableOpacity>
+								</TVPressable>
 
-								<TouchableOpacity
+								<TVPressable
 									style={styles.iconButton}
+									focusedStyle={styles.iconButtonFocused}
 									onPress={() => {
 										startHideTimer();
 										setIsLocked((prev) => !prev);
-									}}
-									activeOpacity={0.7}>
+									}}>
 									<Ionicons
 										name={
 											isLocked
@@ -1147,15 +1226,15 @@ export default function VideoPlayer({
 										size={20}
 										color={isLocked ? "#FF3B30" : "#FFFFFF"}
 									/>
-								</TouchableOpacity>
+								</TVPressable>
 
-								<TouchableOpacity
+								<TVPressable
 									style={styles.iconButton}
+									focusedStyle={styles.iconButtonFocused}
 									onPress={() => {
 										startHideTimer();
 										toggleOrientation();
-									}}
-									activeOpacity={0.7}>
+									}}>
 									<Ionicons
 										name={
 											isLandscape
@@ -1165,7 +1244,7 @@ export default function VideoPlayer({
 										size={20}
 										color="#FFFFFF"
 									/>
-								</TouchableOpacity>
+								</TVPressable>
 							</View>
 						</View>
 
@@ -1174,13 +1253,13 @@ export default function VideoPlayer({
 							<View
 								style={styles.centerControls}
 								pointerEvents="box-none">
-								<TouchableOpacity
+								<TVPressable
 									style={styles.seekButton}
+									focusedStyle={styles.seekButtonFocused}
 									onPress={() => {
 										handleSeekBy(-seekDuration);
 										startHideTimer();
-									}}
-									activeOpacity={0.7}>
+									}}>
 									<Ionicons
 										name="play-back-outline"
 										size={24}
@@ -1189,29 +1268,30 @@ export default function VideoPlayer({
 									<Text style={styles.seekButtonText}>
 										-{seekDuration}s
 									</Text>
-								</TouchableOpacity>
+								</TVPressable>
 
-								<TouchableOpacity
+								<TVPressable
+									autoFocus={showControls}
 									style={styles.playPauseButton}
+									focusedStyle={styles.playPauseButtonFocused}
 									onPress={() => {
 										setPaused((prev) => !prev);
 										startHideTimer();
-									}}
-									activeOpacity={0.8}>
+									}}>
 									<Ionicons
 										name={paused ? "play" : "pause"}
 										size={38}
 										color="#FFFFFF"
 									/>
-								</TouchableOpacity>
+								</TVPressable>
 
-								<TouchableOpacity
+								<TVPressable
 									style={styles.seekButton}
+									focusedStyle={styles.seekButtonFocused}
 									onPress={() => {
 										handleSeekBy(seekDuration);
 										startHideTimer();
-									}}
-									activeOpacity={0.7}>
+									}}>
 									<Ionicons
 										name="play-forward-outline"
 										size={24}
@@ -1220,7 +1300,7 @@ export default function VideoPlayer({
 									<Text style={styles.seekButtonText}>
 										+{seekDuration}s
 									</Text>
-								</TouchableOpacity>
+								</TVPressable>
 							</View>
 						)}
 
@@ -1240,8 +1320,9 @@ export default function VideoPlayer({
 										</Text>
 									</Text>
 
-									<TouchableOpacity
+									<TVPressable
 										style={styles.resizeButton}
+										focusedStyle={styles.resizeButtonFocused}
 										onPress={() => {
 											startHideTimer();
 											setResizeMode((prev) =>
@@ -1264,7 +1345,7 @@ export default function VideoPlayer({
 												? "Sığdır"
 												: "Doldur"}
 										</Text>
-									</TouchableOpacity>
+									</TVPressable>
 								</View>
 
 								<View
@@ -1502,6 +1583,12 @@ const styles = StyleSheet.create({
 		borderColor: "rgba(255, 59, 48, 0.6)",
 		borderWidth: 1,
 	},
+	iconButtonFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.35)",
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.15 }],
+	},
 	pillButton: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -1514,6 +1601,12 @@ const styles = StyleSheet.create({
 		flexShrink: 1,
 		borderWidth: 1,
 		borderColor: "rgba(255, 59, 48, 0.35)",
+	},
+	pillButtonFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.4)",
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.1 }],
 	},
 	pillText: {
 		color: "#FFFFFF",
@@ -1540,6 +1633,13 @@ const styles = StyleSheet.create({
 		shadowRadius: 8,
 		elevation: 6,
 	},
+	playPauseButtonFocused: {
+		borderColor: "#FF3B30",
+		borderWidth: 3,
+		backgroundColor: "rgba(255, 59, 48, 0.95)",
+		transform: [{ scale: 1.18 }],
+		elevation: 10,
+	},
 	seekButton: {
 		width: 56,
 		height: 56,
@@ -1549,6 +1649,12 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		borderWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.15)",
+	},
+	seekButtonFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.35)",
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.15 }],
 	},
 	seekButtonText: {
 		color: "#FFFFFF",
@@ -1585,11 +1691,17 @@ const styles = StyleSheet.create({
 	resizeButton: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 4,
-		backgroundColor: "rgba(255, 255, 255, 0.12)",
-		paddingHorizontal: 8,
+		gap: 6,
+		paddingHorizontal: 10,
 		paddingVertical: 4,
-		borderRadius: 8,
+		borderRadius: 12,
+		backgroundColor: "rgba(255, 255, 255, 0.12)",
+	},
+	resizeButtonFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.35)",
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.08 }],
 	},
 	resizeButtonText: {
 		color: "#E5E5EA",

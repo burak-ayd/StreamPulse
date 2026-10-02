@@ -1,4 +1,5 @@
 import LanguageBadge from "@/components/common/LanguageBadge";
+import TVPressable from "@/components/common/TVPressable";
 import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -92,12 +93,12 @@ export default function MovieCategorySection({
 			{/* Section Header */}
 			<View style={styles.sectionHeader}>
 				<Text style={styles.sectionTitle}>{category.name}</Text>
-				<TouchableOpacity
+				<TVPressable
 					onPress={() => onSeeAll?.(category)}
 					style={styles.arrowButton}
-					activeOpacity={0.7}>
+					focusedStyle={styles.arrowButtonFocused}>
 					<Ionicons name="arrow-forward" size={18} color="#ffffff" />
-				</TouchableOpacity>
+				</TVPressable>
 			</View>
 
 			{/* Horizontal List of Cards */}
@@ -109,9 +110,10 @@ export default function MovieCategorySection({
 				horizontal
 				showsHorizontalScrollIndicator={false}
 				contentContainerStyle={styles.horizontalList}
-				initialNumToRender={5}
-				maxToRenderPerBatch={5}
-				windowSize={3}
+				initialNumToRender={6}
+				maxToRenderPerBatch={6}
+				windowSize={5}
+				removeClippedSubviews={false}
 				renderItem={({ item }) => {
 					const posterUri =
 						item.poster ||
@@ -128,51 +130,64 @@ export default function MovieCategorySection({
 						item.subtitles;
 
 					return (
-						<TouchableOpacity
+						<TVPressable
 							style={styles.cardContainer}
-							activeOpacity={0.8}
+							focusedStyle={styles.cardContainerFocused}
 							onPress={() => onMoviePress(item)}
 							onLongPress={() => onMovieLongPress?.(item)}>
-							{/* Poster Image Container */}
-							<View style={styles.posterWrapper}>
-								<Image
-									source={{ uri: posterUri }}
-									style={styles.poster}
-									contentFit="cover"
-									contentPosition="center"
-									transition={150}
-									cachePolicy="memory-disk"
-								/>
-
-								{/* Top-left Rating Badge */}
-								{rating && (
-									<View style={styles.ratingBadge}>
-										<Ionicons
-											name="star"
-											size={10}
-											color="#FFD700"
+							{({ focused }) => (
+								<View>
+									{/* Poster Image Container */}
+									<View
+										style={[
+											styles.posterWrapper,
+											focused && styles.posterWrapperFocused,
+										]}>
+										<Image
+											source={{ uri: posterUri }}
+											style={styles.poster}
+											contentFit="cover"
+											contentPosition="center"
+											transition={150}
+											cachePolicy="memory-disk"
 										/>
-										<Text style={styles.ratingText}>
-											{rating}
-										</Text>
+
+										{/* Top-left Rating Badge */}
+										{rating && (
+											<View style={styles.ratingBadge}>
+												<Ionicons
+													name="star"
+													size={10}
+													color="#FFD700"
+												/>
+												<Text style={styles.ratingText}>
+													{rating}
+												</Text>
+											</View>
+										)}
+
+										{/* Bottom-right Language Badge */}
+										{movieRawLang ? (
+											<LanguageBadge
+												language={movieRawLang}
+												size="small"
+												style={styles.languageBadge}
+											/>
+										) : null}
 									</View>
-								)}
 
-								{/* Bottom-right Language Badge */}
-								{movieRawLang ? (
-									<LanguageBadge
-										language={movieRawLang}
-										size="small"
-										style={styles.languageBadge}
-									/>
-								) : null}
-							</View>
-
-							{/* Title */}
-							<Text style={styles.movieTitle} numberOfLines={1}>
-								{item.title}
-							</Text>
-						</TouchableOpacity>
+									{/* Title */}
+									<Text
+										style={[
+											styles.movieTitle,
+											focused && styles.movieTitleFocused,
+										]}
+										numberOfLines={1}>
+										{item.title}
+									</Text>
+								</View>
+							)}
+						</TVPressable>
 					);
 				}}
 			/>
@@ -200,12 +215,22 @@ const styles = StyleSheet.create({
 	arrowButton: {
 		padding: 4,
 	},
+	arrowButtonFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.35)",
+		borderRadius: 12,
+		transform: [{ scale: 1.15 }],
+	},
 	horizontalList: {
 		paddingHorizontal: 18,
-		gap: 4,
+		gap: 6,
+		paddingVertical: 6,
 	},
 	cardContainer: {
 		width: 124,
+	},
+	cardContainerFocused: {
+		transform: [{ scale: 1.08 }],
+		zIndex: 10,
 	},
 	posterWrapper: {
 		width: 124,
@@ -214,6 +239,16 @@ const styles = StyleSheet.create({
 		overflow: "hidden",
 		backgroundColor: "#1c1e24",
 		position: "relative",
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	posterWrapperFocused: {
+		borderColor: "#FF3B30",
+		shadowColor: "#FF3B30",
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.6,
+		shadowRadius: 10,
+		elevation: 8,
 	},
 	poster: {
 		width: "100%",
@@ -251,6 +286,10 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 		marginTop: 6,
 		letterSpacing: -0.1,
+	},
+	movieTitleFocused: {
+		color: "#FF3B30",
+		fontWeight: "700",
 	},
 	loadingContainer: {
 		height: 140,

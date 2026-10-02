@@ -12,6 +12,7 @@ import {
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
+import TVPressable from "@components/common/TVPressable";
 import { Image } from "expo-image";
 import {
 	Stack,
@@ -19,8 +20,9 @@ import {
 	useLocalSearchParams,
 	useRouter,
 } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
+	BackHandler,
 	Dimensions,
 	FlatList,
 	ScrollView,
@@ -39,6 +41,19 @@ export default function ProfileScreen() {
 	const { isLoggedIn, user } = useAuth();
 	const router = useRouter();
 	const params = useLocalSearchParams();
+
+	useEffect(() => {
+		const onBackPress = () => {
+			router.back();
+			return true;
+		};
+
+		const subscription = BackHandler.addEventListener(
+			"hardwareBackPress",
+			onBackPress,
+		);
+		return () => subscription.remove();
+	}, [router]);
 
 	const [profile, setProfile] = useState(null);
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
@@ -191,15 +206,18 @@ export default function ProfileScreen() {
 							backgroundColor: colors.bg,
 						},
 					]}>
-					<TouchableOpacity
+					<TVPressable
 						onPress={handleBack}
-						style={styles.backButton}>
+						style={({ focused }) => [
+							styles.backButton,
+							focused && styles.iconButtonFocused,
+						]}>
 						<Ionicons
 							name="arrow-back"
 							size={24}
 							color={colors.text}
 						/>
-					</TouchableOpacity>
+					</TVPressable>
 					<Text style={[styles.topBarTitle, { color: colors.text }]}>
 						Profil
 					</Text>
@@ -251,13 +269,14 @@ export default function ProfileScreen() {
 							</Text>
 						) : null}
 
-						<TouchableOpacity
-							style={[
+						<TVPressable
+							style={({ focused }) => [
 								styles.editButton,
 								{
 									borderColor: colors.primary,
 									backgroundColor: colors.cardBg,
 								},
+								focused && styles.buttonFocused,
 							]}
 							onPress={() => router.push("/profile/EditProfile")}>
 							<Text
@@ -267,17 +286,18 @@ export default function ProfileScreen() {
 								]}>
 								Profili Düzenle
 							</Text>
-						</TouchableOpacity>
+						</TVPressable>
 
 						{/* Sync durumu kartı */}
 						{isLoggedIn && user ? (
-							<TouchableOpacity
-								style={[
+							<TVPressable
+								style={({ focused }) => [
 									styles.syncCard,
 									{
 										backgroundColor: "rgba(16, 185, 129, 0.08)",
 										borderColor: "rgba(16, 185, 129, 0.2)",
 									},
+									focused && styles.syncCardFocused,
 								]}
 								onPress={() => router.push("/(app)/settings/sync")}
 								activeOpacity={0.75}>
@@ -286,15 +306,16 @@ export default function ProfileScreen() {
 									Senkronizasyon Aktif • {user.email}
 								</Text>
 								<Ionicons name="chevron-forward" size={16} color="#10B981" />
-							</TouchableOpacity>
+							</TVPressable>
 						) : (
-							<TouchableOpacity
-								style={[
+							<TVPressable
+								style={({ focused }) => [
 									styles.syncCard,
 									{
 										backgroundColor: "rgba(56, 189, 248, 0.08)",
 										borderColor: "rgba(56, 189, 248, 0.2)",
 									},
+									focused && styles.syncCardFocused,
 								]}
 								onPress={() => router.push("/(auth)/login")}
 								activeOpacity={0.75}>
@@ -303,7 +324,7 @@ export default function ProfileScreen() {
 									Giriş yap ve verilerini tüm cihazlarında senkronize et
 								</Text>
 								<Ionicons name="chevron-forward" size={16} color="#38bdf8" />
-							</TouchableOpacity>
+							</TVPressable>
 						)}
 					</View>
 
@@ -377,9 +398,9 @@ export default function ProfileScreen() {
 							styles.tabsContainer,
 							{ borderBottomColor: colors.border },
 						]}>
-						<TouchableOpacity
+						<TVPressable
 							onPress={() => setActiveTab("continue")}
-							style={[
+							style={({ focused }) => [
 								styles.tab,
 								{
 									borderBottomColor:
@@ -387,6 +408,7 @@ export default function ProfileScreen() {
 											? colors.primary
 											: "transparent",
 								},
+								focused && styles.tabFocused,
 							]}>
 							<Text
 								style={[
@@ -407,10 +429,10 @@ export default function ProfileScreen() {
 									? ` (${continueWatching.length})`
 									: ""}
 							</Text>
-						</TouchableOpacity>
-						<TouchableOpacity
+						</TVPressable>
+						<TVPressable
 							onPress={() => setActiveTab("history")}
-							style={[
+							style={({ focused }) => [
 								styles.tab,
 								{
 									borderBottomColor:
@@ -418,6 +440,7 @@ export default function ProfileScreen() {
 											? colors.primary
 											: "transparent",
 								},
+								focused && styles.tabFocused,
 							]}>
 							<Text
 								style={[
@@ -435,10 +458,10 @@ export default function ProfileScreen() {
 								]}>
 								İzleme Geçmişi
 							</Text>
-						</TouchableOpacity>
-						<TouchableOpacity
+						</TVPressable>
+						<TVPressable
 							onPress={() => setActiveTab("favorites")}
-							style={[
+							style={({ focused }) => [
 								styles.tab,
 								{
 									borderBottomColor:
@@ -446,6 +469,7 @@ export default function ProfileScreen() {
 											? colors.primary
 											: "transparent",
 								},
+								focused && styles.tabFocused,
 							]}>
 							<Text
 								style={[
@@ -463,7 +487,7 @@ export default function ProfileScreen() {
 								]}>
 								Favoriler
 							</Text>
-						</TouchableOpacity>
+						</TVPressable>
 					</View>
 
 					{/* Tab Content */}
@@ -564,17 +588,19 @@ export default function ProfileScreen() {
 									}
 									numColumns={3}
 									scrollEnabled={false}
+									removeClippedSubviews={false}
 									columnWrapperStyle={styles.gridRow}
 									renderItem={({ item }) => {
 										const itemPlugin = resolvePluginName(item);
 										return (
-											<TouchableOpacity
-												style={[
+											<TVPressable
+												style={({ focused }) => [
 													styles.gridItem,
 													{
 														backgroundColor:
 															colors.cardBg,
 													},
+													focused && styles.gridItemFocused,
 												]}
 												onPress={() =>
 													handleItemPress(item)
@@ -609,7 +635,7 @@ export default function ProfileScreen() {
 														</Text>
 													</View>
 												) : null}
-											</TouchableOpacity>
+											</TVPressable>
 										);
 									}}
 								/>
@@ -814,5 +840,33 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 		color: "#38bdf8",
 		lineHeight: 18,
+	},
+	iconButtonFocused: {
+		transform: [{ scale: 1.15 }],
+	},
+	buttonFocused: {
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+		transform: [{ scale: 1.05 }],
+	},
+	syncCardFocused: {
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+		transform: [{ scale: 1.02 }],
+	},
+	tabFocused: {
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		borderRadius: 8,
+		transform: [{ scale: 1.05 }],
+	},
+	gridItemFocused: {
+		transform: [{ scale: 1.05 }],
+		borderWidth: 2,
+		borderColor: "#E50914",
+		shadowColor: "#E50914",
+		shadowOpacity: 0.6,
+		shadowRadius: 8,
+		elevation: 4,
 	},
 });

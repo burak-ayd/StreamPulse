@@ -12,13 +12,15 @@ import {
 	setAllPluginsVisibility,
 	setPluginCategoriesVisibility,
 } from "@/utils/storage";
+import TVPressable from "@/components/common/TVPressable";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
+	BackHandler,
 	RefreshControl,
 	ScrollView,
 	StatusBar,
@@ -44,6 +46,20 @@ export default function PluginSettingsScreen() {
 	const [pluginCategories, setPluginCategories] = useState({});
 	const [loadingCategories, setLoadingCategories] = useState({});
 	const [searchQuery, setSearchQuery] = useState("");
+
+	useFocusEffect(
+		useCallback(() => {
+			const onBackPress = () => {
+				router.back();
+				return true;
+			};
+			const subscription = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => subscription.remove();
+		}, [router]),
+	);
 
 	// Load plugins, plugin visibility and category visibility settings
 	const loadData = useCallback(async (forceRefresh = false) => {
@@ -320,12 +336,13 @@ export default function PluginSettingsScreen() {
 							backgroundColor: colors.cardBg,
 						},
 					]}>
-					<TouchableOpacity
+					<TVPressable
 						onPress={() => router.back()}
 						style={styles.backButton}
+						focusedStyle={styles.headerButtonFocused}
 						hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
 						<Ionicons name="arrow-back" size={24} color={colors.text} />
-					</TouchableOpacity>
+					</TVPressable>
 					<View style={styles.headerTitleContainer}>
 						<Text style={[styles.headerTitle, { color: colors.text }]}>
 							Eklenti Ayarları
@@ -338,16 +355,17 @@ export default function PluginSettingsScreen() {
 							{activeCount}/{totalCount} Aktif
 						</Text>
 					</View>
-					<TouchableOpacity
+					<TVPressable
 						onPress={() => handleRefresh()}
 						style={styles.iconButton}
+						focusedStyle={styles.headerButtonFocused}
 						disabled={refreshing}>
 						<Ionicons
 							name="refresh"
 							size={20}
 							color={refreshing ? colors.textSecondary : colors.primary}
 						/>
-					</TouchableOpacity>
+					</TVPressable>
 				</View>
 
 				<ScrollView
@@ -480,20 +498,21 @@ export default function PluginSettingsScreen() {
 								style={[styles.searchInput, { color: colors.text }]}
 							/>
 							{searchQuery.length > 0 && (
-								<TouchableOpacity
+								<TVPressable
 									onPress={() => setSearchQuery("")}
+									focusedStyle={styles.headerButtonFocused}
 									hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
 									<Ionicons
 										name="close-circle"
 										size={18}
 										color={colors.textSecondary}
 									/>
-								</TouchableOpacity>
+								</TVPressable>
 							)}
 						</View>
 
 						<View style={styles.bulkActionsRow}>
-							<TouchableOpacity
+							<TVPressable
 								style={[
 									styles.bulkActionButton,
 									{
@@ -501,6 +520,7 @@ export default function PluginSettingsScreen() {
 											theme === "dark" ? "#1e293b" : "#e2e8f0",
 									},
 								]}
+								focusedStyle={styles.bulkButtonFocused}
 								onPress={() => handleToggleAll(true)}
 								activeOpacity={0.7}>
 								<Ionicons
@@ -512,9 +532,9 @@ export default function PluginSettingsScreen() {
 									style={[styles.bulkActionText, { color: colors.text }]}>
 									Tümünü Aç
 								</Text>
-							</TouchableOpacity>
+							</TVPressable>
 
-							<TouchableOpacity
+							<TVPressable
 								style={[
 									styles.bulkActionButton,
 									{
@@ -522,6 +542,7 @@ export default function PluginSettingsScreen() {
 											theme === "dark" ? "#1e293b" : "#e2e8f0",
 									},
 								]}
+								focusedStyle={styles.bulkButtonFocused}
 								onPress={() => handleToggleAll(false)}
 								activeOpacity={0.7}>
 								<Ionicons name="eye-off-outline" size={15} color="#ef4444" />
@@ -529,7 +550,7 @@ export default function PluginSettingsScreen() {
 									style={[styles.bulkActionText, { color: colors.text }]}>
 									Tümünü Gizle
 								</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 					</View>
 
@@ -619,11 +640,13 @@ export default function PluginSettingsScreen() {
 
 								return (
 									<View key={key || index}>
-										<View
+										<TVPressable
 											style={[
 												styles.pluginCard,
 												!isVisible && styles.pluginCardDisabled,
-											]}>
+											]}
+											focusedStyle={styles.pluginCardFocused}
+											onPress={() => handleToggleVisibility(plugin)}>
 											{/* Plugin Icon / Favicon */}
 											<View style={styles.pluginIconWrapper}>
 												{plugin.favicon ? (
@@ -754,10 +777,10 @@ export default function PluginSettingsScreen() {
 													{isVisible ? "Görünür" : "Gizli"}
 												</Text>
 											</View>
-										</View>
+										</TVPressable>
 
 										{/* Category Accordion Header Button */}
-										<TouchableOpacity
+										<TVPressable
 											style={[
 												styles.categoryAccordionTrigger,
 												{
@@ -774,6 +797,7 @@ export default function PluginSettingsScreen() {
 														: colors.border,
 												},
 											]}
+											focusedStyle={styles.accordionFocused}
 											onPress={() => togglePluginExpanded(plugin)}
 											activeOpacity={0.7}>
 											<View style={styles.categoryAccordionLeft}>
@@ -846,7 +870,7 @@ export default function PluginSettingsScreen() {
 													/>
 												)}
 											</View>
-										</TouchableOpacity>
+										</TVPressable>
 
 										{/* Expanded Categories Section */}
 										{isExpanded && (
@@ -932,7 +956,7 @@ export default function PluginSettingsScreen() {
 															Bu eklentiye ait kategori
 															bulunamadı.
 														</Text>
-														<TouchableOpacity
+														<TVPressable
 															style={[
 																styles.reloadCatsButton,
 																{
@@ -940,6 +964,7 @@ export default function PluginSettingsScreen() {
 																		colors.border,
 																},
 															]}
+															focusedStyle={styles.bulkButtonFocused}
 															onPress={() =>
 																handleReloadCategories(
 																	plugin,
@@ -960,7 +985,7 @@ export default function PluginSettingsScreen() {
 																]}>
 																Yeniden Dene
 															</Text>
-														</TouchableOpacity>
+														</TVPressable>
 													</View>
 												) : (
 													<>
@@ -984,7 +1009,7 @@ export default function PluginSettingsScreen() {
 																style={
 																	styles.categoriesBulkActions
 																}>
-																<TouchableOpacity
+																<TVPressable
 																	style={[
 																		styles.catBulkButton,
 																		{
@@ -994,6 +1019,7 @@ export default function PluginSettingsScreen() {
 																					: "#e2e8f0",
 																		},
 																	]}
+																	focusedStyle={styles.catBulkButtonFocused}
 																	onPress={() =>
 																		handleToggleAllCategories(
 																			plugin,
@@ -1015,8 +1041,8 @@ export default function PluginSettingsScreen() {
 																		]}>
 																		Tümünü Aç
 																	</Text>
-																</TouchableOpacity>
-																<TouchableOpacity
+																</TVPressable>
+																<TVPressable
 																	style={[
 																		styles.catBulkButton,
 																		{
@@ -1026,6 +1052,7 @@ export default function PluginSettingsScreen() {
 																					: "#e2e8f0",
 																		},
 																	]}
+																	focusedStyle={styles.catBulkButtonFocused}
 																	onPress={() =>
 																		handleToggleAllCategories(
 																			plugin,
@@ -1047,7 +1074,7 @@ export default function PluginSettingsScreen() {
 																		]}>
 																		Tümünü Gizle
 																	</Text>
-																</TouchableOpacity>
+																</TVPressable>
 															</View>
 														</View>
 
@@ -1078,12 +1105,19 @@ export default function PluginSettingsScreen() {
 																				catKey ||
 																				catIdx
 																			}>
-																			<View
+																			<TVPressable
 																				style={[
 																					styles.categoryItemRow,
 																					!isCatVisible &&
 																						styles.categoryItemRowDisabled,
-																				]}>
+																				]}
+																				focusedStyle={styles.categoryItemRowFocused}
+																				onPress={() =>
+																					handleToggleCategory(
+																						plugin,
+																						category,
+																					)
+																				}>
 																				<View
 																					style={
 																						styles.categoryItemInfo
@@ -1185,7 +1219,7 @@ export default function PluginSettingsScreen() {
 																							: "Gizli"}
 																					</Text>
 																				</View>
-																			</View>
+																			</TVPressable>
 																			{!isCatLast && (
 																				<View
 																					style={[
@@ -1649,5 +1683,40 @@ const styles = StyleSheet.create({
 		height: StyleSheet.hairlineWidth,
 		marginLeft: 24,
 		marginVertical: 2,
+	},
+	headerButtonFocused: {
+		backgroundColor: "rgba(229, 9, 20, 0.2)",
+		borderRadius: 8,
+		transform: [{ scale: 1.08 }],
+	},
+	bulkButtonFocused: {
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.05 }],
+	},
+	pluginCardFocused: {
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		backgroundColor: "rgba(229, 9, 20, 0.12)",
+		transform: [{ scale: 1.02 }],
+	},
+	accordionFocused: {
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		backgroundColor: "rgba(229, 9, 20, 0.15)",
+		transform: [{ scale: 1.02 }],
+	},
+	catBulkButtonFocused: {
+		borderWidth: 1,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.05 }],
+	},
+	categoryItemRowFocused: {
+		borderWidth: 1,
+		borderColor: "#E50914",
+		backgroundColor: "rgba(229, 9, 20, 0.12)",
+		borderRadius: 6,
+		paddingHorizontal: 4,
+		transform: [{ scale: 1.02 }],
 	},
 });

@@ -1,3 +1,4 @@
+import TVPressable from "@components/common/TVPressable";
 import { useThemeContext } from "@context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -107,19 +108,26 @@ export default function HeroSection({ content, onShare, genreList = [] }) {
 			</View>
 
 			{/* Back Button (Sol üst) */}
-			<TouchableOpacity
-				style={styles.headerButton}
+			<TVPressable
+				style={({ focused }) => [
+					styles.headerButton,
+					focused && styles.headerButtonFocused,
+				]}
 				onPress={() => router.back()}
 				activeOpacity={0.8}>
 				<View style={styles.headerButtonInner}>
 					<Ionicons name="arrow-back" size={22} color="#ffffff" />
 				</View>
-			</TouchableOpacity>
+			</TVPressable>
 
 			{/* Share Button (Sağ üst) */}
 			{onShare && (
-				<TouchableOpacity
-					style={[styles.headerButton, styles.headerButtonRight]}
+				<TVPressable
+					style={({ focused }) => [
+						styles.headerButton,
+						styles.headerButtonRight,
+						focused && styles.headerButtonFocused,
+					]}
 					onPress={onShare}
 					activeOpacity={0.8}>
 					<View style={styles.headerButtonInner}>
@@ -129,7 +137,7 @@ export default function HeroSection({ content, onShare, genreList = [] }) {
 							color="#ffffff"
 						/>
 					</View>
-				</TouchableOpacity>
+				</TVPressable>
 			)}
 
 			{/* Content Info (backdrop alt kısmı) */}
@@ -306,5 +314,11 @@ const styles = StyleSheet.create({
 		color: "#cbd5e1",
 		fontStyle: "italic",
 		letterSpacing: 0.3,
+	},
+	headerButtonFocused: {
+		transform: [{ scale: 1.15 }],
+		borderWidth: 2,
+		borderColor: "#E50914",
+		borderRadius: 20,
 	},
 });

@@ -10,6 +10,7 @@ import {
 	View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import TVPressable from "../common/TVPressable";
 
 /**
  * TrackSelectionModal
@@ -88,12 +89,13 @@ export default function TrackSelectionModal({
 							/>
 							<Text style={styles.headerTitle}>{getTitle()}</Text>
 						</View>
-						<TouchableOpacity
+						<TVPressable
 							onPress={onClose}
 							hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-							style={styles.closeButton}>
+							style={styles.closeButton}
+							focusedStyle={styles.closeButtonFocused}>
 							<Ionicons name="close" size={22} color="#8E8E93" />
-						</TouchableOpacity>
+						</TVPressable>
 					</View>
 
 					{/* Options Content */}
@@ -117,13 +119,14 @@ export default function TrackSelectionModal({
 										const subCount = item.result?.subtitles?.length || 0;
 
 										return (
-											<TouchableOpacity
+											<TVPressable
 												key={`source-${index}`}
+												autoFocus={isSelected}
 												style={[
 													styles.optionItem,
 													isSelected && styles.optionItemSelected,
 												]}
-												activeOpacity={0.7}
+												focusedStyle={styles.optionItemFocused}
 												onPress={() => {
 													onSelectSource(index);
 													onClose();
@@ -158,7 +161,7 @@ export default function TrackSelectionModal({
 														<Text style={styles.badgeText}>Aktif</Text>
 													</View>
 												)}
-											</TouchableOpacity>
+											</TVPressable>
 										);
 									})
 								)}
@@ -204,29 +207,32 @@ export default function TrackSelectionModal({
 											Altyazı erken geliyorsa (+), geç kalıyorsa (-) butonlarına basın.
 										</Text>
 										<View style={styles.syncButtonsRow}>
-											<TouchableOpacity
+											<TVPressable
 												style={styles.syncBtn}
+												focusedStyle={styles.syncBtnFocused}
 												onPress={() =>
 													onUpdateSubtitleOffset?.(-0.5)
 												}>
 												<Text style={styles.syncBtnText}>
 													-0.5s
 												</Text>
-											</TouchableOpacity>
-											<TouchableOpacity
+											</TVPressable>
+											<TVPressable
 												style={styles.syncBtn}
+												focusedStyle={styles.syncBtnFocused}
 												onPress={() =>
 													onUpdateSubtitleOffset?.(-0.1)
 												}>
 												<Text style={styles.syncBtnText}>
 													-0.1s
 												</Text>
-											</TouchableOpacity>
-											<TouchableOpacity
+											</TVPressable>
+											<TVPressable
 												style={[
 													styles.syncBtn,
 													styles.syncBtnReset,
 												]}
+												focusedStyle={styles.syncBtnFocused}
 												onPress={() =>
 													onUpdateSubtitleOffset?.(0, true)
 												}>
@@ -236,36 +242,39 @@ export default function TrackSelectionModal({
 													}>
 													Sıfırla
 												</Text>
-											</TouchableOpacity>
-											<TouchableOpacity
+											</TVPressable>
+											<TVPressable
 												style={styles.syncBtn}
+												focusedStyle={styles.syncBtnFocused}
 												onPress={() =>
 													onUpdateSubtitleOffset?.(0.1)
 												}>
 												<Text style={styles.syncBtnText}>
 													+0.1s
 												</Text>
-											</TouchableOpacity>
-											<TouchableOpacity
+											</TVPressable>
+											<TVPressable
 												style={styles.syncBtn}
+												focusedStyle={styles.syncBtnFocused}
 												onPress={() =>
 													onUpdateSubtitleOffset?.(0.5)
 												}>
 												<Text style={styles.syncBtnText}>
 													+0.5s
 												</Text>
-											</TouchableOpacity>
+											</TVPressable>
 										</View>
 									</View>
 								)}
 
 								{/* Option: Kapalı (Off) */}
-								<TouchableOpacity
+								<TVPressable
+									autoFocus={!selectedSubtitle}
 									style={[
 										styles.optionItem,
 										!selectedSubtitle && styles.optionItemSelected,
 									]}
-									activeOpacity={0.7}
+									focusedStyle={styles.optionItemFocused}
 									onPress={() => {
 										onSelectSubtitle(null);
 										onClose();
@@ -300,7 +309,7 @@ export default function TrackSelectionModal({
 											color="#FF3B30"
 										/>
 									)}
-								</TouchableOpacity>
+								</TVPressable>
 
 								{/* Available Subtitles */}
 								{subtitles.map((sub, index) => {
@@ -312,13 +321,14 @@ export default function TrackSelectionModal({
 												selectedSubtitle.index === sub.index));
 
 									return (
-										<TouchableOpacity
+										<TVPressable
 											key={`sub-${index}-${sub.title || sub.name}`}
+											autoFocus={isSelected}
 											style={[
 												styles.optionItem,
 												isSelected && styles.optionItemSelected,
 											]}
-											activeOpacity={0.7}
+											focusedStyle={styles.optionItemFocused}
 											onPress={() => {
 												onSelectSubtitle(sub);
 											}}>
@@ -354,7 +364,7 @@ export default function TrackSelectionModal({
 													color="#FF3B30"
 												/>
 											)}
-										</TouchableOpacity>
+										</TVPressable>
 									);
 								})}
 							</View>
@@ -393,13 +403,14 @@ export default function TrackSelectionModal({
 												: `Ses Parçası ${index + 1}`);
 
 										return (
-											<TouchableOpacity
+											<TVPressable
 												key={`audio-${index}`}
+												autoFocus={isSelected}
 												style={[
 													styles.optionItem,
 													isSelected && styles.optionItemSelected,
 												]}
-												activeOpacity={0.7}
+												focusedStyle={styles.optionItemFocused}
 												onPress={() => {
 													onSelectAudioTrack(trackId);
 													onClose();
@@ -436,7 +447,7 @@ export default function TrackSelectionModal({
 														color="#FF3B30"
 													/>
 												)}
-											</TouchableOpacity>
+											</TVPressable>
 										);
 									})
 								)}
@@ -494,6 +505,12 @@ const styles = StyleSheet.create({
 		borderRadius: 16,
 		backgroundColor: "rgba(255, 255, 255, 0.06)",
 	},
+	closeButtonFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.35)",
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.15 }],
+	},
 	contentList: {
 		marginBottom: 8,
 	},
@@ -509,9 +526,22 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		borderColor: "transparent",
 	},
+	optionItemFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.28)",
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.02 }],
+		elevation: 4,
+	},
 	optionItemSelected: {
 		backgroundColor: "rgba(255, 59, 48, 0.12)",
 		borderColor: "rgba(255, 59, 48, 0.35)",
+	},
+	syncBtnFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.35)",
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.08 }],
 	},
 	optionLeft: {
 		flexDirection: "row",

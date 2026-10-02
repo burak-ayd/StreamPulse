@@ -1,4 +1,5 @@
 import LanguageBadge from "@/components/common/LanguageBadge";
+import TVPressable from "@/components/common/TVPressable";
 import { resolvePluginName } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -54,13 +55,19 @@ export default function ContinueWatchingCard({ item, onPress, onLongPress, onRem
 		item.subtitles;
 
 	return (
-		<TouchableOpacity
+		<TVPressable
 			style={[styles.card]}
+			focusedStyle={styles.cardFocused}
 			onPress={() => onPress?.(item)}
-			onLongPress={() => onLongPress?.(item)}
-			activeOpacity={0.82}>
-			{/* Thumbnail Wrapper */}
-			<View style={styles.thumbnailWrapper}>
+			onLongPress={() => onLongPress?.(item)}>
+			{({ focused }) => (
+				<View>
+					{/* Thumbnail Wrapper */}
+					<View
+						style={[
+							styles.thumbnailWrapper,
+							focused && styles.thumbnailWrapperFocused,
+						]}>
 				<Image
 					source={{ uri: posterUri }}
 					style={styles.thumbnail}
@@ -146,7 +153,9 @@ export default function ContinueWatchingCard({ item, onPress, onLongPress, onRem
 					</Text>
 				)}
 			</View>
-		</TouchableOpacity>
+				</View>
+			)}
+		</TVPressable>
 	);
 }
 
@@ -155,6 +164,10 @@ const styles = StyleSheet.create({
 		marginRight: 4,
 		width: 124,
 	},
+	cardFocused: {
+		transform: [{ scale: 1.08 }],
+		zIndex: 10,
+	},
 	thumbnailWrapper: {
 		width: 124,
 		height: 182,
@@ -162,8 +175,16 @@ const styles = StyleSheet.create({
 		overflow: "hidden",
 		position: "relative",
 		backgroundColor: "#161922",
-		borderWidth: 1,
+		borderWidth: 2,
 		borderColor: "rgba(255, 255, 255, 0.08)",
+	},
+	thumbnailWrapperFocused: {
+		borderColor: "#FF3B30",
+		shadowColor: "#FF3B30",
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.6,
+		shadowRadius: 10,
+		elevation: 8,
 	},
 	thumbnail: {
 		width: "100%",

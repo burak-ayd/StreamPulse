@@ -1,3 +1,4 @@
+import TVPressable from "@/components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import * as WebBrowser from "expo-web-browser";
@@ -304,10 +305,12 @@ export default function ActionButtons({
 					onPress={handleWatch}
 				/>
 			) : (
-				<TouchableOpacity
-					style={[
+				<TVPressable
+					autoFocus={true}
+					style={({ focused }) => [
 						styles.primaryButton,
 						isCompleted && styles.primaryButtonCompleted,
+						focused && styles.primaryButtonFocused,
 					]}
 					onPress={handleWatch}
 					activeOpacity={0.85}>
@@ -320,15 +323,15 @@ export default function ActionButtons({
 							</Text>
 						) : null}
 					</View>
-				</TouchableOpacity>
+				</TVPressable>
 			)}
 
 			{/* 4-Column Action Grid */}
 			<View style={styles.gridRow}>
 				{gridActions.map((action) => (
-					<TouchableOpacity
+					<TVPressable
 						key={action.key}
-						style={[
+						style={({ focused }) => [
 							styles.gridItem,
 							{
 								backgroundColor: surfaceBg,
@@ -336,6 +339,7 @@ export default function ActionButtons({
 									? "rgba(229,9,20,0.3)"
 									: surfaceBorder,
 							},
+							focused && styles.gridItemFocused,
 						]}
 						onPress={action.onPress}
 						activeOpacity={0.7}>
@@ -356,7 +360,7 @@ export default function ActionButtons({
 							numberOfLines={1}>
 							{action.label}
 						</Text>
-					</TouchableOpacity>
+					</TVPressable>
 				))}
 			</View>
 		</View>
@@ -421,5 +425,23 @@ const styles = StyleSheet.create({
 	gridLabel: {
 		fontSize: 11,
 		fontWeight: "500",
+	},
+	primaryButtonFocused: {
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+		transform: [{ scale: 1.03 }],
+		shadowColor: "#E50914",
+		shadowOpacity: 0.8,
+		shadowRadius: 10,
+		elevation: 6,
+	},
+	gridItemFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.08 }],
+		shadowColor: "#E50914",
+		shadowOpacity: 0.5,
+		shadowRadius: 8,
+		elevation: 4,
 	},
 });

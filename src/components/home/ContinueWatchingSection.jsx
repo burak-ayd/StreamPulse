@@ -1,4 +1,5 @@
 import ContinueWatchingCard from "@/components/content/ContinueWatchingCard";
+import TVPressable from "@/components/common/TVPressable";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import {
 	FlatList,
@@ -30,17 +31,17 @@ export default function ContinueWatchingSection({
 					</Text>
 				</View>
 				{onSeeAllPress && (
-					<TouchableOpacity
+					<TVPressable
 						onPress={onSeeAllPress}
 						style={styles.seeAllButton}
-						activeOpacity={0.7}>
+						focusedStyle={styles.seeAllButtonFocused}>
 						<Text style={styles.seeAllText}>Tümü</Text>
 						<Ionicons
 							name="chevron-forward"
 							size={16}
 							color="#9CA3AF"
 						/>
-					</TouchableOpacity>
+					</TVPressable>
 				)}
 			</View>
 
@@ -53,6 +54,10 @@ export default function ContinueWatchingSection({
 				horizontal
 				showsHorizontalScrollIndicator={false}
 				contentContainerStyle={styles.listContent}
+				initialNumToRender={5}
+				maxToRenderPerBatch={5}
+				windowSize={5}
+				removeClippedSubviews={false}
 				renderItem={({ item }) => (
 					<ContinueWatchingCard
 						item={item}
@@ -101,6 +106,13 @@ const styles = StyleSheet.create({
 		gap: 2,
 		paddingVertical: 4,
 		paddingHorizontal: 6,
+		borderRadius: 8,
+	},
+	seeAllButtonFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.35)",
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.08 }],
 	},
 	seeAllText: {
 		color: "#9CA3AF",

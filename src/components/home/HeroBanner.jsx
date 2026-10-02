@@ -1,18 +1,14 @@
 import LanguageBadge from "@/components/common/LanguageBadge";
+import TVPressable from "@/components/common/TVPressable";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import {
-	Dimensions,
-	StyleSheet,
-	Text,
-	TouchableOpacity,
-	View,
-} from "react-native";
+import { Dimensions, Platform, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
-const BANNER_HEIGHT = 520;
+const isTV = Platform.isTV;
+const BANNER_HEIGHT = isTV ? 360 : 520;
 
 export default function HeroBanner({
 	movie,
@@ -42,7 +38,10 @@ export default function HeroBanner({
 		movie?.lang ||
 		movie?.audio ||
 		movie?.subtitles;
+
+	// TV'de varsa yatay arka plan (backdrop), yoksa afiş görseli kullan
 	const posterUri =
+		(isTV && (movie?.backdrop_url || movie?.backdrop)) ||
 		movie?.poster ||
 		movie?.poster_url ||
 		movie?.image ||
@@ -87,21 +86,29 @@ export default function HeroBanner({
 			/>
 
 			{/* Top Header Overlay */}
-			<View style={[styles.topHeader, { top: insets.top + 8 }]}>
+			<View
+				style={[
+					styles.topHeader,
+					{ top: insets.top + (isTV ? 6 : 8) },
+				]}>
 				{/* Search Icon */}
-				<TouchableOpacity
+				<TVPressable
 					style={styles.headerIconButton}
-					onPress={onSearchPress}
-					activeOpacity={0.7}>
-					<Ionicons name="search" size={24} color="#ffffff" />
-				</TouchableOpacity>
+					focusedStyle={styles.headerIconButtonFocused}
+					onPress={onSearchPress}>
+					<Ionicons
+						name="search"
+						size={isTV ? 20 : 24}
+						color="#ffffff"
+					/>
+				</TVPressable>
 
 				{/* Platform Selector Pill */}
 				{platform && (
-					<TouchableOpacity
+					<TVPressable
 						style={styles.platformPill}
-						onPress={onPlatformPress}
-						activeOpacity={0.8}>
+						focusedStyle={styles.platformPillFocused}
+						onPress={onPlatformPress}>
 						{platform.favicon ? (
 							<Image
 								source={{ uri: platform.favicon }}
@@ -111,7 +118,7 @@ export default function HeroBanner({
 						) : (
 							<Ionicons
 								name="film-outline"
-								size={14}
+								size={isTV ? 12 : 14}
 								color="#ffffff"
 							/>
 						)}
@@ -120,17 +127,17 @@ export default function HeroBanner({
 						</Text>
 						<Ionicons
 							name="chevron-down"
-							size={14}
+							size={isTV ? 12 : 14}
 							color="#9ca3af"
 						/>
-					</TouchableOpacity>
+					</TVPressable>
 				)}
 
 				{/* User Profile Avatar with Blue Ring */}
-				<TouchableOpacity
+				<TVPressable
 					style={styles.profileButton}
-					onPress={onProfilePress}
-					activeOpacity={0.7}>
+					focusedStyle={styles.profileButtonFocused}
+					onPress={onProfilePress}>
 					{userAvatarUrl ? (
 						<Image
 							source={{ uri: userAvatarUrl }}
@@ -139,101 +146,103 @@ export default function HeroBanner({
 						/>
 					) : (
 						<View style={styles.avatarPlaceholder}>
-							<Ionicons name="person" size={16} color="#38bdf8" />
+							<Ionicons
+								name="person"
+								size={isTV ? 16 : 20}
+								color="#38bdf8"
+							/>
 						</View>
 					)}
-				</TouchableOpacity>
+				</TVPressable>
 			</View>
 
-			{/* Bottom Details Section */}
-			<TouchableOpacity
-				activeOpacity={0.95}
-				onLongPress={onLongPress}
-				style={styles.bottomContent}>
+			{/* Bottom Hero Content: Title, Genres, Action Buttons */}
+			<View style={styles.bottomContent}>
 				{/* Movie Title */}
-				<Text style={styles.movieTitle} numberOfLines={2}>
+				<Text style={styles.movieTitle} numberOfLines={isTV ? 1 : 2}>
 					{title}
 				</Text>
 
-				{/* Genres / Metadata */}
-				{genres ? (
-					<Text
-						style={[
-							styles.genresText,
-							!movieRawLang && styles.genresTextWithoutBadge,
-						]}
-						numberOfLines={1}>
-						{genres}
-					</Text>
-				) : null}
+				{/* Category / Genre Badges */}
+				<Text
+					style={[
+						styles.genresText,
+						!movieRawLang && styles.genresTextWithoutBadge,
+					]}
+					numberOfLines={1}>
+					{genres}
+				</Text>
 
-				{/* Language Badge (Altta / Underneath) */}
+				{/* Language & Dubbing Badges */}
 				{movieRawLang ? (
-					<LanguageBadge
-						language={movieRawLang}
-						size="normal"
-						style={styles.heroLanguageBadge}
-					/>
+					<View style={styles.heroLanguageBadge}>
+						<LanguageBadge
+							language={movieRawLang}
+							size={isTV ? "small" : "normal"}
+						/>
+					</View>
 				) : null}
 
-				{/* 3 Buttons Row */}
+				{/* Action Buttons Row */}
 				<View style={styles.buttonsRow}>
-					{/* Left: Listem */}
-					<TouchableOpacity
+					{/* Left: Listeye Ekle / Çıkar */}
+					<TVPressable
 						style={styles.actionColumn}
-						onPress={onToggleList}
-						activeOpacity={0.7}>
+						focusedStyle={styles.actionColumnFocused}
+						onPress={onToggleList}>
 						<Ionicons
 							name={isInList ? "checkmark" : "add"}
-							size={24}
+							size={isTV ? 20 : 24}
 							color="#ffffff"
 						/>
 						<Text style={styles.actionLabel}>
 							{isInList ? "Listede" : "Listem"}
 						</Text>
-					</TouchableOpacity>
+					</TVPressable>
 
-					{/* Center: Play Pill Button */}
-					<TouchableOpacity
+					{/* Center: Play Pill Button - TV'de Ana İlk Odak */}
+					<TVPressable
+						autoFocus={true}
 						style={styles.playButton}
-						onPress={onPlayPress}
-						activeOpacity={0.85}>
+						focusedStyle={styles.playButtonFocused}
+						onPress={onPlayPress}>
 						<Ionicons
 							name="play"
-							size={19}
+							size={isTV ? 16 : 19}
 							color="#000000"
 							style={{ marginLeft: 2 }}
 						/>
 						<Text style={styles.playButtonText}>Oynat</Text>
-					</TouchableOpacity>
+					</TVPressable>
 
 					{/* Right: Bilgi */}
-					<TouchableOpacity
+					<TVPressable
 						style={styles.actionColumn}
-						onPress={onInfoPress}
-						activeOpacity={0.7}>
+						focusedStyle={styles.actionColumnFocused}
+						onPress={onInfoPress}>
 						<Ionicons
 							name="information-circle-outline"
-							size={24}
+							size={isTV ? 20 : 24}
 							color="#ffffff"
 						/>
 						<Text style={styles.actionLabel}>Bilgi</Text>
-					</TouchableOpacity>
+					</TVPressable>
 				</View>
-			</TouchableOpacity>
+			</View>
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
 	bannerContainer: {
-		width,
+		width: "100%",
 		height: BANNER_HEIGHT,
 		position: "relative",
 		backgroundColor: "#0d0e12",
 		overflow: "hidden",
 	},
 	bannerImage: {
+		top: 50,
 		width: "100%",
 		height: "100%",
 		overflow: "hidden",
@@ -243,14 +252,14 @@ const styles = StyleSheet.create({
 		top: 0,
 		left: 0,
 		right: 0,
-		height: 120,
+		height: isTV ? 80 : 120,
 	},
 	bottomGradient: {
 		position: "absolute",
 		bottom: 0,
 		left: 0,
 		right: 0,
-		height: 350,
+		height: isTV ? 220 : 350,
 	},
 	topHeader: {
 		position: "absolute",
@@ -259,16 +268,65 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		paddingHorizontal: 18,
+		paddingHorizontal: isTV ? 16 : 18,
 		zIndex: 10,
 	},
+	bottomContent: {
+		position: "absolute",
+		bottom: isTV ? 16 : 24,
+		left: 0,
+		right: 0,
+		alignItems: "center",
+		paddingHorizontal: 20,
+	},
+	movieTitle: {
+		color: "#ffffff",
+		fontSize: isTV ? 22 : 26,
+		fontWeight: "800",
+		textAlign: "center",
+		letterSpacing: -0.3,
+		marginBottom: isTV ? 4 : 6,
+		textShadowColor: "rgba(0, 0, 0, 0.8)",
+		textShadowOffset: { width: 0, height: 2 },
+		textShadowRadius: 6,
+	},
+	genresText: {
+		color: "#D1D5DB",
+		fontSize: isTV ? 12 : 13,
+		fontWeight: "500",
+		textAlign: "center",
+		textShadowColor: "rgba(0, 0, 0, 0.8)",
+		textShadowOffset: { width: 0, height: 1 },
+		textShadowRadius: 4,
+		marginBottom: isTV ? 4 : 6,
+		maxWidth: isTV ? "85%" : width * 0.88,
+	},
+	genresTextWithoutBadge: {
+		marginBottom: isTV ? 10 : 18,
+	},
+	heroLanguageBadge: {
+		marginBottom: isTV ? 10 : 16,
+		alignSelf: "center",
+	},
+	buttonsRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		gap: isTV ? 30 : 40,
+	},
 	headerIconButton: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
+		width: isTV ? 36 : 40,
+		height: isTV ? 36 : 40,
+		borderRadius: isTV ? 18 : 20,
 		backgroundColor: "rgba(0, 0, 0, 0.35)",
 		justifyContent: "center",
 		alignItems: "center",
+	},
+	headerIconButtonFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.35)",
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.15 }],
 	},
 	platformPill: {
 		flexDirection: "row",
@@ -276,27 +334,33 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(22, 27, 34, 0.8)",
 		borderColor: "rgba(255, 255, 255, 0.15)",
 		borderWidth: 1,
-		paddingHorizontal: 12,
-		paddingVertical: 6,
+		paddingHorizontal: isTV ? 10 : 12,
+		paddingVertical: isTV ? 4 : 6,
 		borderRadius: 20,
-		gap: 6,
+		gap: isTV ? 4 : 6,
 		maxWidth: width * 0.5,
 	},
+	platformPillFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.4)",
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.08 }],
+	},
 	platformFavicon: {
-		width: 16,
-		height: 16,
+		width: isTV ? 14 : 16,
+		height: isTV ? 14 : 16,
 		borderRadius: 4,
 	},
 	platformText: {
 		color: "#ffffff",
-		fontSize: 13,
+		fontSize: isTV ? 12 : 13,
 		fontWeight: "600",
 		letterSpacing: 0.2,
 	},
 	profileButton: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
+		width: isTV ? 36 : 40,
+		height: isTV ? 36 : 40,
+		borderRadius: isTV ? 18 : 20,
 		borderWidth: 2,
 		borderColor: "#2563EB",
 		overflow: "hidden",
@@ -304,10 +368,15 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		backgroundColor: "rgba(0, 0, 0, 0.35)",
 	},
+	profileButtonFocused: {
+		borderColor: "#FF3B30",
+		borderWidth: 3,
+		transform: [{ scale: 1.15 }],
+	},
 	avatarImage: {
 		width: "100%",
 		height: "100%",
-		borderRadius: 18,
+		borderRadius: isTV ? 16 : 18,
 		overflow: "hidden",
 	},
 	avatarPlaceholder: {
@@ -317,58 +386,23 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		backgroundColor: "rgba(37, 99, 235, 0.2)",
 	},
-	bottomContent: {
-		position: "absolute",
-		bottom: 24,
-		left: 0,
-		right: 0,
-		alignItems: "center",
-		paddingHorizontal: 20,
-	},
-	movieTitle: {
-		color: "#ffffff",
-		fontSize: 26,
-		fontWeight: "800",
-		textAlign: "center",
-		letterSpacing: -0.3,
-		marginBottom: 6,
-		textShadowColor: "rgba(0, 0, 0, 0.8)",
-		textShadowOffset: { width: 0, height: 2 },
-		textShadowRadius: 6,
-	},
-	genresText: {
-		color: "#D1D5DB",
-		fontSize: 13,
-		fontWeight: "500",
-		textAlign: "center",
-		textShadowColor: "rgba(0, 0, 0, 0.8)",
-		textShadowOffset: { width: 0, height: 1 },
-		textShadowRadius: 4,
-		marginBottom: 6,
-		maxWidth: width * 0.88,
-	},
-	genresTextWithoutBadge: {
-		marginBottom: 18,
-	},
-	heroLanguageBadge: {
-		marginBottom: 16,
-		alignSelf: "center",
-	},
-	buttonsRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		gap: 40,
-	},
 	actionColumn: {
 		alignItems: "center",
 		justifyContent: "center",
-		width: 60,
-		gap: 3,
+		width: isTV ? 54 : 60,
+		gap: isTV ? 2 : 3,
+		paddingVertical: isTV ? 4 : 6,
+		borderRadius: 12,
+	},
+	actionColumnFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.25)",
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.12 }],
 	},
 	actionLabel: {
 		color: "#E5E7EB",
-		fontSize: 12,
+		fontSize: isTV ? 11 : 12,
 		fontWeight: "500",
 	},
 	playButton: {
@@ -376,8 +410,8 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		backgroundColor: "#FFFFFF",
-		paddingHorizontal: 28,
-		paddingVertical: 10,
+		paddingHorizontal: isTV ? 22 : 28,
+		paddingVertical: isTV ? 8 : 10,
 		borderRadius: 24,
 		gap: 6,
 		shadowColor: "#000",
@@ -385,10 +419,22 @@ const styles = StyleSheet.create({
 		shadowOpacity: 0.3,
 		shadowRadius: 5,
 		elevation: 4,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	playButtonFocused: {
+		backgroundColor: "#FF3B30",
+		borderColor: "#FFFFFF",
+		transform: [{ scale: 1.12 }],
+		elevation: 10,
+		shadowColor: "#FF3B30",
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.6,
+		shadowRadius: 10,
 	},
 	playButtonText: {
 		color: "#000000",
-		fontSize: 15,
+		fontSize: isTV ? 14 : 15,
 		fontWeight: "700",
 	},
 });

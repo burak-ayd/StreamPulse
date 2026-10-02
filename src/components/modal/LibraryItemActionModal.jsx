@@ -1,7 +1,9 @@
+import TVPressable from "@/components/common/TVPressable";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
-import React from "react";
+import React, { useEffect } from "react";
 import {
+	BackHandler,
 	Modal,
 	Pressable,
 	StyleSheet,
@@ -20,6 +22,19 @@ export default function LibraryItemActionModal({
 	onRemove,
 	onShare,
 }) {
+	useEffect(() => {
+		if (!visible) return;
+		const onBackPress = () => {
+			onClose?.();
+			return true;
+		};
+		const sub = BackHandler.addEventListener(
+			"hardwareBackPress",
+			onBackPress,
+		);
+		return () => sub.remove();
+	}, [visible, onClose]);
+
 	if (!visible || !item) return null;
 
 	const title = item.title || item.seriesTitle || "İçerik";
@@ -69,8 +84,10 @@ export default function LibraryItemActionModal({
 					{/* Action Buttons List */}
 					<View style={styles.actionsList}>
 						{/* 1. Detay Sayfasına Git */}
-						<TouchableOpacity
+						<TVPressable
 							style={styles.actionRow}
+							focusedStyle={styles.actionRowFocused}
+							autoFocus={true}
 							onPress={() => {
 								onClose();
 								onGoDetails?.();
@@ -100,11 +117,12 @@ export default function LibraryItemActionModal({
 								size={16}
 								color="#64748b"
 							/>
-						</TouchableOpacity>
+						</TVPressable>
 
 						{/* 2. Listeyi Değiştir */}
-						<TouchableOpacity
+						<TVPressable
 							style={styles.actionRow}
+							focusedStyle={styles.actionRowFocused}
 							onPress={() => {
 								onClose();
 								onChangeList?.();
@@ -134,11 +152,12 @@ export default function LibraryItemActionModal({
 								size={16}
 								color="#64748b"
 							/>
-						</TouchableOpacity>
+						</TVPressable>
 
 						{/* 3. Paylaş */}
-						<TouchableOpacity
+						<TVPressable
 							style={styles.actionRow}
+							focusedStyle={styles.actionRowFocused}
 							onPress={() => {
 								onClose();
 								onShare?.();
@@ -166,11 +185,12 @@ export default function LibraryItemActionModal({
 								size={16}
 								color="#64748b"
 							/>
-						</TouchableOpacity>
+						</TVPressable>
 
 						{/* 4. Kitaplıktan Kaldır (Destructive) */}
-						<TouchableOpacity
+						<TVPressable
 							style={[styles.actionRow, styles.destructiveRow]}
+							focusedStyle={styles.actionRowDestructiveFocused}
 							onPress={() => {
 								onClose();
 								onRemove?.();
@@ -199,16 +219,17 @@ export default function LibraryItemActionModal({
 									Bu listeyi temizle
 								</Text>
 							</View>
-						</TouchableOpacity>
+						</TVPressable>
 					</View>
 
 					{/* Kapat Butonu */}
-					<TouchableOpacity
+					<TVPressable
 						style={styles.cancelButton}
+						focusedStyle={styles.cancelButtonFocused}
 						onPress={onClose}
 						activeOpacity={0.8}>
 						<Text style={styles.cancelButtonText}>Vazgeç</Text>
-					</TouchableOpacity>
+					</TVPressable>
 				</Pressable>
 			</Pressable>
 		</Modal>
@@ -319,5 +340,23 @@ const styles = StyleSheet.create({
 		color: "#cbd5e1",
 		fontSize: 13,
 		fontWeight: "700",
+	},
+	actionRowFocused: {
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		backgroundColor: "rgba(229, 9, 20, 0.15)",
+		transform: [{ scale: 1.02 }],
+	},
+	actionRowDestructiveFocused: {
+		borderWidth: 1.5,
+		borderColor: "#f43f5e",
+		backgroundColor: "rgba(244, 63, 94, 0.2)",
+		transform: [{ scale: 1.02 }],
+	},
+	cancelButtonFocused: {
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+		backgroundColor: "rgba(255, 255, 255, 0.15)",
+		transform: [{ scale: 1.03 }],
 	},
 });

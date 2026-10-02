@@ -17,11 +17,14 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
+import TVPressable from "@/components/common/TVPressable";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
 	Alert,
+	BackHandler,
 	Modal,
+	Platform,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -48,8 +51,9 @@ function SettingRow({
 	const { colors } = useThemeContext();
 
 	return (
-		<TouchableOpacity
+		<TVPressable
 			style={styles.settingRow}
+			focusedStyle={styles.settingRowFocused}
 			onPress={onPress}
 			disabled={!onPress && !rightComponent}
 			activeOpacity={onPress ? 0.65 : 1}>
@@ -115,7 +119,7 @@ function SettingRow({
 					/>
 				)}
 			</View>
-		</TouchableOpacity>
+		</TVPressable>
 	);
 }
 
@@ -221,6 +225,43 @@ export default function SettingsScreen() {
 		}, []),
 	);
 
+	useFocusEffect(
+		useCallback(() => {
+			const onBackPress = () => {
+				if (languageModalVisible) {
+					setLanguageModalVisible(false);
+					return true;
+				}
+				if (backupModalVisible) {
+					setBackupModalVisible(false);
+					return true;
+				}
+				if (layoutModalVisible) {
+					setLayoutModalVisible(false);
+					return true;
+				}
+				if (generalModalVisible) {
+					setGeneralModalVisible(false);
+					return true;
+				}
+				router.replace("/(app)");
+				return true;
+			};
+
+			const subscription = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => subscription.remove();
+		}, [
+			languageModalVisible,
+			backupModalVisible,
+			layoutModalVisible,
+			generalModalVisible,
+			router,
+		]),
+	);
+
 	const handleClearCache = () => {
 		Alert.alert(
 			"Verileri Temizle",
@@ -285,7 +326,7 @@ export default function SettingsScreen() {
 					showsVerticalScrollIndicator={false}
 					contentContainerStyle={styles.scrollContent}>
 					{/* Profile Header Card */}
-					<TouchableOpacity
+					<TVPressable
 						style={[
 							styles.profileCard,
 							{
@@ -293,6 +334,7 @@ export default function SettingsScreen() {
 								borderColor: colors.border,
 							},
 						]}
+						focusedStyle={styles.profileCardFocused}
 						onPress={() =>
 							router.push({ pathname: "profile/EditProfile" })
 						}
@@ -349,7 +391,7 @@ export default function SettingsScreen() {
 							size={20}
 							color={colors.textSecondary}
 						/>
-					</TouchableOpacity>
+					</TVPressable>
 
 					{/* KATEGORİ 1: İÇERİK VE KAYNAKLAR */}
 					<SettingsSection title="İÇERİK VE KAYNAKLAR">
@@ -539,7 +581,8 @@ export default function SettingsScreen() {
 									]}>
 									Genel Ayarlar
 								</Text>
-								<TouchableOpacity
+								<TVPressable
+									focusedStyle={styles.modalCloseButtonFocused}
 									onPress={() =>
 										setGeneralModalVisible(false)
 									}
@@ -554,7 +597,7 @@ export default function SettingsScreen() {
 										size={24}
 										color={colors.text}
 									/>
-								</TouchableOpacity>
+								</TVPressable>
 							</View>
 
 							{/* Dark Mode Switch */}
@@ -628,8 +671,9 @@ export default function SettingsScreen() {
 							/>
 
 							{/* Bildirimler */}
-							<TouchableOpacity
+							<TVPressable
 								style={styles.modalRow}
+								focusedStyle={styles.settingRowFocused}
 								onPress={() => {
 									Alert.alert(
 										"Bildirimler",
@@ -657,18 +701,19 @@ export default function SettingsScreen() {
 									size={18}
 									color={colors.textSecondary}
 								/>
-							</TouchableOpacity>
+							</TVPressable>
 
-							<TouchableOpacity
+							<TVPressable
 								style={[
 									styles.modalCloseButton,
 									{ backgroundColor: colors.primary },
 								]}
+								focusedStyle={styles.modalCloseButtonFocused}
 								onPress={() => setGeneralModalVisible(false)}>
 								<Text style={styles.modalCloseButtonText}>
 									Kapat
 								</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 					</View>
 				</Modal>
@@ -696,7 +741,8 @@ export default function SettingsScreen() {
 									]}>
 									Düzen Tercihleri
 								</Text>
-								<TouchableOpacity
+								<TVPressable
+									focusedStyle={styles.modalCloseButtonFocused}
 									onPress={() =>
 										setLayoutModalVisible(false)
 									}>
@@ -705,7 +751,7 @@ export default function SettingsScreen() {
 										size={24}
 										color={colors.text}
 									/>
-								</TouchableOpacity>
+								</TVPressable>
 							</View>
 
 							<View style={styles.modalRow}>
@@ -736,16 +782,17 @@ export default function SettingsScreen() {
 								/>
 							</View>
 
-							<TouchableOpacity
+							<TVPressable
 								style={[
 									styles.modalCloseButton,
 									{ backgroundColor: colors.primary },
 								]}
+								focusedStyle={styles.modalCloseButtonFocused}
 								onPress={() => setLayoutModalVisible(false)}>
 								<Text style={styles.modalCloseButtonText}>
 									Kaydet
 								</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 					</View>
 				</Modal>
@@ -773,7 +820,8 @@ export default function SettingsScreen() {
 									]}>
 									Güncellemeler ve Yedekleme
 								</Text>
-								<TouchableOpacity
+								<TVPressable
+									focusedStyle={styles.modalCloseButtonFocused}
 									onPress={() =>
 										setBackupModalVisible(false)
 									}>
@@ -782,11 +830,12 @@ export default function SettingsScreen() {
 										size={24}
 										color={colors.text}
 									/>
-								</TouchableOpacity>
+								</TVPressable>
 							</View>
 
-							<TouchableOpacity
+							<TVPressable
 								style={styles.modalActionItem}
+								focusedStyle={styles.settingRowFocused}
 								onPress={handleSyncNow}>
 								<Ionicons
 									name="sync-outline"
@@ -809,7 +858,7 @@ export default function SettingsScreen() {
 										Ayarlar ve listeler zaten otomatik kaydedilir
 									</Text>
 								</View>
-							</TouchableOpacity>
+							</TVPressable>
 
 							<View
 								style={[
@@ -818,8 +867,9 @@ export default function SettingsScreen() {
 								]}
 							/>
 
-							<TouchableOpacity
+							<TVPressable
 								style={styles.modalActionItem}
+								focusedStyle={styles.settingRowFocused}
 								onPress={() => {
 									Alert.alert(
 										"Güncelleme",
@@ -847,18 +897,19 @@ export default function SettingsScreen() {
 										Sürüm 4.8.0 • 8bdc599
 									</Text>
 								</View>
-							</TouchableOpacity>
+							</TVPressable>
 
-							<TouchableOpacity
+							<TVPressable
 								style={[
 									styles.modalCloseButton,
 									{ backgroundColor: colors.primary },
 								]}
+								focusedStyle={styles.modalCloseButtonFocused}
 								onPress={() => setBackupModalVisible(false)}>
 								<Text style={styles.modalCloseButtonText}>
 									Kapat
 								</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 					</View>
 				</Modal>
@@ -886,7 +937,8 @@ export default function SettingsScreen() {
 									]}>
 									Dil Bilgisi Gösterimi
 								</Text>
-								<TouchableOpacity
+								<TVPressable
+									focusedStyle={styles.modalCloseButtonFocused}
 									onPress={() =>
 										setLanguageModalVisible(false)
 									}>
@@ -895,7 +947,7 @@ export default function SettingsScreen() {
 										size={24}
 										color={colors.text}
 									/>
-								</TouchableOpacity>
+								</TVPressable>
 							</View>
 
 							{/* Options */}
@@ -922,7 +974,7 @@ export default function SettingsScreen() {
 								const isSelected =
 									languageDisplayMode === opt.key;
 								return (
-									<TouchableOpacity
+									<TVPressable
 										key={opt.key}
 										style={[
 											styles.modalOptionCard,
@@ -936,6 +988,7 @@ export default function SettingsScreen() {
 													: colors.border,
 											},
 										]}
+										focusedStyle={styles.modalOptionCardFocused}
 										activeOpacity={0.7}
 										onPress={() => {
 											setLanguageDisplayMode(opt.key);
@@ -992,20 +1045,21 @@ export default function SettingsScreen() {
 												/>
 											)}
 										</View>
-									</TouchableOpacity>
+									</TVPressable>
 								);
 							})}
 
-							<TouchableOpacity
+							<TVPressable
 								style={[
 									styles.modalCloseButton,
 									{ backgroundColor: colors.primary },
 								]}
+								focusedStyle={styles.modalCloseButtonFocused}
 								onPress={() => setLanguageModalVisible(false)}>
 								<Text style={styles.modalCloseButtonText}>
 									Tamam
 								</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 					</View>
 				</Modal>
@@ -1020,6 +1074,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
+		paddingLeft: Platform.isTV ? 56 : 0,
 	},
 	scrollContent: {
 		paddingHorizontal: 16,
@@ -1281,5 +1336,26 @@ const styles = StyleSheet.create({
 		width: 10,
 		height: 10,
 		borderRadius: 5,
+	},
+	settingRowFocused: {
+		backgroundColor: "rgba(229, 9, 20, 0.12)",
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.02 }],
+	},
+	profileCardFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.02 }],
+	},
+	modalOptionCardFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.02 }],
+	},
+	modalCloseButtonFocused: {
+		borderWidth: 2,
+		borderColor: "#ffffff",
+		transform: [{ scale: 1.04 }],
 	},
 });

@@ -1,3 +1,4 @@
+import TVPressable from "@/components/common/TVPressable";
 import { fetchPlatforms } from "@/services/api";
 import {
 	NONE_PLATFORM,
@@ -170,13 +171,15 @@ export default function PlatformList({ onSelectPlatform }) {
 					autoCorrect={false}
 				/>
 				{searchQuery.length > 0 && (
-					<TouchableOpacity onPress={() => setSearchQuery("")}>
+					<TVPressable
+						onPress={() => setSearchQuery("")}
+						focusedStyle={styles.searchClearFocused}>
 						<Ionicons
 							name="close-circle"
 							size={16}
 							color="#9ca3af"
 						/>
-					</TouchableOpacity>
+					</TVPressable>
 				)}
 			</View>
 
@@ -188,12 +191,13 @@ export default function PlatformList({ onSelectPlatform }) {
 					{ id: "series", label: "Diziler" },
 					{ id: "anime", label: "Animeler" },
 				].map((f) => (
-					<TouchableOpacity
+					<TVPressable
 						key={f.id}
 						style={[
 							styles.filterPill,
 							activeFilter === f.id && styles.filterPillActive,
 						]}
+						focusedStyle={styles.filterPillFocused}
 						onPress={() => setActiveFilter(f.id)}
 						activeOpacity={0.7}>
 						<Text
@@ -204,7 +208,7 @@ export default function PlatformList({ onSelectPlatform }) {
 							]}>
 							{f.label}
 						</Text>
-					</TouchableOpacity>
+					</TVPressable>
 				))}
 			</View>
 
@@ -219,11 +223,12 @@ export default function PlatformList({ onSelectPlatform }) {
 					contentContainerStyle={styles.scrollContent}
 					showsVerticalScrollIndicator={false}>
 					{/* 1. None Option */}
-					<TouchableOpacity
+					<TVPressable
 						style={[
 							styles.platformCard,
 							isNoneSelected && styles.platformCardActive,
 						]}
+						focusedStyle={styles.platformCardFocused}
 						onPress={() => handlePlatformSelect(NONE_PLATFORM)}
 						activeOpacity={0.7}>
 						<View
@@ -256,11 +261,12 @@ export default function PlatformList({ onSelectPlatform }) {
 								<View style={styles.radioCircle} />
 							)}
 						</View>
-					</TouchableOpacity>
+					</TVPressable>
 
 					{/* 2. Random Option */}
-					<TouchableOpacity
+					<TVPressable
 						style={styles.platformCard}
+						focusedStyle={styles.platformCardFocused}
 						onPress={handleSelectRandom}
 						activeOpacity={0.7}>
 						<View
@@ -287,7 +293,7 @@ export default function PlatformList({ onSelectPlatform }) {
 							size={18}
 							color="#6b7280"
 						/>
-					</TouchableOpacity>
+					</TVPressable>
 
 					{/* Section Divider */}
 					<View style={styles.divider}>
@@ -305,12 +311,13 @@ export default function PlatformList({ onSelectPlatform }) {
 								selectedPlatformId === platform.name);
 
 						return (
-							<TouchableOpacity
+							<TVPressable
 								key={key}
 								style={[
 									styles.platformCard,
 									isSelected && styles.platformCardActive,
 								]}
+								focusedStyle={styles.platformCardFocused}
 								onPress={() => handlePlatformSelect(platform)}
 								activeOpacity={0.7}>
 								{platform.favicon ? (
@@ -361,7 +368,7 @@ export default function PlatformList({ onSelectPlatform }) {
 										<View style={styles.radioCircle} />
 									)}
 								</View>
-							</TouchableOpacity>
+							</TVPressable>
 						);
 					})}
 
@@ -543,5 +550,21 @@ const styles = StyleSheet.create({
 	emptyText: {
 		color: "#6b7280",
 		fontSize: 13,
+	},
+	filterPillFocused: {
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		backgroundColor: "rgba(229, 9, 20, 0.2)",
+		transform: [{ scale: 1.05 }],
+	},
+	platformCardFocused: {
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		backgroundColor: "rgba(229, 9, 20, 0.15)",
+		transform: [{ scale: 1.02 }],
+	},
+	searchClearFocused: {
+		backgroundColor: "rgba(229, 9, 20, 0.2)",
+		borderRadius: 10,
 	},
 });

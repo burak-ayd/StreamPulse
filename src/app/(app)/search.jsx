@@ -1,4 +1,5 @@
 import BottomNavigation from "@components/BottomNavigation";
+import TVPressable from "@components/common/TVPressable";
 import { useThemeContext } from "@context/ThemeContext";
 import { searchContent, searchPluginContent } from "@/services/api";
 import {
@@ -14,7 +15,9 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
+	BackHandler,
 	Keyboard,
+	Platform,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -72,6 +75,23 @@ export default function SearchScreen() {
 		searchMemoryCache.hasSearched,
 	);
 	const [searchHistory, setSearchHistory] = useState([]);
+
+	useEffect(() => {
+		const onBackPress = () => {
+			if (results.length > 0 || searchQuery.length > 0 || hasSearched) {
+				clearSearch();
+				return true;
+			}
+			router.replace("/(app)");
+			return true;
+		};
+
+		const subscription = BackHandler.addEventListener(
+			"hardwareBackPress",
+			onBackPress,
+		);
+		return () => subscription.remove();
+	}, [results.length, searchQuery, hasSearched, router]);
 
 	useEffect(() => {
 		if (params?.plugin) {
@@ -295,8 +315,11 @@ export default function SearchScreen() {
 								autoCapitalize="none"
 							/>
 							{searchQuery.length > 0 && (
-								<TouchableOpacity
+								<TVPressable
 									onPress={clearSearch}
+									style={({ focused }) => [
+										focused && styles.iconButtonFocused,
+									]}
 									hitSlop={{
 										top: 10,
 										bottom: 10,
@@ -308,13 +331,13 @@ export default function SearchScreen() {
 										size={18}
 										color={colors.textSecondary}
 									/>
-								</TouchableOpacity>
+								</TVPressable>
 							)}
 						</View>
 
 						{/* Arama Butonu */}
-						<TouchableOpacity
-							style={[
+						<TVPressable
+							style={({ focused }) => [
 								styles.searchButton,
 								{
 									backgroundColor: colors.primary,
@@ -323,6 +346,7 @@ export default function SearchScreen() {
 											? 0.6
 											: 1,
 								},
+								focused && styles.searchButtonFocused,
 							]}
 							onPress={() => handleSearch()}
 							disabled={searchQuery.trim().length === 0 || loading}
@@ -335,13 +359,13 @@ export default function SearchScreen() {
 									<Text style={styles.searchButtonText}>Ara</Text>
 								</>
 							)}
-						</TouchableOpacity>
+						</TVPressable>
 					</View>
 
 					{/* Arama Kapsamı (Genel vs Eklenti İçi) */}
 					<View style={styles.scopeRow}>
-						<TouchableOpacity
-							style={[
+						<TVPressable
+							style={({ focused }) => [
 								styles.scopePill,
 								searchScope === "all"
 									? styles.scopePillActive
@@ -349,6 +373,7 @@ export default function SearchScreen() {
 											backgroundColor: colors.cardBg,
 											borderColor: colors.border,
 										},
+								focused && styles.scopePillFocused,
 							]}
 							onPress={() => handleScopeChange("all")}
 							activeOpacity={0.7}>
@@ -375,11 +400,11 @@ export default function SearchScreen() {
 								]}>
 								Genel Arama
 							</Text>
-						</TouchableOpacity>
+						</TVPressable>
 
 						{activePlugin ? (
-							<TouchableOpacity
-								style={[
+							<TVPressable
+								style={({ focused }) => [
 									styles.scopePill,
 									searchScope === "plugin"
 										? styles.scopePillActive
@@ -387,6 +412,7 @@ export default function SearchScreen() {
 												backgroundColor: colors.cardBg,
 												borderColor: colors.border,
 											},
+									focused && styles.scopePillFocused,
 								]}
 								onPress={() => handleScopeChange("plugin")}
 								activeOpacity={0.7}>
@@ -416,7 +442,7 @@ export default function SearchScreen() {
 									numberOfLines={1}>
 									{activePlugin}
 								</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						) : null}
 					</View>
 				</View>
@@ -470,8 +496,11 @@ export default function SearchScreen() {
 												Son Aramalar
 											</Text>
 										</View>
-										<TouchableOpacity
+										<TVPressable
 											onPress={handleClearAllHistory}
+											style={({ focused }) => [
+												focused && styles.textButtonFocused,
+											]}
 											hitSlop={{
 												top: 8,
 												bottom: 8,
@@ -485,15 +514,15 @@ export default function SearchScreen() {
 												]}>
 												Tümünü Temizle
 											</Text>
-										</TouchableOpacity>
+										</TVPressable>
 									</View>
 
 									{/* Geçmiş Öğeleri Listesi */}
 									<View style={styles.historyList}>
 										{searchHistory.map((item, index) => (
-											<TouchableOpacity
+											<TVPressable
 												key={`${item}-${index}`}
-												style={[
+												style={({ focused }) => [
 													styles.historyItem,
 													{
 														backgroundColor:
@@ -501,6 +530,7 @@ export default function SearchScreen() {
 														borderColor:
 															colors.border,
 													},
+													focused && styles.historyItemFocused,
 												]}
 												activeOpacity={0.7}
 												onPress={() => handleSearch(item)}>
@@ -521,12 +551,15 @@ export default function SearchScreen() {
 														{item}
 													</Text>
 												</View>
-												<TouchableOpacity
+												<TVPressable
 													onPress={() =>
 														handleDeleteHistoryItem(
 															item,
 														)
 													}
+													style={({ focused }) => [
+														focused && styles.iconButtonFocused,
+													]}
 													hitSlop={{
 														top: 10,
 														bottom: 10,
@@ -540,8 +573,8 @@ export default function SearchScreen() {
 															colors.textSecondary
 														}
 													/>
-												</TouchableOpacity>
-											</TouchableOpacity>
+												</TVPressable>
+											</TVPressable>
 										))}
 									</View>
 								</View>
@@ -663,19 +696,20 @@ export default function SearchScreen() {
 													item.backdrop_url;
 
 												return (
-													<TouchableOpacity
+													<TVPressable
 														key={
 															item.url ||
 															`${pluginName}-${index}`
 														}
-														style={[
+														style={({ focused }) => [
 															styles.resultCard,
 															{
 																backgroundColor:
 																	colors.cardBg,
 																borderColor:
-																	colors.border,
+																	focused ? colors.primary : colors.border,
 															},
+															focused && styles.resultCardFocused,
 														]}
 														activeOpacity={0.75}
 														onPress={() =>
@@ -812,7 +846,7 @@ export default function SearchScreen() {
 															}
 															style={styles.chevron}
 														/>
-													</TouchableOpacity>
+													</TVPressable>
 												);
 											})}
 										</View>
@@ -832,6 +866,7 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
+		paddingLeft: Platform.isTV ? 56 : 0,
 	},
 	header: {
 		height: 56,
@@ -1076,5 +1111,36 @@ const styles = StyleSheet.create({
 	},
 	scopeText: {
 		fontSize: 12,
+	},
+	searchButtonFocused: {
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+		transform: [{ scale: 1.05 }],
+	},
+	scopePillFocused: {
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+		transform: [{ scale: 1.06 }],
+	},
+	historyItemFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.02 }],
+	},
+	resultCardFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.02 }],
+		shadowColor: "#E50914",
+		shadowOpacity: 0.5,
+		shadowRadius: 8,
+		elevation: 4,
+	},
+	iconButtonFocused: {
+		transform: [{ scale: 1.2 }],
+	},
+	textButtonFocused: {
+		borderBottomWidth: 1,
+		borderBottomColor: "#E50914",
 	},
 });

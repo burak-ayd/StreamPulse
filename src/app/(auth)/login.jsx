@@ -5,13 +5,15 @@
  * "Hesabın yok mu? Kayıt ol" linki ile register'a yönlendirir.
  */
 
+import TVPressable from "@/components/common/TVPressable";
 import { useAuth } from "@/context/AuthContext";
 import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useRouter } from "expo-router";
-import React, { useState } from "react";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
 	ActivityIndicator,
+	BackHandler,
 	KeyboardAvoidingView,
 	Platform,
 	ScrollView,
@@ -34,6 +36,24 @@ export default function LoginScreen() {
 	const [showPassword, setShowPassword] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState("");
+
+	useFocusEffect(
+		useCallback(() => {
+			const onBackPress = () => {
+				if (router.canGoBack()) {
+					router.back();
+				} else {
+					router.replace("/(app)");
+				}
+				return true;
+			};
+			const sub = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => sub.remove();
+		}, [router]),
+	);
 
 	const handleLogin = async () => {
 		if (!email.trim() || !password.trim()) {
@@ -70,12 +90,13 @@ export default function LoginScreen() {
 						keyboardShouldPersistTaps="handled"
 						showsVerticalScrollIndicator={false}>
 						{/* Geri düğmesi */}
-						<TouchableOpacity
+						<TVPressable
 							style={styles.backButton}
+							focusedStyle={styles.headerButtonFocused}
 							onPress={() => router.canGoBack() ? router.back() : router.replace("/(app)")}
 							activeOpacity={0.7}>
 							<Ionicons name="close" size={28} color={colors.text} />
-						</TouchableOpacity>
+						</TVPressable>
 
 						{/* Başlık */}
 						<View style={styles.headerSection}>
@@ -160,24 +181,26 @@ export default function LoginScreen() {
 										autoCapitalize="none"
 										autoComplete="password"
 									/>
-									<TouchableOpacity
+									<TVPressable
 										onPress={() => setShowPassword(!showPassword)}
-										style={styles.eyeButton}>
+										style={styles.eyeButton}
+										focusedStyle={styles.eyeButtonFocused}>
 										<Ionicons
 											name={showPassword ? "eye-off-outline" : "eye-outline"}
 											size={20}
 											color={colors.textSecondary}
 										/>
-									</TouchableOpacity>
+									</TVPressable>
 								</View>
 							</View>
 
 							{/* Giriş butonu */}
-							<TouchableOpacity
+							<TVPressable
 								style={[
 									styles.primaryButton,
 									isSubmitting && styles.disabledButton,
 								]}
+								focusedStyle={styles.primaryButtonFocused}
 								onPress={handleLogin}
 								disabled={isSubmitting}
 								activeOpacity={0.8}>
@@ -186,7 +209,7 @@ export default function LoginScreen() {
 								) : (
 									<Text style={styles.primaryButtonText}>Giriş Yap</Text>
 								)}
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 
 						{/* Alt link */}
@@ -194,10 +217,11 @@ export default function LoginScreen() {
 							<Text style={[styles.footerText, { color: colors.textSecondary }]}>
 								Hesabın yok mu?{" "}
 							</Text>
-							<TouchableOpacity
+							<TVPressable
+								focusedStyle={styles.footerLinkFocused}
 								onPress={() => router.replace("/(auth)/register")}>
 								<Text style={styles.footerLink}>Kayıt Ol</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 					</ScrollView>
 				</KeyboardAvoidingView>
@@ -327,5 +351,28 @@ const styles = StyleSheet.create({
 		fontSize: 15,
 		fontWeight: "700",
 		color: "#38bdf8",
+	},
+	headerButtonFocused: {
+		backgroundColor: "rgba(229, 9, 20, 0.2)",
+		borderRadius: 22,
+		transform: [{ scale: 1.1 }],
+	},
+	eyeButtonFocused: {
+		backgroundColor: "rgba(229, 9, 20, 0.15)",
+		borderRadius: 8,
+	},
+	primaryButtonFocused: {
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+		backgroundColor: "#0284c7",
+		transform: [{ scale: 1.02 }],
+	},
+	footerLinkFocused: {
+		borderWidth: 1,
+		borderColor: "#38bdf8",
+		backgroundColor: "rgba(56, 189, 248, 0.15)",
+		borderRadius: 6,
+		paddingHorizontal: 6,
+		paddingVertical: 2,
 	},
 });
