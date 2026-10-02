@@ -2,7 +2,7 @@
   "expo": {
     "name": "Stream Pulse",
     "slug": "StreamPulse",
-    "version": "1.0.2",
+    "version": "1.0.6",
     "orientation": "default",
     "icon": "./assets/images/logo.png",
     "scheme": "streampulse",
@@ -16,7 +16,10 @@
         "android.permission.INTERNET",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "REQUEST_INSTALL_PACKAGES"
+        "REQUEST_INSTALL_PACKAGES",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+        "android.permission.WAKE_LOCK"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#0B0E14",
@@ -62,6 +65,18 @@
           "initialOrientation": "DEFAULT"
         }
       ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "useLegacyPackaging": true,
+            "enablePngCrunchInReleaseBuilds": true
+          }
+        }
+      ],
       "@react-native-community/datetimepicker",
       "@react-native-vector-icons/ionicons",
       "expo-font",
@@ -71,7 +86,8 @@
       "./scripts/withSplitApk.js",
       "./scripts/withGradleJvmArgs.js",
       "./scripts/withCustomApkName.js",
-      "./scripts/withFileProvider.js"
+      "./scripts/withFileProvider.js",
+      "./scripts/withBuildOptimizations.js"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -81,7 +97,9 @@
       "router": {},
       "eas": {
         "projectId": "6e7b0adb-396f-4d06-b66d-bea82406c890"
-      }
+      },
+      "variant": "production",
+      "API_URL": "https://movieapi.burakaydogan.net.tr"
     },
     "owner": "darkpuye"
   }

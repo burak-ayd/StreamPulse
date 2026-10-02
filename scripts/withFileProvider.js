@@ -76,6 +76,9 @@ const withFileProvider = (config) => {
     <!-- Downloads klasörü için -->
     <external-path name="external_files" path="Download/"/>
     
+    <!-- External media klasörü (Android/media/...) -->
+    <external-media-path name="external_media" path="."/>
+
     <!-- Tüm external storage -->
     <external-path name="external" path="."/>
     
