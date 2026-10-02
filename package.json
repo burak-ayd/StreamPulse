@@ -1,7 +1,7 @@
 {
-  "name": "notificationtest",
+  "name": "streampulse",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "dependencies": {
     "@expo/ui": "~57.0.19",
     "@gorhom/bottom-sheet": "^5",
@@ -51,10 +51,12 @@
     "start": "expo start",
     "clean-start": "expo start -c",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
-    "lint": "expo lint"
+    "android": "expo run:android",
+    "lint": "expo lint",
+    "build:android:apk": "node scripts/build.js apk",
+    "build:android:aab": "node scripts/build.js aab",
+    "web": "expo start --web"
   },
   "private": true
 }

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Stream Pulse",
     "slug": "StreamPulse",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "default",
     "icon": "./assets/images/logo.png",
     "scheme": "streampulse",
@@ -12,6 +12,12 @@
       "icon": "./assets/images/logo.png"
     },
     "android": {
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "REQUEST_INSTALL_PACKAGES"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0B0E14",
         "foregroundImage": "./assets/images/logo.png"
@@ -61,11 +67,22 @@
       "expo-font",
       "expo-image",
       "expo-status-bar",
-      "expo-secure-store"
+      "expo-secure-store",
+      "./scripts/withSplitApk.js",
+      "./scripts/withGradleJvmArgs.js",
+      "./scripts/withCustomApkName.js",
+      "./scripts/withFileProvider.js"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6e7b0adb-396f-4d06-b66d-bea82406c890"
+      }
+    },
+    "owner": "darkpuye"
   }
 }
