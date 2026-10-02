@@ -1,3 +1,4 @@
+import TVPressable from "@components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
@@ -402,8 +403,8 @@ export default function SeasonsSection({
 			{/* Kontrol Çubuğu (Sezon Dropdown, Bölüm Sıralama, Sezon İndir) */}
 			<View style={styles.controlsBar}>
 				{/* 1. Sezon Seçim Dropdown Butonu */}
-				<TouchableOpacity
-					style={[
+				<TVPressable
+					style={({ focused }) => [
 						styles.seasonDropdownButton,
 						{
 							backgroundColor:
@@ -411,6 +412,7 @@ export default function SeasonsSection({
 							borderColor:
 								theme === "dark" ? "#232A36" : "#E2E8F0",
 						},
+						focused && styles.controlsButtonFocused,
 					]}
 					onPress={() => setIsSeasonModalOpen(true)}
 					activeOpacity={0.75}>
@@ -427,11 +429,11 @@ export default function SeasonsSection({
 						color={colors.text}
 						style={styles.dropdownChevron}
 					/>
-				</TouchableOpacity>
+				</TVPressable>
 
 				{/* 2. Bölüm Sıralama Butonu (Bölüm ↑ / Bölüm ↓) */}
-				<TouchableOpacity
-					style={[
+				<TVPressable
+					style={({ focused }) => [
 						styles.sortButton,
 						{
 							backgroundColor:
@@ -439,6 +441,7 @@ export default function SeasonsSection({
 							borderColor:
 								theme === "dark" ? "#232A36" : "#E2E8F0",
 						},
+						focused && styles.controlsButtonFocused,
 					]}
 					onPress={() =>
 						setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
@@ -447,11 +450,14 @@ export default function SeasonsSection({
 					<Text style={[styles.sortButtonText, { color: colors.text }]}>
 						Bölüm {sortOrder === "asc" ? "↑" : "↓"}
 					</Text>
-				</TouchableOpacity>
+				</TVPressable>
 
 				{/* 3. Sezon Bölüm Sayısı & Toplu İndir Butonu */}
-				<TouchableOpacity
-					style={styles.seasonDownloadButton}
+				<TVPressable
+					style={({ focused }) => [
+						styles.seasonDownloadButton,
+						focused && styles.controlsButtonFocused,
+					]}
 					onPress={handleDownloadSeason}
 					activeOpacity={0.7}
 					hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -467,7 +473,7 @@ export default function SeasonsSection({
 						]}>
 						{sortedEpisodes.length} Bölüm
 					</Text>
-				</TouchableOpacity>
+				</TVPressable>
 			</View>
 
 			{/* Bölüm Listesi */}
@@ -505,9 +511,9 @@ export default function SeasonsSection({
 					);
 
 					return (
-						<TouchableOpacity
+						<TVPressable
 							key={ep.url || `${selectedSeason}-${epNumber}-${index}`}
-							style={[
+							style={({ focused }) => [
 								styles.episodeCard,
 								{
 									backgroundColor: isDark
@@ -525,6 +531,7 @@ export default function SeasonsSection({
 									borderWidth: isInProgress ? 1.5 : 1,
 								},
 								isInProgress && styles.episodeCardActive,
+								focused && styles.episodeCardFocused,
 							]}
 							onPress={() => handleEpisodeClick(ep, index)}
 							activeOpacity={0.75}>
@@ -648,14 +655,15 @@ export default function SeasonsSection({
 							</View>
 
 							{/* Sağ: İndir Butonu (w-8 h-8 rounded-full) */}
-							<TouchableOpacity
-								style={[
+							<TVPressable
+								style={({ focused }) => [
 									styles.downloadButton,
 									{
 										backgroundColor: isDark
 											? "#1e293b"
 											: "#f1f5f9",
 									},
+									focused && styles.controlsButtonFocused,
 								]}
 								onPress={() =>
 									handleDownloadEpisode(ep, epNumber, epDisplayTitle)
@@ -679,8 +687,8 @@ export default function SeasonsSection({
 													: "#64748b"
 									}
 								/>
-							</TouchableOpacity>
-						</TouchableOpacity>
+							</TVPressable>
+						</TVPressable>
 					);
 				})}
 			</View>
@@ -712,15 +720,18 @@ export default function SeasonsSection({
 								]}>
 								Sezon Seçin
 							</Text>
-							<TouchableOpacity
+							<TVPressable
 								onPress={() => setIsSeasonModalOpen(false)}
+								style={({ focused }) => [
+									focused && styles.controlsButtonFocused,
+								]}
 								hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
 								<Ionicons
 									name="close"
 									size={22}
 									color={colors.textSecondary}
 								/>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 
 						{/* Sezonlar Listesi */}
@@ -733,13 +744,15 @@ export default function SeasonsSection({
 									normalizedSeasons[sKey]?.length || 0;
 
 								return (
-									<TouchableOpacity
+									<TVPressable
 										key={sKey}
-										style={[
+										autoFocus={isSelected}
+										style={({ focused }) => [
 											styles.modalSeasonItem,
 											isSelected && {
 												backgroundColor: `${colors.primary}22`,
 											},
+											focused && styles.modalSeasonItemFocused,
 										]}
 										onPress={() => {
 											handleSeasonSelect(sKey);
@@ -788,7 +801,7 @@ export default function SeasonsSection({
 												color={colors.primary}
 											/>
 										)}
-									</TouchableOpacity>
+									</TVPressable>
 								);
 							})}
 						</ScrollView>
@@ -1027,5 +1040,24 @@ const styles = StyleSheet.create({
 	loadingText: {
 		fontSize: 14,
 		fontWeight: "500",
+	},
+	controlsButtonFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.05 }],
+	},
+	episodeCardFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.02 }],
+		shadowColor: "#E50914",
+		shadowOpacity: 0.5,
+		shadowRadius: 8,
+		elevation: 4,
+	},
+	modalSeasonItemFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.02 }],
 	},
 });

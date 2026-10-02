@@ -1,3 +1,4 @@
+import TVPressable from "@components/common/TVPressable";
 import { useAuth } from "@/context/AuthContext";
 import { useThemeContext } from "@/context/ThemeContext";
 import { getUserProfile, saveUserProfile } from "@/utils/storage";
@@ -10,6 +11,7 @@ import { useEffect, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
+	BackHandler,
 	KeyboardAvoidingView,
 	Platform,
 	ScrollView,
@@ -28,6 +30,21 @@ export default function EditProfile() {
 	const { user, isLoggedIn } = useAuth();
 	const router = useRouter();
 	const [isLoading, setIsLoading] = useState(false);
+
+	useEffect(() => {
+		const onBackPress = () => {
+			if (router.canGoBack()) {
+				router.back();
+			}
+			return true;
+		};
+
+		const subscription = BackHandler.addEventListener(
+			"hardwareBackPress",
+			onBackPress,
+		);
+		return () => subscription.remove();
+	}, [router]);
 
 	// User data states
 	const [email, setEmail] = useState("");
@@ -207,22 +224,28 @@ export default function EditProfile() {
 							backgroundColor: colors.cardBg,
 						},
 					]}>
-					<TouchableOpacity
+					<TVPressable
 						onPress={handleBack}
-						style={styles.backButton}>
+						style={({ focused }) => [
+							styles.backButton,
+							focused && styles.iconButtonFocused,
+						]}>
 						<Ionicons
 							name="arrow-back"
 							size={24}
 							color={colors.text}
 						/>
-					</TouchableOpacity>
+					</TVPressable>
 					<Text style={[styles.headerTitle, { color: colors.text }]}>
 						Profili Düzenle
 					</Text>
-					<TouchableOpacity
+					<TVPressable
 						onPress={handleSave}
 						disabled={isLoading}
-						style={styles.saveButton}>
+						style={({ focused }) => [
+							styles.saveButton,
+							focused && styles.saveButtonFocused,
+						]}>
 						{isLoading ? (
 							<ActivityIndicator
 								size="small"
@@ -237,7 +260,7 @@ export default function EditProfile() {
 								Kaydet
 							</Text>
 						)}
-					</TouchableOpacity>
+					</TVPressable>
 				</View>
 
 				<KeyboardAvoidingView
@@ -276,10 +299,11 @@ export default function EditProfile() {
 									/>
 								)}
 							</View>
-							<TouchableOpacity
-								style={[
+							<TVPressable
+								style={({ focused }) => [
 									styles.changeAvatarButton,
 									{ borderColor: colors.primary },
+									focused && styles.changeAvatarButtonFocused,
 								]}
 								onPress={pickImage}>
 								<Ionicons
@@ -295,7 +319,7 @@ export default function EditProfile() {
 									{" "}
 									Fotoğrafı Değiştir
 								</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 
 						{/* User Info Form */}
@@ -484,8 +508,11 @@ export default function EditProfile() {
 							</View>
 
 							{/* Language */}
-							<TouchableOpacity
-								style={styles.inputGroup}
+							<TVPressable
+								style={({ focused }) => [
+									styles.inputGroup,
+									focused && styles.inputGroupFocused,
+								]}
 								onPress={showLanguagePicker}>
 								<Text
 									style={[
@@ -521,11 +548,14 @@ export default function EditProfile() {
 										color={colors.textSecondary}
 									/>
 								</View>
-							</TouchableOpacity>
+							</TVPressable>
 
 							{/* Birth Date */}
-							<TouchableOpacity
-								style={styles.inputGroup}
+							<TVPressable
+								style={({ focused }) => [
+									styles.inputGroup,
+									focused && styles.inputGroupFocused,
+								]}
 								onPress={() => {
 									setShowPicker(true);
 								}}>
@@ -565,7 +595,7 @@ export default function EditProfile() {
 										color={colors.textSecondary}
 									/>
 								</View>
-							</TouchableOpacity>
+							</TVPressable>
 							{showPicker && (
 								<DateTimePicker
 									value={
@@ -805,5 +835,27 @@ const styles = StyleSheet.create({
 	privacyDescription: {
 		fontSize: 12,
 		marginTop: 2,
+	},
+	iconButtonFocused: {
+		transform: [{ scale: 1.15 }],
+	},
+	saveButtonFocused: {
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		borderRadius: 8,
+		paddingHorizontal: 8,
+		paddingVertical: 4,
+		transform: [{ scale: 1.05 }],
+	},
+	changeAvatarButtonFocused: {
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+		transform: [{ scale: 1.05 }],
+	},
+	inputGroupFocused: {
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		borderRadius: 12,
+		padding: 4,
 	},
 });

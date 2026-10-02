@@ -1,9 +1,12 @@
 import { useThemeContext } from "@/context/ThemeContext";
 import { usePlayerSettings } from "@/context/PlayerSettingsContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useRouter } from "expo-router";
+import TVPressable from "@/components/common/TVPressable";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback } from "react";
 import {
 	Alert,
+	BackHandler,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -60,6 +63,20 @@ export default function PlayerSettingsScreen() {
 	const router = useRouter();
 	const { settings, updateSettings, resetSettings } = usePlayerSettings();
 
+	useFocusEffect(
+		useCallback(() => {
+			const onBackPress = () => {
+				router.back();
+				return true;
+			};
+			const subscription = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => subscription.remove();
+		}, [router]),
+	);
+
 	const handleReset = () => {
 		Alert.alert(
 			"Ayarları Sıfırla",
@@ -112,25 +129,27 @@ export default function PlayerSettingsScreen() {
 							backgroundColor: colors.cardBg,
 						},
 					]}>
-					<TouchableOpacity
+					<TVPressable
 						onPress={() => router.back()}
-						style={styles.backButton}>
+						style={styles.backButton}
+						focusedStyle={styles.headerButtonFocused}>
 						<Ionicons
 							name="arrow-back"
 							size={24}
 							color={colors.text}
 						/>
-					</TouchableOpacity>
+					</TVPressable>
 					<Text style={[styles.headerTitle, { color: colors.text }]}>
 						Oynatıcı ve Altyazı
 					</Text>
-					<TouchableOpacity
+					<TVPressable
 						onPress={handleReset}
-						style={styles.resetButton}>
+						style={styles.resetButton}
+						focusedStyle={styles.headerButtonFocused}>
 						<Text style={[styles.resetButtonText, { color: colors.primary }]}>
 							Sıfırla
 						</Text>
-					</TouchableOpacity>
+					</TVPressable>
 				</View>
 
 				<ScrollView
@@ -234,7 +253,7 @@ export default function PlayerSettingsScreen() {
 										const isSelected =
 											settings.subtitleFontSize === item.value;
 										return (
-											<TouchableOpacity
+											<TVPressable
 												key={item.value}
 												style={[
 													styles.chip,
@@ -247,6 +266,7 @@ export default function PlayerSettingsScreen() {
 															: colors.border,
 													},
 												]}
+												focusedStyle={styles.chipFocused}
 												onPress={() =>
 													updateSettings({
 														subtitleFontSize: item.value,
@@ -267,7 +287,7 @@ export default function PlayerSettingsScreen() {
 													]}>
 													{item.label}
 												</Text>
-											</TouchableOpacity>
+											</TVPressable>
 										);
 									})}
 								</View>
@@ -298,7 +318,7 @@ export default function PlayerSettingsScreen() {
 										const isSelected =
 											settings.subtitleTextColor === item.value;
 										return (
-											<TouchableOpacity
+											<TVPressable
 												key={item.value}
 												style={[
 													styles.colorCard,
@@ -310,6 +330,7 @@ export default function PlayerSettingsScreen() {
 														borderWidth: isSelected ? 2 : 1,
 													},
 												]}
+												focusedStyle={styles.colorCardFocused}
 												onPress={() =>
 													updateSettings({
 														subtitleTextColor: item.value,
@@ -343,7 +364,7 @@ export default function PlayerSettingsScreen() {
 													]}>
 													{item.label}
 												</Text>
-											</TouchableOpacity>
+											</TVPressable>
 										);
 									})}
 								</View>
@@ -374,7 +395,7 @@ export default function PlayerSettingsScreen() {
 										const isSelected =
 											settings.subtitleBgColor === item.value;
 										return (
-											<TouchableOpacity
+											<TVPressable
 												key={item.value}
 												style={[
 													styles.chip,
@@ -387,6 +408,7 @@ export default function PlayerSettingsScreen() {
 															: colors.border,
 													},
 												]}
+												focusedStyle={styles.chipFocused}
 												onPress={() =>
 													updateSettings({
 														subtitleBgColor: item.value,
@@ -407,7 +429,7 @@ export default function PlayerSettingsScreen() {
 													]}>
 													{item.label}
 												</Text>
-											</TouchableOpacity>
+											</TVPressable>
 										);
 									})}
 								</View>
@@ -418,7 +440,14 @@ export default function PlayerSettingsScreen() {
 							/>
 
 							{/* Metin Gölgesi */}
-							<View style={styles.toggleRow}>
+							<TVPressable
+								style={styles.toggleRow}
+								focusedStyle={styles.toggleRowFocused}
+								onPress={() =>
+									updateSettings({
+										subtitleTextShadow: !settings.subtitleTextShadow,
+									})
+								}>
 								<View style={styles.toggleRowLeft}>
 									<Ionicons
 										name="sunny-outline"
@@ -453,7 +482,7 @@ export default function PlayerSettingsScreen() {
 									}}
 									thumbColor="#ffffff"
 								/>
-							</View>
+							</TVPressable>
 
 							<View
 								style={[styles.divider, { backgroundColor: colors.border }]}
@@ -481,7 +510,7 @@ export default function PlayerSettingsScreen() {
 											settings.defaultSubtitleLanguage ===
 											item.value;
 										return (
-											<TouchableOpacity
+											<TVPressable
 												key={item.value}
 												style={[
 													styles.chip,
@@ -494,6 +523,7 @@ export default function PlayerSettingsScreen() {
 															: colors.border,
 													},
 												]}
+												focusedStyle={styles.chipFocused}
 												onPress={() =>
 													updateSettings({
 														defaultSubtitleLanguage: item.value,
@@ -514,7 +544,7 @@ export default function PlayerSettingsScreen() {
 													]}>
 													{item.label}
 												</Text>
-											</TouchableOpacity>
+											</TVPressable>
 										);
 									})}
 								</View>
@@ -557,7 +587,7 @@ export default function PlayerSettingsScreen() {
 										const isSelected =
 											settings.seekDuration === item.value;
 										return (
-											<TouchableOpacity
+											<TVPressable
 												key={item.value}
 												style={[
 													styles.chip,
@@ -570,6 +600,7 @@ export default function PlayerSettingsScreen() {
 															: colors.border,
 													},
 												]}
+												focusedStyle={styles.chipFocused}
 												onPress={() =>
 													updateSettings({
 														seekDuration: item.value,
@@ -590,7 +621,7 @@ export default function PlayerSettingsScreen() {
 													]}>
 													{item.label}
 												</Text>
-											</TouchableOpacity>
+											</TVPressable>
 										);
 									})}
 								</View>
@@ -624,7 +655,7 @@ export default function PlayerSettingsScreen() {
 										const isSelected =
 											settings.defaultResizeMode === item.value;
 										return (
-											<TouchableOpacity
+											<TVPressable
 												key={item.value}
 												style={[
 													styles.chip,
@@ -638,6 +669,7 @@ export default function PlayerSettingsScreen() {
 															: colors.border,
 													},
 												]}
+												focusedStyle={styles.chipFocused}
 												onPress={() =>
 													updateSettings({
 														defaultResizeMode: item.value,
@@ -658,7 +690,7 @@ export default function PlayerSettingsScreen() {
 													]}>
 													{item.label}
 												</Text>
-											</TouchableOpacity>
+											</TVPressable>
 										);
 									})}
 								</View>
@@ -689,7 +721,7 @@ export default function PlayerSettingsScreen() {
 										const isSelected =
 											settings.controlsTimeout === item.value;
 										return (
-											<TouchableOpacity
+											<TVPressable
 												key={item.value}
 												style={[
 													styles.chip,
@@ -702,6 +734,7 @@ export default function PlayerSettingsScreen() {
 															: colors.border,
 													},
 												]}
+												focusedStyle={styles.chipFocused}
 												onPress={() =>
 													updateSettings({
 														controlsTimeout: item.value,
@@ -722,7 +755,7 @@ export default function PlayerSettingsScreen() {
 													]}>
 													{item.label}
 												</Text>
-											</TouchableOpacity>
+											</TVPressable>
 										);
 									})}
 								</View>
@@ -733,7 +766,14 @@ export default function PlayerSettingsScreen() {
 							/>
 
 							{/* Kaldığı Yerden Devam Et */}
-							<View style={styles.toggleRow}>
+							<TVPressable
+								style={styles.toggleRow}
+								focusedStyle={styles.toggleRowFocused}
+								onPress={() =>
+									updateSettings({
+										autoResume: !settings.autoResume,
+									})
+								}>
 								<View style={styles.toggleRowLeft}>
 									<Ionicons
 										name="refresh-circle-outline"
@@ -768,7 +808,7 @@ export default function PlayerSettingsScreen() {
 									}}
 									thumbColor="#ffffff"
 								/>
-							</View>
+							</TVPressable>
 						</View>
 					</View>
 				</ScrollView>
@@ -984,5 +1024,28 @@ const styles = StyleSheet.create({
 	divider: {
 		height: 1,
 		marginHorizontal: 16,
+	},
+	headerButtonFocused: {
+		backgroundColor: "rgba(229, 9, 20, 0.2)",
+		borderRadius: 8,
+		transform: [{ scale: 1.08 }],
+	},
+	chipFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		backgroundColor: "rgba(229, 9, 20, 0.2)",
+		transform: [{ scale: 1.05 }],
+	},
+	colorCardFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.06 }],
+	},
+	toggleRowFocused: {
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		backgroundColor: "rgba(229, 9, 20, 0.12)",
+		borderRadius: 8,
+		transform: [{ scale: 1.02 }],
 	},
 });

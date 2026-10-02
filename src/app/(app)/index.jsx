@@ -29,8 +29,11 @@ import BottomNavigation from "@components/BottomNavigation";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
+import TVPressable from "@/components/common/TVPressable";
 import {
 	ActivityIndicator,
+	BackHandler,
+	Platform,
 	RefreshControl,
 	ScrollView,
 	StatusBar,
@@ -60,6 +63,31 @@ export default function Index() {
 	const [previewMovie, setPreviewMovie] = useState(null);
 	const [isPreviewModalVisible, setIsPreviewModalVisible] = useState(false);
 	const [isHeroListSelectVisible, setIsHeroListSelectVisible] = useState(false);
+
+	// Android TV Kumanda Geri Tuşu: Açık modal varsa kapat
+	useEffect(() => {
+		const onBackPress = () => {
+			if (isPlatformModalVisible) {
+				setIsPlatformModalVisible(false);
+				return true;
+			}
+			if (isPreviewModalVisible) {
+				setIsPreviewModalVisible(false);
+				return true;
+			}
+			if (isHeroListSelectVisible) {
+				setIsHeroListSelectVisible(false);
+				return true;
+			}
+			return false;
+		};
+
+		const sub = BackHandler.addEventListener(
+			"hardwareBackPress",
+			onBackPress,
+		);
+		return () => sub.remove();
+	}, [isPlatformModalVisible, isPreviewModalVisible, isHeroListSelectVisible]);
 
 	const isNoneMode =
 		!selectedPlatform ||
@@ -486,12 +514,12 @@ export default function Index() {
 											seçip içerikleri cihazınıza
 											indirebilirsiniz.
 										</Text>
-										<TouchableOpacity
+										<TVPressable
 											style={styles.selectPlatformBtn}
+											focusedStyle={styles.selectPlatformBtnFocused}
 											onPress={() =>
 												setIsPlatformModalVisible(true)
-											}
-											activeOpacity={0.8}>
+											}>
 											<Ionicons
 												name="grid-outline"
 												size={16}
@@ -503,7 +531,7 @@ export default function Index() {
 												}>
 												Eklenti Seç
 											</Text>
-										</TouchableOpacity>
+										</TVPressable>
 									</View>
 								)}
 
@@ -567,21 +595,21 @@ export default function Index() {
 								{/* Load more categories button */}
 								{visibleCount < categories.length && (
 									<View style={styles.loadMoreContainer}>
-										<TouchableOpacity
+										<TVPressable
 											style={styles.loadMoreButton}
+											focusedStyle={styles.loadMoreButtonFocused}
 											onPress={() =>
 												setVisibleCount(
 													(prev) => prev + 5,
 												)
-											}
-											activeOpacity={0.8}>
+											}>
 											<Text style={styles.loadMoreText}>
 												Daha Fazla Kategori Göster (
 												{categories.length -
 													visibleCount}
 												)
 											</Text>
-										</TouchableOpacity>
+										</TVPressable>
 									</View>
 								)}
 							</>
@@ -642,6 +670,7 @@ const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 		backgroundColor: "#0d0e12",
+		paddingLeft: Platform.isTV ? 56 : 0,
 	},
 	centerLoading: {
 		flex: 1,
@@ -725,6 +754,12 @@ const styles = StyleSheet.create({
 		borderRadius: 20,
 		gap: 6,
 	},
+	selectPlatformBtnFocused: {
+		backgroundColor: "#FF3B30",
+		borderColor: "#FFFFFF",
+		borderWidth: 2,
+		transform: [{ scale: 1.08 }],
+	},
 	selectPlatformBtnText: {
 		color: "#ffffff",
 		fontSize: 14,
@@ -741,6 +776,12 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.15)",
 		backgroundColor: "#161b22",
+	},
+	loadMoreButtonFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.35)",
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.08 }],
 	},
 	loadMoreText: {
 		color: "#38bdf8",

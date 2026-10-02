@@ -19,11 +19,14 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
+import TVPressable from "@/components/common/TVPressable";
 import {
 	ActivityIndicator,
+	BackHandler,
 	Dimensions,
 	FlatList,
 	Modal,
+	Platform,
 	Pressable,
 	ScrollView,
 	Share,
@@ -87,6 +90,38 @@ export default function LibraryScreen() {
 	const [seriesTotalsMap, setSeriesTotalsMap] = useState({});
 	const [activePlatformName, setActivePlatformName] = useState(null);
 	const [playingItemId, setPlayingItemId] = useState(null);
+
+	// Android TV Kumanda Geri Tuşu: Açık modal varsa kapat, yoksa ana sayfaya dön
+	useFocusEffect(
+		useCallback(() => {
+			const onBackPress = () => {
+				if (isSortModalVisible) {
+					setIsSortModalVisible(false);
+					return true;
+				}
+				if (isActionModalVisible) {
+					setIsActionModalVisible(false);
+					return true;
+				}
+				if (isListSelectModalVisible) {
+					setIsListSelectModalVisible(false);
+					return true;
+				}
+				router.push("/(app)");
+				return true;
+			};
+			const sub = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => sub.remove();
+		}, [
+			isSortModalVisible,
+			isActionModalVisible,
+			isListSelectModalVisible,
+			router,
+		]),
+	);
 
 	// Verileri AsyncStorage'dan yükle
 	const loadLibraryData = useCallback(async () => {
@@ -688,10 +723,10 @@ export default function LibraryScreen() {
 						: "Film";
 
 		return (
-			<TouchableOpacity
+			<TVPressable
 				style={styles.card}
-				onPress={() => handleOpenDetails(item)}
-				activeOpacity={0.88}>
+				focusedStyle={styles.cardFocused}
+				onPress={() => handleOpenDetails(item)}>
 				{/* Poster & Overlays */}
 				<View style={styles.posterContainer}>
 					<Image
@@ -733,17 +768,17 @@ export default function LibraryScreen() {
 					)}
 
 					{/* Ortadaki Canlı Kırmızı Play Butonu */}
-					<TouchableOpacity
+					<TVPressable
 						style={styles.centerPlayButton}
+						focusedStyle={styles.centerPlayButtonFocused}
 						onPress={() => handlePlayItem(item)}
-						disabled={playingItemId === (item.id || item.url)}
-						activeOpacity={0.8}>
+						disabled={playingItemId === (item.id || item.url)}>
 						{playingItemId === (item.id || item.url) ? (
 							<ActivityIndicator size="small" color="#ffffff" />
 						) : (
 							<Ionicons name="play" size={20} color="#ffffff" />
 						)}
-					</TouchableOpacity>
+					</TVPressable>
 
 					{/* Poster Altındaki İlerleme & Süre Bilgisi */}
 					<View style={styles.posterBottomInfo}>
@@ -798,19 +833,20 @@ export default function LibraryScreen() {
 								)}
 							</Text>
 						</View>
-						<TouchableOpacity
+						<TVPressable
 							onPress={() => handleItemOptions(item)}
 							hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-							style={styles.moreButton}>
+							style={styles.moreButton}
+							focusedStyle={styles.moreButtonFocused}>
 							<Ionicons
 								name="ellipsis-vertical"
 								size={14}
 								color="#94a3b8"
 							/>
-						</TouchableOpacity>
+						</TVPressable>
 					</View>
 				</View>
-			</TouchableOpacity>
+			</TVPressable>
 		);
 	};
 
@@ -836,13 +872,13 @@ export default function LibraryScreen() {
 			</Text>
 
 			{/* Keşfet Butonu */}
-			<TouchableOpacity
+			<TVPressable
 				style={styles.emptyCtaButton}
-				onPress={() => router.push("/(app)")}
-				activeOpacity={0.85}>
+				focusedStyle={styles.emptyCtaButtonFocused}
+				onPress={() => router.push("/(app)")}>
 				<Ionicons name="compass-outline" size={18} color="#ffffff" />
 				<Text style={styles.emptyCtaText}>İçerikleri Keşfet</Text>
-			</TouchableOpacity>
+			</TVPressable>
 		</View>
 	);
 
@@ -884,28 +920,26 @@ export default function LibraryScreen() {
 					</View>
 
 					{/* Filtrele / Ayarlar Butonu */}
-					<TouchableOpacity
+					<TVPressable
 						style={styles.iconButton}
-						onPress={() => setIsSortModalVisible(true)}
-						activeOpacity={0.75}
-						title="Filtrele">
+						focusedStyle={styles.iconButtonFocused}
+						onPress={() => setIsSortModalVisible(true)}>
 						<Ionicons
 							name="options-outline"
 							size={19}
 							color="#cbd5e1"
 						/>
-					</TouchableOpacity>
+					</TVPressable>
 
 					{/* Izgara / Liste Görünüm Butonu */}
-					<TouchableOpacity
+					<TVPressable
 						style={styles.iconButton}
+						focusedStyle={styles.iconButtonFocused}
 						onPress={() =>
 							setViewMode((prev) =>
 								prev === "grid" ? "list" : "grid",
 							)
-						}
-						activeOpacity={0.75}
-						title="Görünüm Değiştir">
+						}>
 						<Ionicons
 							name={
 								viewMode === "grid"
@@ -915,7 +949,7 @@ export default function LibraryScreen() {
 							size={19}
 							color="#cbd5e1"
 						/>
-					</TouchableOpacity>
+					</TVPressable>
 				</View>
 
 				{/* 2. YATAY KATEGORİ / DURUM SEKMELERİ */}
@@ -927,7 +961,7 @@ export default function LibraryScreen() {
 						{tabs.map((tab) => {
 							const isActive = activeTab === tab.key;
 							return (
-								<TouchableOpacity
+								<TVPressable
 									key={tab.key}
 									style={[
 										styles.tabPill,
@@ -935,8 +969,8 @@ export default function LibraryScreen() {
 											? styles.tabPillActive
 											: styles.tabPillInactive,
 									]}
-									onPress={() => setActiveTab(tab.key)}
-									activeOpacity={0.75}>
+									focusedStyle={styles.tabPillFocused}
+									onPress={() => setActiveTab(tab.key)}>
 									<Ionicons
 										name={tab.icon}
 										size={15}
@@ -972,7 +1006,7 @@ export default function LibraryScreen() {
 											</Text>
 										</View>
 									)}
-								</TouchableOpacity>
+								</TVPressable>
 							);
 						})}
 					</ScrollView>
@@ -990,10 +1024,10 @@ export default function LibraryScreen() {
 						</Text>
 					</View>
 
-					<TouchableOpacity
+					<TVPressable
 						style={styles.quickSortButton}
-						onPress={() => setIsSortModalVisible(true)}
-						activeOpacity={0.75}>
+						focusedStyle={styles.quickSortButtonFocused}
+						onPress={() => setIsSortModalVisible(true)}>
 						<Ionicons
 							name="swap-vertical"
 							size={13}
@@ -1002,7 +1036,7 @@ export default function LibraryScreen() {
 						<Text style={styles.quickSortText}>
 							{sortLabels[sortBy] || "Sırala"}
 						</Text>
-					</TouchableOpacity>
+					</TVPressable>
 				</View>
 
 				{/* 4. MEDYA LİSTESİ (IZGARA / BOŞ DURUM) */}
@@ -1415,6 +1449,7 @@ const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
 		backgroundColor: "#0B0E14",
+		paddingLeft: Platform.isTV ? 56 : 0,
 	},
 
 	/* 1. Üst Çubuk */
@@ -1456,6 +1491,11 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		alignItems: "center",
 	},
+	iconButtonFocused: {
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.15 }],
+	},
 
 	/* 2. Sekmeler (Tabs) */
 	tabsWrapper: {
@@ -1485,6 +1525,11 @@ const styles = StyleSheet.create({
 		backgroundColor: "#161B24",
 		borderWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.06)",
+	},
+	tabPillFocused: {
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.08 }],
 	},
 	tabText: {
 		fontSize: 12,
@@ -1556,6 +1601,11 @@ const styles = StyleSheet.create({
 		borderRadius: 8,
 		gap: 5,
 	},
+	quickSortButtonFocused: {
+		borderColor: "#FF3B30",
+		borderWidth: 1.5,
+		transform: [{ scale: 1.08 }],
+	},
 	quickSortText: {
 		fontSize: 11,
 		color: "#cbd5e1",
@@ -1587,6 +1637,33 @@ const styles = StyleSheet.create({
 		shadowOpacity: 0.3,
 		shadowRadius: 8,
 		elevation: 6,
+	},
+	cardFocused: {
+		borderColor: "#FF3B30",
+		borderWidth: 2,
+		transform: [{ scale: 1.05 }],
+		shadowColor: "#FF3B30",
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.6,
+		shadowRadius: 10,
+		elevation: 8,
+		zIndex: 10,
+	},
+	centerPlayButtonFocused: {
+		borderColor: "#FFFFFF",
+		borderWidth: 2,
+		transform: [{ scale: 1.2 }],
+		elevation: 10,
+	},
+	moreButtonFocused: {
+		backgroundColor: "rgba(255, 59, 48, 0.35)",
+		borderRadius: 12,
+		transform: [{ scale: 1.2 }],
+	},
+	emptyCtaButtonFocused: {
+		backgroundColor: "#FF3B30",
+		transform: [{ scale: 1.06 }],
+		elevation: 8,
 	},
 	posterContainer: {
 		width: "100%",

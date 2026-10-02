@@ -8,15 +8,17 @@
  * Faz 3 & 4 senkronizasyon motoru entegrasyonu.
  */
 
+import TVPressable from "@/components/common/TVPressable";
 import { useAuth } from "@/context/AuthContext";
 import { useSync } from "@/context/SyncContext";
 import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
+	BackHandler,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -43,6 +45,20 @@ export default function SyncSettingsScreen() {
 
 	const router = useRouter();
 	const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+	useFocusEffect(
+		useCallback(() => {
+			const onBackPress = () => {
+				router.back();
+				return true;
+			};
+			const subscription = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => subscription.remove();
+		}, [router]),
+	);
 
 	useEffect(() => {
 		if (isLoggedIn) {
@@ -233,11 +249,12 @@ export default function SyncSettingsScreen() {
 									Cihazlar arası eşitleme için giriş yapın
 								</Text>
 							</View>
-							<TouchableOpacity
+							<TVPressable
 								style={styles.loginBtn}
+								focusedStyle={styles.btnFocused}
 								onPress={() => router.push("/(auth)/login")}>
 								<Text style={styles.loginBtnText}>Giriş</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 					)}
 
@@ -298,8 +315,9 @@ export default function SyncSettingsScreen() {
 							<View style={[styles.divider, { backgroundColor: colors.border }]} />
 
 							{/* Şimdi Senkronize Et */}
-							<TouchableOpacity
+							<TVPressable
 								style={styles.statusRow}
+								focusedStyle={styles.rowFocused}
 								activeOpacity={0.65}
 								disabled={isSyncing || !isLoggedIn}
 								onPress={handleSyncPress}>
@@ -326,7 +344,7 @@ export default function SyncSettingsScreen() {
 										style={{ opacity: 0.6 }}
 									/>
 								)}
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 					</View>
 
@@ -337,8 +355,9 @@ export default function SyncSettingsScreen() {
 								<Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
 									BAĞLI CİHAZLAR
 								</Text>
-								<TouchableOpacity
+								<TVPressable
 									onPress={refreshDevices}
+									focusedStyle={styles.iconBtnFocused}
 									disabled={isLoadingDevices}
 									hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
 									<Ionicons
@@ -346,7 +365,7 @@ export default function SyncSettingsScreen() {
 										size={16}
 										color={colors.textSecondary}
 									/>
-								</TouchableOpacity>
+								</TVPressable>
 							</View>
 							<View
 								style={[
@@ -403,11 +422,12 @@ export default function SyncSettingsScreen() {
 														</View>
 													</View>
 													{!isCurrent && (
-														<TouchableOpacity
+														<TVPressable
 															onPress={() => handleRevokeDevice(device)}
+															focusedStyle={styles.iconBtnFocused}
 															hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
 															<Ionicons name="trash-outline" size={18} color="#EF4444" />
-														</TouchableOpacity>
+														</TVPressable>
 													)}
 												</View>
 												{!isLast && (
@@ -441,7 +461,7 @@ export default function SyncSettingsScreen() {
 					{/* Çıkış Yap Butonu */}
 					{isLoggedIn && (
 						<View style={styles.logoutWrapper}>
-							<TouchableOpacity
+							<TVPressable
 								style={[
 									styles.logoutBtn,
 									{
@@ -449,6 +469,7 @@ export default function SyncSettingsScreen() {
 										borderColor: "rgba(239, 68, 68, 0.3)",
 									},
 								]}
+								focusedStyle={styles.logoutBtnFocused}
 								activeOpacity={0.7}
 								disabled={isLoggingOut}
 								onPress={handleLogout}>
@@ -460,7 +481,7 @@ export default function SyncSettingsScreen() {
 										<Text style={styles.logoutText}>Hesaptan Çıkış Yap</Text>
 									</>
 								)}
-							</TouchableOpacity>
+							</TVPressable>
 							<Text style={[styles.logoutHint, { color: colors.textSecondary }]}>
 								Çıkış yaptığınızda bu cihazdaki verileriniz korunacaktır.
 							</Text>
@@ -670,5 +691,28 @@ const styles = StyleSheet.create({
 	logoutHint: {
 		fontSize: 12,
 		textAlign: "center",
+	},
+	btnFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.05 }],
+	},
+	rowFocused: {
+		backgroundColor: "rgba(229, 9, 20, 0.12)",
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		borderRadius: 12,
+		transform: [{ scale: 1.02 }],
+	},
+	iconBtnFocused: {
+		backgroundColor: "rgba(229, 9, 20, 0.2)",
+		borderRadius: 6,
+		transform: [{ scale: 1.15 }],
+	},
+	logoutBtnFocused: {
+		borderWidth: 2,
+		borderColor: "#EF4444",
+		backgroundColor: "rgba(239, 68, 68, 0.2)",
+		transform: [{ scale: 1.03 }],
 	},
 });

@@ -1,3 +1,4 @@
+import TVPressable from "@components/common/TVPressable";
 import React, { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useThemeContext } from "@context/ThemeContext";
@@ -43,10 +44,13 @@ export default function OverviewSection({ content }) {
 				</Text>
 
 				{shouldShowExpandButton && (
-					<TouchableOpacity
+					<TVPressable
 						onPress={() => setExpanded(!expanded)}
 						activeOpacity={0.7}
-						style={styles.expandRow}>
+						style={({ focused }) => [
+							styles.expandRow,
+							focused && styles.expandRowFocused,
+						]}>
 						<Text
 							style={[
 								styles.expandButton,
@@ -56,7 +60,7 @@ export default function OverviewSection({ content }) {
 								? "Daha Az Göster ▴"
 								: "Devamını Oku ▾"}
 						</Text>
-					</TouchableOpacity>
+					</TVPressable>
 				)}
 			</View>
 		</View>
@@ -100,5 +104,12 @@ const styles = StyleSheet.create({
 	expandButton: {
 		fontSize: 13,
 		fontWeight: "700",
+	},
+	expandRowFocused: {
+		borderWidth: 1,
+		borderColor: "#E50914",
+		borderRadius: 6,
+		paddingHorizontal: 6,
+		paddingVertical: 2,
 	},
 });

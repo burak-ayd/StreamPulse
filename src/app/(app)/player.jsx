@@ -5,8 +5,10 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import TVPressable from "@/components/common/TVPressable";
 import {
 	ActivityIndicator,
+	BackHandler,
 	StyleSheet,
 	Text,
 	TouchableOpacity,
@@ -300,12 +302,27 @@ export default function PlayerScreen() {
 		};
 	}, [targetUrl, contentId, title, subtitle, poster, params.plugin, seriesInfo]);
 
-	const handleClose = () => {
+	const handleClose = useCallback(() => {
 		ScreenOrientation.lockAsync(
 			ScreenOrientation.OrientationLock.PORTRAIT_UP,
 		).catch(() => {});
 		router.back();
-	};
+	}, [router]);
+
+	// Yükleme veya hata ekranındayken kumanda Geri tuşuyla çıkış
+	useEffect(() => {
+		if (loading || error) {
+			const onBackPress = () => {
+				handleClose();
+				return true;
+			};
+			const sub = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => sub.remove();
+		}
+	}, [loading, error, handleClose]);
 
 	return (
 		<View style={styles.container}>
@@ -318,12 +335,14 @@ export default function PlayerScreen() {
 					<Text style={styles.loadingSubtitle}>
 						Lütfen bekleyin, en uygun yayın akışı hazırlanıyor...
 					</Text>
-					<TouchableOpacity
+					<TVPressable
+						autoFocus={true}
 						style={[styles.backButton, { marginTop: 32 }]}
+						focusedStyle={styles.backButtonFocused}
 						onPress={handleClose}>
 						<Ionicons name="arrow-back" size={20} color="#FFFFFF" />
 						<Text style={styles.backButtonText}>Vazgeç</Text>
-					</TouchableOpacity>
+					</TVPressable>
 				</View>
 			)}
 
@@ -333,18 +352,21 @@ export default function PlayerScreen() {
 					<Text style={styles.errorTitle}>Kaynak Bulunamadı</Text>
 					<Text style={styles.errorDescription}>{error}</Text>
 					<View style={styles.errorButtonsRow}>
-						<TouchableOpacity
+						<TVPressable
+							autoFocus={true}
 							style={styles.retryButton}
+							focusedStyle={styles.retryButtonFocused}
 							onPress={loadSources}>
 							<Ionicons name="refresh" size={18} color="#FFFFFF" />
 							<Text style={styles.buttonText}>Tekrar Dene</Text>
-						</TouchableOpacity>
-						<TouchableOpacity
+						</TVPressable>
+						<TVPressable
 							style={styles.backButton}
+							focusedStyle={styles.backButtonFocused}
 							onPress={handleClose}>
 							<Ionicons name="arrow-back" size={18} color="#FFFFFF" />
 							<Text style={styles.buttonText}>Geri Dön</Text>
-						</TouchableOpacity>
+						</TVPressable>
 					</View>
 				</View>
 			)}
@@ -419,6 +441,13 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 20,
 		paddingVertical: 12,
 		borderRadius: 12,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	retryButtonFocused: {
+		borderColor: "#FFFFFF",
+		transform: [{ scale: 1.08 }],
+		elevation: 8,
 	},
 	backButton: {
 		flexDirection: "row",
@@ -428,6 +457,14 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 20,
 		paddingVertical: 12,
 		borderRadius: 12,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	backButtonFocused: {
+		borderColor: "#FF3B30",
+		backgroundColor: "rgba(255, 59, 48, 0.3)",
+		transform: [{ scale: 1.08 }],
+		elevation: 8,
 	},
 	buttonText: {
 		color: "#FFFFFF",

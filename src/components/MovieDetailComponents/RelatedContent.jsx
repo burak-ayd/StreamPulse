@@ -1,3 +1,4 @@
+import TVPressable from "@components/common/TVPressable";
 import { useThemeContext } from "@context/ThemeContext";
 import { fetchRelatedContent as getRelatedApiContent } from "@/services/api";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -94,68 +95,77 @@ export default function RelatedContent({
 			<ScrollView
 				horizontal
 				showsHorizontalScrollIndicator={false}
+				removeClippedSubviews={false}
 				contentContainerStyle={styles.scrollContent}>
 				{displayList.map((item, index) => {
 					const posterUri =
 						item.poster_url || item.poster || item.image;
 
 					return (
-						<TouchableOpacity
+						<TVPressable
 							key={item.id || item.url || index}
-							style={styles.contentCard}
+							style={({ focused }) => [
+								styles.contentCard,
+								focused && styles.contentCardFocused,
+							]}
 							onPress={() => handleContentPress(item)}
 							activeOpacity={0.8}>
-							<View
-								style={[
-									styles.posterContainer,
-									{ borderColor: surfaceBorder },
-								]}>
-								{posterUri ? (
-									<Image
-										source={{ uri: posterUri }}
-										style={styles.poster}
-										contentFit="cover"
-										contentPosition="center"
-										transition={150}
-										cachePolicy="memory-disk"
-									/>
-								) : (
+							{({ focused }) => (
+								<>
 									<View
 										style={[
-											styles.posterPlaceholder,
-											{ backgroundColor: colors.cardBg },
+											styles.posterContainer,
+											{ borderColor: surfaceBorder },
+											focused && styles.posterContainerFocused,
 										]}>
-										<Ionicons
-											name="film-outline"
-											size={32}
-											color={colors.textSecondary}
-										/>
-									</View>
-								)}
+										{posterUri ? (
+											<Image
+												source={{ uri: posterUri }}
+												style={styles.poster}
+												contentFit="cover"
+												contentPosition="center"
+												transition={150}
+												cachePolicy="memory-disk"
+											/>
+										) : (
+											<View
+												style={[
+													styles.posterPlaceholder,
+													{ backgroundColor: colors.cardBg },
+												]}>
+												<Ionicons
+													name="film-outline"
+													size={32}
+													color={colors.textSecondary}
+												/>
+											</View>
+										)}
 
-								{item.rating && (
-									<View style={styles.ratingBadge}>
-										<Ionicons
-											name="star"
-											size={10}
-											color="#FBBF24"
-										/>
-										<Text style={styles.ratingText}>
-											{Number(item.rating).toFixed(1)}
-										</Text>
+										{item.rating && (
+											<View style={styles.ratingBadge}>
+												<Ionicons
+													name="star"
+													size={10}
+													color="#FBBF24"
+												/>
+												<Text style={styles.ratingText}>
+													{Number(item.rating).toFixed(1)}
+												</Text>
+											</View>
+										)}
 									</View>
-								)}
-							</View>
 
-							<Text
-								style={[
-									styles.contentTitle,
-									{ color: colors.text },
-								]}
-								numberOfLines={2}>
-								{item.title || item.name}
-							</Text>
-						</TouchableOpacity>
+									<Text
+										style={[
+											styles.contentTitle,
+											{ color: colors.text },
+										]}
+										numberOfLines={2}>
+										{item.title || item.name}
+									</Text>
+								</>
+							)}
+						</TVPressable>
 					);
 				})}
 			</ScrollView>
@@ -231,5 +241,16 @@ const styles = StyleSheet.create({
 		fontSize: 13,
 		fontWeight: "600",
 		lineHeight: 18,
+	},
+	contentCardFocused: {
+		transform: [{ scale: 1.08 }],
+	},
+	posterContainerFocused: {
+		borderColor: "#E50914",
+		borderWidth: 2,
+		shadowColor: "#E50914",
+		shadowOpacity: 0.6,
+		shadowRadius: 8,
+		elevation: 5,
 	},
 });

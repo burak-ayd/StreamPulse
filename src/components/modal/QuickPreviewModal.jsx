@@ -1,3 +1,4 @@
+import TVPressable from "@/components/common/TVPressable";
 import ListSelectModal from "@/components/modal/ListSelectModal";
 import { fetchPluginDetail } from "@/services/api";
 import {
@@ -13,6 +14,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
+	BackHandler,
 	Dimensions,
 	Modal,
 	Pressable,
@@ -55,6 +57,23 @@ export default function QuickPreviewModal({
 	const [isListSelectVisible, setIsListSelectVisible] = useState(false);
 
 	const movieId = movie?.id || movie?.url || movie?.title;
+
+	useEffect(() => {
+		if (!visible) return;
+		const onBackPress = () => {
+			if (isListSelectVisible) {
+				setIsListSelectVisible(false);
+				return true;
+			}
+			onClose?.();
+			return true;
+		};
+		const sub = BackHandler.addEventListener(
+			"hardwareBackPress",
+			onBackPress,
+		);
+		return () => sub.remove();
+	}, [visible, isListSelectVisible, onClose]);
 
 	// Modal açıldığında ilk durumu ve detayları yükle
 	useEffect(() => {
@@ -333,12 +352,13 @@ export default function QuickPreviewModal({
 									{toastInfo.text}
 								</Text>
 							</View>
-							<TouchableOpacity
+							<TVPressable
 								onPress={handleUndoToast}
 								style={styles.undoButton}
+								focusedStyle={styles.btnFocused}
 								activeOpacity={0.7}>
 								<Text style={styles.undoButtonText}>Geri Al</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 					)}
 
@@ -369,8 +389,9 @@ export default function QuickPreviewModal({
 									</View>
 
 									{/* Ortada Oynat/Durdur */}
-									<TouchableOpacity
+									<TVPressable
 										style={styles.centerPlayBtn}
+										focusedStyle={styles.centerPlayBtnFocused}
 										onPress={handleTrailerClick}
 										activeOpacity={0.85}>
 										<Ionicons
@@ -378,7 +399,7 @@ export default function QuickPreviewModal({
 											size={28}
 											color="#ffffff"
 										/>
-									</TouchableOpacity>
+									</TVPressable>
 
 									{/* Alt İlerleme Çubuğu ve Ses */}
 									<View style={styles.trailerBottomBar}>
@@ -388,15 +409,16 @@ export default function QuickPreviewModal({
 											</View>
 											<Text style={styles.trailerTimeText}>0:14 / 1:45</Text>
 										</View>
-										<TouchableOpacity
+										<TVPressable
 											onPress={() => setIsMuted((m) => !m)}
-											style={styles.muteButton}>
+											style={styles.muteButton}
+											focusedStyle={styles.iconCircleBtnFocused}>
 											<Ionicons
 												name={isMuted ? "volume-mute-outline" : "volume-high-outline"}
 												size={18}
 												color="#ffffff"
 											/>
-										</TouchableOpacity>
+										</TVPressable>
 									</View>
 								</View>
 							</View>
@@ -405,8 +427,9 @@ export default function QuickPreviewModal({
 						{/* 4. Ana Önizleme Başlığı: Poster + Meta Detaylar (Screen 1 & 2) */}
 						<View style={styles.previewHeaderRow}>
 							{/* Sol Afiş (Poster) */}
-							<TouchableOpacity
+							<TVPressable
 								style={styles.posterWrapper}
+								focusedStyle={styles.posterWrapperFocused}
 								activeOpacity={0.9}
 								onPress={handleTrailerClick}>
 								<Image
@@ -423,7 +446,7 @@ export default function QuickPreviewModal({
 								<View style={styles.posterHdBadge}>
 									<Text style={styles.posterHdText}>HD</Text>
 								</View>
-							</TouchableOpacity>
+							</TVPressable>
 
 							{/* Sağ Sütun: Başlık, İkonlar, Meta & Özet */}
 							<View style={styles.detailsColumn}>
@@ -434,8 +457,9 @@ export default function QuickPreviewModal({
 									</Text>
 									<View style={styles.headerIconActions}>
 										{/* Bildirim Çanı */}
-										<TouchableOpacity
+										<TVPressable
 											style={styles.iconCircleBtn}
+											focusedStyle={styles.iconCircleBtnFocused}
 											onPress={handleToggleNotification}
 											activeOpacity={0.75}>
 											<Ionicons
@@ -451,10 +475,11 @@ export default function QuickPreviewModal({
 														: "#cbd5e1"
 												}
 											/>
-										</TouchableOpacity>
+										</TVPressable>
 										{/* Favori Kalp */}
-										<TouchableOpacity
+										<TVPressable
 											style={styles.iconCircleBtn}
+											focusedStyle={styles.iconCircleBtnFocused}
 											onPress={handleToggleFavorite}
 											activeOpacity={0.75}>
 											<Ionicons
@@ -462,7 +487,7 @@ export default function QuickPreviewModal({
 												size={19}
 												color={isFav ? "#E50914" : "#cbd5e1"}
 											/>
-										</TouchableOpacity>
+										</TVPressable>
 									</View>
 								</View>
 
@@ -514,12 +539,13 @@ export default function QuickPreviewModal({
 								{STATUS_CHIPS.map((chip) => {
 									const isActive = activeStatus === chip.key;
 									return (
-										<TouchableOpacity
+										<TVPressable
 											key={chip.key}
 											style={[
 												styles.statusChip,
 												isActive && styles.statusChipActive,
 											]}
+											focusedStyle={styles.statusChipFocused}
 											onPress={() => handleStatusSelect(chip.key)}
 											activeOpacity={0.8}>
 											{isActive && (
@@ -536,7 +562,7 @@ export default function QuickPreviewModal({
 												]}>
 												{chip.label}
 											</Text>
-										</TouchableOpacity>
+										</TVPressable>
 									);
 								})}
 							</ScrollView>
@@ -545,11 +571,12 @@ export default function QuickPreviewModal({
 						{/* 6. Ana Eylem Butonları Izgarası (Screen 1 & 2) */}
 						<View style={styles.actionButtonsGrid}>
 							{/* Listeme Ekle / Liste Seçim Butonu */}
-							<TouchableOpacity
+							<TVPressable
 								style={[
 									styles.actionBtnSecondary,
 									activeStatus && styles.actionBtnInList,
 								]}
+								focusedStyle={styles.actionBtnFocused}
 								onPress={handleToggleList}
 								activeOpacity={0.85}>
 								<Ionicons
@@ -582,11 +609,12 @@ export default function QuickPreviewModal({
 												? "Tamamlandı"
 												: "Listeme Ekle"}
 								</Text>
-							</TouchableOpacity>
+							</TVPressable>
 
 							{/* Daha Fazla Bilgi Butonu */}
-							<TouchableOpacity
+							<TVPressable
 								style={styles.actionBtnPrimary}
+								focusedStyle={styles.actionBtnFocused}
 								onPress={handleNavigateDetails}
 								activeOpacity={0.85}>
 								<Ionicons
@@ -597,24 +625,27 @@ export default function QuickPreviewModal({
 								<Text style={styles.actionBtnPrimaryText}>
 									Daha fazla bilgi
 								</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 
 						{/* 7. Büyük Kırmızı CTA (Hemen İzle) */}
-						<TouchableOpacity
+						<TVPressable
+							autoFocus={true}
 							style={styles.prominentCtaButton}
+							focusedStyle={styles.prominentCtaFocused}
 							onPress={handlePlay}
 							activeOpacity={0.85}>
 							<Ionicons name="play" size={18} color="#ffffff" />
 							<Text style={styles.prominentCtaText}>
 								{isSeries ? "Bölüm 1'i Başlat" : "Hemen Şimdi İzle"}
 							</Text>
-						</TouchableOpacity>
+						</TVPressable>
 
 						{/* 8. Alt Hızlı Eylemler (İndir, Paylaş, Fragman, Detaylar) */}
 						<View style={styles.quickSubActionsRow}>
-							<TouchableOpacity
+							<TVPressable
 								style={styles.subActionItem}
+								focusedStyle={styles.subActionItemFocused}
 								onPress={handleTrailerClick}
 								activeOpacity={0.75}>
 								<Ionicons
@@ -623,10 +654,11 @@ export default function QuickPreviewModal({
 									color="#cbd5e1"
 								/>
 								<Text style={styles.subActionLabel}>Fragman</Text>
-							</TouchableOpacity>
+							</TVPressable>
 
-							<TouchableOpacity
+							<TVPressable
 								style={styles.subActionItem}
+								focusedStyle={styles.subActionItemFocused}
 								onPress={() =>
 									Alert.alert(
 										"İndirme",
@@ -640,10 +672,11 @@ export default function QuickPreviewModal({
 									color="#cbd5e1"
 								/>
 								<Text style={styles.subActionLabel}>İndir</Text>
-							</TouchableOpacity>
+							</TVPressable>
 
-							<TouchableOpacity
+							<TVPressable
 								style={styles.subActionItem}
+								focusedStyle={styles.subActionItemFocused}
 								onPress={handleShare}
 								activeOpacity={0.75}>
 								<Ionicons
@@ -652,10 +685,11 @@ export default function QuickPreviewModal({
 									color="#cbd5e1"
 								/>
 								<Text style={styles.subActionLabel}>Paylaş</Text>
-							</TouchableOpacity>
+							</TVPressable>
 
-							<TouchableOpacity
+							<TVPressable
 								style={styles.subActionItem}
+								focusedStyle={styles.subActionItemFocused}
 								onPress={handleNavigateDetails}
 								activeOpacity={0.75}>
 								<Ionicons
@@ -664,7 +698,7 @@ export default function QuickPreviewModal({
 									color="#cbd5e1"
 								/>
 								<Text style={styles.subActionLabel}>Detaylar</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						</View>
 
 						{/* Home Bar Indicator Spacer */}
@@ -1170,5 +1204,49 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(255, 255, 255, 0.2)",
 		alignSelf: "center",
 		marginTop: 16,
+	},
+	btnFocused: {
+		borderWidth: 1.5,
+		borderColor: "#FFFFFF",
+		transform: [{ scale: 1.05 }],
+	},
+	centerPlayBtnFocused: {
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+		backgroundColor: "#b20710",
+		transform: [{ scale: 1.15 }],
+	},
+	posterWrapperFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.04 }],
+	},
+	iconCircleBtnFocused: {
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		backgroundColor: "rgba(229, 9, 20, 0.2)",
+		transform: [{ scale: 1.1 }],
+	},
+	statusChipFocused: {
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		backgroundColor: "rgba(229, 9, 20, 0.2)",
+		transform: [{ scale: 1.06 }],
+	},
+	actionBtnFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.03 }],
+	},
+	prominentCtaFocused: {
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+		backgroundColor: "#b20710",
+		transform: [{ scale: 1.03 }],
+	},
+	subActionItemFocused: {
+		backgroundColor: "rgba(229, 9, 20, 0.15)",
+		borderRadius: 8,
+		transform: [{ scale: 1.08 }],
 	},
 });

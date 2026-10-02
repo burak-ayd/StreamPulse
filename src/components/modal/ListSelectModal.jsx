@@ -1,3 +1,4 @@
+import TVPressable from "@components/common/TVPressable";
 import {
 	getContentLibraryStatus,
 	setContentLibraryList,
@@ -158,11 +159,13 @@ export default function ListSelectModal({
 						{LIST_OPTIONS.map((opt) => {
 							const isSelected = currentList === opt.key;
 							return (
-								<TouchableOpacity
+								<TVPressable
 									key={opt.key}
-									style={[
+									autoFocus={isSelected}
+									style={({ focused }) => [
 										styles.optionCard,
 										isSelected && styles.optionCardSelected,
+										focused && styles.optionCardFocused,
 									]}
 									onPress={() => handleSelectList(opt.key)}
 									activeOpacity={0.8}
@@ -222,14 +225,17 @@ export default function ListSelectModal({
 											/>
 										)}
 									</View>
-								</TouchableOpacity>
+								</TVPressable>
 							);
 						})}
 
 						{/* Listeden Kaldır Butonu (Eğer bir listedeyse) */}
 						{currentList && (
-							<TouchableOpacity
-								style={styles.removeButton}
+							<TVPressable
+								style={({ focused }) => [
+									styles.removeButton,
+									focused && styles.buttonFocused,
+								]}
 								onPress={() => handleSelectList(null)}
 								activeOpacity={0.8}
 								disabled={loading}>
@@ -241,16 +247,17 @@ export default function ListSelectModal({
 								<Text style={styles.removeButtonText}>
 									İzleme Listelerinden Kaldır
 								</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						)}
 					</View>
 
 					{/* Favori Hızlı Geçiş Butonu */}
 					<View style={styles.footerRow}>
-						<TouchableOpacity
-							style={[
+						<TVPressable
+							style={({ focused }) => [
 								styles.favButton,
 								isFav && styles.favButtonActive,
+								focused && styles.buttonFocused,
 							]}
 							onPress={handleToggleFav}
 							activeOpacity={0.8}>
@@ -266,14 +273,17 @@ export default function ListSelectModal({
 								]}>
 								{isFav ? "Favorilerden Çıkar" : "Favorilere Ekle"}
 							</Text>
-						</TouchableOpacity>
+						</TVPressable>
 
-						<TouchableOpacity
-							style={styles.closeButton}
+						<TVPressable
+							style={({ focused }) => [
+								styles.closeButton,
+								focused && styles.buttonFocused,
+							]}
 							onPress={onClose}
 							activeOpacity={0.8}>
 							<Text style={styles.closeButtonText}>Kapat</Text>
-						</TouchableOpacity>
+						</TVPressable>
 					</View>
 				</Pressable>
 			</Pressable>
@@ -474,5 +484,15 @@ const styles = StyleSheet.create({
 		color: "#ffffff",
 		fontSize: 12,
 		fontWeight: "700",
+	},
+	optionCardFocused: {
+		borderWidth: 2,
+		borderColor: "#E50914",
+		transform: [{ scale: 1.02 }],
+	},
+	buttonFocused: {
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+		transform: [{ scale: 1.04 }],
 	},
 });

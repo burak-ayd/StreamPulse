@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	Animated,
+	BackHandler,
 	Dimensions,
 	Modal,
 	PanResponder,
@@ -127,6 +128,19 @@ const BottomSheetModal = ({
 			}
 		}
 	}, [visible, isAuto, animateOpen, animateClose, measuredHeight]);
+
+	useEffect(() => {
+		if (!visible) return;
+		const onBackPress = () => {
+			onClose?.();
+			return true;
+		};
+		const sub = BackHandler.addEventListener(
+			"hardwareBackPress",
+			onBackPress,
+		);
+		return () => sub.remove();
+	}, [visible, onClose]);
 
 	// İçerik ölçümü (fitContent aktifse)
 	const handleLayout = (e) => {

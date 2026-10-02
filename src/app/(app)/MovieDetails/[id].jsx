@@ -10,13 +10,15 @@ import {
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
 import ListSelectModal from "@components/modal/ListSelectModal";
+import TVPressable from "@components/common/TVPressable";
 import { useContentDetails } from "@hooks/useContentDetails";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	Alert,
+	BackHandler,
 	Linking,
 	ScrollView,
 	Share,
@@ -73,6 +75,7 @@ export default function MovieDetailsScreen() {
 	}, [params.movieData]);
 
 	const { colors, theme } = useThemeContext();
+	const router = useRouter();
 
 	const [selectedPlatformName, setSelectedPlatformName] = useState(null);
 
@@ -497,6 +500,23 @@ export default function MovieDetailsScreen() {
 		passedMovie?.initialSeason ? String(passedMovie.initialSeason) : null,
 	);
 
+	useEffect(() => {
+		const onBackPress = () => {
+			if (isListSelectModalVisible) {
+				setIsListSelectModalVisible(false);
+				return true;
+			}
+			router.back();
+			return true;
+		};
+
+		const subscription = BackHandler.addEventListener(
+			"hardwareBackPress",
+			onBackPress,
+		);
+		return () => subscription.remove();
+	}, [isListSelectModalVisible, router]);
+
 	const movieItem = useMemo(() => {
 		if (!content) return null;
 		const targetId = content.id || content.url || id;
@@ -689,11 +709,12 @@ export default function MovieDetailsScreen() {
 							{ borderBottomColor: surfaceBorder },
 						]}>
 						{/* Tab 1: Genel Bakış */}
-						<TouchableOpacity
-							style={[
+						<TVPressable
+							style={({ focused }) => [
 								styles.tabItem,
 								activeTab === "overview" &&
 									styles.tabItemActive,
+								focused && styles.tabItemFocused,
 							]}
 							onPress={() => setActiveTab("overview")}
 							activeOpacity={0.7}>
@@ -716,15 +737,15 @@ export default function MovieDetailsScreen() {
 							{activeTab === "overview" && (
 								<View style={styles.tabIndicator} />
 							)}
-						</TouchableOpacity>
+						</TVPressable>
 
-						{/* Tab 2: Bölümler (Eğer dizi ise) */}
 						{isSeries && (
-							<TouchableOpacity
-								style={[
+							<TVPressable
+								style={({ focused }) => [
 									styles.tabItem,
 									activeTab === "episodes" &&
 										styles.tabItemActive,
+									focused && styles.tabItemFocused,
 								]}
 								onPress={() => setActiveTab("episodes")}
 								activeOpacity={0.7}>
@@ -756,14 +777,15 @@ export default function MovieDetailsScreen() {
 								{activeTab === "episodes" && (
 									<View style={styles.tabIndicator} />
 								)}
-							</TouchableOpacity>
+							</TVPressable>
 						)}
 
 						{/* Tab 3: Benzerler */}
-						<TouchableOpacity
-							style={[
+						<TVPressable
+							style={({ focused }) => [
 								styles.tabItem,
 								activeTab === "related" && styles.tabItemActive,
+								focused && styles.tabItemFocused,
 							]}
 							onPress={() => setActiveTab("related")}
 							activeOpacity={0.7}>
@@ -786,7 +808,7 @@ export default function MovieDetailsScreen() {
 							{activeTab === "related" && (
 								<View style={styles.tabIndicator} />
 							)}
-						</TouchableOpacity>
+						</TVPressable>
 					</View>
 
 					{/* 4. SEKMELERE GÖRE İÇERİK GÖSTERİMİ */}
@@ -1171,5 +1193,11 @@ const styles = StyleSheet.create({
 		shadowRadius: 8,
 		elevation: 8,
 		zIndex: 99,
+	},
+	tabItemFocused: {
+		transform: [{ scale: 1.06 }],
+		borderWidth: 1.5,
+		borderColor: "#E50914",
+		borderRadius: 8,
 	},
 });

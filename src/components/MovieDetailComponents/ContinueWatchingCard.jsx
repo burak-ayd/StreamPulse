@@ -1,3 +1,4 @@
+import TVPressable from "@/components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
 import { formatTime } from "@/utils/formatters";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -176,10 +177,14 @@ export default function ContinueWatchingCard({
 	const isDark = theme === "dark";
 
 	return (
-		<TouchableOpacity
+		<TVPressable
+			autoFocus={true}
 			activeOpacity={0.92}
 			onPress={onPress}
-			style={styles.cardContainer}>
+			style={({ focused }) => [
+				styles.cardContainer,
+				focused && styles.cardContainerFocused,
+			]}>
 			<LinearGradient
 				colors={
 					isDark
@@ -279,13 +284,10 @@ export default function ContinueWatchingCard({
 					</View>
 
 					{/* Devam Et Butonu */}
-					<TouchableOpacity
-						style={styles.continueButton}
-						onPress={onPress}
-						activeOpacity={0.85}>
+					<View style={styles.continueButton}>
 						<Ionicons name="play" size={14} color="#ffffff" />
 						<Text style={styles.continueButtonText}>Devam Et</Text>
-					</TouchableOpacity>
+					</View>
 				</View>
 
 				{/* 3. ALT İLERLEME ÇUBUĞU & SÜRE İSTATİSTİKLERİ */}
@@ -351,7 +353,7 @@ export default function ContinueWatchingCard({
 					</View>
 				</View>
 			</LinearGradient>
-		</TouchableOpacity>
+		</TVPressable>
 	);
 }
 
@@ -364,6 +366,15 @@ const styles = StyleSheet.create({
 		shadowOpacity: 0.25,
 		shadowRadius: 14,
 		elevation: 6,
+	},
+	cardContainerFocused: {
+		transform: [{ scale: 1.02 }],
+		borderWidth: 2,
+		borderColor: "#E50914",
+		shadowColor: "#E50914",
+		shadowOpacity: 0.8,
+		shadowRadius: 14,
+		elevation: 8,
 	},
 	gradientCard: {
 		borderRadius: 20,
