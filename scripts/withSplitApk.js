@@ -1,3 +1,4 @@
+// withSplitApk.js
 const { withAppBuildGradle } = require("@expo/config-plugins");
 
 module.exports = function withSplitApk(config) {
@@ -26,8 +27,8 @@ module.exports = function withSplitApk(config) {
         abi {
             enable ${isProdOrRelease}
             reset()
-            include "arm64-v8a"
-            universalApk false
+            include "armeabi-v7a", "arm64-v8a"
+            universalApk true
         }
     }`,
 				);
@@ -39,8 +40,8 @@ module.exports = function withSplitApk(config) {
         abi {
             enable true
             reset()
-            include  "arm64-v8a"
-            universalApk false
+            include "armeabi-v7a", "arm64-v8a"
+            universalApk true
         }
     }`,
 				);
