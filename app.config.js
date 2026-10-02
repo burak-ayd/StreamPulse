@@ -36,7 +36,7 @@ export default ({ config }) => ({
 		API_URL: IS_DEV
 			? "https://movieapi.burakaydogan.net.tr"
 			: IS_PREVIEW
-				? "http://192.168.1.21:8000"
-				: "http://192.168.1.21:8000",
+				? "https://movieapi.burakaydogan.net.tr"
+				: "https://movieapi.burakaydogan.net.tr",
 	},
 });
