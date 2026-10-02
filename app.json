@@ -73,7 +73,32 @@
             "enableProguardInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
             "useLegacyPackaging": true,
-            "enablePngCrunchInReleaseBuilds": true
+            "enablePngCrunchInReleaseBuilds": true,
+            "extraManifestParams": {
+              "application": {
+                "android:banner": "@drawable/notification_icon"
+              }
+            }
+          }
+        }
+      ],
+      [
+        "@react-native-tvos/config-tv",
+        {
+          "isTV": true,
+          "showVerboseWarnings": false,
+          "tvosDeploymentTarget": "15.1",
+          "removeFlipperOnAndroid": true,
+          "androidTVBanner": "./assets/images/logo.png",
+          "androidTVIcon": "./assets/images/logo.png",
+          "appleTVImages": {
+            "icon": "./assets/images/logo.png",
+            "iconSmall": "./assets/images/logo.png",
+            "iconSmall2x": "./assets/images/logo.png",
+            "topShelf": "./assets/images/logo.png",
+            "topShelf2x": "./assets/images/logo.png",
+            "topShelfWide": "./assets/images/logo.png",
+            "topShelfWide2x": "./assets/images/logo.png"
           }
         }
       ],
@@ -87,7 +112,8 @@
       "./scripts/withGradleJvmArgs.js",
       "./scripts/withCustomApkName.js",
       "./scripts/withFileProvider.js",
-      "./scripts/withBuildOptimizations.js"
+      "./scripts/withBuildOptimizations.js",
+      "./scripts/withTVArch.js"
     ],
     "experiments": {
       "typedRoutes": true,

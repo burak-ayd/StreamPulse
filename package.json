@@ -7,6 +7,7 @@
 		"@gorhom/bottom-sheet": "^5",
 		"@react-native-async-storage/async-storage": "2.2.0",
 		"@react-native-community/datetimepicker": "9.1.0",
+		"@react-native-tvos/config-tv": "^0.1.7",
 		"@react-native-vector-icons/ionicons": "^13.1.4",
 		"expo": "^57.0.24",
 		"expo-blur": "~57.0.3",
@@ -63,9 +64,10 @@
 		"build:preview": "cross-env APP_VARIANT=preview node scripts/build.js apk",
 		"build:release": "cross-env APP_VARIANT=production node scripts/build.js apk",
 		"android:dev": "cross-env APP_VARIANT=development expo run:android --variant debug",
-		"clean:dev": "cross-env APP_VARIANT=development npx expo prebuild --clean",
-		"clean:preview": "cross-env APP_VARIANT=preview npx expo prebuild --clean",
-		"clean:release": "cross-env APP_VARIANT=release npx expo prebuild --clean"
+		"clean:dev": "cross-env APP_VARIANT=development bunx expo prebuild --clean",
+		"clean:preview": "cross-env APP_VARIANT=preview bunx expo prebuild --clean",
+		"clean:release": "cross-env APP_VARIANT=release bunx expo prebuild --clean",
+		"tv": "cross-env EXPO_TV=1 bunx expo prebuild --clean && bun expo run:android"
 	},
 	"private": true
 }
