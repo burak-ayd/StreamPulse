@@ -19,11 +19,61 @@ import { mergeLibraryList } from "@/utils/merge/library";
 import { mergeDocument, mergeSearchHistory } from "@/utils/merge/documents";
 import { notifyStorageChange } from "@/utils/storageListener";
 import { hasSession } from "./token";
+import { STORAGE_KEYS } from "@/utils/storage";
 
-const LAST_SYNCED_KEY = "streampulse_last_synced_at";
-const PENDING_CHANGES_KEY = "streampulse_pending_sync_count";
+const LAST_SYNCED_KEY = STORAGE_KEYS.LAST_SYNCED_AT;
+const PENDING_CHANGES_KEY = STORAGE_KEYS.PENDING_SYNC_COUNT;
+const SYNC_OWNER_KEY = STORAGE_KEYS.SYNC_OWNER;
+
+/**
+ * Otomatik senkronize edilen ayar/kayıt grupları.
+ *
+ * Sunucu tarafında karşılık gelen belge türleri `DOCUMENT_TYPES` ile aynıdır
+ * (player_settings, search_history, plugin_visibility, category_visibility).
+ *
+ * `selected_platform` BİLEREK burada yoktur: seçili platform cihaza özeldir
+ * (telefon Dizipox, TV HDFilmCehennemi kullanıyor olabilir) ve global
+ * senkronizasyonda cihazları birbirine karıştırır.
+ *
+ * @type {{[group: string]: {label: string, doc: string, key: string}}}
+ */
+export const SYNC_GROUPS = {
+	player_settings: {
+		label: "Oynatıcı ve altyazı ayarları",
+		doc: "player_settings",
+		key: STORAGE_KEYS.PLAYER_SETTINGS,
+	},
+	search_history: {
+		label: "Arama geçmişi",
+		doc: "search_history",
+		key: STORAGE_KEYS.SEARCH_HISTORY,
+	},
+	plugin_visibility: {
+		label: "Eklenti görünürlüğü",
+		doc: "plugin_visibility",
+		key: STORAGE_KEYS.PLUGIN_VISIBILITY,
+	},
+	category_visibility: {
+		label: "Kategori görünürlüğü",
+		doc: "category_visibility",
+		key: STORAGE_KEYS.CATEGORY_VISIBILITY,
+	},
+};
+
+/** Tüm grup adları (varsayılan: hepsi = global). */
+export const ALL_SYNC_GROUPS = Object.keys(SYNC_GROUPS);
+
 
 let _isSyncing = false;
+
+/**
+ * Anlık push kuyruğu.
+ *
+ * `syncNow` çalışırken yeni bir değişiklik gelirse (ör. kullanıcı video
+ * izlerken ayar değiştirdi) push doğrudan düşürülürse o değişiklik KAYBOLUR.
+ * Bu bayrak, mevcut tur bitince bir tur daha çalıştırılmasını ister.
+ */
+let _resyncRequested = false;
 let _debounceTimer = null;
 const DEBOUNCE_DELAY_MS = 2000;
 
@@ -92,6 +142,49 @@ export async function setPendingChangesCount(count) {
 }
 
 /**
+ * Delta damgasının sahibi olan hesabı bildirir.
+ *
+ * ⚠️ Damga bir "bu cihaz şu ana kadar şunu indirdi" işaretidir ve HESABA BAĞLIDIR.
+ * Cihaz geneli tutulursa iki kullanıcı birbirinin damgasını miras alır:
+ * Kullanıcı B giriş yaptığında `since` Kullanıcı A'nın damgası olur, sunucudaki
+ * B kayıtları daha eski sayılır ve B hiçbir şey görmez.
+ *
+ * Hesap değiştiyse damga silinir → yeni hesap tam döküm çeker.
+ *
+ * @param {string|null} userId - Oturumdaki kullanıcı kimliği
+ */
+export async function setSyncOwner(userId) {
+	if (!userId) return;
+	try {
+		const prev = await AsyncStorage.getItem(SYNC_OWNER_KEY);
+		if (prev && prev !== userId) {
+			await AsyncStorage.multiRemove([LAST_SYNCED_KEY, PENDING_CHANGES_KEY]);
+		}
+		if (prev !== userId) {
+			await AsyncStorage.setItem(SYNC_OWNER_KEY, userId);
+		}
+	} catch (err) {
+		console.warn("Sync sahibi kaydedilemedi:", err);
+	}
+}
+
+/**
+ * Senkronizasyon durumunu tamamen sıfırlar (çıkış / veri temizleme).
+ * Sonraki senkronizasyon tam döküm çeker.
+ */
+export async function resetSyncState() {
+	try {
+		await AsyncStorage.multiRemove([
+			LAST_SYNCED_KEY,
+			PENDING_CHANGES_KEY,
+			SYNC_OWNER_KEY,
+		]);
+	} catch (err) {
+		console.warn("Sync durumu sıfırlanamadı:", err);
+	}
+}
+
+/**
  * Cihaz meta verilerini hazırlar
  */
 async function getDeviceMetadata() {
@@ -115,6 +208,8 @@ async function collectLocalPushData() {
 	const deviceId = await getDeviceId();
 	const records = [];
 	const documents = {};
+	// Gerçekte gönderilen gruplar (raporlama için)
+	const sent = [];
 
 	// 1. Favoriler
 	try {
@@ -209,35 +304,37 @@ async function collectLocalPushData() {
 	}
 
 	// 5. Belgeler (Documents)
-	try {
-		const playerSettingsRaw = await AsyncStorage.getItem("app_player_settings");
-		if (playerSettingsRaw) {
-			documents.player_settings = {
-				payload: JSON.parse(playerSettingsRaw),
+	//    Yalnızca seçili gruplar gönderilir — kullanıcı yedekleme sırasında
+	//    hangi ayarların kopyalanacağını seçebilir.
+	const doc = async (group) => {
+		const meta = SYNC_GROUPS[group];
+		try {
+			const raw = await AsyncStorage.getItem(meta.key);
+			if (raw === null || raw === undefined) return;
+			documents[meta.doc] = {
+				payload: JSON.parse(raw),
 				hlc: getHlcNow(),
 				device_id: deviceId,
 				client_updated_at: new Date().toISOString(),
 			};
+			sent.push(group);
+		} catch (e) {
+			console.warn(`${meta.label} push verisi toplanırken hata:`, e);
 		}
+	};
 
-		const searchHistoryRaw = await AsyncStorage.getItem("user_search_history");
-		if (searchHistoryRaw) {
-			documents.search_history = {
-				payload: JSON.parse(searchHistoryRaw),
-				hlc: getHlcNow(),
-				device_id: deviceId,
-				client_updated_at: new Date().toISOString(),
-			};
-		}
-	} catch (e) {
-		console.warn("Belge push verisi toplanırken hata:", e);
-	}
+	await doc("player_settings");
+	await doc("search_history");
+	await doc("plugin_visibility");
+	await doc("category_visibility");
 
-	return { records, documents };
+	return { records, documents, sentGroups: sent };
 }
 
 /**
  * Sunucudan gelen delta verilerini (pull yanıtı) yerel depolama ile birleştirir.
+ * @param {object} pullData
+ * @param {string[]} [groups] - Uygulanacak belge grupları (varsayılan: tümü)
  */
 async function applyPullData(pullData) {
 	if (!pullData) return;
@@ -336,7 +433,10 @@ async function applyPullData(pullData) {
 		try {
 			const localRaw = await AsyncStorage.getItem("user_search_history");
 			const localHistory = localRaw ? JSON.parse(localRaw) : [];
-			const remoteHistory = documents.search_history?.payload || [];
+			// Sunucu boş diziyi `{}` olarak dönebilir; mergeSearchHistory zaten
+			// tipi doğruluyor ama burada da netleştiriyoruz.
+			const rawRemote = documents.search_history?.payload;
+			const remoteHistory = Array.isArray(rawRemote) ? rawRemote : [];
 			const merged = mergeSearchHistory(localHistory, remoteHistory);
 			await AsyncStorage.setItem("user_search_history", JSON.stringify(merged));
 			notifyStorageChange("user_search_history", merged, { source: "sync" });
@@ -344,6 +444,47 @@ async function applyPullData(pullData) {
 			console.error("Pull search_history birleştirme hatası:", e);
 		}
 	}
+
+	// ── Global görünürlük belgeleri ──────────────────────────
+	// Bu ayarlar hesap genelinde GEÇERLİDİR (bir cihazda yapılan değişiklik
+	// tüm cihazlara yansır). Birleştirme sunucu-otoriter: sunucunun verdiği
+	// değerler uygulanır, sunucunun bilmediği yerel anahtarlar korunur.
+	for (const group of ["plugin_visibility", "category_visibility"]) {
+		const doc = documents[SYNC_GROUPS[group].doc];
+		if (!doc) continue;
+		if (doc.is_deleted) continue; // tombstone: görünürlük haritası silinmez
+
+		try {
+			const meta = SYNC_GROUPS[group];
+			const remote = doc.payload || {};
+			const localRaw = await AsyncStorage.getItem(meta.key);
+			const local = localRaw ? JSON.parse(localRaw) : {};
+
+			const merged = group === "category_visibility"
+				? mergeNestedVisibility(local, remote)
+				: { ...local, ...remote };
+
+			await AsyncStorage.setItem(meta.key, JSON.stringify(merged));
+			notifyStorageChange(meta.key, merged, { source: "sync" });
+		} catch (e) {
+			console.error(`Pull ${SYNC_GROUPS[group].label} birleştirme hatası:`, e);
+		}
+	}
+}
+
+/**
+ * `{ eklenti: { kategori: bool } }` yapısını sunucu-otoriter birleştirir.
+ * İki katmanlı olduğu için düz yayılım yetmez: iç haritalar da ayrı ayrı
+ * birleştirilir, aksi halde bir eklentinin tüm kategorileri diğer cihazdaki
+ * değişikliklerle ezilir.
+ */
+function mergeNestedVisibility(local = {}, remote = {}) {
+	const out = { ...local };
+	for (const [plugin, remoteCats] of Object.entries(remote || {})) {
+		if (!remoteCats || typeof remoteCats !== "object") continue;
+		out[plugin] = { ...(out[plugin] || {}), ...remoteCats };
+	}
+	return out;
 }
 
 /**
@@ -385,18 +526,31 @@ async function reconcileRejectedItems(rejected = [], documentsRejected = []) {
 }
 
 /**
- * Ana senkronizasyon fonksiyonu (Pull -> Push döngüsü)
- * @param {object} options
- * @param {boolean} options.force - Zaman kısıtlamasını yoksay
- * @returns {Promise<{ success: boolean, error?: string }>}
+ * Ana senkronizasyon fonksiyonu (Push -> Pull döngüsü)
+ *
+ * ⚠️ SIRA ÖNEMLİ: önce PUSH, sonra PULL.
+ * Ters sırada (pull → push) bir senkronizasyon tam olarak yerel bir değişikliğin
+ * üstüne denk gelirse, pull sunucudaki ESKİ değeri yerele yazar ve push da bu
+ * ezilmiş değeri geri gönderir — yerel değişiklik kalıcı olarak kaybolur.
+ * Önce push ile yerel durum en yeni HLC ile sunucuya yazılır; LWW kararını sunucu
+ * verir, sonraki pull güncel hali (kendi değişikliğimiz dahil) geri getirir.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.full] - `since` damgasını yok sayıp tam döküm çek
+ * @returns {Promise<{ success: boolean, error?: string, pushed?: boolean }>}
  */
 export async function syncNow(options = {}) {
+	const full = Boolean(options.full);
+
 	const loggedIn = await hasSession();
 	if (!loggedIn) {
 		return { success: false, error: "not_authenticated" };
 	}
 
 	if (_isSyncing) {
+		// Devam eden bir tur varsa onu DÜŞÜRME. Tur bitince yeniden çalıştır,
+		// yoksa o araya gelen değişiklik sunucuya hiç ulaşmaz.
+		_resyncRequested = true;
 		return { success: false, error: "already_syncing" };
 	}
 
@@ -407,50 +561,100 @@ export async function syncNow(options = {}) {
 		const lastSynced = await getLastSyncedAt();
 		const device = await getDeviceMetadata();
 
-		// ─── 1. PULL (Sunucudan delta çek) ──────────────────────
-		const pullUrl = lastSynced
-			? `/api/sync/pull?since=${encodeURIComponent(lastSynced)}`
+		// ─── 1. PUSH (Yerel değişiklikleri sunucuya gönder) ──────
+		const localData = await collectLocalPushData();
+		const pushRes = await authFetch("/api/sync/push", {
+			method: "POST",
+			body: JSON.stringify({
+				device,
+				records: localData.records,
+				documents: localData.documents,
+			}),
+		});
+
+		let pushed = false;
+		let pushError = null;
+		let pushDetail = "";
+		const sentCount = (localData.sentGroups || []).length;
+
+		if (pushRes.ok) {
+			pushed = true;
+			const pushData = await pushRes.json();
+			// Reddedilenleri yerelle uzlaştır
+			await reconcileRejectedItems(pushData.rejected, pushData.documents_rejected);
+
+			const appliedDocs = pushData.documents_applied || [];
+			const rejectedDocs = pushData.documents_rejected || [];
+
+			if (sentCount === 0) {
+				pushDetail =
+					"Seçilen ayarların henüz kaydedilecek bir değeri yok. Bir ayara dokunup tekrar deneyin.";
+			} else {
+				const names = (localData.sentGroups || [])
+					.map((g) => SYNC_GROUPS[g].label)
+					.join(", ");
+				pushDetail = `${names} hesabınıza kaydedildi.`;
+				if (rejectedDocs.length > 0) {
+					pushDetail += `\n\n${rejectedDocs.length} belge reddedildi: hesabınızdaki kayıt daha yeni.`;
+				}
+			}
+
+			// Sunucu 200 döndü ama hiçbir şey uygulamamış olabilir. Bu bir hata
+			// değil; ama kullanıcıya "kaydedildi" demek yanlış olur.
+			if (
+				sentCount > 0 &&
+				appliedDocs.length === 0 &&
+				rejectedDocs.length === 0
+			) {
+				pushError = "push_nothing_applied";
+			}
+		} else if (pushRes.status === 401) {
+			emitSyncState({ status: "error", lastSyncedAt: lastSynced, error: "unauthorized" });
+			return { success: false, error: "unauthorized" };
+		} else {
+			// ⚠️ Push başarısızsa bunu SESSİZCE geçmiyoruz. Önceden burada yalnızca
+			// konsola yazılıyordu ve fonksiyon `success: true` döndürüyordu; kullanıcı
+			// "yedeklendi" uyarısı görüyor, DB'de ise hiçbir şey olmuyordu.
+			pushError = `push_failed_${pushRes.status}`;
+			pushDetail = await pushRes.text().catch(() => "");
+			console.warn("Push başarısız oldu:", pushRes.status, pushDetail);
+		}
+
+		// ─── 2. PULL (Sunucudan delta çek) ──────────────────────
+		const since = full ? null : lastSynced;
+		const pullUrl = since
+			? `/api/sync/pull?since=${encodeURIComponent(since)}`
 			: `/api/sync/pull`;
 
 		const pullRes = await authFetch(pullUrl, { method: "GET" });
+		let serverTime = since;
+
 		if (pullRes.ok) {
 			const pullData = await pullRes.json();
 			await applyPullData(pullData);
+			// Damga PULL'dan gelir: sunucu bu değemi OKUMADAN ÖNCE hesaplar,
+			// yani okuma anında yazılan satırlar bir sonraki çekişte teslim edilir.
+			if (pullData.server_time) serverTime = pullData.server_time;
 		} else if (pullRes.status === 401) {
 			emitSyncState({ status: "error", lastSyncedAt: lastSynced, error: "unauthorized" });
 			return { success: false, error: "unauthorized" };
 		}
 
-		// ─── 2. PUSH (Yerel değişiklikleri sunucuya gönder) ──────
-		const localData = await collectLocalPushData();
-		const pushPayload = {
-			device,
-			records: localData.records,
-			documents: localData.documents,
-		};
+		const finalTime = serverTime || new Date().toISOString();
+		await setLastSyncedAt(finalTime);
+		await setPendingChangesCount(0);
 
-		const pushRes = await authFetch("/api/sync/push", {
-			method: "POST",
-			body: JSON.stringify(pushPayload),
+		emitSyncState({
+			status: pushError ? "error" : "idle",
+			lastSyncedAt: finalTime,
+			error: pushError,
 		});
-
-		if (pushRes.ok) {
-			const pushData = await pushRes.json();
-			// Reddedilenleri yerelle uzlaştır
-			await reconcileRejectedItems(pushData.rejected, pushData.documents_rejected);
-
-			const serverTime = pushData.server_time || new Date().toISOString();
-			await setLastSyncedAt(serverTime);
-			await setPendingChangesCount(0);
-
-			emitSyncState({ status: "idle", lastSyncedAt: serverTime, error: null });
-			return { success: true };
-		} else {
-			const errText = await pushRes.text();
-			console.warn("Push başarısız oldu:", pushRes.status, errText);
-			emitSyncState({ status: "error", lastSyncedAt: lastSynced, error: `push_failed_${pushRes.status}` });
-			return { success: false, error: `push_failed_${pushRes.status}` };
-		}
+		return {
+			success: !pushError,
+			pushed,
+			error: pushError || undefined,
+			detail: pushDetail || undefined,
+		};
 	} catch (error) {
 		console.warn("Senkronizasyon hatası (çevrimdışı olabilir):", error);
 		const lastSynced = await getLastSyncedAt();
@@ -458,11 +662,29 @@ export async function syncNow(options = {}) {
 		return { success: false, error: error.message };
 	} finally {
 		_isSyncing = false;
+
+		// Bu turun sırasında yeni bir değişiklik geldiyse (ör. kullanıcı ayarı
+		// değiştirdi) onu da gönder. Bu turda toplanan veri o değişikliği
+		// İÇERMEZ, bu yüzden turun tamamen atlanırsa veri kaybolur.
+		if (_resyncRequested) {
+			_resyncRequested = false;
+			// Yeni turun başlaması için mevcut turunun sıfırlamasını bekle
+			setTimeout(() => {
+				syncNow().catch((err) =>
+					console.log("Takip eden sync ertelendi:", err.message),
+				);
+			}, 0);
+		}
 	}
 }
 
+
 /**
- * Debounce'lu senkronizasyon tetikleyici (yerel veri değiştiğinde çağrılır)
+ * Debounce'lu senkronizasyon tetikleyicisi.
+ *
+ * Yalnızca SIK DEĞİŞEN kayıtlar için kullanılır (izleme listesi, geçmiş,
+ * devam et). Video oynatılırken ilerleme sürekli güncellenir; her kare için
+ * istek atmak pili ve bağlantıyı yakar, bu yüzden 2 saniyelik debounce vardır.
  */
 export function schedulePush() {
 	if (_debounceTimer) {
@@ -475,6 +697,24 @@ export function schedulePush() {
 			syncNow().catch((err) => console.log("Otomatik sync ertelendi:", err.message));
 		}
 	}, DEBOUNCE_DELAY_MS);
+}
+
+/**
+ * ANLIK senkronizasyon — debounce YOK.
+ *
+ * Ayar değişiklikleri (oynatıcı ayarları, eklenti/kategori görünürlüğü) ve arama
+ * geçmişi için kullanılır: kullanıcı tercihini değiştirdiği anda hesabına
+ * yazılsın istiyoruz, "birazdan" değil.
+ *
+ * Senkronizasyon zaten sürüyorsa değişiklik düşürülmez: `syncNow` bitince
+ * kendiliğinden bir tur daha çalışır (bkz. `_resyncRequested`).
+ */
+export function pushImmediately() {
+	if (_debounceTimer) {
+		clearTimeout(_debounceTimer);
+		_debounceTimer = null;
+	}
+	syncNow().catch((err) => console.log("Anlık sync ertelendi:", err.message));
 }
 
 /**

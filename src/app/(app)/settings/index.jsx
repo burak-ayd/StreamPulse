@@ -7,6 +7,7 @@ import {
 } from "@/context/LanguageDisplayContext";
 import { useThemeContext } from "@/context/ThemeContext";
 import { fetchPlatforms } from "@/services/api";
+import { syncNow } from "@/services/sync";
 import {
 	clearAllUserData,
 	getPluginVisibilitySettings,
@@ -251,11 +252,19 @@ export default function SettingsScreen() {
 		);
 	};
 
-	const handleBackup = () => {
+	/**
+	 * Ayarlar ve listeler ZATEN otomatik senkronize edilir: bir tercih
+	 * değiştiği anda hesaba yazılır (bkz. SyncContext). Elle yedekleme
+	 * penceresinin tek işlevi "senkronizasyonu şimdi tetiklemek" olur.
+	 */
+	const handleSyncNow = async () => {
+		setBackupModalVisible(false);
+		const res = await syncNow();
 		Alert.alert(
-			"Yedekleme",
-			"Ayarlarınız ve izleme listeniz yerel veritabanına başarıyla yedeklendi.",
-			[{ text: "Tamam" }],
+			res.success ? "Senkronizasyon tamamlandı" : "Senkronizasyon başarısız",
+			res.success
+				? "Değişiklikleriniz hesabınıza kaydedildi."
+				: `Sunucuya ulaşılamadı (${res.error}). Bağlantınızı kontrol edin.`,
 		);
 	};
 
@@ -778,9 +787,9 @@ export default function SettingsScreen() {
 
 							<TouchableOpacity
 								style={styles.modalActionItem}
-								onPress={handleBackup}>
+								onPress={handleSyncNow}>
 								<Ionicons
-									name="save-outline"
+									name="sync-outline"
 									size={22}
 									color={colors.primary}
 								/>
@@ -790,14 +799,14 @@ export default function SettingsScreen() {
 											styles.modalRowTitle,
 											{ color: colors.text },
 										]}>
-										Yerel Yedek Oluştur
+										Senkronizasyonu Şimdi Çalıştır
 									</Text>
 									<Text
 										style={[
 											styles.modalRowSubtitle,
 											{ color: colors.textSecondary },
 										]}>
-										İzleme listesini ve tercihleri yedekle
+										Ayarlar ve listeler zaten otomatik kaydedilir
 									</Text>
 								</View>
 							</TouchableOpacity>
@@ -818,9 +827,9 @@ export default function SettingsScreen() {
 									);
 								}}>
 								<Ionicons
-									name="cloud-download-outline"
+									name="sparkles-outline"
 									size={22}
-									color="#10b981"
+									color={colors.primary}
 								/>
 								<View style={{ flex: 1 }}>
 									<Text
@@ -1160,8 +1169,26 @@ const styles = StyleSheet.create({
 		padding: 20,
 		paddingBottom: 36,
 	},
-	modalHeader: {
+	groupPickerSheet: {
+		borderTopLeftRadius: 24,
+		borderTopRightRadius: 24,
+		borderWidth: 1,
+		padding: 20,
+		paddingBottom: 36,
+		maxHeight: "85%",
+	},
+	groupPickerHint: {
+		fontSize: 13,
+		lineHeight: 19,
+		marginBottom: 14,
+	},
+	groupPickerRow: {
 		flexDirection: "row",
+		alignItems: "center",
+		paddingVertical: 12,
+		borderBottomWidth: StyleSheet.hairlineWidth,
+	},
+	modalHeader: {		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
 		marginBottom: 20,

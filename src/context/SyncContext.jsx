@@ -30,6 +30,7 @@ import {
 	getConnectedDevices,
 	revokeDevice as executeRevokeDevice,
 	schedulePush,
+	pushImmediately,
 } from "@/services/sync";
 import { runMigrationIfNeeded } from "@/utils/migrate";
 import { subscribeStorage } from "@/utils/storageListener";
@@ -166,35 +167,52 @@ export function SyncProvider({ children }) {
 		return () => clearInterval(interval);
 	}, [isLoggedIn]);
 
-	// ─── 7. Yerel Veri Değişikliklerinde Debounce'lu Push ────────
+	// ─── 7. Yerel Veri Değişikliklerinde Push ────────────────────
 	//
 	// ⚠️ Yalnızca KULLANICI kaynaklı değişiklikler push tetikler.
 	// `applyPullData()` uzak veriyi AsyncStorage'a yazdıktan sonra
 	// `{ source: "sync" }` ile bildirim yayınlar. O bildirimi de tetikleyici
 	// kabul edersek döngü kapanmaz:
 	//
-	//     pull → yaz → bildirim → schedulePush → pull → yaz → ...
+	//     pull → yaz → bildirim → push → pull → yaz → ...
 	//
 	// Sonsuz döngü (birim zamanda tam döküm + push) hem pili hem veritabanını
 	// yakar, hem de UI'ın veri geldikten sonra hiç güncellenmemesine yol açar.
 	useEffect(() => {
 		if (!isLoggedIn) return;
 
-		const syncableKeys = [
+		// A) ANLIK kaydedilenler — kullanıcı tercihi değiştirdiği anda hesabına
+		//    yazılsın. Bunlar seyrek değişir (birkaç dokunuş), debounce'un
+		//    getireceği "birazdan olacak" gecikmesi gereksiz.
+		const IMMEDIATE_KEYS = [
+			"app_player_settings",          // oynatıcı / altyazı ayarları
+			"streampulse_plugin_visibility",   // eklenti görünürlüğü
+			"streampulse_category_visibility", // kategori görünürlüğü
+			"user_search_history",             // arama yapıldıkça eklenir
+		];
+
+		// B) DEBOUNCE'lu kaydedilenler — video oynatılırken ilerleme her saniye
+		//    değişir; her değişiklikte istek atmak bağlantıyı/pili yakar.
+		const DEBOUNCED_KEYS = [
 			"user_favorites",
 			"user_watchlist",
 			"user_watch_history",
 			"user_continue_watching",
-			"app_player_settings",
-			"user_search_history",
 		];
 
-		const unsub = subscribeStorage(syncableKeys, (_key, _data, meta) => {
+		const handleChange = (immediate) => (_key, _data, meta) => {
 			if (meta?.source === "sync") return; // uzak veri uygulandı, geri itme
-			schedulePush();
-		});
+			if (immediate) pushImmediately();
+			else schedulePush();
+		};
 
-		return unsub;
+		const unsubImmediate = subscribeStorage(IMMEDIATE_KEYS, handleChange(true));
+		const unsubDebounced = subscribeStorage(DEBOUNCED_KEYS, handleChange(false));
+
+		return () => {
+			unsubImmediate();
+			unsubDebounced();
+		};
 	}, [isLoggedIn]);
 
 	const value = useMemo(

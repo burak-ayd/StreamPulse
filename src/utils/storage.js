@@ -18,6 +18,17 @@ export const STORAGE_KEYS = {
 	CATEGORY_VISIBILITY: "streampulse_category_visibility",
 	WATCHLIST: "user_watchlist",
 	SERIES_TOTAL_EPISODES: "streampulse_series_total_episodes",
+
+	// ── Senkronizasyum durumu ──────────────────────────────────
+	// ⚠️ Bunlar KULLANICI VERİSİ DEĞİLDİR; cihaz geneli durumdur. Yine de
+	// kullanıcı verisiyle birlikte temizlenmelidir, çünkü damga (`LAST_SYNCED_AT`)
+	// o kullanıcının verisinin hangi noktaya kadar indiğini belirtir. Silinmezse
+	// "verileri temizle → tekrar giriş yap" akışında istemci sunucudan daha yeni
+	// bir damga bildirir, sunucudaki satırların hepsi eski sayılır ve
+	// `updated_at > since` hiçbir şey döndürmez → kullanıcı boş bir kütüphane görür.
+	LAST_SYNCED_AT: "streampulse_last_synced_at",
+	PENDING_SYNC_COUNT: "streampulse_pending_sync_count",
+	SYNC_OWNER: "streampulse_sync_owner",
 };
 
 // Sıralı yazma kuyruğu — read-modify-write yarış koşullarını önler
@@ -56,6 +67,11 @@ export async function clearAllUserData() {
 		STORAGE_KEYS.CATEGORY_VISIBILITY,
 		STORAGE_KEYS.WATCHLIST,
 		STORAGE_KEYS.SERIES_TOTAL_EPISODES,
+		// Senkronizasyon durumu da temizlenmeli. Damga kalırsa sunucudaki veri
+		// "daha eski" sayılır ve bir sonraki girişte hiçbir şey çekilmez.
+		STORAGE_KEYS.LAST_SYNCED_AT,
+		STORAGE_KEYS.PENDING_SYNC_COUNT,
+		STORAGE_KEYS.SYNC_OWNER,
 	];
 	try {
 		await AsyncStorage.multiRemove(userKeys);
@@ -472,7 +488,12 @@ export async function removeFromSearchHistory(query) {
 export async function clearSearchHistory() {
 	return mutate(STORAGE_KEYS.SEARCH_HISTORY, async () => {
 		try {
-			await AsyncStorage.removeItem(STORAGE_KEYS.SEARCH_HISTORY);
+			// ⚠️ `removeItem` KULLANILMAZ. Anahtarı silersek
+			// `collectLocalPushData()` grubu "diskte yok" diye ATLAR, boş liste
+			// sunucuya hiç gitmez ve bir sonraki pull'da SİLİNEN ARAMALAR
+			// hesaptan geri gelir. Boş DİZİYİ yazıyoruz: LWW ile sunucuya
+			// temizleme bilgisi gider ve diğer cihazlar da sıfırlanır.
+			await AsyncStorage.setItem(STORAGE_KEYS.SEARCH_HISTORY, JSON.stringify([]));
 			notifyStorageChange(STORAGE_KEYS.SEARCH_HISTORY, []);
 			return [];
 		} catch (error) {
@@ -491,6 +512,17 @@ export async function getPlayerSettings() {
 		if (data) {
 			return { ...DEFAULT_PLAYER_SETTINGS, ...JSON.parse(data) };
 		}
+
+		// İlk okumada varsayılanları DİSKE YAZ.
+		//
+		// Yazmazsak `collectLocalPushData()` bu anahtarı bulamaz, push boş
+		// gider ve hesapta hiçbir oynatıcı ayarı olmaz. Kullanıcı hiçbir ayara
+		// dokunmamış olsa bile hesapta bir taban değer bulunmalıdır; aksi halde
+		// yeni bir cihazda ayarlar "hiç tanımsız" olarak görünür.
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.PLAYER_SETTINGS,
+			JSON.stringify(DEFAULT_PLAYER_SETTINGS),
+		);
 		return DEFAULT_PLAYER_SETTINGS;
 	} catch (error) {
 		console.error("Player ayarları okunurken hata:", error);
@@ -1288,37 +1320,46 @@ export async function getPluginVisibilitySettings() {
  * Tek bir eklentinin görünürlük durumunu günceller ve kaydeder
  */
 export async function savePluginVisibility(pluginName, isVisible) {
-	try {
-		const currentSettings = await getPluginVisibilitySettings();
-		const updatedSettings = {
-			...currentSettings,
-			[pluginName]: Boolean(isVisible),
-		};
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.PLUGIN_VISIBILITY,
-			JSON.stringify(updatedSettings),
-		);
-		return updatedSettings;
-	} catch (error) {
-		console.error("Eklenti görünürlüğü kaydedilirken hata:", error);
-		throw error;
-	}
+	return mutate(STORAGE_KEYS.PLUGIN_VISIBILITY, async () => {
+		try {
+			const currentSettings = await getPluginVisibilitySettings();
+			const updatedSettings = {
+				...currentSettings,
+				[pluginName]: Boolean(isVisible),
+			};
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.PLUGIN_VISIBILITY,
+				JSON.stringify(updatedSettings),
+			);
+			// Görünürlük global bir tercihtir; bildirim olmadan push tetiklenmez
+			// ve değişiklik yalnızca bu cihazda kalır.
+			notifyStorageChange(STORAGE_KEYS.PLUGIN_VISIBILITY, updatedSettings);
+			return updatedSettings;
+		} catch (error) {
+			console.error("Eklenti görünürlüğü kaydedilirken hata:", error);
+			throw error;
+		}
+	});
 }
 
 /**
  * Tüm eklentilerin görünürlük haritasını topluca kaydeder
  */
 export async function setAllPluginsVisibility(visibilityMap) {
-	try {
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.PLUGIN_VISIBILITY,
-			JSON.stringify(visibilityMap || {}),
-		);
-		return visibilityMap;
-	} catch (error) {
-		console.error("Tüm eklenti görünürlüğü kaydedilirken hata:", error);
-		throw error;
-	}
+	return mutate(STORAGE_KEYS.PLUGIN_VISIBILITY, async () => {
+		try {
+			const map = visibilityMap || {};
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.PLUGIN_VISIBILITY,
+				JSON.stringify(map),
+			);
+			notifyStorageChange(STORAGE_KEYS.PLUGIN_VISIBILITY, map);
+			return map;
+		} catch (error) {
+			console.error("Tüm eklenti görünürlüğü kaydedilirken hata:", error);
+			throw error;
+		}
+	});
 }
 
 /**
@@ -1360,56 +1401,65 @@ export async function getCategoryVisibilitySettings(pluginName = null) {
  * Belirli bir eklentinin tek bir kategorisinin görünürlük durumunu günceller ve kaydeder.
  */
 export async function saveCategoryVisibility(pluginName, categoryKey, isVisible) {
-	try {
-		if (!pluginName || !categoryKey) return {};
-		const allSettings = await getCategoryVisibilitySettings();
-		const pluginSettings = allSettings[pluginName] || {};
+	if (!pluginName || !categoryKey) return {};
+	return mutate(STORAGE_KEYS.CATEGORY_VISIBILITY, async () => {
+		try {
+			const allSettings = await getCategoryVisibilitySettings();
+			const pluginSettings = allSettings[pluginName] || {};
 
-		const updatedPluginSettings = {
-			...pluginSettings,
-			[categoryKey]: Boolean(isVisible),
-		};
+			const updatedPluginSettings = {
+				...pluginSettings,
+				[categoryKey]: Boolean(isVisible),
+			};
 
-		const updatedAllSettings = {
-			...allSettings,
-			[pluginName]: updatedPluginSettings,
-		};
+			const updatedAllSettings = {
+				...allSettings,
+				[pluginName]: updatedPluginSettings,
+			};
 
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.CATEGORY_VISIBILITY,
-			JSON.stringify(updatedAllSettings),
-		);
-		return updatedPluginSettings;
-	} catch (error) {
-		console.error("Kategori görünürlüğü kaydedilirken hata:", error);
-		throw error;
-	}
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.CATEGORY_VISIBILITY,
+				JSON.stringify(updatedAllSettings),
+			);
+			notifyStorageChange(STORAGE_KEYS.CATEGORY_VISIBILITY, updatedAllSettings);
+			return updatedPluginSettings;
+		} catch (error) {
+			console.error("Kategori görünürlüğü kaydedilirken hata:", error);
+			throw error;
+		}
+	});
 }
 
 /**
  * Bir eklentiye ait tüm kategorilerin görünürlük haritasını topluca günceller ve kaydeder.
  */
 export async function setPluginCategoriesVisibility(pluginName, categoryMap) {
-	try {
-		if (!pluginName) return {};
-		const allSettings = await getCategoryVisibilitySettings();
-		const updatedAllSettings = {
-			...allSettings,
-			[pluginName]: categoryMap || {},
-		};
+	if (!pluginName) return {};
+	return mutate(STORAGE_KEYS.CATEGORY_VISIBILITY, async () => {
+		try {
+			const allSettings = await getCategoryVisibilitySettings();
+			const updatedAllSettings = {
+				...allSettings,
+				[pluginName]: categoryMap || {},
+			};
 
-		await AsyncStorage.setItem(
-			STORAGE_KEYS.CATEGORY_VISIBILITY,
-			JSON.stringify(updatedAllSettings),
-		);
-		return updatedAllSettings[pluginName];
-	} catch (error) {
-		console.error(
-			"Eklenti kategori görünürlükleri topluca kaydedilirken hata:",
-			error,
-		);
-		throw error;
-	}
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.CATEGORY_VISIBILITY,
+				JSON.stringify(updatedAllSettings),
+			);
+			notifyStorageChange(
+				STORAGE_KEYS.CATEGORY_VISIBILITY,
+				updatedAllSettings,
+			);
+			return updatedAllSettings[pluginName];
+		} catch (error) {
+			console.error(
+				"Eklenti kategori görünürlükleri topluca kaydedilirken hata:",
+				error,
+			);
+			throw error;
+		}
+	});
 }
 
 /**

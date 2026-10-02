@@ -56,6 +56,24 @@ export function mergeDocument(localDoc, remoteDoc) {
  * @returns {Array<string>}
  */
 export function mergeSearchHistory(localHistory = [], remoteHistory = []) {
+	// ⚠️ `|| []` YETMEZ. Boş JSONB dizi bazı sunucu katmanlarında boş NESNE `{}`
+	// olarak döner (Python'da `[] or {}` -> `{}`). `{}` truthy olduğu için
+	// `payload || []` fallback'i onu yakalamaz ve `({}).forEach` undefined
+	// döner → "undefined is not a function". Bu yüzden tip gerçekten doğrulanır.
+	const asList = (value) => {
+		if (Array.isArray(value)) return value;
+		if (typeof value === "string" && value.trim().length > 0) {
+			// Bazı istemciler JSON metni gönderebilir; bir kez çözmeyi dene
+			try {
+				const parsed = JSON.parse(value);
+				return Array.isArray(parsed) ? parsed : [];
+			} catch {
+				return [];
+			}
+		}
+		return [];
+	};
+
 	const normalizeItem = (item) => {
 		if (typeof item === "string") return { q: item.trim(), time: 0 };
 		if (item && typeof item === "object") {
@@ -79,8 +97,8 @@ export function mergeSearchHistory(localHistory = [], remoteHistory = []) {
 		}
 	};
 
-	(localHistory || []).forEach(add);
-	(remoteHistory || []).forEach(add);
+	asList(localHistory).forEach(add);
+	asList(remoteHistory).forEach(add);
 
 	// Sırala: en son aranan en başta
 	const sorted = Array.from(itemsMap.values()).sort((a, b) => b.time - a.time);

@@ -24,6 +24,7 @@ import {
 	setOnAuthExpired,
 } from "@/services/apiClient";
 import { hasSession, clearTokens } from "@/services/token";
+import { setSyncOwner, resetSyncState } from "@/services/sync";
 
 /**
  * @typedef {object} AuthUser
@@ -81,6 +82,7 @@ export function AuthProvider({ children }) {
 				if (isMounted) {
 					if (meData?.user || meData?.id) {
 						setUser(meData.user || meData);
+			setSyncOwner((meData.user || meData)?.id);
 						setStatus("authenticated");
 					} else {
 						// Token geçersiz olmuş
@@ -119,6 +121,8 @@ export function AuthProvider({ children }) {
 					display_name,
 				});
 				setUser(result.user);
+				// Delta damgası hesaba bağlıdır; sahibi bildir
+				setSyncOwner(result.user?.id);
 				setStatus("authenticated");
 				return result;
 			} catch (error) {
@@ -135,6 +139,7 @@ export function AuthProvider({ children }) {
 		try {
 			const result = await apiLogin({ email, password });
 			setUser(result.user);
+			setSyncOwner(result.user?.id);
 			setStatus("authenticated");
 			return result;
 		} catch (error) {
@@ -148,6 +153,10 @@ export function AuthProvider({ children }) {
 		try {
 			await apiLogout();
 		} finally {
+			// Damga silinmezse bir sonraki girişte (aynı veya farklı hesap)
+			// istemci eski bir "son indirme" noktası bildirir ve sunucudaki veri
+			// daha eski sayılır → boş kütüphane.
+			resetSyncState();
 			setUser(null);
 			setStatus("unauthenticated");
 		}
@@ -159,6 +168,7 @@ export function AuthProvider({ children }) {
 			const meData = await apiGetMe();
 			if (meData?.user || meData?.id) {
 				setUser(meData.user || meData);
+			setSyncOwner((meData.user || meData)?.id);
 				setStatus("authenticated");
 			}
 		} catch {
