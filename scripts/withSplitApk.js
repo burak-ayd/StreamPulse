@@ -5,7 +5,11 @@ module.exports = function withSplitApk(config) {
 		if (config.modResults.language === "groovy") {
 			let contents = config.modResults.contents;
 
-			// 1. Eski usul satır varsa true yap
+			const currentVariant = process.env.APP_VARIANT || "release";
+			const isProdOrRelease = ["production", "release"].includes(
+				currentVariant,
+			);
+
 			if (
 				contents.includes(
 					"enableSeparateBuildPerCPUArchitecture = false",
@@ -13,23 +17,21 @@ module.exports = function withSplitApk(config) {
 			) {
 				contents = contents.replace(
 					/def enableSeparateBuildPerCPUArchitecture = false/,
-					"def enableSeparateBuildPerCPUArchitecture = true",
+					`def enableSeparateBuildPerCPUArchitecture = ${isProdOrRelease}`,
 				);
-			}
-			// 2. Eğer o satır yoksa, gradle dosyasındaki 'splits' bloğunu bulup mimari ayrıştırmayı zorla aktif et
-			else if (contents.includes("splits {")) {
+			} else if (contents.includes("splits {")) {
 				contents = contents.replace(
-					/splits\s*\{/,
+					/splits\s*\{[\s\S]*?abi\s*\{[\s\S]*?\}[\s\S]*?\}/,
 					`splits {
-    abi {
-        enable true
-        reset()
-        include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
-        universalApk true
+        abi {
+            enable ${isProdOrRelease}
+            reset()
+            include "arm64-v8a"
+            universalApk false
+        }
     }`,
 				);
-			} else {
-				// Eğer hiçbiri yoksa android { bloğunun içine splits ekle
+			} else if (isProdOrRelease) {
 				contents = contents.replace(
 					/android\s*\{/,
 					`android {
@@ -37,8 +39,8 @@ module.exports = function withSplitApk(config) {
         abi {
             enable true
             reset()
-            include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
-            universalApk true
+            include  "arm64-v8a"
+            universalApk false
         }
     }`,
 				);
