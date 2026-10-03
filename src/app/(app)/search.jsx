@@ -1,4 +1,5 @@
 import BottomNavigation from "@components/BottomNavigation";
+import { useNavLayout } from "@/hooks/useNavLayout";
 import TVPressable from "@components/common/TVPressable";
 import { useThemeContext } from "@context/ThemeContext";
 import { searchContent, searchPluginContent } from "@/services/api";
@@ -17,7 +18,6 @@ import {
 	ActivityIndicator,
 	BackHandler,
 	Keyboard,
-	Platform,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -55,6 +55,8 @@ export const resetSearchMemoryCache = () => {
 export default function SearchScreen() {
 	const { theme, colors } = useThemeContext();
 	const router = useRouter();
+	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
+	const { contentPaddingLeft } = useNavLayout();
 	const params = useLocalSearchParams();
 	const scrollViewRef = useRef(null);
 
@@ -255,7 +257,7 @@ export default function SearchScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right", "bottom"]}
-				style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+				style={[styles.safeArea, { backgroundColor: colors.bg, paddingLeft: contentPaddingLeft }]}>
 				<StatusBar
 					barStyle={
 						theme === "dark" ? "light-content" : "dark-content"
@@ -726,7 +728,8 @@ export default function SearchScreen() {
 																}
 																contentFit="cover"
 																contentPosition="center"
-																transition={150}
+																transition={0}
+																recyclingKey={posterUri}
 																cachePolicy="memory-disk"
 															/>
 														) : (
@@ -866,7 +869,6 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
-		paddingLeft: Platform.isTV ? 56 : 0,
 	},
 	header: {
 		height: 56,
@@ -1131,10 +1133,6 @@ const styles = StyleSheet.create({
 		borderWidth: 2,
 		borderColor: "#E50914",
 		transform: [{ scale: 1.02 }],
-		shadowColor: "#E50914",
-		shadowOpacity: 0.5,
-		shadowRadius: 8,
-		elevation: 4,
 	},
 	iconButtonFocused: {
 		transform: [{ scale: 1.2 }],

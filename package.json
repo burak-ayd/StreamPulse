@@ -67,7 +67,7 @@
 		"clean:dev": "cross-env APP_VARIANT=development bunx expo prebuild --clean",
 		"clean:preview": "cross-env APP_VARIANT=preview bunx expo prebuild --clean",
 		"clean:release": "cross-env APP_VARIANT=release bunx expo prebuild --clean",
-		"tv": "cross-env EXPO_TV=1 bunx expo prebuild --clean && bun expo run:android",
+		"tv": "cross-env EXPO_TV=1 APP_VARIANT=development bunx expo prebuild --clean && bun expo run:android --variant debug",
 		"build:dev:tv": "cross-env EXPO_TV=1 APP_VARIANT=development node scripts/build.js apk",
 		"build:preview:tv": "cross-env EXPO_TV=1 APP_VARIANT=preview node scripts/build.js apk",
 		"build:release:tv": "cross-env EXPO_TV=1 APP_VARIANT=production node scripts/build.js apk"

@@ -27,6 +27,7 @@ import {
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
 import BottomNavigation from "@components/BottomNavigation";
+import { useNavLayout } from "@/hooks/useNavLayout";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -51,6 +52,8 @@ const EMPTY_ARRAY = [];
 
 export default function Index() {
 	const router = useRouter();
+	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
+	const { contentPaddingLeft } = useNavLayout();
 	const params = useLocalSearchParams();
 	const insets = useSafeAreaInsets();
 
@@ -519,7 +522,7 @@ export default function Index() {
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
-			<View style={styles.container}>
+			<View style={[styles.container, { paddingLeft: contentPaddingLeft }]}>
 				<StatusBar
 					barStyle="light-content"
 					translucent={true}
@@ -777,7 +780,6 @@ const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 		backgroundColor: "#0d0e12",
-		paddingLeft: Platform.isTV ? 56 : 0,
 	},
 	centerLoading: {
 		flex: 1,

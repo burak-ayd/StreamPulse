@@ -531,7 +531,6 @@ const styles = StyleSheet.create({
 		borderColor: "#FF3B30",
 		borderWidth: 1.5,
 		transform: [{ scale: 1.02 }],
-		elevation: 4,
 	},
 	optionItemSelected: {
 		backgroundColor: "rgba(255, 59, 48, 0.12)",

@@ -654,7 +654,8 @@ export default function PluginSettingsScreen() {
 														source={{ uri: plugin.favicon }}
 														style={styles.pluginFavicon}
 														contentFit="contain"
-														transition={150}
+														transition={0}
+														recyclingKey={plugin.favicon}
 													/>
 												) : (
 													<View

@@ -1,4 +1,5 @@
 import BottomNavigation from "@components/BottomNavigation";
+import { useNavLayout } from "@/hooks/useNavLayout";
 import TVPressable from "@/components/common/TVPressable";
 import { CATEGORIES } from "@constants/data";
 import { useThemeContext } from "@context/ThemeContext";
@@ -8,7 +9,6 @@ import { useEffect } from "react";
 import {
 	BackHandler,
 	FlatList,
-	Platform,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -21,6 +21,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function DiscoverScreen() {
 	const { theme, colors } = useThemeContext();
 	const router = useRouter();
+	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
+	const { contentPaddingLeft } = useNavLayout();
 
 	useEffect(() => {
 		const onBackPress = () => {
@@ -36,7 +38,7 @@ export default function DiscoverScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right", "bottom"]}
-				style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+				style={[styles.safeArea, { backgroundColor: colors.bg, paddingLeft: contentPaddingLeft }]}>
 				<StatusBar
 					barStyle={
 						theme === "dark" ? "light-content" : "dark-content"
@@ -150,7 +152,6 @@ export default function DiscoverScreen() {
 const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
-		paddingLeft: Platform.isTV ? 56 : 0,
 	},
 	header: {
 		height: 60,
@@ -193,11 +194,6 @@ const styles = StyleSheet.create({
 		borderColor: "#FF3B30",
 		backgroundColor: "rgba(255, 59, 48, 0.15)",
 		transform: [{ scale: 1.05 }],
-		elevation: 6,
-		shadowColor: "#FF3B30",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.5,
-		shadowRadius: 8,
 	},
 	categoryName: {
 		fontSize: 14,
@@ -216,11 +212,6 @@ const styles = StyleSheet.create({
 	trendingCardFocused: {
 		borderColor: "#FF3B30",
 		transform: [{ scale: 1.03 }],
-		elevation: 6,
-		shadowColor: "#FF3B30",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.5,
-		shadowRadius: 8,
 	},
 	trendingText: {
 		fontSize: 14,

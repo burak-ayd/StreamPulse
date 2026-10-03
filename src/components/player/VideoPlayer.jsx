@@ -1638,7 +1638,6 @@ const styles = StyleSheet.create({
 		borderWidth: 3,
 		backgroundColor: "rgba(255, 59, 48, 0.95)",
 		transform: [{ scale: 1.18 }],
-		elevation: 10,
 	},
 	seekButton: {
 		width: 56,
