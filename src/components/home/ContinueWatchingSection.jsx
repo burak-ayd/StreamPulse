@@ -5,7 +5,6 @@ import {
 	FlatList,
 	StyleSheet,
 	Text,
-	TouchableOpacity,
 	View,
 } from "react-native";
 
@@ -55,8 +54,10 @@ export default function ContinueWatchingSection({
 				showsHorizontalScrollIndicator={false}
 				contentContainerStyle={styles.listContent}
 				initialNumToRender={5}
-				maxToRenderPerBatch={5}
-				windowSize={5}
+				maxToRenderPerBatch={4}
+				windowSize={3}
+				// TV'de false kalmalı: odaklı kartın detache olması kumanda
+				// odağını kaybettirir.
 				removeClippedSubviews={false}
 				renderItem={({ item }) => (
 					<ContinueWatchingCard

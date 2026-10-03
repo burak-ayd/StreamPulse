@@ -29,11 +29,12 @@ import { useReactiveData } from "@/utils/storageListener";
 import BottomNavigation from "@components/BottomNavigation";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import TVPressable from "@/components/common/TVPressable";
 import {
 	ActivityIndicator,
 	BackHandler,
+	FlatList,
 	Platform,
 	RefreshControl,
 	ScrollView,
@@ -44,6 +45,9 @@ import {
 	View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+/** Stabil referans: useMemo içinde yeni dizi üretmemek için. */
+const EMPTY_ARRAY = [];
 
 export default function Index() {
 	const router = useRouter();
@@ -349,95 +353,106 @@ export default function Index() {
 	};
 
 	// Open movie details / player
-	const handleMoviePress = (movie) => {
-		if (!movie || movie.id === "offline-placeholder") return;
+	// useCallback: bu fonksiyon kimliği her render'da değişirse tüm kategori
+	// satırları yeniden render olur (TV'de kaydırma takılır).
+	const handleMoviePress = useCallback(
+		(movie) => {
+			if (!movie || movie.id === "offline-placeholder") return;
 
-		let movieWithPlugin = {
-			...movie,
-			plugin: movie.plugin || selectedPlatform?.name,
-		};
-
-		const epTitleMatch = (movieWithPlugin.title || "").match(
-			/^(.+?)\s+(\d+)\.\s*Sezon\s+(\d+)\.\s*Bölüm/i,
-		);
-
-		if (epTitleMatch) {
-			movieWithPlugin = {
-				...movieWithPlugin,
-				seriesTitle: epTitleMatch[1].trim(),
-				initialSeason: String(epTitleMatch[2]),
-				initialEpisode: String(epTitleMatch[3]),
-				is_series: true,
-				content_type: "series",
+			let movieWithPlugin = {
+				...movie,
+				plugin: movie.plugin || selectedPlatform?.name,
 			};
-		}
 
-		const movieId =
-			movieWithPlugin.id ||
-			encodeURIComponent(
-				movieWithPlugin.url ||
-					movieWithPlugin.slug ||
-					movieWithPlugin.title,
+			const epTitleMatch = (movieWithPlugin.title || "").match(
+				/^(.+?)\s+(\d+)\.\s*Sezon\s+(\d+)\.\s*Bölüm/i,
 			);
 
-		router.push({
-			pathname: "/(app)/MovieDetails/[id]",
-			params: {
-				id: movieId,
-				movieData: JSON.stringify(movieWithPlugin),
-			},
-		});
-	};
+			if (epTitleMatch) {
+				movieWithPlugin = {
+					...movieWithPlugin,
+					seriesTitle: epTitleMatch[1].trim(),
+					initialSeason: String(epTitleMatch[2]),
+					initialEpisode: String(epTitleMatch[3]),
+					is_series: true,
+					content_type: "series",
+				};
+			}
 
-	// Uzun basma ile Hızlı Önizleme Modalı aç
-	const handleMovieLongPress = (movie) => {
-		if (!movie || movie.id === "offline-placeholder") return;
-		setPreviewMovie({
-			...movie,
-			plugin: movie.plugin || selectedPlatform?.name,
-		});
-		setIsPreviewModalVisible(true);
-	};
+			const movieId =
+				movieWithPlugin.id ||
+				encodeURIComponent(
+					movieWithPlugin.url ||
+						movieWithPlugin.slug ||
+						movieWithPlugin.title,
+				);
 
-	const handleContinueWatchingPress = (item) => {
-		if (item.url) {
 			router.push({
-				pathname: "/player",
+				pathname: "/(app)/MovieDetails/[id]",
 				params: {
-					url: item.url,
-					title: item.title,
-					subtitle: item.episodeTitle || item.seriesTitle || "",
-					poster: item.poster,
-					id: item.id,
-					type: item.type || "movie",
-					seriesId: item.seriesId,
-					seriesUrl: item.seriesUrl,
-					seriesTitle: item.seriesTitle || item.title,
-					plugin: item.plugin || selectedPlatform?.name,
-					season: item.season,
-					episode: item.episode,
-					episodeTitle: item.episodeTitle,
-					totalEpisodes: item.totalEpisodes,
-					currentTime: item.currentTime,
-					nextEpisode: item.nextEpisode
-						? typeof item.nextEpisode === "string"
-							? item.nextEpisode
-							: JSON.stringify(item.nextEpisode)
-						: undefined,
+					id: movieId,
+					movieData: JSON.stringify(movieWithPlugin),
 				},
 			});
-		} else if (item.id) {
-			handleMoviePress(item);
-		}
-	};
+		},
+		[router, selectedPlatform],
+	);
 
-	const handleRemoveContinueWatching = async (id) => {
+	// Uzun basma ile Hızlı Önizleme Modalı aç
+	const handleMovieLongPress = useCallback(
+		(movie) => {
+			if (!movie || movie.id === "offline-placeholder") return;
+			setPreviewMovie({
+				...movie,
+				plugin: movie.plugin || selectedPlatform?.name,
+			});
+			setIsPreviewModalVisible(true);
+		},
+		[selectedPlatform],
+	);
+
+	const handleContinueWatchingPress = useCallback(
+		(item) => {
+			if (item.url) {
+				router.push({
+					pathname: "/player",
+					params: {
+						url: item.url,
+						title: item.title,
+						subtitle: item.episodeTitle || item.seriesTitle || "",
+						poster: item.poster,
+						id: item.id,
+						type: item.type || "movie",
+						seriesId: item.seriesId,
+						seriesUrl: item.seriesUrl,
+						seriesTitle: item.seriesTitle || item.title,
+						plugin: item.plugin || selectedPlatform?.name,
+						season: item.season,
+						episode: item.episode,
+						episodeTitle: item.episodeTitle,
+						totalEpisodes: item.totalEpisodes,
+						currentTime: item.currentTime,
+						nextEpisode: item.nextEpisode
+							? typeof item.nextEpisode === "string"
+								? item.nextEpisode
+								: JSON.stringify(item.nextEpisode)
+							: undefined,
+					},
+				});
+			} else if (item.id) {
+				handleMoviePress(item);
+			}
+		},
+		[router, selectedPlatform, handleMoviePress],
+	);
+
+	const handleRemoveContinueWatching = useCallback(async (id) => {
 		const updated = await removeContinueWatching(id);
 		setContinueWatching(updated);
-	};
+	}, []);
 
 	// Search handler: Eklenti içi arama (Header'dan tetiklenince)
-	const handleHeaderSearch = () => {
+	const handleHeaderSearch = useCallback(() => {
 		if (!isNoneMode && selectedPlatform?.name) {
 			router.push({
 				pathname: "/(app)/search",
@@ -446,7 +461,60 @@ export default function Index() {
 		} else {
 			router.push("/(app)/search");
 		}
-	};
+	}, [router, isNoneMode, selectedPlatform]);
+
+	// ------------------------------------------------------------------
+	// Ana sayfa listesi parçaları (TV performansı)
+	//
+	// Dikey FlatList satırları sanallaştırır: ScrollView tüm kategori
+	// satırlarını aynı anda mount ediyordu. CloudStream de tek bir
+	// RecyclerView + paylaşımlı view pool ile aynı sonuca ulaşıyor.
+	// ------------------------------------------------------------------
+	const visibleCategories = useMemo(
+		() => (isNoneMode ? EMPTY_ARRAY : categories.slice(0, visibleCount)),
+		[isNoneMode, categories, visibleCount],
+	);
+
+	const categoryKeyExtractor = useCallback(
+		(category, index) => category.url || category.name || `cat-${index}`,
+		[],
+	);
+
+	// useCallback: kimliği her render'da değişirse FlatList tüm satırları
+	// yeniden render eder (TV'de kaydırma takılır).
+	const renderCategoryRow = useCallback(
+		({ item: category }) => (
+			<MovieCategorySection
+				platformName={selectedPlatform?.name}
+				category={category}
+				onMoviePress={handleMoviePress}
+				onMovieLongPress={handleMovieLongPress}
+				onSeeAll={() => {}}
+			/>
+		),
+		[selectedPlatform, handleMoviePress, handleMovieLongPress],
+	);
+
+	const handleLoadMore = useCallback(() => {
+		setVisibleCount((prev) => prev + 5);
+	}, []);
+
+	const homeListFooter = useMemo(() => {
+		if (isNoneMode || visibleCount >= categories.length) return null;
+		return (
+			<View style={styles.loadMoreContainer}>
+				<TVPressable
+					style={styles.loadMoreButton}
+					focusedStyle={styles.loadMoreButtonFocused}
+					onPress={handleLoadMore}>
+					<Text style={styles.loadMoreText}>
+						Daha Fazla Kategori Göster (
+						{categories.length - visibleCount})
+					</Text>
+				</TVPressable>
+			</View>
+		);
+	}, [isNoneMode, visibleCount, categories.length, handleLoadMore]);
 
 	return (
 		<>
@@ -463,9 +531,22 @@ export default function Index() {
 						<ActivityIndicator size="large" color="#2563EB" />
 					</View>
 				) : (
-					<ScrollView
+					<FlatList
+						data={visibleCategories}
+						keyExtractor={categoryKeyExtractor}
+						renderItem={renderCategoryRow}
+						ListFooterComponent={homeListFooter}
 						showsVerticalScrollIndicator={false}
 						contentContainerStyle={styles.scrollContent}
+						// TV: satır sanallaştırması. ScrollView tüm kategori satırlarını
+						// aynı anda mount ediyordu; CloudStream tek bir RecyclerView +
+						// paylaşımlı view pool kullanıyor. removeClippedSubviews TV'de
+						// false KALMALI: odaklı kartın detache olması kumanda odağını
+						// kaybettirir.
+						initialNumToRender={2}
+						maxToRenderPerBatch={2}
+						windowSize={3}
+						removeClippedSubviews={false}
 						refreshControl={
 							<RefreshControl
 								refreshing={refreshing}
@@ -473,7 +554,9 @@ export default function Index() {
 								tintColor="#2563EB"
 								progressViewOffset={insets.top + 20}
 							/>
-						}>
+						}
+						ListHeaderComponent={
+							<>
 						{/* 1. Hero Featured Banner */}
 						<HeroBanner
 							movie={featuredMovie}
@@ -632,51 +715,13 @@ export default function Index() {
 									/>
 								)}
 
-								{/* Platform Dynamic Category Sections */}
-								{categories
-									.slice(0, visibleCount)
-									.map((category, index) => (
-										<MovieCategorySection
-											key={
-												category.url ||
-												category.name ||
-												index
-											}
-											platformName={
-												selectedPlatform?.name
-											}
-											category={category}
-											onMoviePress={handleMoviePress}
-											onMovieLongPress={handleMovieLongPress}
-											onSeeAll={(cat) => {
-												// Optional see all
-											}}
-										/>
-									))}
-
-								{/* Load more categories button */}
-								{visibleCount < categories.length && (
-									<View style={styles.loadMoreContainer}>
-										<TVPressable
-											style={styles.loadMoreButton}
-											focusedStyle={styles.loadMoreButtonFocused}
-											onPress={() =>
-												setVisibleCount(
-													(prev) => prev + 5,
-												)
-											}>
-											<Text style={styles.loadMoreText}>
-												Daha Fazla Kategori Göster (
-												{categories.length -
-													visibleCount}
-												)
-											</Text>
-										</TVPressable>
-									</View>
-								)}
+								{/* Kategori satırları artık FlatList'in data'sı;
+								    "daha fazla" butonu da footer olarak taşındı. */}
 							</>
-						)}
-					</ScrollView>
+							)}
+							</>
+						}
+					/>
 				)}
 
 				{/* Bottom Navigation */}
