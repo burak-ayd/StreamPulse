@@ -8,6 +8,21 @@ import {
 	View,
 } from "react-native";
 
+/** ContinueWatchingCard kartı sabit 124dp genişliğinde (bkz. card stili). */
+const CARD_WIDTH = 124;
+const CARD_GAP = 8;
+const LIST_PAD_H = 18;
+const CARD_STRIDE = CARD_WIDTH + CARD_GAP;
+
+/** Kart yüksekliği sabit → dinamik ölçümü atla. */
+function getItemLayout(_data, index) {
+	return {
+		length: CARD_STRIDE,
+		offset: LIST_PAD_H + CARD_STRIDE * index,
+		index,
+	};
+}
+
 export default function ContinueWatchingSection({
 	items = [],
 	onItemPress,
@@ -56,9 +71,9 @@ export default function ContinueWatchingSection({
 				initialNumToRender={5}
 				maxToRenderPerBatch={4}
 				windowSize={3}
-				// TV'de false kalmalı: odaklı kartın detache olması kumanda
-				// odağını kaybettirir.
-				removeClippedSubviews={false}
+				// Yatay listede odaklı kart ekranda olduğu için kırpma güvenli.
+				removeClippedSubviews={true}
+				getItemLayout={getItemLayout}
 				renderItem={({ item }) => (
 					<ContinueWatchingCard
 						item={item}
@@ -121,6 +136,7 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 	},
 	listContent: {
-		paddingHorizontal: 18,
+		paddingHorizontal: LIST_PAD_H,
+		gap: CARD_GAP,
 	},
 });
