@@ -3,12 +3,40 @@ import TVPressable from "@/components/common/TVPressable";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { Dimensions, Platform, StyleSheet, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import {
+	Platform,
+	StyleSheet,
+	Text,
+	View,
+	useWindowDimensions,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const { width } = Dimensions.get("window");
 const isTV = Platform.isTV;
-const BANNER_HEIGHT = isTV ? 360 : 520;
+
+/**
+ * CloudStream'in ana sayfa kuralı: görselin kutusu, görselin KENDİ oranına
+ * yakın olacak şekilde seçilir; ekran yüzdesiyle seçilip `cover` ile
+ * ezilmez. CloudStream kartları sabit dp kutulardır (114×180dp poster ≈ 2:3,
+ * 180×114dp yatay ≈ 16:10) ve hangi oranın kullanılacağına veri karar verir
+ * (`HomeParentItemAdapter`: `isHorizontal = info.isHorizontalImages`).
+ *
+ * TMDB w1280 backdrop 16:9'dur. TV hero'su tam içerik genişliğinde, yuvarlak
+ * köşeli bir KART olarak kurulur; yükseklik ekrana orantılıdır ve sinematik
+ * kırpma oranı her çözünürlükte sabit kalır.
+ */
+const POSTER_RATIO = 2 / 3;
+/** Hero kutusunun hedef oranı (21:9 sinematik). Backdrop 16:9 → yanlarda değil, üst/altta kırpılır. */
+const HERO_BOX_RATIO = 2.35;
+
+const PAGE_BG = "#0d0e12";
+const TV_SIDE = 24; // kartın kenar boşluğu
+const TV_CARD_H_FRACTION = 0.6; // hero kartı en fazla ekranın %60'ı
+const TV_REF_CARD_H = 420; // TV ölçek referansı
+const CARD_RADIUS = 16;
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 export default function HeroBanner({
 	movie,
@@ -24,6 +52,15 @@ export default function HeroBanner({
 	onProfilePress,
 }) {
 	const insets = useSafeAreaInsets();
+	const { width: winW, height: winH } = useWindowDimensions();
+
+	// TV'de ana container `paddingLeft: 56` (navigation rail) uyguladığı için
+	// banner'ın gerçek genişliği ekran genişliğinden küçüktür — ölçüyoruz.
+	const [boxW, setBoxW] = useState(0);
+	const handleLayout = (e) => {
+		const w = e.nativeEvent.layout.width;
+		if (w > 0 && Math.abs(w - boxW) > 0.5) setBoxW(w);
+	};
 
 	const title = movie?.title || "StreamPulse";
 	const rawGenres = movie?.category || movie?.genres;
@@ -39,28 +76,454 @@ export default function HeroBanner({
 		movie?.audio ||
 		movie?.subtitles;
 
-	// TV'de varsa yatay arka plan (backdrop), yoksa afiş görseli kullan
+	const backdropUri = movie?.backdrop_url || movie?.backdrop || null;
 	const posterUri =
-		(isTV && (movie?.backdrop_url || movie?.backdrop)) ||
 		movie?.poster ||
 		movie?.poster_url ||
 		movie?.image ||
-		movie?.backdrop_url ||
+		backdropUri ||
 		"https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=60";
 
+	const ui = useMemo(() => {
+		const w = boxW > 0 ? boxW : winW;
+
+		if (isTV) {
+			// --- Yatay backdrop varsa: geniş sinematik kart ---
+			if (backdropUri) {
+				// Kart genişliği içerik alanı; yükseklik önce sinematik orandan,
+				// sonra ekran payından sınırlanır. Böylece hem oran hem de
+				// kırpma oranı her çözünürlükte sabit kalır.
+				const cardW = Math.max(320, w - TV_SIDE * 2);
+				const maxH = winH * TV_CARD_H_FRACTION;
+				const minH = Math.min(winH * 0.42, maxH);
+				const cardH = clamp(
+					Math.min(cardW / HERO_BOX_RATIO, maxH),
+					minH,
+					maxH,
+				);
+				const s = clamp(cardH / TV_REF_CARD_H, 0.85, 1.4);
+				// Kenar boşluğu sabit: ölçeklenirse kart genişlik hesabı
+				// ile uyuşmaz ve kart kapsayıcıyı taşabilir.
+				const side = TV_SIDE;
+				return {
+					mode: "wide",
+					cardW,
+					cardH,
+					s,
+					side,
+					// Hero'nun üstündeki boşluk
+					topGap: Math.round(14 * s) + insets.top,
+					bottomGap: Math.round(18 * s),
+					headerGap: Math.round(14 * s),
+					radius: Math.round(CARD_RADIUS * s),
+					headerBtn: Math.round(38 * s),
+					headerIcon: Math.round(21 * s),
+					platformIcon: Math.round(15 * s),
+					platformText: Math.round(12 * s),
+					titleSize: Math.round(26 * s),
+					metaSize: Math.round(13 * s),
+					actionIcon: Math.round(21 * s),
+					actionLabel: Math.round(11 * s),
+					actionColW: Math.round(58 * s),
+					playPadH: Math.round(24 * s),
+					playPadV: Math.round(9 * s),
+					playIcon: Math.round(17 * s),
+					playText: Math.round(15 * s),
+					buttonsGap: Math.round(30 * s),
+					overlayPadX: Math.round(26 * s),
+					overlayPadB: Math.round(20 * s),
+					contentMaxW: cardW - Math.round(52 * s),
+				};
+			}
+
+			// --- Backdrop yok: dikey poster kartı (2:3) ---
+			const cardH = clamp(winH * 0.54, 300, 540);
+			const cardW = Math.round(cardH * POSTER_RATIO);
+			const s = clamp(cardH / 390, 0.85, 1.4);
+			const side = Math.round(22 * s);
+			const rowGap = Math.round(22 * s);
+			return {
+				mode: "poster",
+				cardW,
+				cardH,
+				s,
+				side,
+				topGap: Math.round(16 * s) + insets.top,
+				bottomGap: Math.round(18 * s),
+				headerGap: Math.round(14 * s),
+				rowGap,
+				radius: Math.round(CARD_RADIUS * s),
+				headerBtn: Math.round(38 * s),
+				headerIcon: Math.round(21 * s),
+				platformIcon: Math.round(15 * s),
+				platformText: Math.round(12 * s),
+				titleSize: Math.round(24 * s),
+				metaSize: Math.round(13 * s),
+				actionIcon: Math.round(21 * s),
+				actionLabel: Math.round(11 * s),
+				actionColW: Math.round(58 * s),
+				playPadH: Math.round(24 * s),
+				playPadV: Math.round(9 * s),
+				playIcon: Math.round(17 * s),
+				playText: Math.round(15 * s),
+				buttonsGap: Math.round(30 * s),
+				contentMaxW: Math.max(180, w - side * 2 - cardW - rowGap),
+			};
+		}
+
+		// --- Mobil: tam ekran poster hero (mevcut davranış) ---
+		const bandH = clamp(Math.min(w / POSTER_RATIO, winH * 0.58), 260, 620);
+		return {
+			mode: "fullbleed",
+			bandH,
+			s: 1,
+			side: 18,
+			topGap: 0,
+			bottomGap: 24,
+			headerGap: 0,
+			headerBtn: 40,
+			headerIcon: 24,
+			platformIcon: 16,
+			platformText: 13,
+			titleSize: 26,
+			metaSize: 13,
+			actionIcon: 24,
+			actionLabel: 12,
+			actionColW: 60,
+			playPadH: 28,
+			playPadV: 10,
+			playIcon: 19,
+			playText: 15,
+			buttonsGap: 40,
+			contentMaxW: w * 0.9,
+		};
+	}, [boxW, winW, winH, insets.top, backdropUri]);
+
+	// ------------------------------------------------------------------
+	// Ortak parçalar
+	// ------------------------------------------------------------------
+	const renderHeader = (extra) => (
+		<View style={[styles.topHeader, { paddingHorizontal: ui.side }, extra]}>
+			<TVPressable
+				style={[
+					styles.headerIconButton,
+					{
+						width: ui.headerBtn,
+						height: ui.headerBtn,
+						borderRadius: ui.headerBtn / 2,
+					},
+				]}
+				focusedStyle={styles.headerIconButtonFocused}
+				onPress={onSearchPress}>
+				<Ionicons name="search" size={ui.headerIcon} color="#ffffff" />
+			</TVPressable>
+
+			{platform && (
+				<TVPressable
+					style={styles.platformPill}
+					focusedStyle={styles.platformPillFocused}
+					onPress={onPlatformPress}>
+					{platform.favicon ? (
+						<Image
+							source={{ uri: platform.favicon }}
+							style={{
+								width: ui.platformIcon,
+								height: ui.platformIcon,
+								borderRadius: 4,
+							}}
+							contentFit="contain"
+						/>
+					) : (
+						<Ionicons
+							name="film-outline"
+							size={Math.round(ui.platformIcon * 0.85)}
+							color="#ffffff"
+						/>
+					)}
+					<Text
+						style={[styles.platformText, { fontSize: ui.platformText }]}
+						numberOfLines={1}>
+						{platform.name}
+					</Text>
+					<Ionicons
+						name="chevron-down"
+						size={Math.round(ui.platformIcon * 0.85)}
+						color="#9ca3af"
+					/>
+				</TVPressable>
+			)}
+
+			<TVPressable
+				style={[
+					styles.profileButton,
+					{
+						width: ui.headerBtn,
+						height: ui.headerBtn,
+						borderRadius: ui.headerBtn / 2,
+						borderWidth: 2,
+					},
+				]}
+				focusedStyle={styles.profileButtonFocused}
+				onPress={onProfilePress}>
+				{userAvatarUrl ? (
+					<Image
+						source={{ uri: userAvatarUrl }}
+						style={[
+							styles.avatarImage,
+							{ borderRadius: ui.headerBtn / 2 - 2 },
+						]}
+						contentFit="cover"
+					/>
+				) : (
+					<View
+						style={[
+							styles.avatarPlaceholder,
+							{ borderRadius: ui.headerBtn / 2 - 2 },
+						]}>
+						<Ionicons
+							name="person"
+							size={Math.round(ui.headerIcon * 0.8)}
+							color="#38bdf8"
+						/>
+					</View>
+				)}
+			</TVPressable>
+		</View>
+	);
+
+	const renderActions = (align) => (
+		<View
+			style={[
+				styles.buttonsRow,
+				{ gap: ui.buttonsGap, justifyContent: align },
+			]}>
+			<TVPressable
+				style={[styles.actionColumn, { width: ui.actionColW }]}
+				focusedStyle={styles.actionColumnFocused}
+				onPress={onToggleList}>
+				<Ionicons
+					name={isInList ? "checkmark" : "add"}
+					size={ui.actionIcon}
+					color="#ffffff"
+				/>
+				<Text style={[styles.actionLabel, { fontSize: ui.actionLabel }]}>
+					{isInList ? "Listede" : "Listem"}
+				</Text>
+			</TVPressable>
+
+			<TVPressable
+				autoFocus={true}
+				style={[
+					styles.playButton,
+					{
+						paddingHorizontal: ui.playPadH,
+						paddingVertical: ui.playPadV,
+						borderRadius: Math.round(ui.playPadV * 3),
+					},
+				]}
+				focusedStyle={styles.playButtonFocused}
+				onPress={onPlayPress}>
+				<Ionicons
+					name="play"
+					size={ui.playIcon}
+					color="#000000"
+					style={{ marginLeft: 2 }}
+				/>
+				<Text style={[styles.playButtonText, { fontSize: ui.playText }]}>
+					Oynat
+				</Text>
+			</TVPressable>
+
+			<TVPressable
+				style={[styles.actionColumn, { width: ui.actionColW }]}
+				focusedStyle={styles.actionColumnFocused}
+				onPress={onInfoPress}>
+				<Ionicons
+					name="information-circle-outline"
+					size={ui.actionIcon}
+					color="#ffffff"
+				/>
+				<Text style={[styles.actionLabel, { fontSize: ui.actionLabel }]}>
+					Bilgi
+				</Text>
+			</TVPressable>
+		</View>
+	);
+
+	/** Kategori + dil rozeti tek satırda. */
+	const renderMetaRow = (align) => (
+		<View
+			style={[
+				styles.metaRow,
+				{
+					alignSelf: align === "center" ? "center" : "flex-start",
+					justifyContent: align === "center" ? "center" : "flex-start",
+				},
+			]}>
+			{movieRawLang ? (
+				<LanguageBadge
+					language={movieRawLang}
+					size={isTV ? "small" : "normal"}
+				/>
+			) : null}
+			<Text
+				style={[
+					styles.metaText,
+					{ fontSize: ui.metaSize, maxWidth: ui.contentMaxW },
+				]}
+				numberOfLines={1}>
+				{genres}
+			</Text>
+		</View>
+	);
+
+	// ------------------------------------------------------------------
+	// TV — geniş sinematik hero KARTI (üstte boşluk + yuvarlak kenarlar)
+	// ------------------------------------------------------------------
+	if (ui.mode === "wide") {
+		return (
+			<View
+				style={[styles.cardScreen, { paddingTop: ui.topGap }]}
+				onLayout={handleLayout}>
+				{renderHeader({ marginBottom: ui.headerGap })}
+
+				<View
+					style={[
+						styles.heroCard,
+						{
+							width: ui.cardW,
+							height: ui.cardH,
+							borderRadius: ui.radius,
+							marginHorizontal: ui.side,
+						},
+					]}>
+					<Image
+						source={{ uri: backdropUri }}
+						style={styles.heroCardImage}
+						contentFit="cover"
+						contentPosition="center"
+						transition={250}
+						cachePolicy="memory-disk"
+					/>
+
+					{/* Alt karartma: içerik okunurluğu + sayfa zeminine yumuşak geçiş */}
+					<LinearGradient
+						colors={[
+							"transparent",
+							"rgba(13, 14, 18, 0.45)",
+							"rgba(13, 14, 18, 0.88)",
+						]}
+						locations={[0.3, 0.66, 1]}
+						style={styles.heroScrim}
+					/>
+
+					<View
+						style={[
+							styles.heroOverlay,
+							{
+								paddingLeft: ui.overlayPadX,
+								paddingRight: ui.overlayPadX,
+								paddingBottom: ui.overlayPadB,
+							},
+						]}>
+						<Text
+							style={[
+								styles.heroTitle,
+								{ fontSize: ui.titleSize, maxWidth: ui.contentMaxW },
+							]}
+							numberOfLines={2}>
+							{title}
+						</Text>
+
+						<View style={{ marginBottom: 10 * ui.s }}>
+							{renderMetaRow("left")}
+						</View>
+
+						{renderActions("flex-start")}
+					</View>
+				</View>
+
+				<View style={{ height: ui.bottomGap }} />
+			</View>
+		);
+	}
+
+	// ------------------------------------------------------------------
+	// TV — backdrop yoksa dikey poster kartı (2:3)
+	// ------------------------------------------------------------------
+	if (ui.mode === "poster") {
+		return (
+			<View
+				style={[styles.cardScreen, { paddingTop: ui.topGap }]}
+				onLayout={handleLayout}>
+				{renderHeader({ marginBottom: ui.headerGap })}
+
+				<View
+					style={[
+						styles.heroRow,
+						{ paddingHorizontal: ui.side, gap: ui.rowGap },
+					]}>
+					<View
+						style={[
+							styles.heroCard,
+							{
+								width: ui.cardW,
+								height: ui.cardH,
+								borderRadius: ui.radius,
+							},
+						]}>
+						<Image
+							source={{ uri: posterUri }}
+							style={styles.heroCardImage}
+							contentFit="cover"
+							contentPosition="center"
+							transition={250}
+							cachePolicy="memory-disk"
+						/>
+						<LinearGradient
+							colors={["transparent", "rgba(0,0,0,0.35)"]}
+							locations={[0.55, 1]}
+							style={styles.heroCardFade}
+						/>
+					</View>
+
+					<View style={[styles.heroTextCol, { width: ui.contentMaxW }]}>
+						<Text
+							style={[
+								styles.heroTitle,
+								{ fontSize: ui.titleSize, maxWidth: ui.contentMaxW },
+							]}
+							numberOfLines={2}>
+							{title}
+						</Text>
+						<View style={{ marginBottom: 10 * ui.s }}>
+							{renderMetaRow("left")}
+						</View>
+						{renderActions("flex-start")}
+					</View>
+				</View>
+
+				<View style={{ height: ui.bottomGap }} />
+			</View>
+		);
+	}
+
+	// ------------------------------------------------------------------
+	// Mobil — tam ekran poster hero
+	// ------------------------------------------------------------------
 	return (
-		<View style={styles.bannerContainer}>
-			{/* Poster Image */}
+		<View
+			style={[styles.bannerContainer, { height: ui.bandH }]}
+			onLayout={handleLayout}>
 			<Image
 				source={{ uri: posterUri }}
-				style={styles.bannerImage}
+				style={StyleSheet.absoluteFill}
 				contentFit="cover"
 				contentPosition="center"
 				transition={250}
 				cachePolicy="memory-disk"
 			/>
 
-			{/* Top Gradient for Header Readability */}
 			<LinearGradient
 				colors={[
 					"rgba(13, 14, 18, 0.85)",
@@ -71,180 +534,97 @@ export default function HeroBanner({
 				style={styles.topGradient}
 			/>
 
-			{/* Bottom Gradient for Seamless Transition into Page Background */}
 			<LinearGradient
 				colors={[
 					"transparent",
 					"rgba(13, 14, 18, 0.2)",
 					"rgba(13, 14, 18, 0.65)",
 					"rgba(13, 14, 18, 0.92)",
-					"#0d0e12",
-					"#0d0e12",
+					PAGE_BG,
+					PAGE_BG,
 				]}
 				locations={[0, 0.25, 0.55, 0.8, 0.94, 1]}
 				style={styles.bottomGradient}
 			/>
 
-			{/* Top Header Overlay */}
-			<View
-				style={[
-					styles.topHeader,
-					{ top: insets.top + (isTV ? 6 : 8) },
-				]}>
-				{/* Search Icon */}
-				<TVPressable
-					style={styles.headerIconButton}
-					focusedStyle={styles.headerIconButtonFocused}
-					onPress={onSearchPress}>
-					<Ionicons
-						name="search"
-						size={isTV ? 20 : 24}
-						color="#ffffff"
-					/>
-				</TVPressable>
+			{renderHeader({ top: insets.top + 8, position: "absolute" })}
 
-				{/* Platform Selector Pill */}
-				{platform && (
-					<TVPressable
-						style={styles.platformPill}
-						focusedStyle={styles.platformPillFocused}
-						onPress={onPlatformPress}>
-						{platform.favicon ? (
-							<Image
-								source={{ uri: platform.favicon }}
-								style={styles.platformFavicon}
-								contentFit="contain"
-							/>
-						) : (
-							<Ionicons
-								name="film-outline"
-								size={isTV ? 12 : 14}
-								color="#ffffff"
-							/>
-						)}
-						<Text style={styles.platformText} numberOfLines={1}>
-							{platform.name}
-						</Text>
-						<Ionicons
-							name="chevron-down"
-							size={isTV ? 12 : 14}
-							color="#9ca3af"
-						/>
-					</TVPressable>
-				)}
-
-				{/* User Profile Avatar with Blue Ring */}
-				<TVPressable
-					style={styles.profileButton}
-					focusedStyle={styles.profileButtonFocused}
-					onPress={onProfilePress}>
-					{userAvatarUrl ? (
-						<Image
-							source={{ uri: userAvatarUrl }}
-							style={styles.avatarImage}
-							contentFit="cover"
-						/>
-					) : (
-						<View style={styles.avatarPlaceholder}>
-							<Ionicons
-								name="person"
-								size={isTV ? 16 : 20}
-								color="#38bdf8"
-							/>
-						</View>
-					)}
-				</TVPressable>
-			</View>
-
-			{/* Bottom Hero Content: Title, Genres, Action Buttons */}
-			<View style={styles.bottomContent}>
-				{/* Movie Title */}
-				<Text style={styles.movieTitle} numberOfLines={isTV ? 1 : 2}>
-					{title}
-				</Text>
-
-				{/* Category / Genre Badges */}
+			<View style={[styles.bottomContent, { bottom: ui.bottomGap }]}>
 				<Text
 					style={[
-						styles.genresText,
-						!movieRawLang && styles.genresTextWithoutBadge,
+						styles.movieTitle,
+						{ fontSize: ui.titleSize, maxWidth: ui.contentMaxW },
 					]}
-					numberOfLines={1}>
-					{genres}
+					numberOfLines={2}>
+					{title}
 				</Text>
-
-				{/* Language & Dubbing Badges */}
-				{movieRawLang ? (
-					<View style={styles.heroLanguageBadge}>
-						<LanguageBadge
-							language={movieRawLang}
-							size={isTV ? "small" : "normal"}
-						/>
-					</View>
-				) : null}
-
-				{/* Action Buttons Row */}
-				<View style={styles.buttonsRow}>
-					{/* Left: Listeye Ekle / Çıkar */}
-					<TVPressable
-						style={styles.actionColumn}
-						focusedStyle={styles.actionColumnFocused}
-						onPress={onToggleList}>
-						<Ionicons
-							name={isInList ? "checkmark" : "add"}
-							size={isTV ? 20 : 24}
-							color="#ffffff"
-						/>
-						<Text style={styles.actionLabel}>
-							{isInList ? "Listede" : "Listem"}
-						</Text>
-					</TVPressable>
-
-					{/* Center: Play Pill Button - TV'de Ana İlk Odak */}
-					<TVPressable
-						autoFocus={true}
-						style={styles.playButton}
-						focusedStyle={styles.playButtonFocused}
-						onPress={onPlayPress}>
-						<Ionicons
-							name="play"
-							size={isTV ? 16 : 19}
-							color="#000000"
-							style={{ marginLeft: 2 }}
-						/>
-						<Text style={styles.playButtonText}>Oynat</Text>
-					</TVPressable>
-
-					{/* Right: Bilgi */}
-					<TVPressable
-						style={styles.actionColumn}
-						focusedStyle={styles.actionColumnFocused}
-						onPress={onInfoPress}>
-						<Ionicons
-							name="information-circle-outline"
-							size={isTV ? 20 : 24}
-							color="#ffffff"
-						/>
-						<Text style={styles.actionLabel}>Bilgi</Text>
-					</TVPressable>
+				<View style={{ marginBottom: 12 }}>
+					{renderMetaRow("center")}
 				</View>
+				{renderActions("center")}
 			</View>
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
-	bannerContainer: {
+	/** Hero bloğu: sayfa zemininde, üstte boşluk bırakarak */
+	cardScreen: {
 		width: "100%",
-		height: BANNER_HEIGHT,
-		position: "relative",
-		backgroundColor: "#0d0e12",
-		overflow: "hidden",
+		backgroundColor: PAGE_BG,
 	},
-	bannerImage: {
-		top: 50,
+	/** Yuvarlak köşeli hero görsel kutusu */
+	heroCard: {
+		overflow: "hidden",
+		backgroundColor: "#1c1e24",
+		borderWidth: 1,
+		borderColor: "rgba(255,255,255,0.08)",
+		position: "relative",
+	},
+	heroCardImage: {
 		width: "100%",
 		height: "100%",
+	},
+	/** Geniş kartın alt karartması */
+	heroScrim: {
+		position: "absolute",
+		left: 0,
+		right: 0,
+		bottom: 0,
+		height: "68%",
+	},
+	/** Poster kartının alt karartması */
+	heroCardFade: {
+		position: "absolute",
+		left: 0,
+		right: 0,
+		bottom: 0,
+		height: "30%",
+	},
+	/** Kartın sol-alt köşesindeki içerik */
+	heroOverlay: {
+		position: "absolute",
+		left: 0,
+		right: 0,
+		bottom: 0,
+		alignItems: "flex-start",
+	},
+	/** Poster kartı yanındaki metin sütunu */
+	heroRow: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+	},
+	heroTextCol: {
+		flexShrink: 1,
+		justifyContent: "center",
+		paddingTop: 2,
+	},
+
+	/** Mobil tam ekran banner */
+	bannerContainer: {
+		width: "100%",
+		position: "relative",
+		backgroundColor: PAGE_BG,
 		overflow: "hidden",
 	},
 	topGradient: {
@@ -252,72 +632,62 @@ const styles = StyleSheet.create({
 		top: 0,
 		left: 0,
 		right: 0,
-		height: isTV ? 80 : 120,
+		height: 120,
 	},
 	bottomGradient: {
 		position: "absolute",
 		bottom: 0,
 		left: 0,
 		right: 0,
-		height: isTV ? 220 : 350,
+		height: 350,
 	},
 	topHeader: {
-		position: "absolute",
-		left: 0,
-		right: 0,
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		paddingHorizontal: isTV ? 16 : 18,
-		zIndex: 10,
 	},
 	bottomContent: {
 		position: "absolute",
-		bottom: isTV ? 16 : 24,
 		left: 0,
 		right: 0,
 		alignItems: "center",
-		paddingHorizontal: 20,
+		paddingHorizontal: 16,
+	},
+	heroTitle: {
+		color: "#ffffff",
+		fontWeight: "800",
+		letterSpacing: -0.3,
+		marginBottom: 6,
+		textShadowColor: "rgba(0, 0, 0, 0.85)",
+		textShadowOffset: { width: 0, height: 2 },
+		textShadowRadius: 6,
 	},
 	movieTitle: {
 		color: "#ffffff",
-		fontSize: isTV ? 22 : 26,
 		fontWeight: "800",
 		textAlign: "center",
 		letterSpacing: -0.3,
-		marginBottom: isTV ? 4 : 6,
+		marginBottom: 6,
 		textShadowColor: "rgba(0, 0, 0, 0.8)",
 		textShadowOffset: { width: 0, height: 2 },
 		textShadowRadius: 6,
 	},
-	genresText: {
+	/** Kategori + dil rozeti satırı */
+	metaRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+	},
+	metaText: {
 		color: "#D1D5DB",
-		fontSize: isTV ? 12 : 13,
 		fontWeight: "500",
-		textAlign: "center",
-		textShadowColor: "rgba(0, 0, 0, 0.8)",
-		textShadowOffset: { width: 0, height: 1 },
-		textShadowRadius: 4,
-		marginBottom: isTV ? 4 : 6,
-		maxWidth: isTV ? "85%" : width * 0.88,
-	},
-	genresTextWithoutBadge: {
-		marginBottom: isTV ? 10 : 18,
-	},
-	heroLanguageBadge: {
-		marginBottom: isTV ? 10 : 16,
-		alignSelf: "center",
+		flexShrink: 1,
 	},
 	buttonsRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "center",
-		gap: isTV ? 30 : 40,
 	},
 	headerIconButton: {
-		width: isTV ? 36 : 40,
-		height: isTV ? 36 : 40,
-		borderRadius: isTV ? 18 : 20,
 		backgroundColor: "rgba(0, 0, 0, 0.35)",
 		justifyContent: "center",
 		alignItems: "center",
@@ -334,11 +704,11 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(22, 27, 34, 0.8)",
 		borderColor: "rgba(255, 255, 255, 0.15)",
 		borderWidth: 1,
-		paddingHorizontal: isTV ? 10 : 12,
-		paddingVertical: isTV ? 4 : 6,
+		paddingHorizontal: isTV ? 11 : 12,
+		paddingVertical: isTV ? 5 : 6,
 		borderRadius: 20,
 		gap: isTV ? 4 : 6,
-		maxWidth: width * 0.5,
+		flexShrink: 1,
 	},
 	platformPillFocused: {
 		backgroundColor: "rgba(255, 59, 48, 0.4)",
@@ -346,22 +716,12 @@ const styles = StyleSheet.create({
 		borderWidth: 1.5,
 		transform: [{ scale: 1.08 }],
 	},
-	platformFavicon: {
-		width: isTV ? 14 : 16,
-		height: isTV ? 14 : 16,
-		borderRadius: 4,
-	},
 	platformText: {
 		color: "#ffffff",
-		fontSize: isTV ? 12 : 13,
 		fontWeight: "600",
 		letterSpacing: 0.2,
 	},
 	profileButton: {
-		width: isTV ? 36 : 40,
-		height: isTV ? 36 : 40,
-		borderRadius: isTV ? 18 : 20,
-		borderWidth: 2,
 		borderColor: "#2563EB",
 		overflow: "hidden",
 		justifyContent: "center",
@@ -370,13 +730,11 @@ const styles = StyleSheet.create({
 	},
 	profileButtonFocused: {
 		borderColor: "#FF3B30",
-		borderWidth: 3,
 		transform: [{ scale: 1.15 }],
 	},
 	avatarImage: {
 		width: "100%",
 		height: "100%",
-		borderRadius: isTV ? 16 : 18,
 		overflow: "hidden",
 	},
 	avatarPlaceholder: {
@@ -389,9 +747,8 @@ const styles = StyleSheet.create({
 	actionColumn: {
 		alignItems: "center",
 		justifyContent: "center",
-		width: isTV ? 54 : 60,
-		gap: isTV ? 2 : 3,
-		paddingVertical: isTV ? 4 : 6,
+		gap: 3,
+		paddingVertical: 5,
 		borderRadius: 12,
 	},
 	actionColumnFocused: {
@@ -402,7 +759,6 @@ const styles = StyleSheet.create({
 	},
 	actionLabel: {
 		color: "#E5E7EB",
-		fontSize: isTV ? 11 : 12,
 		fontWeight: "500",
 	},
 	playButton: {
@@ -410,9 +766,6 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		backgroundColor: "#FFFFFF",
-		paddingHorizontal: isTV ? 22 : 28,
-		paddingVertical: isTV ? 8 : 10,
-		borderRadius: 24,
 		gap: 6,
 		shadowColor: "#000",
 		shadowOffset: { width: 0, height: 3 },
@@ -434,7 +787,6 @@ const styles = StyleSheet.create({
 	},
 	playButtonText: {
 		color: "#000000",
-		fontSize: isTV ? 14 : 15,
 		fontWeight: "700",
 	},
 });
