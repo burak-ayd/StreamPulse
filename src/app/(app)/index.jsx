@@ -9,6 +9,7 @@ import {
 	clearPluginCache,
 	fetchPlatformCategories,
 	fetchPlatforms,
+	fetchPluginDetail,
 	fetchRandomContents,
 	getCachedCategories,
 	getCachedHeroMovie,
@@ -125,13 +126,74 @@ export default function Index() {
 		"user_favorites",
 	]);
 
+	// ---------------------------------------------------------------
+	// Hero backdrop hidrasyonu
+	//
+	// ÖNEMLİ: Ana sayfa hero içeriği `fetchRandomContents` (GET /random)
+	// ile gelir. Bu endpoint bir LİSTE öğesi döndürür ve bu öğelerde
+	// genellikle yalnızca 2:3 dikey `poster` bulunur; `backdrop_url` YOKTUR.
+	// Hero ise yatay (16:9) bir kompozisyon beklediği için poster, sinematik
+	// banda sığdırıldığında ya çok kırpılır ya da ince bir sütuna
+	// sıkışıp kalır (CloudStream'de kart kutusu oranı verinin kendisinden
+	// gelir — bkz. HomeParentItemAdapter: `isHorizontal = info.isHorizontalImages`).
+	//
+	// Bu yüzden MovieDetails'in yaptığı gibi plugin detayı çekilip gerçek
+	// backdrop hydrate edilir. Poster anında gösterilir, backdrop gelince
+	// keskinleşir (görsel zaten `transition` kullanıyor).
+	// ---------------------------------------------------------------
+	const hydrateHeroBackdrop = useCallback(
+		async (item, platformName) => {
+			if (!item || item.id === "offline-placeholder") return item;
+			if (!platformName) return item;
+			// Zaten yatay görsel varsa tekrar istek atmaya gerek yok.
+			if (item.backdrop_url || item.backdrop) return item;
+
+			const detailUrl = item.url || item.slug;
+			if (!detailUrl) return item;
+
+			try {
+				const detail = await fetchPluginDetail(platformName, detailUrl);
+				const backdrop =
+					detail?.backdrop_url ||
+					detail?.backdrop ||
+					detail?.background ||
+					detail?.landscape_url;
+				if (!backdrop) return item;
+				return {
+					...item,
+					backdrop_url: backdrop,
+					plugin: item.plugin || platformName,
+				};
+			} catch (error) {
+				// Detay alınamazsa poster ile devam et – hero boş kalmaz.
+				console.warn("Hero backdrop alınamadı:", error?.message);
+				return item;
+			}
+		},
+		[],
+	);
+
+	// featuredMovie'yi set eder ve arka planı (varsa) arka planda hydrate eder.
+	const setFeaturedMovieWithBackdrop = useCallback(
+		(item, platformName) => {
+			setFeaturedMovie(item);
+			if (!item) return;
+			hydrateHeroBackdrop(item, platformName).then((hydrated) => {
+				if (hydrated && hydrated !== item) {
+					setFeaturedMovie(hydrated);
+				}
+			});
+		},
+		[hydrateHeroBackdrop],
+	);
+
 	const fetchPlatformData = useCallback(async (platform, force = false) => {
 		if (!platform || platform.id === "none" || platform.name === "None") {
 			setCategories([]);
 			const downloads = await getDownloads();
 			setDownloadedItems(downloads || []);
 			if (downloads && downloads.length > 0) {
-				setFeaturedMovie(downloads[0]);
+				setFeaturedMovieWithBackdrop(downloads[0], platform.name);
 			} else {
 				setFeaturedMovie({
 					id: "offline-placeholder",
@@ -153,7 +215,7 @@ export default function Index() {
 				setCategories(catList);
 				const heroItem = Array.isArray(cachedHero) && cachedHero.length > 0 ? cachedHero[0] : cachedHero;
 				if (heroItem) {
-					setFeaturedMovie(heroItem);
+					setFeaturedMovieWithBackdrop(heroItem, platform.name);
 					getContentLibraryStatus(heroItem.id || heroItem.url).then((st) =>
 						setIsInList(Boolean(st?.currentList || st?.isFav)),
 					);
@@ -178,7 +240,7 @@ export default function Index() {
 					: null;
 
 			if (randomItem) {
-				setFeaturedMovie(randomItem);
+				setFeaturedMovieWithBackdrop(randomItem, platform.name);
 				const status = await getContentLibraryStatus(
 					randomItem.id || randomItem.url,
 				);
@@ -187,7 +249,7 @@ export default function Index() {
 		} catch (error) {
 			console.error("Platform içeriği yüklenirken hata:", error);
 		}
-	}, []);
+	}, [setFeaturedMovieWithBackdrop]);
 
 	// 1. Initial platform load: retrieve last selected platform or default to first/none
 	useEffect(() => {
