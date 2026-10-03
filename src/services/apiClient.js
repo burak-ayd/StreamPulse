@@ -10,6 +10,7 @@
  * storage.js'ye BAĞIMLILIK YOK (döngüsel import önleme)
  */
 
+import Constants from "expo-constants";
 import {
 	clearTokens,
 	getAccessToken,
@@ -18,7 +19,9 @@ import {
 } from "./token";
 
 const API_BASE_URL =
-	process.env.EXPO_PUBLIC_API_URL || "https://api.example.com";
+	Constants.expoConfig?.extra?.API_URL ??
+	Constants.manifest?.extra?.API_URL ??
+	"https://api.example.com";
 
 // Auth event listener — AuthContext bu olayları dinler
 let _onAuthExpired = null;

@@ -1,4 +1,5 @@
 import BottomNavigation from "@/components/BottomNavigation";
+import { useNavLayout } from "@/hooks/useNavLayout";
 import { useAuth } from "@/context/AuthContext";
 import LanguageBadge from "@/components/common/LanguageBadge";
 import {
@@ -24,7 +25,6 @@ import {
 	Alert,
 	BackHandler,
 	Modal,
-	Platform,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -171,6 +171,8 @@ export default function SettingsScreen() {
 	const { theme, toggleTheme, colors } = useThemeContext();
 	const { isLoggedIn } = useAuth();
 	const router = useRouter();
+	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
+	const { contentPaddingLeft } = useNavLayout();
 
 	const [userProfile, setUserProfile] = useState(null);
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
@@ -314,7 +316,7 @@ export default function SettingsScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right"]}
-				style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+				style={[styles.safeArea, { backgroundColor: colors.bg, paddingLeft: contentPaddingLeft }]}>
 				<StatusBar
 					barStyle={
 						theme === "dark" ? "light-content" : "dark-content"
@@ -1074,7 +1076,6 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
-		paddingLeft: Platform.isTV ? 56 : 0,
 	},
 	scrollContent: {
 		paddingHorizontal: 16,

@@ -371,10 +371,6 @@ const styles = StyleSheet.create({
 		transform: [{ scale: 1.02 }],
 		borderWidth: 2,
 		borderColor: "#E50914",
-		shadowColor: "#E50914",
-		shadowOpacity: 0.8,
-		shadowRadius: 14,
-		elevation: 8,
 	},
 	gradientCard: {
 		borderRadius: 20,

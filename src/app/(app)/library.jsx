@@ -1,4 +1,5 @@
 import BottomNavigation from "@/components/BottomNavigation";
+import { useNavLayout } from "@/hooks/useNavLayout";
 import LibraryItemActionModal from "@/components/modal/LibraryItemActionModal";
 import ListSelectModal from "@/components/modal/ListSelectModal";
 import {
@@ -26,7 +27,6 @@ import {
 	Dimensions,
 	FlatList,
 	Modal,
-	Platform,
 	Pressable,
 	ScrollView,
 	Share,
@@ -64,6 +64,8 @@ function formatRelativeTime(dateString) {
 
 export default function LibraryScreen() {
 	const router = useRouter();
+	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
+	const { contentPaddingLeft } = useNavLayout();
 
 	// Durum Sekmeleri (Beklemede ve Bırakıldı kaldırıldı)
 	const [activeTab, setActiveTab] = useState("watching"); // 'watching' | 'completed' | 'planned' | 'favorites'
@@ -600,6 +602,7 @@ export default function LibraryScreen() {
 	};
 
 	// Detay Sayfasına Yönlendir
+	// Detay Sayfasına Yönlendir
 	const handleOpenDetails = (item) => {
 		if (!item) return;
 
@@ -634,6 +637,16 @@ export default function LibraryScreen() {
 			},
 		});
 	};
+
+	/**
+	 * Izgara anahtarlari sabit fonksiyon. (Proje `reactCompiler: true` ile
+	 * calistigi icin handler'lar zaten otomatik memoize ediliyor; bu yuzden
+	 * elle useCallback eklemeye calismak compiler'in kuralina takiliyor.)
+	 */
+	const gridKeyExtractor = useCallback(
+		(item, index) => item.id || item.url || String(index),
+		[],
+	);
 
 	// Sekme Yapılandırması
 	const tabs = [
@@ -739,7 +752,8 @@ export default function LibraryScreen() {
 						}}
 						style={styles.posterImage}
 						contentFit="cover"
-						transition={200}
+						transition={0}
+						recyclingKey={item.poster || item.poster_url || item.image || item.backdrop_url}
 					/>
 					{/* Gradient Karartma */}
 					<View style={styles.posterGradient} />
@@ -885,7 +899,7 @@ export default function LibraryScreen() {
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
-			<SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+			<SafeAreaView style={[styles.safeArea, { paddingLeft: contentPaddingLeft }]} edges={["top", "left", "right"]}>
 				<StatusBar barStyle="light-content" backgroundColor="#0B0E14" />
 
 				{/* 1. ÜST ARAMA VE EYLEM ÇUBUĞU */}
@@ -1043,9 +1057,7 @@ export default function LibraryScreen() {
 				<FlatList
 					data={displayedItems}
 					renderItem={renderGridCard}
-					keyExtractor={(item, index) =>
-						item.id || item.url || String(index)
-					}
+					keyExtractor={gridKeyExtractor}
 					numColumns={2}
 					contentContainerStyle={[
 						styles.listContent,
@@ -1058,6 +1070,13 @@ export default function LibraryScreen() {
 					}
 					ListEmptyComponent={renderEmptyState}
 					showsVerticalScrollIndicator={false}
+					// Sanallaştırma ayarları (ana medya ızgarası).
+					// removeClippedSubviews TV'de false KALMALI: odaklı kartın
+					// detache olması kumanda odağını kaybettirir.
+					initialNumToRender={6}
+					maxToRenderPerBatch={4}
+					windowSize={5}
+					removeClippedSubviews={false}
 				/>
 
 				{/* 5. KAYAN SIRALAMA BUTONU (FAB - Yalnızca liste doluyken) */}
@@ -1449,7 +1468,6 @@ const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
 		backgroundColor: "#0B0E14",
-		paddingLeft: Platform.isTV ? 56 : 0,
 	},
 
 	/* 1. Üst Çubuk */
@@ -1515,11 +1533,6 @@ const styles = StyleSheet.create({
 	},
 	tabPillActive: {
 		backgroundColor: "#E50914",
-		shadowColor: "#E50914",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.35,
-		shadowRadius: 6,
-		elevation: 4,
 	},
 	tabPillInactive: {
 		backgroundColor: "#161B24",
@@ -1642,18 +1655,11 @@ const styles = StyleSheet.create({
 		borderColor: "#FF3B30",
 		borderWidth: 2,
 		transform: [{ scale: 1.05 }],
-		shadowColor: "#FF3B30",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.6,
-		shadowRadius: 10,
-		elevation: 8,
-		zIndex: 10,
 	},
 	centerPlayButtonFocused: {
 		borderColor: "#FFFFFF",
 		borderWidth: 2,
 		transform: [{ scale: 1.2 }],
-		elevation: 10,
 	},
 	moreButtonFocused: {
 		backgroundColor: "rgba(255, 59, 48, 0.35)",
@@ -1663,7 +1669,6 @@ const styles = StyleSheet.create({
 	emptyCtaButtonFocused: {
 		backgroundColor: "#FF3B30",
 		transform: [{ scale: 1.06 }],
-		elevation: 8,
 	},
 	posterContainer: {
 		width: "100%",
@@ -2099,11 +2104,6 @@ const styles = StyleSheet.create({
 	filterChipActive: {
 		backgroundColor: "#E50914",
 		borderColor: "#E50914",
-		shadowColor: "#E50914",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.35,
-		shadowRadius: 6,
-		elevation: 4,
 	},
 	filterChipText: {
 		fontSize: 11,

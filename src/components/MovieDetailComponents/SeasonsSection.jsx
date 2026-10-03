@@ -879,11 +879,8 @@ const styles = StyleSheet.create({
 		gap: 12,
 	},
 	episodeCardActive: {
-		shadowColor: "#E50914",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.18,
-		shadowRadius: 6,
-		elevation: 3,
+borderWidth: 1.5,
+borderColor: "rgba(229, 9, 20, 0.55)",
 	},
 	playIconContainer: {
 		width: 28,
@@ -894,11 +891,9 @@ const styles = StyleSheet.create({
 		flexShrink: 0,
 	},
 	playIconActiveGlow: {
-		shadowColor: "#E50914",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.4,
-		shadowRadius: 4,
-		elevation: 3,
+borderWidth: 1.5,
+borderColor: "rgba(229, 9, 20, 0.65)",
+backgroundColor: "rgba(229, 9, 20, 0.18)",
 	},
 	playIconOffset: {
 		marginLeft: 1.5,
@@ -1050,10 +1045,6 @@ const styles = StyleSheet.create({
 		borderWidth: 2,
 		borderColor: "#E50914",
 		transform: [{ scale: 1.02 }],
-		shadowColor: "#E50914",
-		shadowOpacity: 0.5,
-		shadowRadius: 8,
-		elevation: 4,
 	},
 	modalSeasonItemFocused: {
 		borderWidth: 2,

@@ -1,4 +1,5 @@
 import BottomNavigation from "@/components/BottomNavigation";
+import { useNavLayout } from "@/hooks/useNavLayout";
 import TVPressable from "@/components/common/TVPressable";
 import { getDownloads } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -6,7 +7,6 @@ import { Stack, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
 	BackHandler,
-	Platform,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -17,6 +17,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function DownloadsScreen() {
 	const router = useRouter();
+	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
+	const { contentPaddingLeft } = useNavLayout();
 	const [downloads, setDownloads] = useState([]);
 
 	useEffect(() => {
@@ -37,7 +39,7 @@ export default function DownloadsScreen() {
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
-			<SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+			<SafeAreaView style={[styles.safeArea, { paddingLeft: contentPaddingLeft }]} edges={["top", "left", "right"]}>
 				<StatusBar barStyle="light-content" backgroundColor="#0d0e12" />
 
 				{/* Header */}
@@ -118,7 +120,6 @@ const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
 		backgroundColor: "#0d0e12",
-		paddingLeft: Platform.isTV ? 56 : 0,
 	},
 	header: {
 		height: 56,

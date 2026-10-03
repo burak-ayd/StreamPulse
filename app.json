@@ -126,7 +126,7 @@
         "projectId": "6e7b0adb-396f-4d06-b66d-bea82406c890"
       },
       "variant": "production",
-      "API_URL": "http://api.example.com"
+      "API_URL": "https://movieapi.burakaydogan.net.tr"
     },
     "owner": "darkpuye"
   }

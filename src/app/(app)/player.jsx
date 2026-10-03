@@ -447,7 +447,6 @@ const styles = StyleSheet.create({
 	retryButtonFocused: {
 		borderColor: "#FFFFFF",
 		transform: [{ scale: 1.08 }],
-		elevation: 8,
 	},
 	backButton: {
 		flexDirection: "row",
@@ -464,7 +463,6 @@ const styles = StyleSheet.create({
 		borderColor: "#FF3B30",
 		backgroundColor: "rgba(255, 59, 48, 0.3)",
 		transform: [{ scale: 1.08 }],
-		elevation: 8,
 	},
 	buttonText: {
 		color: "#FFFFFF",

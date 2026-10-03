@@ -233,7 +233,8 @@ export default function ProfileScreen() {
 								source={{ uri: avatarUri }}
 								style={styles.avatar}
 								contentFit="cover"
-								transition={150}
+								transition={0}
+								recyclingKey={avatarUri}
 							/>
 						) : (
 							<View
@@ -617,7 +618,8 @@ export default function ProfileScreen() {
 													style={styles.gridImage}
 													contentFit="cover"
 													contentPosition="center"
-													transition={150}
+													transition={0}
+													recyclingKey={item.poster || item.poster_url || item.image || item.backdrop_url}
 													cachePolicy="memory-disk"
 												/>
 												{/* Eklenti Adı Rozeti */}
@@ -864,9 +866,5 @@ const styles = StyleSheet.create({
 		transform: [{ scale: 1.05 }],
 		borderWidth: 2,
 		borderColor: "#E50914",
-		shadowColor: "#E50914",
-		shadowOpacity: 0.6,
-		shadowRadius: 8,
-		elevation: 4,
 	},
 });

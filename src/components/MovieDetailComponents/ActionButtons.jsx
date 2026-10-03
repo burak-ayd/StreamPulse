@@ -430,18 +430,10 @@ const styles = StyleSheet.create({
 		borderWidth: 2,
 		borderColor: "#FFFFFF",
 		transform: [{ scale: 1.03 }],
-		shadowColor: "#E50914",
-		shadowOpacity: 0.8,
-		shadowRadius: 10,
-		elevation: 6,
 	},
 	gridItemFocused: {
 		borderWidth: 2,
 		borderColor: "#E50914",
 		transform: [{ scale: 1.08 }],
-		shadowColor: "#E50914",
-		shadowOpacity: 0.5,
-		shadowRadius: 8,
-		elevation: 4,
 	},
 });

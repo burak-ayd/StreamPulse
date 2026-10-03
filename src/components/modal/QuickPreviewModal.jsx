@@ -1088,11 +1088,6 @@ const styles = StyleSheet.create({
 	statusChipActive: {
 		backgroundColor: "#E50914",
 		borderColor: "#E50914",
-		shadowColor: "#E50914",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.4,
-		shadowRadius: 6,
-		elevation: 4,
 	},
 	statusChipText: {
 		fontSize: 11,

@@ -325,7 +325,8 @@ export default function PlatformList({ onSelectPlatform }) {
 										source={{ uri: platform.favicon }}
 										style={styles.platformImage}
 										contentFit="contain"
-										transition={150}
+										transition={0}
+										recyclingKey={platform.favicon}
 										cachePolicy="memory-disk"
 									/>
 								) : (

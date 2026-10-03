@@ -1,21 +1,24 @@
 import TVPressable from "@/components/common/TVPressable";
+import { NAV_RAIL_WIDTH, useNavLayout } from "@/hooks/useNavLayout";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
-import { Platform, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
-export const TV_NAV_WIDTH = 56;
+/** @deprecated Geriye uyumluluk: artık useNavLayout'ı kullanın. */
+export const TV_NAV_WIDTH = NAV_RAIL_WIDTH;
+
+const NAV_ITEMS = [
+	{ id: "home", icon: "home", route: "/(app)" },
+	{ id: "search", icon: "search", route: "/(app)/search" },
+	{ id: "library", icon: "folder", route: "/(app)/library" },
+	{ id: "downloads", icon: "download", route: "/(app)/downloads" },
+	{ id: "settings", icon: "settings", route: "/(app)/settings" },
+];
 
 export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 	const router = useRouter();
-	const isTV = Platform.isTV;
-
-	const navItems = [
-		{ id: "home", icon: "home", route: "/(app)" },
-		{ id: "search", icon: "search", route: "/(app)/search" },
-		{ id: "library", icon: "folder", route: "/(app)/library" },
-		{ id: "downloads", icon: "download", route: "/(app)/downloads" },
-		{ id: "settings", icon: "settings", route: "/(app)/settings" },
-	];
+	// Tek kaynak: TV + tablet yatay → sol ray; telefon ve tablet dikey → alt bar.
+	const { isSideRail } = useNavLayout();
 
 	const handleAction = (item) => {
 		if (item.route && activeRoute !== item.route) {
@@ -23,81 +26,56 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 		}
 	};
 
-	// Android TV: Vertical Left Navigation Rail
-	if (isTV) {
+	// Sol tarafta dikey ray: TV ve tablet (yatay)
+	if (isSideRail) {
 		return (
-			<View style={styles.tvContainer}>
-				{/* TV Top Brand Badge
-				<View style={styles.tvLogoContainer}>
-					<View style={styles.tvLogoCircle}>
-						<Ionicons name="play" size={20} color="#E50914" />
-					</View>
-				</View>
-				*/}
-
-				{/* TV Vertical Navigation Rail (Centered) */}
-				<View style={styles.tvNavList}>
-					{navItems.map((item) => {
+			<View style={styles.railContainer}>
+				<View style={styles.railNavList}>
+					{NAV_ITEMS.map((item) => {
 						const isActive =
 							item.route && activeRoute === item.route;
 						return (
 							<TVPressable
 								key={item.id}
 								onPress={() => handleAction(item)}
-								style={styles.tvNavItem}
-								focusedStyle={styles.tvNavItemFocused}>
-								{({ focused }) => {
-									if (isActive) {
-										return (
-											<View
-												style={[
-													styles.tvActivePill,
-													focused &&
-														styles.tvActivePillFocused,
-												]}>
-												<Ionicons
-													name={item.icon}
-													size={22}
-													color="#ffffff"
-												/>
-											</View>
-										);
-									}
-									return (
-										<View
-											style={[
-												styles.tvInactivePill,
-												focused &&
-													styles.tvInactivePillFocused,
-											]}>
-											<Ionicons
-												name={`${item.icon}-outline`}
-												size={22}
-												color={
-													focused
-														? "#ffffff"
-														: "#8E8E93"
-												}
-											/>
-										</View>
-									);
-								}}
+								style={styles.railItem}
+								focusedStyle={styles.railItemFocused}>
+								{({ focused }) => (
+									<View
+										style={[
+											styles.railIconBox,
+											isActive
+												? styles.railIconBoxActive
+												: styles.railIconBoxInactive,
+											focused && styles.railIconBoxFocused,
+										]}>
+										<Ionicons
+											name={
+												isActive
+													? item.icon
+													: `${item.icon}-outline`
+											}
+											size={22}
+											color={
+												isActive || focused
+													? "#ffffff"
+													: "#8E8E93"
+											}
+										/>
+									</View>
+								)}
 							</TVPressable>
 						);
 					})}
 				</View>
-
-				{/* Bottom spacer for visual balance
-				<View style={styles.tvBottomSpacer} />
-				*/}
 			</View>
 		);
 	}
 
-	// Phone & Tablet: Horizontal Bottom Navigation Bar
+	// Altta yatay bar: telefon ve tablet (dikey)
 	return (
 		<View style={styles.container}>
-			{navItems.map((item) => {
+			{NAV_ITEMS.map((item) => {
 				const isActive = item.route && activeRoute === item.route;
 				return (
 					<TVPressable
@@ -105,36 +83,28 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 						onPress={() => handleAction(item)}
 						style={styles.navItem}
 						focusedStyle={styles.navItemFocused}>
-						{({ focused }) => {
-							if (isActive) {
-								return (
-									<View
-										style={[
-											styles.activePill,
-											focused && styles.activePillFocused,
-										]}>
-										<Ionicons
-											name={item.icon}
-											size={21}
-											color="#ffffff"
-										/>
-									</View>
-								);
-							}
-							return (
-								<View
-									style={[
-										styles.inactivePill,
-										focused && styles.inactivePillFocused,
-									]}>
-									<Ionicons
-										name={`${item.icon}-outline`}
-										size={22}
-										color={focused ? "#ffffff" : "#8E8E93"}
-									/>
-								</View>
-							);
-						}}
+						{({ focused }) => (
+							<View
+								style={[
+									isActive
+										? styles.activePill
+										: styles.inactivePill,
+									focused &&
+										(isActive
+											? styles.activePillFocused
+											: styles.inactivePillFocused),
+								]}>
+								<Ionicons
+									name={
+										isActive
+											? item.icon
+											: `${item.icon}-outline`
+									}
+									size={22}
+									color={focused || isActive ? "#ffffff" : "#8E8E93"}
+								/>
+							</View>
+						)}
 					</TVPressable>
 				);
 			})}
@@ -143,13 +113,13 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 }
 
 const styles = StyleSheet.create({
-	// --- TV Vertical Navigation Rail Styles ---
-	tvContainer: {
+	// --- Sol taraf rayı: TV + tablet (yatay) ---
+	railContainer: {
 		position: "absolute",
 		top: 0,
 		bottom: 0,
 		left: 0,
-		width: TV_NAV_WIDTH,
+		width: NAV_RAIL_WIDTH,
 		backgroundColor: "#0d0e12",
 		borderRightWidth: 1,
 		borderRightColor: "rgba(255, 255, 255, 0.08)",
@@ -159,67 +129,43 @@ const styles = StyleSheet.create({
 		zIndex: 9999,
 		elevation: 24,
 	},
-	tvLogoContainer: {
-		alignItems: "center",
-		justifyContent: "center",
-		paddingTop: 8,
-	},
-	tvLogoCircle: {
-		width: 42,
-		height: 42,
-		borderRadius: 21,
-		backgroundColor: "rgba(229, 9, 20, 0.12)",
-		alignItems: "center",
-		justifyContent: "center",
-		borderWidth: 1.5,
-		borderColor: "rgba(229, 9, 20, 0.4)",
-	},
-	tvNavList: {
+	railNavList: {
 		flexDirection: "column",
 		alignItems: "center",
 		justifyContent: "center",
 		gap: 16,
 	},
-	tvNavItem: {
+	railItem: {
 		width: 44,
 		height: 44,
 		alignItems: "center",
 		justifyContent: "center",
 		borderRadius: 14,
 	},
-	tvNavItemFocused: {
+	railItemFocused: {
 		transform: [{ scale: 1.12 }],
 	},
-	tvActivePill: {
+	railIconBox: {
 		width: 44,
 		height: 44,
+		borderRadius: 14,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	railIconBoxActive: {
 		backgroundColor: "#2563EB",
-		borderRadius: 14,
-		alignItems: "center",
-		justifyContent: "center",
 	},
-	tvActivePillFocused: {
-		backgroundColor: "#E50914",
-		borderColor: "#FFFFFF",
-		borderWidth: 2,
+	railIconBoxInactive: {
+		backgroundColor: "transparent",
 	},
-	tvInactivePill: {
-		width: 44,
-		height: 44,
-		borderRadius: 14,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	tvInactivePillFocused: {
+	// TV performans: odakta elevation DEĞİŞTİRİLMEZ, sadece kenar + zemin.
+	railIconBoxFocused: {
 		backgroundColor: "rgba(229, 9, 20, 0.25)",
 		borderColor: "#E50914",
 		borderWidth: 2,
 	},
-	tvBottomSpacer: {
-		height: 42,
-	},
 
-	// --- Mobile / Tablet Horizontal Bottom Bar Styles ---
+	// --- Alt bar: telefon + tablet (dikey) ---
 	container: {
 		flexDirection: "row",
 		borderTopWidth: 1,
@@ -251,11 +197,6 @@ const styles = StyleSheet.create({
 		backgroundColor: "#FF3B30",
 		borderColor: "#FFFFFF",
 		borderWidth: 1.5,
-		shadowColor: "#FF3B30",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.6,
-		shadowRadius: 6,
-		elevation: 6,
 	},
 	inactivePill: {
 		paddingHorizontal: 14,

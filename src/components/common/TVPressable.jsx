@@ -78,11 +78,6 @@ const styles = StyleSheet.create({
 		borderColor: "#E50914",
 		borderWidth: 2,
 		transform: [{ scale: 1.05 }],
-		elevation: 8,
-		shadowColor: "#E50914",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.5,
-		shadowRadius: 8,
 	},
 	defaultPressed: {
 		opacity: 0.85,

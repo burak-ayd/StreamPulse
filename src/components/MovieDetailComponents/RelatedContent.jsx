@@ -124,7 +124,8 @@ export default function RelatedContent({
 												style={styles.poster}
 												contentFit="cover"
 												contentPosition="center"
-												transition={150}
+												transition={0}
+												recyclingKey={posterUri}
 												cachePolicy="memory-disk"
 											/>
 										) : (
@@ -248,9 +249,5 @@ const styles = StyleSheet.create({
 	posterContainerFocused: {
 		borderColor: "#E50914",
 		borderWidth: 2,
-		shadowColor: "#E50914",
-		shadowOpacity: 0.6,
-		shadowRadius: 8,
-		elevation: 5,
 	},
 });

@@ -5,7 +5,6 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMemo, useState } from "react";
 import {
-	Platform,
 	StyleSheet,
 	Text,
 	View,
@@ -13,28 +12,42 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const isTV = Platform.isTV;
-
 /**
- * CloudStream'in ana sayfa kuralı: görselin kutusu, görselin KENDİ oranına
- * yakın olacak şekilde seçilir; ekran yüzdesiyle seçilip `cover` ile
- * ezilmez. CloudStream kartları sabit dp kutulardır (114×180dp poster ≈ 2:3,
- * 180×114dp yatay ≈ 16:10) ve hangi oranın kullanılacağına veri karar verir
- * (`HomeParentItemAdapter`: `isHorizontal = info.isHorizontalImages`).
+ * Hero tasarımı TEK bir kuralla tüm cihazlarda aynıdır:
  *
- * TMDB w1280 backdrop 16:9'dur. TV hero'su tam içerik genişliğinde, yuvarlak
- * köşeli bir KART olarak kurulur; yükseklik ekrana orantılıdır ve sinematik
- * kırpma oranı her çözünürlükte sabit kalır.
+ *   1. Üstte boşluk bırakılır (header bu boşluğun içinde durur).
+ *   2. Görsel, kenarları YUVARLATILMIŞ bir KART içinde gösterilir.
+ *   3. Kartın en-boy oranı görselin oranından türetilir (CloudStream'in
+ *      kuralı: kutu görselin kendi oranına yakın olur, ekran yüzdesiyle
+ *      ezilmez. CloudStream kartları sabit dp kutulardır — 114×180dp
+ *      poster ≈ 2:3, 180×114dp yatay ≈ 16:10 — ve oranı veri belirler:
+ *      `HomeParentItemAdapter`: `isHorizontal = info.isHorizontalImages`).
+ *   4. Kart daima yüksekliğe sığmıyorsa GENİŞLİĞİ küçülür; oranı bozulmaz.
+ *
+ * Sadece YERLEŞİM cihaza göre değişir:
+ *   • Yeterli yer varsa → metin kartın altında/solunda yer alır
+ *   • Geniş ve yüksek kart (TV, tablet yatay) → metin kartın sol-altına
+ *     bindirilir (sinematik görünüm)
+ *
+ * Yatay kaynak = 16:9 backdrop, dikey kaynak = 2:3 poster.
  */
-const POSTER_RATIO = 2 / 3;
-/** Hero kutusunun hedef oranı (21:9 sinematik). Backdrop 16:9 → yanlarda değil, üst/altta kırpılır. */
-const HERO_BOX_RATIO = 2.35;
+/** Hero kartının hedef oranı (kaynak oranına göre hafif kırpma). */
+const BACKDROP_CARD_RATIO = 1.9; // yatay 16:9 backdrop
+const POSTER_CARD_RATIO = 0.78; // dikey 2:3 poster
 
 const PAGE_BG = "#0d0e12";
-const TV_SIDE = 24; // kartın kenar boşluğu
-const TV_CARD_H_FRACTION = 0.6; // hero kartı en fazla ekranın %60'ı
-const TV_REF_CARD_H = 420; // TV ölçek referansı
 const CARD_RADIUS = 16;
+
+/** Bu genişliğin üstü "geniş ekran" sayılır (TV / tablet). */
+const ROOMY_WIDTH = 700;
+/** Metnin kartın yanında sığması için gereken en az genişlik. */
+const MIN_TEXT_COLUMN = 250;
+/** Sinematik yerleşim için ekranın yatay ve yeterince yüksek olması. */
+const CINEMATIC_MIN_HEIGHT = 480;
+/** Sinematik kartın ekranın en fazla bu kadarını kaplaması. */
+const CINEMATIC_MAX_FRACTION = 0.66;
+/** Metin kartın altındaysa kartın ekranın en fazla bu kadarını kaplaması. */
+const STACKED_MAX_FRACTION = 0.46;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -54,8 +67,8 @@ export default function HeroBanner({
 	const insets = useSafeAreaInsets();
 	const { width: winW, height: winH } = useWindowDimensions();
 
-	// TV'de ana container `paddingLeft: 56` (navigation rail) uyguladığı için
-	// banner'ın gerçek genişliği ekran genişliğinden küçüktür — ölçüyoruz.
+	// İçerik alanının gerçek genişliği. Sol ray (TV / tablet yatay) açıkken
+	// ekran genişliğinden küçüktür; bu yüzden tahmin etmiyoruz, ölçüyoruz.
 	const [boxW, setBoxW] = useState(0);
 	const handleLayout = (e) => {
 		const w = e.nativeEvent.layout.width;
@@ -84,126 +97,127 @@ export default function HeroBanner({
 		backdropUri ||
 		"https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=60";
 
+	const hasBackdrop = !!backdropUri;
+
 	const ui = useMemo(() => {
 		const w = boxW > 0 ? boxW : winW;
 
-		if (isTV) {
-			// --- Yatay backdrop varsa: geniş sinematik kart ---
-			if (backdropUri) {
-				// Kart genişliği içerik alanı; yükseklik önce sinematik orandan,
-				// sonra ekran payından sınırlanır. Böylece hem oran hem de
-				// kırpma oranı her çözünürlükte sabit kalır.
-				const cardW = Math.max(320, w - TV_SIDE * 2);
-				const maxH = winH * TV_CARD_H_FRACTION;
-				const minH = Math.min(winH * 0.42, maxH);
-				const cardH = clamp(
-					Math.min(cardW / HERO_BOX_RATIO, maxH),
-					minH,
-					maxH,
-				);
-				const s = clamp(cardH / TV_REF_CARD_H, 0.85, 1.4);
-				// Kenar boşluğu sabit: ölçeklenirse kart genişlik hesabı
-				// ile uyuşmaz ve kart kapsayıcıyı taşabilir.
-				const side = TV_SIDE;
-				return {
-					mode: "wide",
-					cardW,
-					cardH,
-					s,
-					side,
-					// Hero'nun üstündeki boşluk
-					topGap: Math.round(14 * s) + insets.top,
-					bottomGap: Math.round(18 * s),
-					headerGap: Math.round(14 * s),
-					radius: Math.round(CARD_RADIUS * s),
-					headerBtn: Math.round(38 * s),
-					headerIcon: Math.round(21 * s),
-					platformIcon: Math.round(15 * s),
-					platformText: Math.round(12 * s),
-					titleSize: Math.round(26 * s),
-					metaSize: Math.round(13 * s),
-					actionIcon: Math.round(21 * s),
-					actionLabel: Math.round(11 * s),
-					actionColW: Math.round(58 * s),
-					playPadH: Math.round(24 * s),
-					playPadV: Math.round(9 * s),
-					playIcon: Math.round(17 * s),
-					playText: Math.round(15 * s),
-					buttonsGap: Math.round(30 * s),
-					overlayPadX: Math.round(26 * s),
-					overlayPadB: Math.round(20 * s),
-					contentMaxW: cardW - Math.round(52 * s),
-				};
-			}
+		// ---- 1) Yerleşim kararı, kart ölçüsünden BAĞIMSIZ ----
+		const landscape = winW > winH;
+		const roomy = w >= ROOMY_WIDTH;
 
-			// --- Backdrop yok: dikey poster kartı (2:3) ---
-			const cardH = clamp(winH * 0.54, 300, 540);
-			const cardW = Math.round(cardH * POSTER_RATIO);
-			const s = clamp(cardH / 390, 0.85, 1.4);
-			const side = Math.round(22 * s);
-			const rowGap = Math.round(22 * s);
-			return {
-				mode: "poster",
-				cardW,
-				cardH,
-				s,
-				side,
-				topGap: Math.round(16 * s) + insets.top,
-				bottomGap: Math.round(18 * s),
-				headerGap: Math.round(14 * s),
-				rowGap,
-				radius: Math.round(CARD_RADIUS * s),
-				headerBtn: Math.round(38 * s),
-				headerIcon: Math.round(21 * s),
-				platformIcon: Math.round(15 * s),
-				platformText: Math.round(12 * s),
-				titleSize: Math.round(24 * s),
-				metaSize: Math.round(13 * s),
-				actionIcon: Math.round(21 * s),
-				actionLabel: Math.round(11 * s),
-				actionColW: Math.round(58 * s),
-				playPadH: Math.round(24 * s),
-				playPadV: Math.round(9 * s),
-				playIcon: Math.round(17 * s),
-				playText: Math.round(15 * s),
-				buttonsGap: Math.round(30 * s),
-				contentMaxW: Math.max(180, w - side * 2 - cardW - rowGap),
-			};
+		// Yatay backdrop varsa ve ekran yatay/yeterince yüksekse → sinematik
+		// (TV, tablet yatay). Metin kartın içine bindirilir.
+		const cinematic = hasBackdrop && landscape && winH >= CINEMATIC_MIN_HEIGHT;
+		// Poster gibi dikey kaynaklarda, geniş yatay ekranda metin yanına gider.
+		const textBeside = !cinematic && roomy && landscape;
+
+		// ---- 2) Sabit yerleşim ölçüleri ----
+		const side = roomy ? 24 : 16;
+		const topGap = (roomy ? 14 : 10) + insets.top;
+		const headerH = 38;
+		const headerGap = roomy ? 14 : 10;
+		const bottomGap = roomy ? 18 : 14;
+
+		// ---- 3) Metin bloğu yüksekliği (yerleşime göre yer ayır) ----
+		// Büyütülmüş punto ile: başlık 2 satır + meta + buton sırası.
+		const textScale = clamp(Math.min(w, winH) / 460, 0.72, 1.3);
+		const textBlock = cinematic ? 0 : Math.round(165 * textScale);
+		const availH = Math.max(
+			160,
+			winH - topGap - headerH - headerGap - textBlock - bottomGap,
+		);
+
+		// ---- 4) Kart boyutu: oran korunur, gerekirse küçülür ----
+		const cardRatio = hasBackdrop ? BACKDROP_CARD_RATIO : POSTER_CARD_RATIO;
+		const fullW = w - side * 2;
+		let cardW;
+		let cardH;
+
+		if (cinematic) {
+			// Tam genişlik, sinematik oran; ekranın %66'sını aşmaz.
+			cardW = fullW;
+			cardH = cardW / cardRatio;
+			const cap = winH * CINEMATIC_MAX_FRACTION;
+			if (cardH > cap) {
+				cardH = cap;
+				cardW = cardH * cardRatio;
+			}
+		} else if (textBeside) {
+			// Kart solda, metin sağda: ikisi birlikte sığmalı.
+			const maxCardW = Math.max(
+				160,
+				fullW - (roomy ? 22 : 14) - MIN_TEXT_COLUMN,
+			);
+			cardW = Math.min(fullW, maxCardW);
+			cardH = Math.min(cardW / cardRatio, availH);
+			cardW = cardH * cardRatio;
+		} else {
+			// Kart üstte, metin altta: dikey ekranda kart oranı uzun olduğu için
+			// ekran payı da sınırlanır.
+			cardW = fullW;
+			cardH = Math.min(cardW / cardRatio, availH, winH * STACKED_MAX_FRACTION);
+			if (cardH * cardRatio < cardW * 0.6) cardW = cardH * cardRatio;
 		}
 
-		// --- Mobil: tam ekran poster hero (mevcut davranış) ---
-		const bandH = clamp(Math.min(w / POSTER_RATIO, winH * 0.58), 260, 620);
+		cardW = Math.round(cardW);
+		cardH = Math.round(cardH);
+
+		const gap = roomy ? 22 : 14;
+		const textW = Math.max(MIN_TEXT_COLUMN, fullW - cardW - gap);
+
+		const mode = cinematic ? "overlay" : textBeside ? "side" : "below";
+
+		// Ölçek artık EKRANDAN türer, hero kartından değil. Önceden kart
+		// yüksekliğine bağlıydı; telefonda backdrop'lı kart kısa (≈190dp)
+		// kaldığı için ölçek 0.78'e düşüyor ve header/metin küçülüyordu.
+		// Alt sınır 1.0: telefonda tam punto, TV'de kart yüksekliğine göre
+		// biraz büyük.
+		const s = clamp(cardH / 420, 1, 1.45);
+
 		return {
-			mode: "fullbleed",
-			bandH,
-			s: 1,
-			side: 18,
-			topGap: 0,
-			bottomGap: 24,
-			headerGap: 0,
-			headerBtn: 40,
-			headerIcon: 24,
-			platformIcon: 16,
-			platformText: 13,
-			titleSize: 26,
-			metaSize: 13,
-			actionIcon: 24,
-			actionLabel: 12,
-			actionColW: 60,
-			playPadH: 28,
-			playPadV: 10,
-			playIcon: 19,
-			playText: 15,
-			buttonsGap: 40,
-			contentMaxW: w * 0.9,
+			mode,
+			sideBySide: textBeside,
+			overlay: cinematic,
+			rowDirection: textBeside ? "row" : "column",
+			cardW,
+			cardH,
+			side,
+			gap,
+			textW,
+			topGap,
+			headerGap,
+			bottomGap,
+			radius: Math.round(CARD_RADIUS * s),
+			s,
+			headerBtn: Math.round(40 * s),
+			headerIcon: Math.round(22 * s),
+			platformIcon: Math.round(16 * s),
+			platformText: Math.round(13 * s),
+			titleSize: Math.round(26 * s),
+			metaSize: Math.round(14 * s),
+			actionIcon: Math.round(23 * s),
+			actionLabel: Math.round(12 * s),
+			actionColW: Math.round(62 * s),
+			playPadH: Math.round(26 * s),
+			playPadV: Math.round(10 * s),
+			playIcon: Math.round(18 * s),
+			playText: Math.round(16 * s),
+			buttonsGap: Math.round(30 * s),
+			overlayPadX: Math.round(26 * s),
+			overlayPadB: Math.round(20 * s),
+			// Poster kartlarında üst kısım (yüzler) korunur.
+			contentPosition: hasBackdrop ? "center" : "top",
 		};
-	}, [boxW, winW, winH, insets.top, backdropUri]);
+	}, [boxW, winW, winH, insets.top, hasBackdrop]);
 
 	// ------------------------------------------------------------------
 	// Ortak parçalar
 	// ------------------------------------------------------------------
-	const renderHeader = (extra) => (
-		<View style={[styles.topHeader, { paddingHorizontal: ui.side }, extra]}>
+	const renderHeader = () => (
+		<View
+			style={[styles.topHeader, { paddingHorizontal: ui.side }]}
+			onLayout={handleLayout}>
 			<TVPressable
 				style={[
 					styles.headerIconButton,
@@ -350,63 +364,64 @@ export default function HeroBanner({
 		</View>
 	);
 
-	/** Kategori + dil rozeti tek satırda. */
-	const renderMetaRow = (align) => (
+	const renderTitle = (align, maxWidth) => (
+		<Text
+			style={[
+				styles.heroTitle,
+				{ fontSize: ui.titleSize, textAlign: align, maxWidth },
+			]}
+			numberOfLines={2}>
+			{title}
+		</Text>
+	);
+
+	const renderMeta = (align, maxWidth) => (
 		<View
 			style={[
 				styles.metaRow,
 				{
+					maxWidth,
 					alignSelf: align === "center" ? "center" : "flex-start",
-					justifyContent: align === "center" ? "center" : "flex-start",
+					justifyContent:
+						align === "center" ? "center" : "flex-start",
 				},
 			]}>
 			{movieRawLang ? (
-				<LanguageBadge
-					language={movieRawLang}
-					size={isTV ? "small" : "normal"}
-				/>
+				<LanguageBadge language={movieRawLang} size="small" />
 			) : null}
 			<Text
-				style={[
-					styles.metaText,
-					{ fontSize: ui.metaSize, maxWidth: ui.contentMaxW },
-				]}
-				numberOfLines={1}>
+				style={[styles.metaText, { fontSize: ui.metaSize }]}
+				numberOfLines={2}>
 				{genres}
 			</Text>
 		</View>
 	);
 
 	// ------------------------------------------------------------------
-	// TV — geniş sinematik hero KARTI (üstte boşluk + yuvarlak kenarlar)
+	// Hero görseli: her modda aynı yuvarlak kart
 	// ------------------------------------------------------------------
-	if (ui.mode === "wide") {
-		return (
-			<View
-				style={[styles.cardScreen, { paddingTop: ui.topGap }]}
-				onLayout={handleLayout}>
-				{renderHeader({ marginBottom: ui.headerGap })}
+	const renderCard = (withOverlayContent) => (
+		<View
+			style={[
+				styles.heroCard,
+				{
+					width: ui.cardW,
+					height: ui.cardH,
+					borderRadius: ui.radius,
+				},
+			]}>
+			<Image
+				source={{ uri: hasBackdrop ? backdropUri : posterUri }}
+				style={styles.heroCardImage}
+				contentFit="cover"
+				contentPosition={ui.contentPosition}
+				recyclingKey={hasBackdrop ? backdropUri : posterUri}
+				transition={0}
+				cachePolicy="memory-disk"
+			/>
 
-				<View
-					style={[
-						styles.heroCard,
-						{
-							width: ui.cardW,
-							height: ui.cardH,
-							borderRadius: ui.radius,
-							marginHorizontal: ui.side,
-						},
-					]}>
-					<Image
-						source={{ uri: backdropUri }}
-						style={styles.heroCardImage}
-						contentFit="cover"
-						contentPosition="center"
-						transition={250}
-						cachePolicy="memory-disk"
-					/>
-
-					{/* Alt karartma: içerik okunurluğu + sayfa zeminine yumuşak geçiş */}
+			{withOverlayContent ? (
+				<>
 					<LinearGradient
 						colors={[
 							"transparent",
@@ -416,7 +431,6 @@ export default function HeroBanner({
 						locations={[0.3, 0.66, 1]}
 						style={styles.heroScrim}
 					/>
-
 					<View
 						style={[
 							styles.heroOverlay,
@@ -426,149 +440,104 @@ export default function HeroBanner({
 								paddingBottom: ui.overlayPadB,
 							},
 						]}>
-						<Text
-							style={[
-								styles.heroTitle,
-								{ fontSize: ui.titleSize, maxWidth: ui.contentMaxW },
-							]}
-							numberOfLines={2}>
-							{title}
-						</Text>
-
+						{renderTitle("left", ui.cardW - ui.overlayPadX * 2)}
 						<View style={{ marginBottom: 10 * ui.s }}>
-							{renderMetaRow("left")}
+							{renderMeta(
+								"left",
+								ui.cardW - ui.overlayPadX * 2,
+							)}
 						</View>
-
 						{renderActions("flex-start")}
 					</View>
-				</View>
+				</>
+			) : (
+				<LinearGradient
+					colors={["transparent", "rgba(0,0,0,0.32)"]}
+					locations={[0.72, 1]}
+					style={styles.heroCardFade}
+				/>
+			)}
+		</View>
+	);
 
+	// ------------------------------------------------------------------
+	// Sinematik: metin kartın sol-altına bindirilir (TV / tablet yatay)
+	// ------------------------------------------------------------------
+	if (ui.overlay) {
+		return (
+			<View style={[styles.cardScreen, { paddingTop: ui.topGap }]}>
+				{renderHeader()}
+				<View style={{ marginTop: ui.headerGap, alignItems: "center" }}>
+					{renderCard(true)}
+				</View>
 				<View style={{ height: ui.bottomGap }} />
 			</View>
 		);
 	}
 
 	// ------------------------------------------------------------------
-	// TV — backdrop yoksa dikey poster kartı (2:3)
+	// Metin kartın yanında (yatay yer varsa)
 	// ------------------------------------------------------------------
-	if (ui.mode === "poster") {
+	if (ui.sideBySide) {
 		return (
-			<View
-				style={[styles.cardScreen, { paddingTop: ui.topGap }]}
-				onLayout={handleLayout}>
-				{renderHeader({ marginBottom: ui.headerGap })}
-
+			<View style={[styles.cardScreen, { paddingTop: ui.topGap }]}>
+				{renderHeader()}
 				<View
 					style={[
 						styles.heroRow,
-						{ paddingHorizontal: ui.side, gap: ui.rowGap },
+						{
+							flexDirection: "row",
+							alignItems: "flex-start",
+							marginTop: ui.headerGap,
+							paddingHorizontal: ui.side,
+							gap: ui.gap,
+						},
 					]}>
-					<View
-						style={[
-							styles.heroCard,
-							{
-								width: ui.cardW,
-								height: ui.cardH,
-								borderRadius: ui.radius,
-							},
-						]}>
-						<Image
-							source={{ uri: posterUri }}
-							style={styles.heroCardImage}
-							contentFit="cover"
-							contentPosition="center"
-							transition={250}
-							cachePolicy="memory-disk"
-						/>
-						<LinearGradient
-							colors={["transparent", "rgba(0,0,0,0.35)"]}
-							locations={[0.55, 1]}
-							style={styles.heroCardFade}
-						/>
-					</View>
-
-					<View style={[styles.heroTextCol, { width: ui.contentMaxW }]}>
-						<Text
-							style={[
-								styles.heroTitle,
-								{ fontSize: ui.titleSize, maxWidth: ui.contentMaxW },
-							]}
-							numberOfLines={2}>
-							{title}
-						</Text>
+					{renderCard(false)}
+					<View style={{ width: ui.textW }}>
+						{renderTitle("left", ui.textW)}
 						<View style={{ marginBottom: 10 * ui.s }}>
-							{renderMetaRow("left")}
+							{renderMeta("left", ui.textW)}
 						</View>
 						{renderActions("flex-start")}
 					</View>
 				</View>
-
 				<View style={{ height: ui.bottomGap }} />
 			</View>
 		);
 	}
 
 	// ------------------------------------------------------------------
-	// Mobil — tam ekran poster hero
+	// Metin kartın altında (dar ekran / dikey telefon)
 	// ------------------------------------------------------------------
 	return (
-		<View
-			style={[styles.bannerContainer, { height: ui.bandH }]}
-			onLayout={handleLayout}>
-			<Image
-				source={{ uri: posterUri }}
-				style={StyleSheet.absoluteFill}
-				contentFit="cover"
-				contentPosition="center"
-				transition={250}
-				cachePolicy="memory-disk"
-			/>
-
-			<LinearGradient
-				colors={[
-					"rgba(13, 14, 18, 0.85)",
-					"rgba(13, 14, 18, 0.4)",
-					"transparent",
-				]}
-				locations={[0, 0.6, 1]}
-				style={styles.topGradient}
-			/>
-
-			<LinearGradient
-				colors={[
-					"transparent",
-					"rgba(13, 14, 18, 0.2)",
-					"rgba(13, 14, 18, 0.65)",
-					"rgba(13, 14, 18, 0.92)",
-					PAGE_BG,
-					PAGE_BG,
-				]}
-				locations={[0, 0.25, 0.55, 0.8, 0.94, 1]}
-				style={styles.bottomGradient}
-			/>
-
-			{renderHeader({ top: insets.top + 8, position: "absolute" })}
-
-			<View style={[styles.bottomContent, { bottom: ui.bottomGap }]}>
-				<Text
-					style={[
-						styles.movieTitle,
-						{ fontSize: ui.titleSize, maxWidth: ui.contentMaxW },
-					]}
-					numberOfLines={2}>
-					{title}
-				</Text>
-				<View style={{ marginBottom: 12 }}>
-					{renderMetaRow("center")}
+		<View style={[styles.cardScreen, { paddingTop: ui.topGap }]}>
+			{renderHeader()}
+			<View
+				style={[
+					styles.heroRow,
+					{
+						marginTop: ui.headerGap,
+						paddingHorizontal: ui.side,
+						gap: ui.gap,
+					},
+				]}>
+				{renderCard(false)}
+				<View style={{ width: ui.cardW, marginTop: 4 * ui.s }}>
+					{renderTitle("left", ui.cardW)}
+					<View style={{ marginBottom: 10 * ui.s }}>
+						{renderMeta("left", ui.cardW)}
+					</View>
+					{renderActions("center")}
 				</View>
-				{renderActions("center")}
 			</View>
+			<View style={{ height: ui.bottomGap }} />
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
-	/** Hero bloğu: sayfa zemininde, üstte boşluk bırakarak */
+	/** Hero bloğu: üstte boşluk, sayfa zemini */
 	cardScreen: {
 		width: "100%",
 		backgroundColor: PAGE_BG,
@@ -591,17 +560,17 @@ const styles = StyleSheet.create({
 		left: 0,
 		right: 0,
 		bottom: 0,
-		height: "68%",
+		height: "70%",
 	},
-	/** Poster kartının alt karartması */
+	/** Alttaki metin kartları için hafif karartma */
 	heroCardFade: {
 		position: "absolute",
 		left: 0,
 		right: 0,
 		bottom: 0,
-		height: "30%",
+		height: "28%",
 	},
-	/** Kartın sol-alt köşesindeki içerik */
+	/** Kartın sol-alt köşesindeki bindirilmiş içerik */
 	heroOverlay: {
 		position: "absolute",
 		left: 0,
@@ -609,49 +578,15 @@ const styles = StyleSheet.create({
 		bottom: 0,
 		alignItems: "flex-start",
 	},
-	/** Poster kartı yanındaki metin sütunu */
+	/** Kart + metin satırı */
 	heroRow: {
-		flexDirection: "row",
-		alignItems: "flex-start",
-	},
-	heroTextCol: {
-		flexShrink: 1,
-		justifyContent: "center",
-		paddingTop: 2,
-	},
-
-	/** Mobil tam ekran banner */
-	bannerContainer: {
-		width: "100%",
-		position: "relative",
-		backgroundColor: PAGE_BG,
-		overflow: "hidden",
-	},
-	topGradient: {
-		position: "absolute",
-		top: 0,
-		left: 0,
-		right: 0,
-		height: 120,
-	},
-	bottomGradient: {
-		position: "absolute",
-		bottom: 0,
-		left: 0,
-		right: 0,
-		height: 350,
+		flexDirection: "column",
+		alignItems: "center",
 	},
 	topHeader: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-	},
-	bottomContent: {
-		position: "absolute",
-		left: 0,
-		right: 0,
-		alignItems: "center",
-		paddingHorizontal: 16,
 	},
 	heroTitle: {
 		color: "#ffffff",
@@ -662,21 +597,12 @@ const styles = StyleSheet.create({
 		textShadowOffset: { width: 0, height: 2 },
 		textShadowRadius: 6,
 	},
-	movieTitle: {
-		color: "#ffffff",
-		fontWeight: "800",
-		textAlign: "center",
-		letterSpacing: -0.3,
-		marginBottom: 6,
-		textShadowColor: "rgba(0, 0, 0, 0.8)",
-		textShadowOffset: { width: 0, height: 2 },
-		textShadowRadius: 6,
-	},
 	/** Kategori + dil rozeti satırı */
 	metaRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 8,
+		flexWrap: "wrap",
 	},
 	metaText: {
 		color: "#D1D5DB",
@@ -704,10 +630,10 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(22, 27, 34, 0.8)",
 		borderColor: "rgba(255, 255, 255, 0.15)",
 		borderWidth: 1,
-		paddingHorizontal: isTV ? 11 : 12,
-		paddingVertical: isTV ? 5 : 6,
+		paddingHorizontal: 11,
+		paddingVertical: 5,
 		borderRadius: 20,
-		gap: isTV ? 4 : 6,
+		gap: 4,
 		flexShrink: 1,
 	},
 	platformPillFocused: {
@@ -767,11 +693,6 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		backgroundColor: "#FFFFFF",
 		gap: 6,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 3 },
-		shadowOpacity: 0.3,
-		shadowRadius: 5,
-		elevation: 4,
 		borderWidth: 2,
 		borderColor: "transparent",
 	},
@@ -779,11 +700,6 @@ const styles = StyleSheet.create({
 		backgroundColor: "#FF3B30",
 		borderColor: "#FFFFFF",
 		transform: [{ scale: 1.12 }],
-		elevation: 10,
-		shadowColor: "#FF3B30",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.6,
-		shadowRadius: 10,
 	},
 	playButtonText: {
 		color: "#000000",
