@@ -13,6 +13,15 @@ import {
 } from "react-native";
 
 /**
+ * Kart geometrisi tek kaynaktan yönetilir; hem stiller hem de
+ * getItemLayout bunları kullanır (böylece "gap" değişirse ölçüm kaymaz).
+ */
+const CARD_WIDTH = 124;
+const CARD_GAP = 6;
+const LIST_PAD_H = 18;
+const CARD_STRIDE = CARD_WIDTH + CARD_GAP;
+
+/**
  * memo: üst bileşen (ana sayfa) yeniden render olduğunda, prop'ları değişmeyen
  * kategori satırları yeniden render olmaz. index.jsx'deki callback'ler
  * useCallback ile sabitlendiği için bu gerçekten tutarlı çalışır.
@@ -117,9 +126,11 @@ function MovieCategorySection({
 				initialNumToRender={5}
 				maxToRenderPerBatch={4}
 				windowSize={3}
-				// TV'de false KALMALI: true, odaklı kartı detache edip kumanda
-				// odağını kaybettirir. Sanallaştırma windowSize ile yapılır.
-				removeClippedSubviews={false}
+				// Yatay listede odaklı kart daima ekrandadır, bu yüzden kırpma
+				// güvenli ve bellek için belirli fayda sağlıyor (120+ kartın
+				// olduğu yer burası).
+				removeClippedSubviews={true}
+				getItemLayout={getItemLayout}
 				renderItem={({ item }) => {
 					const posterUri =
 						item.poster ||
@@ -209,6 +220,18 @@ function MovieCategorySection({
 
 export default memo(MovieCategorySection);
 
+/**
+ * Kart yüksekliği sabit olduğu için ölçüm hesabı tamamen atlanabilir.
+ * `gap` içerik konteynerinde olduğu için adım uzunluğuna eklenmeli.
+ */
+function getItemLayout(_data, index) {
+	return {
+		length: CARD_STRIDE,
+		offset: LIST_PAD_H + CARD_STRIDE * index,
+		index,
+	};
+}
+
 const styles = StyleSheet.create({
 	sectionContainer: {
 		marginBottom: 22,
@@ -235,12 +258,12 @@ const styles = StyleSheet.create({
 		transform: [{ scale: 1.15 }],
 	},
 	horizontalList: {
-		paddingHorizontal: 18,
-		gap: 6,
+		paddingHorizontal: LIST_PAD_H,
+		gap: CARD_GAP,
 		paddingVertical: 6,
 	},
 	cardContainer: {
-		width: 124,
+		width: CARD_WIDTH,
 	},
 	cardContainerFocused: {
 		// zIndex kaldırıldı: kardeş sıralamasını değiştirmek odak başına
@@ -249,7 +272,7 @@ const styles = StyleSheet.create({
 		transform: [{ scale: 1.06 }],
 	},
 	posterWrapper: {
-		width: 124,
+		width: CARD_WIDTH,
 		height: 182,
 		borderRadius: 12,
 		overflow: "hidden",
