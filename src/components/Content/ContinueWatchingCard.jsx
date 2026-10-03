@@ -72,7 +72,8 @@ export default function ContinueWatchingCard({ item, onPress, onLongPress, onRem
 					source={{ uri: posterUri }}
 					style={styles.thumbnail}
 					contentFit="cover"
-					transition={200}
+					recyclingKey={posterUri}
+					transition={0}
 					cachePolicy="memory-disk"
 				/>
 
@@ -165,8 +166,8 @@ const styles = StyleSheet.create({
 		width: 124,
 	},
 	cardFocused: {
-		transform: [{ scale: 1.08 }],
-		zIndex: 10,
+		// zIndex kaldırıldı (odak başına kardeş sıralaması değişimi = ek commit).
+		transform: [{ scale: 1.06 }],
 	},
 	thumbnailWrapper: {
 		width: 124,
@@ -179,12 +180,10 @@ const styles = StyleSheet.create({
 		borderColor: "rgba(255, 255, 255, 0.08)",
 	},
 	thumbnailWrapperFocused: {
+		// TV performans: odak anında elevation/shadow değiştirilmez (bkz.
+		// MovieCategorySection) — border + arka plan aynı vurguyu bedavaya verir.
 		borderColor: "#FF3B30",
-		shadowColor: "#FF3B30",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.6,
-		shadowRadius: 10,
-		elevation: 8,
+		backgroundColor: "#2a1216",
 	},
 	thumbnail: {
 		width: "100%",
