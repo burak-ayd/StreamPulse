@@ -6,6 +6,11 @@ import { filterPayload, capList, SIZE_CAPS } from "./fieldWhitelist";
 
 export const STORAGE_KEYS = {
 	USER_PROFILE: "user_profile",
+	// Oturumun KİMLİĞİ (id/e-posta/username), içerik DEĞİL.
+	// Sunucuya ulaşılamadan açılan uygulamada "giriş yapmış" görünmek için
+	// son başarılı girişte yazılır. Token'lar gibi OTURUM verisidir, bu yüzden
+	// `clearAllUserData()` tarafından TEMİZLENMEZ (aşağıdaki yoruma bak).
+	AUTH_USER: "user_auth",
 	FAVORITES: "user_favorites",
 	WATCH_HISTORY: "user_watch_history",
 	SETTINGS: "app_settings",
@@ -51,6 +56,11 @@ export async function mutate(key, fn) {
 /**
  * Kullanıcı verilerini temizler.
  * Oturum tokenları, cihaz kimliği ve şema sürümünü KORUR.
+ *
+ * `AUTH_USER` de korunur: o bir içerik değil, oturumun kimliğidir. "Verileri
+ * Temizle" yapan kullanıcı hesabını silmek istemiyor; hesabı silmek istese
+ * açık çıkış yapardı. Böylece temizlikten sonra uçak modunda açılışta kullanıcı
+ * yine tanınır, sonraki çevrimiçi açılışta `getMe()` ile tazelenir.
  */
 export async function clearAllUserData() {
 	const userKeys = [
@@ -163,6 +173,69 @@ export async function saveUserProfile(profileUpdates) {
 			throw error;
 		}
 	});
+}
+
+/**
+ * Son girişte doğrulanan oturum kullanıcısını okur.
+ *
+ * Ne zaman kullanılır: açılışta `/api/auth/me` ULAŞILAMADIĞINDA (uçak modu,
+ * 5xx, zaman aşımı). Token'lar silinmez; oturum "giriş yapmış" sayılır ve
+ * kullanıcı arayüzü bu kimlikle açılır. Sunucu sözleşmesi gereği 5xx'de
+ * "yerel veri korunur" (SYNC_AUTH_PLAN.md §5.3).
+ *
+ * @returns {Promise<object|null>} { id, email, username, display_name, ... }
+ */
+export async function getAuthUser() {
+	try {
+		const raw = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_USER);
+		if (!raw) return null;
+		const parsed = JSON.parse(raw);
+		// id yoksa kimlik doğrulanamaz → çevrimdışı kullanım gösterilmez
+		return parsed?.id ? parsed : null;
+	} catch (error) {
+		console.error("Oturum kullanıcısı okunurken hata:", error);
+		return null;
+	}
+}
+
+/**
+ * Doğrulanmış oturum kullanıcısını saklar (giriş/kayıt/`getMe` başarısında).
+ * @param {object|null} user
+ */
+export async function saveAuthUser(user) {
+	return mutate(STORAGE_KEYS.AUTH_USER, async () => {
+		try {
+			if (!user?.id) {
+				await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_USER);
+				notifyStorageChange(STORAGE_KEYS.AUTH_USER, null);
+				return null;
+			}
+			// Sadece kimlik alanları — profil içeriği `user_profile`'da durur
+			const identity = {
+				id: user.id,
+				email: user.email ?? "",
+				username: user.username ?? "",
+				display_name: user.display_name ?? "",
+				avatar_url: user.avatar_url ?? "",
+			};
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.AUTH_USER,
+				JSON.stringify(identity),
+			);
+			notifyStorageChange(STORAGE_KEYS.AUTH_USER, identity);
+			return identity;
+		} catch (error) {
+			console.error("Oturum kullanıcısı kaydedilirken hata:", error);
+			throw error;
+		}
+	});
+}
+
+/**
+ * Saklanan oturum kullanıcısını siler (çıkış / terminal auth hatası).
+ */
+export async function clearAuthUser() {
+	return await saveAuthUser(null);
 }
 
 /**
@@ -1762,6 +1835,9 @@ export async function setContentLibraryList(movie, targetList) {
 export default {
 	getUserProfile,
 	saveUserProfile,
+	getAuthUser,
+	saveAuthUser,
+	clearAuthUser,
 	getFavorites,
 	toggleFavorite,
 	isFavorite,

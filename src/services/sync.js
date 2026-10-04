@@ -10,7 +10,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { authFetch } from "./apiClient";
+import { authFetch, getAuthOutcome, REFRESH_OUTCOME } from "./apiClient";
 import { getDeviceId, getDeviceName, getDevicePlatform } from "@/utils/deviceId";
 import { now as getHlcNow } from "@/utils/hlc";
 import { filterPayload } from "@/utils/fieldWhitelist";
@@ -609,8 +609,17 @@ export async function syncNow(options = {}) {
 				pushError = "push_nothing_applied";
 			}
 		} else if (pushRes.status === 401) {
-			emitSyncState({ status: "error", lastSyncedAt: lastSynced, error: "unauthorized" });
-			return { success: false, error: "unauthorized" };
+			// ⚠️ 401 tek başına "oturum bitti" DEMEK DEĞİLDİR: yenileme
+			// denemesi sunucu 5xx / ağ hatası yüzünden transient dönmüş olabilir
+			// (bkz. apiClient.refreshSession). "unauthorized" YALNIZCA yenileme
+			// terminal sonuc verdiyse üretilir; aksi halde kullanıcıya var olmayan
+			// bir "oturumunuzun süresi dolmuş" uyarısı gösterilir.
+			if (getAuthOutcome(pushRes) === REFRESH_OUTCOME.TERMINAL) {
+				emitSyncState({ status: "error", lastSyncedAt: lastSynced, error: "unauthorized" });
+				return { success: false, error: "unauthorized" };
+			}
+			pushError = "push_failed_401";
+			pushDetail = await pushRes.text().catch(() => "");
 		} else {
 			// ⚠️ Push başarısızsa bunu SESSİZCE geçmiyoruz. Önceden burada yalnızca
 			// konsola yazılıyordu ve fonksiyon `success: true` döndürüyordu; kullanıcı
@@ -628,31 +637,79 @@ export async function syncNow(options = {}) {
 
 		const pullRes = await authFetch(pullUrl, { method: "GET" });
 		let serverTime = since;
+		let pullError = null;
+		let pullDetail = "";
 
 		if (pullRes.ok) {
 			const pullData = await pullRes.json();
 			await applyPullData(pullData);
 			// Damga PULL'dan gelir: sunucu bu değemi OKUMADAN ÖNCE hesaplar,
 			// yani okuma anında yazılan satırlar bir sonraki çekişte teslim edilir.
-			if (pullData.server_time) serverTime = pullData.server_time;
+			if (pullData.server_time) {
+				serverTime = pullData.server_time;
+			} else {
+				// 200 ama damga yok → veri geldi, nereden devam edeceğimiz
+				// bilinmiyor. Damgayı ilerletmek riskli, ilerletmemek güvenli:
+				// sonraki tur aynı veriyi idempotent olarak tekrar çeker, ama
+				// hiçbir kayıt kaybolmaz.
+				pullError = "pull_missing_server_time";
+			}
 		} else if (pullRes.status === 401) {
-			emitSyncState({ status: "error", lastSyncedAt: lastSynced, error: "unauthorized" });
-			return { success: false, error: "unauthorized" };
+			// Aynı kural: terminal değilse geçici hatadır, "oturum bitti" değil.
+			// ⚠️ Burada DÜŞMEK YOK: `serverTime` `since` olmadığında (ilk tam
+			// döküm) `new Date()`'e düşer ve damga ilerletilir. Veri hiç
+			// çekilmediği hâlde damga ilerletmek, bir sonraki pull'da o verilerin
+			// kalıcı atlanmasına yol açar. Bu yüzden erken dönüyoruz.
+			if (getAuthOutcome(pullRes) === REFRESH_OUTCOME.TERMINAL) {
+				emitSyncState({ status: "error", lastSyncedAt: lastSynced, error: "unauthorized" });
+				return { success: false, error: "unauthorized" };
+			}
+			// Not: `pullError` ile gölgelenmesin diye `authError` adı kullanıldı.
+			const authError = pushError || "pull_failed_401";
+			emitSyncState({ status: "error", lastSyncedAt: lastSynced, error: authError });
+			return { success: false, error: authError };
+		} else {
+			// ⚠️ 5xx / 429 / 400 ve ağ hatası. Önceden bu dal HİÇ YOKTU: kod
+			// doğrudan aşağıdaki damga satırına düşüyordu. `serverTime` `since`
+			// olduğu için, ilk sync'te (`since === null`) `new Date()`'e
+			// düşüyor ve damga "bugüne kadar her şeyi indirdim" anlamına
+			// geliyordu — oysa sunucudan HİÇBİR satır alınmamıştı. Sonraki tur
+			// `since=<bugün>` soruyor, sunucu da `updated_at > since` diye
+			// filtrelediği için hiç indirilmemiş kayıtlar KALICI olarak
+			// atlanır: kullanıcı boş kütüphane görür ve `full` seçeneği
+			// hiçbir yerden tetiklenmediği için kendi kendine toparlanamaz.
+			pullError = `pull_failed_${pullRes.status}`;
+			pullDetail = await pullRes.text().catch(() => "");
+			console.warn("Pull başarısız oldu:", pullRes.status, pullDetail);
 		}
 
-		const finalTime = serverTime || new Date().toISOString();
-		await setLastSyncedAt(finalTime);
+		// ⚠️ Damga ilerletme kuralı: YALNIZCA pull 200 döndüyse.
+		// Başarısız çekişte damga olduğu gibi bırakılır; bir sonraki başarılı
+		// tur aynı veriyi tekrar ister (güvenli), hiçbir kayıt atlanmaz.
+		// `lastSynced` null ise hiçbir şey YAZILMAZ — `setLastSyncedAt(null)`
+		// "null" metnini kaydedip bir sonraki turu bozardı.
+		const finalTime = pullRes.ok && serverTime ? serverTime : lastSynced;
+
+		if (finalTime) await setLastSyncedAt(finalTime);
 		await setPendingChangesCount(0);
 
+		// Push ve pull BİRLİKTE başarılı olmadan "idle" gösterme: pull
+		// sessizce başarısız olduğunda kullanıcı "yedeklendi" sanıyordu
+		// ama kütüphanesi hiç güncellenmemişti.
+		const syncError = pushError || pullError;
+
 		emitSyncState({
-			status: pushError ? "error" : "idle",
+			status: syncError ? "error" : "idle",
 			lastSyncedAt: finalTime,
-			error: pushError,
+			error: syncError,
 		});
 		return {
-			success: !pushError,
+			success: !syncError,
 			pushed,
-			error: pushError || undefined,
+			error: syncError || undefined,
+			// ⚠️ Yalnızca pushDetail insan-okunur Türkçe metindir. `pullDetail`
+			// sunucunun HAM gövdesidir (JSON bile olabilir) ve UI'ya ASLA
+			// verilmez — yalnızca yukarıdaki konsol kaydı için tutulur.
 			detail: pushDetail || undefined,
 		};
 	} catch (error) {
