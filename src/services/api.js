@@ -85,7 +85,7 @@ const apiCache = {
 	platforms: null,
 	categories: new Map(), // platformName -> categories list
 	randomHero: new Map(), // platformName -> hero contents
-	categoryContents: new Map(), // `${platformName}::${categoryURL}` -> contents array
+	categoryContents: new Map(), // `${platformName}::${categoryURL}::p${page}` -> contents array
 	pluginDetails: new Map(), // `${pluginName}::${url}` -> detail
 };
 
@@ -106,9 +106,18 @@ export function getCachedHeroMovie(platformName) {
 	return apiCache.randomHero.get(platformName) || null;
 }
 
-export function getCachedCategoryMovies(platformName, categoryURL) {
+/**
+ * Kategori ana sayfa önbelleğinden okur.
+ *
+ * @param {string} platformName
+ * @param {string} categoryURL
+ * @param {number} [page=1] - Backend her sayfayı ayrı önbellekliyor
+ *   (bkz. api/routes/plugins.py:620), istemci de öyle aynılamalı.
+ * @returns {Array|null}
+ */
+export function getCachedCategoryMovies(platformName, categoryURL, page = 1) {
 	if (!platformName || !categoryURL) return null;
-	const key = `${platformName}::${categoryURL}`;
+	const key = `${platformName}::${categoryURL}::p${page}`;
 	return apiCache.categoryContents.get(key) || null;
 }
 
@@ -163,21 +172,38 @@ export async function fetchPluginDetail(pluginName, url, force = false) {
 }
 
 /**
- * Fetch Platform Main Page
+ * Eklenti ana sayfa / kategori içeriklerini getirir.
+ *
+ * ⚠️ SAYFALAMA: Backend `page` parametresini destekliyor ve her sayfayı ayrı
+ * önbellekliyor (`api/routes/plugins.py:601` ve `:620`). Burada `page`
+ * parametresi daha önce hiç gönderilmiyordu, bu yüzden kategori ekranı
+ * yalnızca 1. sayfayı (20 içerik) görebiliyordu. Anahtar da sayfayı içerir;
+ * aksi hâlde 2. sayfa isteği 1. sayfanın önbelleğini ezerdi.
+ *
+ * @param {string} platformName
+ * @param {string} categoryURL
+ * @param {boolean} [force=false]
+ * @param {number} [page=1]
+ * @returns {Promise<Array>}
  */
 export async function fetchPlatformMainPage(
 	platformName,
 	categoryURL,
 	force = false,
+	page = 1,
 ) {
-	const cacheKey = `${platformName}::${categoryURL}`;
+	const cacheKey = `${platformName}::${categoryURL}::p${page}`;
 	if (!force && apiCache.categoryContents.has(cacheKey)) {
 		return apiCache.categoryContents.get(cacheKey);
 	}
 
 	try {
+		const query = new URLSearchParams({
+			url: categoryURL || "",
+			page: String(page),
+		});
 		const response = await fetch(
-			`${API_BASE_URL}/api/plugins/${platformName}/main-page?url=${encodeURIComponent(categoryURL)}`,
+			`${API_BASE_URL}/api/plugins/${platformName}/main-page?${query.toString()}`,
 			{
 				headers: { "Content-Type": "application/json" },
 			},
@@ -187,12 +213,16 @@ export async function fetchPlatformMainPage(
 			const result = Array.isArray(data)
 				? data
 				: data?.results || data?.data || [];
-			apiCache.categoryContents.set(cacheKey, result);
+			// Boş sayfa sonuçlanıyorsa önbelleğe YAZMA: eklenti geçici
+			// olarak boş dönse bir sonraki kaydırma denemesi yine denesin.
+			if (result.length > 0) {
+				apiCache.categoryContents.set(cacheKey, result);
+			}
 			return result;
 		}
 	} catch (error) {
 		console.warn(
-			"API platform main page request failed, using fallback:",
+			`API ana sayfa isteği başarısız (s.${page}), yedek değer:`,
 			error.message,
 		);
 	}

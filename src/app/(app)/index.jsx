@@ -466,6 +466,25 @@ export default function Index() {
 		}
 	}, [router, isNoneMode, selectedPlatform]);
 
+	// Kategori satırındaki ok → kategorinin tamamını listeleyen ekran.
+	// ⚠️ URL query parametresi olarak taşınıyor; kategori adı Türkçe/uzun
+	// olabilir ama `encodeURIComponent` expo-router tarafından zaten
+	// güvenli şekilde kodlanıyor.
+	const handleSeeAllCategory = useCallback(
+		(category) => {
+			if (!category?.url || !selectedPlatform?.name) return;
+			router.push({
+				pathname: "/(app)/category",
+				params: {
+					platform: selectedPlatform.name,
+					url: category.url,
+					name: category.name || "",
+				},
+			});
+		},
+		[router, selectedPlatform],
+	);
+
 	// ------------------------------------------------------------------
 	// Ana sayfa listesi parçaları (TV performansı)
 	//
@@ -492,10 +511,10 @@ export default function Index() {
 				category={category}
 				onMoviePress={handleMoviePress}
 				onMovieLongPress={handleMovieLongPress}
-				onSeeAll={() => {}}
+				onSeeAll={handleSeeAllCategory}
 			/>
 		),
-		[selectedPlatform, handleMoviePress, handleMovieLongPress],
+		[selectedPlatform, handleMoviePress, handleMovieLongPress, handleSeeAllCategory],
 	);
 
 	const handleLoadMore = useCallback(() => {

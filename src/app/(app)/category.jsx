@@ -1,0 +1,627 @@
+/**
+ * Kategori Ekranı — bir eklenti kategorisinin TÜM içeriği
+ *
+ * Ana sayfada her kategori yatay bir satır olarak ilk 20 içeriği gösterir;
+ * satır başındaki ok (`onSeeAll`) bu ekranı açar. Burada kategori
+ * sayfa sayfa (sonsuz kaydırma) listelenir.
+ *
+ * Tasarım: `C:\Users\Burak\Desktop\kategori-screen` referansı; renkler ve
+ * ölçüler uygulamanın Material 3 paletinden (`useThemeContext().m3`) gelir.
+ * Referansla aynı: telefon 3 sütun, tablet/TV 4 sütun.
+ *
+ * ⚠️ TOPLAM SAYI GÖSTERİLMEZ. Referans "1.420 Yapım" rozeti gösteriyor ama
+ * backend yanıtı yalnızca `{plugin, page, category, results}` — toplam sayı
+ * vermiyor, plugin'ler de kategori toplamını bilmiyor. Sayı uydurmak yerine
+ * YÜKLENEN içerik sayısı gösterilir ve kaydırma sürerken büyür.
+ *
+ * Sayfalama: backend `page` parametresini destekliyor, sayfa başına 20
+ * içerik dönüyor (bkz. api/routes/plugins.py:601).
+ */
+
+import { useThemeContext } from "@/context/ThemeContext";
+import CategoryCard from "@/components/content/CategoryCard";
+import TVPressable from "@/components/common/TVPressable";
+import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
+import {
+	fetchPlatformMainPage,
+	getCachedCategoryMovies,
+} from "@/services/api";
+import { contentKey, yearOf } from "@/utils/contentMeta";
+import { canonicalType } from "@/utils/mediaType";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	ActivityIndicator,
+	BackHandler,
+	FlatList,
+	Platform,
+	StatusBar,
+	StyleSheet,
+	Text,
+	View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+/**
+ * ⚠️ SABİT SAYFA BOYUTU YOKTUR.
+ *
+ * Ölçülen değerler (canlı API, 2026-10): hdfilmcehennemi 20/28,
+ * fullhdfilmizlesene 18, dizibox 15 (kategoriye göre değişiyor). Bu yüzden
+ * "şu sayfadan az döndü, bitti" tahmini kullanılamaz; liste bitişi yalnızca
+ * "sayfa hiç yeni içerik getirmedi" ile belirlenir.
+ */
+
+const GAP = 10;
+const GUTTER = 14;
+/** Kategori adı çok uzunsa tek satırda kısalır. */
+const MAX_TITLE_CHARS = 22;
+
+/** Kategori adını kısaltır: "Yeni Eklenen Diziler" → "Yeni Eklenen Di…" */
+function shortenTitle(name) {
+	if (!name) return "Kategori";
+	if (name.length <= MAX_TITLE_CHARS) return name;
+	return `${name.slice(0, MAX_TITLE_CHARS - 1).trimEnd()}…`;
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// Ekran
+// ════════════════════════════════════════════════════════════════
+
+export default function CategoryScreen() {
+	const { m3, theme } = useThemeContext();
+	const router = useRouter();
+	const { platform, url, name } = useLocalSearchParams();
+
+	const platformName = typeof platform === "string" ? platform : "";
+	const categoryURL = typeof url === "string" ? url : "";
+	const categoryName = typeof name === "string" ? name : "";
+	/** Hedeften parametre geldi mi? Yanıtsız ekranda sonsuz yükleme göstermemek için. */
+	const hasTarget = Boolean(platformName && categoryURL);
+
+	/**
+	 * 1. sayfa önbelleği — ana sayfada bu kategori zaten yüklendiği için çoğu
+	 * zaman hazırdır. `useMemo` saf bir okuma; ilk karede boş ekran görünmesini
+	 * de engeller.
+	 */
+	const cachedFirstPage = useMemo(
+		() =>
+			hasTarget
+				? getCachedCategoryMovies(platformName, categoryURL, 1)
+				: null,
+		[hasTarget, platformName, categoryURL],
+	);
+
+	const [items, setItems] = useState(cachedFirstPage ?? []);
+	const [page, setPage] = useState(cachedFirstPage?.length ? 1 : 0);
+	// Önbellek varsa bekleme ekranı göstermeye gerek yok.
+	const [loading, setLoading] = useState(hasTarget && !cachedFirstPage?.length);
+	const [loadingMore, setLoadingMore] = useState(false);
+	const [exhausted, setExhausted] = useState(false);
+	const [error, setError] = useState(null);
+
+	/** Eşzamanlı iki sayfa isteğini engeller (uçak modu / 5xx). */
+	const inFlight = useRef(false);
+
+	// Ekran genişliği: telefon 3, tablet/TV 4 sütun (referansla aynı).
+	const [layout, setLayout] = useState({ width: 0, columns: 3 });
+	const onLayout = useCallback((e) => {
+		const w = e.nativeEvent.layout.width;
+		setLayout((prev) => {
+			const columns = w >= 720 ? 4 : 3;
+			if (prev.width === w && prev.columns === columns) return prev;
+			return { width: w, columns };
+		});
+	}, []);
+
+	const cardWidth =
+		layout.width > 0
+			? (layout.width - GUTTER * 2 - GAP * (layout.columns - 1)) / layout.columns
+			: 0;
+
+	const handleBack = useCallback(() => {
+		if (router.canGoBack()) router.back();
+		else router.replace("/(app)");
+	}, [router]);
+
+	// Android donanım geri tuşu
+	useEffect(() => {
+		if (Platform.OS !== "android") return;
+		const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+			handleBack();
+			return true;
+		});
+		return () => sub.remove();
+	}, [handleBack]);
+
+	// ── 1) AĞ: state'e dokunmaz, sadece veri getirir ────────────────
+	//
+	// Ağ ile state uygulaması AYRILMIŞTIR. Böylece:
+	//   • effect gövdesinde senkron setState olmaz (cascading render),
+	//   • aynı kod hem ilk yükleme hem kaydırma hem yeniden deneme için
+	//     kullanılabilir,
+	//   • çağıran taraf `cancelled` bayrağıyla yarış iptalini yönetir.
+	const fetchCategoryPage = useCallback(
+		async (targetPage) => {
+			if (!platformName || !categoryURL) {
+				return { data: [], error: null };
+			}
+			if (inFlight.current) {
+				return { data: null, error: null };
+			}
+
+			inFlight.current = true;
+			let data = null;
+			let fetchError = null;
+			try {
+				data = await fetchPlatformMainPage(
+					platformName,
+					categoryURL,
+					false,
+					targetPage,
+				);
+			} catch (err) {
+				fetchError = err;
+			} finally {
+				inFlight.current = false;
+			}
+
+			return { data, error: fetchError };
+		},
+		[platformName, categoryURL],
+	);
+
+	// ── 2) STATE: ağ sonucunu ekrana uygular ─────────────────────────
+	const applyPage = useCallback(({ data, error: fetchError }, targetPage, append) => {
+		setLoading(false);
+		setLoadingMore(false);
+
+		if (fetchError) {
+			console.warn("Kategori sayfası yüklenemedi:", fetchError?.message);
+			setError(fetchError?.message || "Bilinmeyen hata");
+			return;
+		}
+
+		// `data === null` → istek `inFlight` nedeniyle başlamadı, sessiz geç.
+		if (data === null) return;
+
+		setPage(targetPage);
+		setError(null);
+
+		// Boş sonuç = bu kategoride başka içerik yok. SONSUZ KAYDIRMA BU
+		// ŞEKİLDE BİTER; aksi hâlde liste hiç durmadan isterdi.
+		if (data.length === 0) {
+			setExhausted(true);
+			if (!append) setItems([]);
+			return;
+		}
+
+		setItems((prev) => {
+			if (!append) return data;
+
+			// ⚠️ YENİ İÇERİK SAYILMASI — liste bitişinin tek güvenilir yolu.
+			//
+			// Eskiden "sayfa 20'den az döndüyse bu son sayfaydı" kuralı
+			// kullanılıyordu. Bu YANLIŞTIR: sayfa boyutu eklentiden eklentiye
+			// değişiyor ve ölçüldü:
+			//
+			//     hdfilmcehennemi → 20    fullhdfilmizlesene → 18
+			//     dizibox        → 15    (kategoriye göre 28)
+			//
+			// 18 < 20 olduğu için `fullhdfilmizlesene` ilk sayfadan sonra
+			// "bitti" sanıyordu; oysa backend 3. sayfayı da sorunsuz
+			// döndürüyor (canlıda doğrulandı).
+			//
+			// Doğru kural: bir sayfa **hiç yeni içerik getirmediyse** dur.
+			// Bu, eklenti sayfayı ilerletmiyorsa da (bazı kategoriler hep
+			// aynı sayfayı döndürüyor) sonsuz döngüyü kendiliğinden keser.
+			const seen = new Set(prev.map((i) => i.url || i.id || i.title));
+			const extra = data.filter((i) => {
+				const key = i.url || i.id || i.title;
+				if (!key || seen.has(key)) return false;
+				seen.add(key);
+				return true;
+			});
+
+			if (extra.length === 0) {
+				// Bu sayfa tamamen mevcut — eklenti ilerlemiyor.
+				setExhausted(true);
+				return prev;
+			}
+			return [...prev, ...extra];
+		});
+
+		// ⚠️ "Sayfa 20'den az döndüyse son sayfaydı" kuralı KALDIRILDI —
+		// sayfa boyutu eklentiden eklentiye değişiyor (18/15/20/28 ölçüldü),
+		// bu tahmin erken bitiriyordu. Bkz. yukarıdaki açıklama ve
+		// `newItems` sayımı.
+	}, []);
+
+	// ── İlk yükleme ──────────────────────────────────────────────────
+	//
+	// `cancelled` bayrağı: kullanıcı ekrandan çıkarken istek uçuyor olabilir;
+	// dönen yanıt unmount olmuş bir bileşene setState uygulamamalı.
+	//
+	// Bu desen `AuthContext.checkSession` ile aynı (bkz. oradaki
+	// `isMounted`). Derleyici `useEffect` gövdesindeki doğrudan setState'i
+	// reddettiği için veri çekme iç içe async fonksiyona alınmıştır.
+	useEffect(() => {
+		if (!hasTarget) return;
+		let cancelled = false;
+
+		async function ilkYukle() {
+			const sonuc = await fetchCategoryPage(1);
+			if (cancelled) return;
+			applyPage(sonuc, 1, false);
+		}
+
+		ilkYukle();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [hasTarget, fetchCategoryPage, applyPage]);
+
+	// ── Kaydırma (olay tetikleyicisi) ────────────────────────────────
+	const loadMore = useCallback(() => {
+		if (inFlight.current || exhausted) return;
+
+		async function sonrakiSayfa() {
+			setLoadingMore(true);
+			const sonuc = await fetchCategoryPage(page + 1);
+			applyPage(sonuc, page + 1, true);
+		}
+
+		sonrakiSayfa();
+	}, [exhausted, page, fetchCategoryPage, applyPage]);
+
+	const handleRetry = useCallback(() => {
+		if (inFlight.current) return;
+
+		async function tekrarDene() {
+			setLoading(true);
+			setError(null);
+			const sonuc = await fetchCategoryPage(page + 1 || 1);
+			applyPage(sonuc, page + 1 || 1, false);
+		}
+
+		tekrarDene();
+	}, [page, fetchCategoryPage, applyPage]);
+
+	const handleItemPress = useCallback(
+		(item) => {
+			if (!item) return;
+
+			const withPlugin = { ...item, plugin: item.plugin || platformName };
+
+			// Kategori kartının `type`ı boş olabilir; kanonik türü dolduruyoruz
+			// ki detay ekranı tahmin yürütmek zorunda kalmasın.
+			// (bkz. utils/mediaType.js — bu ekrandan önce ana sayfa ve
+			// MovieDetails'ın tahmin yürütmesi bu yüzden kalkmıştı.)
+			const type = canonicalType(withPlugin);
+			withPlugin.type = type;
+			if (type === "series") {
+				withPlugin.content_type = "series";
+				withPlugin.is_series = true;
+			}
+
+			// "Dizi 2. Sezon 3. Bölüm" gibi başlıklardan sezon/bölüm çıkar
+			const epMatch = (item.title || "").match(
+				/^(.+?)\s+(\d+)\.\s*Sezon\s+(\d+)\.\s*Bölüm/i,
+			);
+			if (epMatch) {
+				withPlugin.seriesTitle = epMatch[1].trim();
+				withPlugin.initialSeason = String(epMatch[2]);
+				withPlugin.initialEpisode = String(epMatch[3]);
+			}
+
+			const id =
+				item.id ||
+				encodeURIComponent(item.url || item.slug || item.title || "content");
+
+			router.push({
+				pathname: "/(app)/MovieDetails/[id]",
+				params: { id: String(id), movieData: JSON.stringify(withPlugin) },
+			});
+		},
+		[router, platformName],
+	);
+
+	// ── Uzun basma → hızlı önizleme (ana sayfayla aynı) ────────────
+	const [previewItem, setPreviewItem] = useState(null);
+
+	const handleLongPress = useCallback((item) => {
+		if (!item) return;
+		setPreviewItem({
+			...item,
+			// Modal, oynatırken/yorum eklerken eklentiye ihtiyaç duyuyor.
+			plugin: item.plugin || platformName,
+			type: canonicalType(item),
+		});
+	}, [platformName]);
+
+	const renderItem = useCallback(
+		({ item }) => (
+			<CategoryCard
+				item={item}
+				variant="grid"
+				width={cardWidth}
+				onPress={() => handleItemPress(item)}
+				// ⚠️ Ana sayfadaki kartla AYNI davranış: uzun basma hızlı önizleme
+				// modalını açar. Kart paylaşıldığı için bu davranış burada da
+				// ücretsiz geldi — önceki ikinci kopyada hiç yoktu.
+				onLongPress={() => handleLongPress(item)}
+			/>
+		),
+		[cardWidth, handleItemPress, handleLongPress],
+	);
+
+	const keyExtractor = useCallback((item, index) => contentKey(item, index), []);
+
+	const getItemLayout = useCallback(
+		(data, index) => {
+			// Kart yüksekliği = 2:3 poster + başlık (+ yıl varsa). Sabit
+			// olduğu için ölçüm hesabı atlanabilir; TV'de kaydırmayı belirgin
+			// hızlandırır.
+			const row = Math.floor(index / layout.columns);
+			const posterH = cardWidth * 1.5;
+			const itemH = posterH + (yearOf(data[index]) ? 46 : 34);
+			const stride = itemH + GAP;
+			return { length: stride, offset: GUTTER + stride * row, index };
+		},
+		[layout.columns, cardWidth],
+	);
+
+	const footer = useMemo(() => {
+		if (loadingMore) {
+			return (
+				<View style={styles.footer}>
+					<ActivityIndicator size="small" color={m3.primaryContainer} />
+					<Text style={[styles.footerText, { color: m3.onSurfaceVariant }]}>
+						Daha fazla yükleniyor…
+					</Text>
+				</View>
+			);
+		}
+		if (exhausted && items.length > 0) {
+			return (
+				<View style={styles.footer}>
+					<Text style={[styles.footerText, { color: m3.onSurfaceVariant }]}>
+						`${items.length} içerik gösteriliyor`
+					</Text>
+				</View>
+			);
+		}
+		return null;
+	}, [loadingMore, exhausted, items.length, m3]);
+
+	const isEmpty = !loading && !error && items.length === 0;
+
+	return (
+		<>
+			<Stack.Screen options={{ headerShown: false }} />
+			<SafeAreaView
+				edges={["top", "left", "right"]}
+				style={[styles.safeArea, { backgroundColor: m3.surfaceLowest }]}
+				onLayout={onLayout}>
+				<StatusBar
+					barStyle={theme === "dark" ? "light-content" : "dark-content"}
+					backgroundColor={m3.surfaceLowest}
+				/>
+
+				{/* Üst çubuk */}
+				<View
+					style={[
+						styles.topBar,
+						{
+							backgroundColor: `${m3.surfaceLowest}D9`,
+							borderBottomColor: `${m3.surfaceContainerHigh}66`,
+						},
+					]}>
+					<TVPressable
+						onPress={handleBack}
+						focusedStyle={styles.backFocused}
+						style={[
+							styles.backBtn,
+							{ backgroundColor: `${m3.surfaceContainerHigh}CC` },
+						]}
+						accessibilityLabel="Geri">
+						<Ionicons name="arrow-back" size={21} color={m3.onSurface} />
+					</TVPressable>
+
+					<View style={styles.topBarTitleWrap}>
+						<Text
+							style={[styles.topBarTitle, { color: m3.onSurface }]}
+							numberOfLines={1}>
+							{shortenTitle(categoryName)}
+						</Text>
+						{items.length > 0 ? (
+							<View
+								style={[
+									styles.countChip,
+									{
+										backgroundColor: m3.surfaceContainerHigh,
+										borderColor: m3.outlineVariant,
+									},
+								]}>
+								<Text style={[styles.countText, { color: m3.tertiary }]}>
+									{items.length} içerik
+								</Text>
+							</View>
+						) : null}
+					</View>
+				</View>
+
+				{loading && items.length === 0 ? (
+					<View style={styles.center}>
+						<ActivityIndicator color={m3.primaryContainer} />
+						<Text style={[styles.footerText, { color: m3.onSurfaceVariant }]}>
+							Yükleniyor…
+						</Text>
+					</View>
+				) : error && items.length === 0 ? (
+					<View style={styles.center}>
+						<Ionicons
+							name="cloud-offline-outline"
+							size={40}
+							color={m3.onSurfaceVariant}
+						/>
+						<Text style={[styles.errorText, { color: m3.onSurface }]}>
+							Kategori yüklenemedi
+						</Text>
+						<TVPressable
+							onPress={handleRetry}
+							focusedStyle={styles.retryFocused}
+							style={[styles.retryBtn, { borderColor: m3.primaryContainer }]}>
+							<Text style={[styles.retryText, { color: m3.primaryContainer }]}>
+								Tekrar Dene
+							</Text>
+						</TVPressable>
+					</View>
+				) : isEmpty ? (
+					<View style={styles.center}>
+						<Ionicons
+							name="file-tray-outline"
+							size={40}
+							color={m3.onSurfaceVariant}
+						/>
+						<Text style={[styles.errorText, { color: m3.onSurface }]}>
+							Bu kategoride içerik bulunamadı
+						</Text>
+					</View>
+				) : (
+					<FlatList
+						data={items}
+						keyExtractor={keyExtractor}
+						renderItem={renderItem}
+						numColumns={layout.columns}
+						columnWrapperStyle={styles.row}
+						contentContainerStyle={[styles.listContent, { rowGap: GAP }]}
+						getItemLayout={getItemLayout}
+						onEndReached={loadMore}
+						onEndReachedThreshold={0.6}
+						ListFooterComponent={footer}
+						showsVerticalScrollIndicator={false}
+						initialNumToRender={9}
+						maxToRenderPerBatch={6}
+						windowSize={5}
+						// Sonsuz kaydırmada ekran dışı kartları kırpmak bellek için
+						// belirli fayda sağlıyor (ana sayfadaki yatay satırla aynı tercih).
+						removeClippedSubviews
+					/>
+				)}
+			</SafeAreaView>
+
+			{/* Hızlı önizleme — ana sayfadaki kartla aynı deneyim.
+			    Kart paylaşıldığı için uzun basma davranışı her iki ekranda da
+			    aynı; modal'ı da burada aynı şekilde bağlıyoruz. */}
+			<QuickPreviewModal
+				visible={Boolean(previewItem)}
+				movie={previewItem}
+				platformName={platformName}
+				onClose={() => setPreviewItem(null)}
+				onPlayPress={(item) => {
+					setPreviewItem(null);
+					handleItemPress(item);
+				}}
+				onDetailsPress={(item) => {
+					setPreviewItem(null);
+					handleItemPress(item);
+				}}
+			/>
+		</>
+	);
+}
+
+const styles = StyleSheet.create({
+	safeArea: { flex: 1 },
+	topBar: {
+		height: 56,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 12,
+		paddingHorizontal: GUTTER,
+		borderBottomWidth: 1,
+	},
+	backBtn: {
+		width: 40,
+		height: 40,
+		borderRadius: 20,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	topBarTitleWrap: {
+		flex: 1,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+		minWidth: 0,
+	},
+	topBarTitle: {
+		fontSize: 18,
+		lineHeight: 24,
+		fontWeight: "700",
+		letterSpacing: -0.2,
+		flexShrink: 1,
+	},
+	countChip: {
+		paddingHorizontal: 8,
+		paddingVertical: 2,
+		borderRadius: 999,
+		borderWidth: 1,
+	},
+	countText: {
+		fontSize: 11,
+		lineHeight: 16,
+		fontWeight: "700",
+	},
+
+	listContent: {
+		paddingHorizontal: GUTTER,
+		paddingTop: GAP + 2,
+		paddingBottom: 40,
+	},
+	row: { gap: GAP },
+
+	// Alt durumlar
+	center: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
+		gap: 12,
+		paddingHorizontal: 32,
+	},
+	errorText: {
+		fontSize: 15,
+		lineHeight: 20,
+		fontWeight: "600",
+		textAlign: "center",
+	},
+	retryBtn: {
+		paddingHorizontal: 18,
+		paddingVertical: 9,
+		borderRadius: 999,
+		borderWidth: 1,
+		marginTop: 4,
+	},
+	retryText: {
+		fontSize: 13,
+		lineHeight: 18,
+		fontWeight: "700",
+	},
+	footer: {
+		alignItems: "center",
+		justifyContent: "center",
+		paddingVertical: 22,
+		gap: 10,
+	},
+	footerText: {
+		fontSize: 13,
+		lineHeight: 18,
+	},
+
+	// TV odak
+	backFocused: { transform: [{ scale: 1.12 }] },
+	retryFocused: { transform: [{ scale: 1.05 }] },
+});
