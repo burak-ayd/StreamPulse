@@ -15,6 +15,7 @@ import {
 	toggleWatchlist,
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
+import { canonicalType, isSeriesContent } from "@/utils/mediaType";
 import { fetchPluginDetail } from "@/services/api";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -321,13 +322,20 @@ export default function LibraryScreen() {
 			);
 		}
 
-		// 2. Tür Filtresi
+		// 2. Tür Filtresi — `utils/mediaType.js` tek kaynağı
 		if (typeFilter !== "all") {
 			list = list.filter((item) => {
-				const itemType = (item.type || item.content_type || "").toLowerCase();
-				if (typeFilter === "movie") return itemType === "movie" || itemType === "film";
-				if (typeFilter === "series") return itemType === "series" || itemType === "dizi" || itemType === "tv";
-				if (typeFilter === "anime") return itemType === "anime" || item.category?.toLowerCase()?.includes("anime");
+				const tip = canonicalType(item);
+				if (typeFilter === "movie") return tip === "movie";
+				if (typeFilter === "series") return tip === "series";
+				if (typeFilter === "anime") {
+					// Anime ayrı bir filtre olarak duruyor ama veri modelinde
+					// ayrı bir alanı yok; `normalizeMediaType` "anime" değerini
+					// "series" sınıfına indirger. Bu yüzden burada içerik
+					// metninden ayrıca aranır.
+					const metin = `${item.title || ""} ${item.category || ""}`.toLowerCase();
+					return tip === "series" && metin.includes("anime");
+				}
 				return true;
 			});
 		}
@@ -403,21 +411,16 @@ export default function LibraryScreen() {
 		setIsListSelectModalVisible(true);
 	};
 
-	// Oynatıcıyı Başlat
-	const handlePlayItem = async (item) => {
-		if (!item) return;
+		// Oynatıcıyı Başlat
+		const handlePlayItem = async (item) => {
+			if (!item) return;
 
-		const isDizi =
-			item.type === "series" ||
-			item.type === "tv" ||
-			item.content_type === "series" ||
-			item.content_type === "tv" ||
-			item.completedEpisodesCount !== undefined ||
-			(item.url && item.url.includes("/dizi/")) ||
-			(item.id && String(item.id).includes("/dizi/")) ||
-			Boolean(item.season && !item.url);
+			// Tek kaynak: `utils/mediaType.js` (bkz. o dosyanın başlığı).
+			// Eskiden buradaki zincir `content_type`'ı ÖNCE okuyordu ve
+			// `completedEpisodesCount`/`season` gibi alanlara bakıyordu.
+			const isDizi = isSeriesContent(item);
 
-		let resolvedPlugin = item.plugin || activePlatformName;
+			let resolvedPlugin = item.plugin || activePlatformName;
 		if (!resolvedPlugin) {
 			try {
 				const activePlat = await getSelectedPlatform();

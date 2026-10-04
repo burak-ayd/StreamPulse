@@ -158,22 +158,45 @@ export default function SyncSettingsScreen() {
 
 	return (
 		<>
-			<Stack.Screen
-				options={{
-					headerShown: true,
-					title: "Senkronizasyon",
-					headerStyle: { backgroundColor: colors.bg },
-					headerTintColor: colors.text,
-					headerShadowVisible: false,
-				}}
-			/>
+			{/* ⚠️ `headerShown: true` BURADA ÇALIŞMIYORDU.
+			    `(app)/_layout.jsx` `<Stack/>` yerine expo-router'in `<Slot/>`
+			    bileşenini kullandığı için bu route'lar native stack ekranı
+			    DEĞİL; `Stack.Screen options` yok sayılıyor. Sonuç: başlık
+			    çizilmiyor, geri düğmesi görünmüyor ve `SafeAreaView` "top"
+			    kenarı dışarıda kaldığı için hesap kartı durum çubuğunun
+			    ALTINA taşıyordu. 			    `settings/index.jsx` ile aynı desen uygulanıyor: başlık
+			    gizlenir, kendi üst çubuğumuz çizilir. */}
+			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
-				edges={["bottom", "left", "right"]}
+				edges={["top", "left", "right", "bottom"]}
 				style={[styles.container, { backgroundColor: colors.bg }]}>
 				<StatusBar
 					barStyle={theme === "dark" ? "light-content" : "dark-content"}
 					backgroundColor={colors.bg}
 				/>
+
+				{/* Kendi üst çubuğumuz — geri + başlık */}
+				<View
+					style={[
+						styles.topBar,
+						{
+							borderBottomColor: colors.border,
+							backgroundColor: colors.bg,
+						},
+					]}>
+					<TVPressable
+						onPress={() => router.back()}
+						focusedStyle={styles.topBarBtnFocused}
+						style={styles.topBarBtn}
+						accessibilityLabel="Geri">
+						<Ionicons name="arrow-back" size={22} color={colors.text} />
+					</TVPressable>
+					<Text style={[styles.topBarTitle, { color: colors.text }]}>
+						Senkronizasyon
+					</Text>
+					<View style={styles.topBarSpacer} />
+				</View>
+
 				<ScrollView
 					contentContainerStyle={styles.scrollContent}
 					showsVerticalScrollIndicator={false}>
@@ -496,6 +519,32 @@ export default function SyncSettingsScreen() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
+	},
+	topBar: {
+		height: 56,
+		flexDirection: "row",
+		alignItems: "center",
+		paddingHorizontal: 16,
+		borderBottomWidth: 1,
+	},
+	topBarBtn: {
+		width: 40,
+		height: 40,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	topBarSpacer: {
+		width: 40,
+	},
+	topBarTitle: {
+		flex: 1,
+		fontSize: 18,
+		fontWeight: "700",
+		textAlign: "center",
+		letterSpacing: -0.2,
+	},
+	topBarBtnFocused: {
+		transform: [{ scale: 1.12 }],
 	},
 	scrollContent: {
 		padding: 16,

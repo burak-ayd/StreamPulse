@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { formatTime } from "@/utils/formatters";
+import { isSeriesContent } from "@/utils/mediaType";
 import ContinueWatchingCard from "./ContinueWatchingCard";
 
 /**
@@ -36,12 +37,8 @@ export default function ActionButtons({
 	const { colors, theme } = useThemeContext();
 	const router = useRouter();
 
-	const isSeries = Boolean(
-		content?.content_type === "series" ||
-		content?.is_series ||
-		content?.seasons ||
-		content?.episodes,
-	);
+	// Tek kaynak: `utils/mediaType.js` (bkz. o dosyanın başlığı).
+	const isSeries = isSeriesContent(content);
 
 	const isCompleted = watchProgress?.status === "completed";
 	const isInProgress = watchProgress?.status === "in_progress";

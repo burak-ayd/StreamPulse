@@ -9,6 +9,7 @@ import {
 	toggleFavorite,
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
+import { canonicalType, isSeriesContent } from "@/utils/mediaType";
 import ListSelectModal from "@components/modal/ListSelectModal";
 import TVPressable from "@components/common/TVPressable";
 import { useContentDetails } from "@hooks/useContentDetails";
@@ -218,11 +219,21 @@ export default function MovieDetailsScreen() {
 				language:
 					pluginDetail.language || passedMovie?.language || null,
 				age_rating: pluginDetail.age_rating || null,
-				content_type:
-					pluginDetail.content_type ||
-					(pluginDetail.is_series || pluginDetail.seasons
-						? "series"
-						: "movie"),
+				content_type: canonicalType({
+					// Sıralama `isSeriesContent` içinde: önce backend'in model
+					// sınıfından türettiği `is_series`, sonra normalize
+					// `media_type` sözleşmesi, sonra alttaki alanlar.
+					// Eskiden `content_type` ÖNCE okunuyordu; dizi için
+					// `MovieInfo` dönen bir plugin'da yanlış değeri
+					// (`"movie"`) kilitliyordu.
+					is_series: pluginDetail.is_series,
+					media_type: pluginDetail.media_type,
+					content_type: pluginDetail.content_type,
+					seasons: pluginDetail.seasons,
+					episodes: pluginDetail.episodes,
+					seriesId: passedMovie?.seriesId,
+					seriesTitle: passedMovie?.seriesTitle,
+				}),
 				status: pluginDetail.status || null,
 				director:
 					pluginDetail.director ||
@@ -259,13 +270,10 @@ export default function MovieDetailsScreen() {
 		}
 
 		if (passedMovie) {
-			const isSeriesGuess =
-				passedMovie.is_series ||
-				Boolean(passedMovie.initialSeason) ||
-				passedMovie.category?.toLowerCase()?.includes("dizi") ||
-				passedMovie.title?.toLowerCase()?.includes("sezon") ||
-				passedMovie.content_type === "series";
-
+			// ⚠️ Bu dallık detay API'si YOK düşülüp doğrudan liste/derin bağ
+			// verisiyle açıldığında çalışır (çevrimdışı, arşiv, TV kumandası).
+			// Sinyaller `mediaType.js`'de tek yerde toplandı; buradaki
+			// `initialSeason`/`category` ipuçları da ona girdi.
 			return {
 				id: passedMovie.id || id,
 				title: passedMovie.seriesTitle || passedMovie.title,
@@ -295,7 +303,21 @@ export default function MovieDetailsScreen() {
 				release_date: passedMovie.release_date || null,
 				language: passedMovie.language || null,
 				age_rating: null,
-				content_type: isSeriesGuess ? "series" : "movie",
+				content_type: canonicalType({
+					is_series: passedMovie.is_series,
+					media_type: passedMovie.media_type,
+					type: passedMovie.type,
+					content_type: passedMovie.content_type,
+					seasons: passedMovie.seasons,
+					seriesId: passedMovie.seriesId,
+					seriesTitle: passedMovie.seriesTitle,
+					// Derin bağdan gelen bölüm bilgisi güçlü bir dizi işaretidir.
+					season: passedMovie.initialSeason ?? passedMovie.season,
+					episode: passedMovie.initialEpisode ?? passedMovie.episode,
+					category: passedMovie.category,
+					title: passedMovie.title,
+					url: passedMovie.url,
+				}),
 				status: null,
 				director: null,
 				production_co: null,
@@ -315,14 +337,25 @@ export default function MovieDetailsScreen() {
 		: pluginLoading && !content && !passedMovie;
 	const error = isPureStaticContent ? apiError : null;
 
-	const isSeries = Boolean(
-		content?.content_type === "series" ||
-		content?.seasons ||
-		content?.episodes ||
-		passedMovie?.is_series ||
-		passedMovie?.category?.toLowerCase()?.includes("dizi") ||
-		content?.title?.toLowerCase()?.includes("sezon"),
-	);
+	// ⚠️ Tek kaynak: `utils/mediaType.js`. Eskiden burada `content_type`,
+	// `seasons`, `episodes`, `passedMovie.is_series`, `category` ve başlıkta
+	// "sezon" araması ayrı ayrı OR'lanıyordu; `MovieDetails` içindeki iki
+	// farklı zincirle aynı sonucu vermiyordu.
+	//
+	// `content` yayılır (seasons/episodes/content_type/type/title hazır gelir),
+	// ardından eksik sinyaller `passedMovie`'dan tamamlanır.
+	const isSeries = isSeriesContent({
+		...content,
+		is_series: content?.is_series ?? passedMovie?.is_series,
+		media_type: content?.media_type ?? passedMovie?.media_type,
+		seriesId: content?.seriesId ?? passedMovie?.seriesId,
+		seriesTitle: content?.seriesTitle ?? passedMovie?.seriesTitle,
+		season: content?.season ?? passedMovie?.initialSeason ?? passedMovie?.season,
+		episode:
+			content?.episode ?? passedMovie?.initialEpisode ?? passedMovie?.episode,
+		category: passedMovie?.category ?? content?.category,
+		url: content?.url ?? movieUrl,
+	});
 
 	// Kaldığın Yerden Devam Et ve Bölüm Tamamlanma Durumları
 	const [watchProgress, setWatchProgress] = useState(null);

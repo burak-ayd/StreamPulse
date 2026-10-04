@@ -1,75 +1,123 @@
-import ContinueWatchingCard from "@/components/content/ContinueWatchingCard";
+/**
+ * Profil Ekranı
+ *
+ * Referans tasarımlar (3 varyant, tek tasarım dili):
+ *   • profil_sekmeli_minimal        → Devam Edenler sekmesi
+ *   • profil_favoriler_sekmesi      → Favoriler sekmesi
+ *   • profil_son_i_zlenenler_sekmesi→ Son İzlenenler sekmesi
+ *
+ * Yapı: `ProfileHeader.jsx` (chrome) + `ProfileContent.jsx` (gövdeler) +
+ * `ProfileBadges.jsx` (atomlar) + `utils/profileFormat.js` (biçimlendirme).
+ *
+ * ⚠️ Veri gerçekliği: puan / tür / kalite / dublaj alanları veri modelinde
+ * yok; bu ekran onları UYDURMAZ. Bkz. `utils/profileFormat.js` başlığı.
+ *
+ * Erişilebilirlik notu: sekmeler `params.tab` ile derin bağlanabilir
+ * (aynı sözleşme eski ekrandan korundu): `?tab=continue|history|favorites`.
+ */
+
+import {
+	AccountAction,
+	ProfileHeader,
+	ProfileStats,
+	ProfileTabBar,
+	ProfileTopBar,
+} from "@/components/profile/ProfileHeader";
+import {
+	ContinueWatchingList,
+	FavoriteGrid,
+	HistoryList,
+} from "@/components/profile/ProfileContent";
 import { useAuth } from "@/context/AuthContext";
+import { useSync } from "@/context/SyncContext";
 import { useThemeContext } from "@/context/ThemeContext";
 import {
+	clearWatchHistory,
 	getContinueWatching,
 	getFavorites,
 	getSelectedPlatform,
 	getUserProfile,
 	getWatchHistory,
 	removeContinueWatching,
+	removeFromWatchHistory,
 	resolvePluginName,
+	toggleFavorite,
 } from "@/utils/storage";
+import {
+	filterFavorites,
+	isSeries,
+	sortItems,
+} from "@/utils/profileFormat";
 import { useReactiveData } from "@/utils/storageListener";
-import { Ionicons } from "@react-native-vector-icons/ionicons";
-import TVPressable from "@components/common/TVPressable";
-import { Image } from "expo-image";
-import {
-	Stack,
-	useFocusEffect,
-	useLocalSearchParams,
-	useRouter,
-} from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import {
-	BackHandler,
-	Dimensions,
-	FlatList,
-	ScrollView,
-	StatusBar,
-	StyleSheet,
-	Text,
-	TouchableOpacity,
-	View,
-} from "react-native";
+import { Alert, BackHandler, Platform, StatusBar, StyleSheet, View } from "react-native";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const { width } = Dimensions.get("window");
+/** Sekme anahtarları — eski `?tab=` değerleriyle uyumlu. */
+const TAB_KEYS = {
+	continue: { key: "continue", label: "Devam Edenler", param: "continue" },
+	favorites: { key: "favorites", label: "Favoriler", param: "favorites" },
+	history: { key: "history", label: "Son İzlenenler", param: "history" },
+};
+
+const TAB_ORDER = [TAB_KEYS.continue, TAB_KEYS.favorites, TAB_KEYS.history];
+
+/** Sıralama düğmesinin iki durumu arasında döndüğü etiketler. */
+const SORT_LABELS = {
+	added: "Son Eklenenler",
+	title: "Ada Göre (A-Z)",
+};
 
 export default function ProfileScreen() {
-	const { theme, colors } = useThemeContext();
-	const { isLoggedIn, user } = useAuth();
+	const { m3, theme } = useThemeContext();
+	const { isLoggedIn, user, logout } = useAuth();
+	const { status: syncStatus } = useSync();
 	const router = useRouter();
 	const params = useLocalSearchParams();
 
-	useEffect(() => {
-		const onBackPress = () => {
-			router.back();
-			return true;
-		};
+	/**
+	 * Senkronizasyon sağlıklı mı?
+	 *
+	 * `SyncContext.status`: 'idle' | 'syncing' | 'error'. Giriş yapılmış
+	 * ve son durum hata DEĞİLSE yeşil. Giriş yoksa kırmızı — çünkü o
+	 * durumda senkronizasyon hiç çalışmıyor demektir.
+	 */
+	const syncHealthy = isLoggedIn && syncStatus !== "error";
 
-		const subscription = BackHandler.addEventListener(
-			"hardwareBackPress",
-			onBackPress,
-		);
-		return () => subscription.remove();
-	}, [router]);
+	// ── Sekme ────────────────────────────────────────────────
+	const initialTab = TAB_KEYS[params?.tab] ? params.tab : "continue";
+	const [activeTab, setActiveTab] = useState(initialTab);
 
+	// Derin bağ (`?tab=`) değişirse sekmeyi takip et (aynı desen eski ekrandan).
+	const [prevTabParam, setPrevTabParam] = useState(params?.tab);
+	if (params?.tab !== prevTabParam) {
+		setPrevTabParam(params?.tab);
+		if (TAB_KEYS[params?.tab]) setActiveTab(params.tab);
+	}
+
+	// ── Görünüm / filtre / sıralama ──────────────────────────
+	// Varsayılan CARD (ızgara) görünümü — istenen davranış.
+	const [continueView, setContinueView] = useState("grid");
+	const [favFilter, setFavFilter] = useState("all");
+	const [favSort, setFavSort] = useState("added");
+	const [historySort, setHistorySort] = useState("added");
+
+	// ── Veri ─────────────────────────────────────────────────
 	const [profile, setProfile] = useState(null);
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
-	const [activeTab, setActiveTab] = useState(
-		params?.tab === "continue" ? "continue" : "history",
-	);
-	const [prevTab, setPrevTab] = useState(params?.tab);
-	if (params?.tab !== prevTab) {
-		setPrevTab(params?.tab);
-		if (params?.tab) {
-			setActiveTab(params.tab);
-		}
-	}
 	const [favorites, setFavorites] = useState([]);
 	const [history, setHistory] = useState([]);
 	const [continueWatching, setContinueWatching] = useState([]);
+	/**
+	 * "Bu Hafta (N)" sayacı.
+	 *
+	 * ⚠️ Render sırasında `Date.now()` çağrılamaz (React Compiler saflık
+	 * kuralı): render'lar arasında "bu hafta" sınırı kayabilir ve sayaç
+	 * titrer. Sınır veri yüklenirken bir kez hesaplanıp state'e yazılır —
+	 * ki bu doğru zaman zaten odak değişimi ve senkronizasyon olayıdır.
+	 */
+	const [weekCount, setWeekCount] = useState(0);
 
 	const loadData = useCallback(async () => {
 		try {
@@ -82,8 +130,18 @@ export default function ProfileScreen() {
 			]);
 			setProfile(userProf);
 			setFavorites(favs || []);
-			setHistory(hist || []); // Mock data kaldırıldı
+			setHistory(hist || []);
 			setContinueWatching(cont || []);
+
+			const weekAgo = Date.now() - 7 * 86_400_000;
+			setWeekCount(
+				(hist || []).filter((item) => {
+					if (!item.watchedAt) return false;
+					const t = new Date(item.watchedAt).getTime();
+					return !Number.isNaN(t) && t >= weekAgo;
+				}).length,
+			);
+
 			if (platform) setSelectedPlatform(platform);
 		} catch (error) {
 			console.error("Profil bilgileri yüklenirken hata:", error);
@@ -96,7 +154,7 @@ export default function ProfileScreen() {
 		}, [loadData]),
 	);
 
-	// Sync gelen veriyi odak değişimi olmadan da ekrana yansıt
+	// Senkronizasyon gelen veriyi odak değişimi olmadan da yansıt
 	useReactiveData(loadData, [
 		"user_favorites",
 		"user_watchlist",
@@ -104,547 +162,313 @@ export default function ProfileScreen() {
 		"user_continue_watching",
 	]);
 
-	const handleBack = () => {
+	// Android donanım geri tuşu
+	const handleBack = useCallback(() => {
 		router.back();
-	};
+	}, [router]);
 
-	const handleItemPress = (item) => {
-		if (!item) return;
-
-		const targetPlugin =
-			resolvePluginName(item) ||
-			item.plugin ||
-			selectedPlatform?.name ||
-			"hdfilmcehennemi";
-
-		let movieWithPlugin = {
-			...item,
-			plugin: targetPlugin,
-		};
-
-		const epTitleMatch = (movieWithPlugin.title || "").match(
-			/^(.+?)\s+(\d+)\.\s*Sezon\s+(\d+)\.\s*Bölüm/i,
-		);
-
-		if (epTitleMatch) {
-			movieWithPlugin = {
-				...movieWithPlugin,
-				seriesTitle: epTitleMatch[1].trim(),
-				initialSeason: String(epTitleMatch[2]),
-				initialEpisode: String(epTitleMatch[3]),
-				is_series: true,
-				content_type: "series",
-			};
-		}
-
-		const movieId =
-			item.id ||
-			encodeURIComponent(
-				item.url || item.title || "content",
+	useFocusEffect(
+		useCallback(() => {
+			if (Platform.OS !== "android") return;
+			const sub = BackHandler.addEventListener(
+				"hardwareBackPress",
+				() => {
+					handleBack();
+					return true;
+				},
 			);
+			return () => sub.remove();
+		}, [handleBack]),
+	);
 
-		router.push({
-			pathname: "/(app)/MovieDetails/[id]",
-			params: {
-				id: String(movieId),
-				url: item.url || item.seriesUrl || "",
-				plugin: targetPlugin,
-				movieData: JSON.stringify(movieWithPlugin),
-			},
-		});
-	};
+	// ── Türetilmiş veri ──────────────────────────────────────
 
-	const displayList = activeTab === "history" ? history : favorites;
+	const favCounts = useMemo(
+		() => ({
+			all: favorites.length,
+			movie: favorites.filter((i) => !isSeries(i)).length,
+			series: favorites.filter((i) => isSeries(i)).length,
+		}),
+		[favorites],
+	);
 
-	// Profil bilgileri: Giriş yapıldıysa AuthContext'teki gerçek kullanıcı, değilse misafir
+	const favItems = useMemo(
+		() => sortItems(filterFavorites(favorites, favFilter), favSort, "desc"),
+		[favorites, favFilter, favSort],
+	);
+
+	const historyItems = useMemo(
+		() => sortItems(history, historySort, "desc"),
+		[history, historySort],
+	);
+
+	/** "Bu Hafta (N)" — `loadData` içinde hesaplanır (saflık kuralı). */
+
+	const stats = useMemo(
+		() => [
+			{ key: "continue", value: continueWatching.length, label: "Devam Eden" },
+			{ key: "favorites", value: favorites.length, label: "Favorilerim" },
+			{ key: "history", value: history.length, label: "Son İzlenen" },
+		],
+		[continueWatching.length, favorites.length, history.length],
+	);
+
+	// ── Kimlik ───────────────────────────────────────────────
+
+	/**
+	 * Profil kaydı varsayılan "Misafir" değerlerinde mi?
+	 * (Eski ekrandaki mantık korundu; kullanıcı adı zorla değiştirilmesin.)
+	 */
 	const isDefaultProfile =
 		!profile ||
-		profile.username === "sinemasever" ||
-		profile.email === "kullanici@cineverse.com";
+		profile.username === "misafir" ||
+		profile.displayName === "Misafir Kullanıcı";
 
-	const displayName = isLoggedIn && user
-		? user.display_name || user.username || user.email?.split("@")[0] || "Kullanıcı"
-		: !isDefaultProfile && profile?.displayName
-		? profile.displayName
-		: "Misafir Kullanıcı";
+	const displayName =
+		(isLoggedIn && user
+			? user.display_name || user.username || user.email?.split("@")[0]
+			: !isDefaultProfile && profile?.displayName) || "Misafir Kullanıcı";
 
-	const userHandle = isLoggedIn && user
-		? `@${user.username || user.email?.split("@")[0] || "kullanici"}`
-		: !isDefaultProfile && profile?.username
-		? `@${profile.username}`
-		: "@misafir";
+	const handle =
+		(isLoggedIn && user
+			? user.username || user.email?.split("@")[0]
+			: !isDefaultProfile && profile?.username) || "misafir";
 
-	const userBio = isLoggedIn && user
-		? user.bio || (!isDefaultProfile && profile?.bio ? profile.bio : "")
-		: !isDefaultProfile && profile?.bio && !profile.bio.includes("Sinema dünyasındaki")
-		? profile.bio
-		: "";
+	const avatarUri =
+		(isLoggedIn && user?.avatar_url ? user.avatar_url : null) ||
+		(!isDefaultProfile ? profile?.avatarUrl : null) ||
+		null;
 
-	const avatarUri = isLoggedIn && user?.avatar_url
-		? user.avatar_url
-		: profile?.avatarUrl || null;
+	// ── Eylemler ─────────────────────────────────────────────
+
+	const openDetails = useCallback(
+		(item) => {
+			if (!item) return;
+
+			const targetPlugin =
+				resolvePluginName(item) ||
+				item.plugin ||
+				selectedPlatform?.name ||
+				"hdfilmcehennemi";
+
+			let movieWithPlugin = { ...item, plugin: targetPlugin };
+
+			// "Dizi 2. Sezon 3. Bölüm" gibi başlıklardan sezon/bölüm çıkar
+			const epMatch = (item.title || "").match(
+				/^(.+?)\s+(\d+)\.\s*Sezon\s+(\d+)\.\s*Bölüm/i,
+			);
+			if (epMatch) {
+				movieWithPlugin = {
+					...movieWithPlugin,
+					seriesTitle: epMatch[1].trim(),
+					initialSeason: String(epMatch[2]),
+					initialEpisode: String(epMatch[3]),
+					is_series: true,
+					content_type: "series",
+				};
+			}
+
+			const movieId =
+				item.id || encodeURIComponent(item.url || item.title || "content");
+
+			router.push({
+				pathname: "/(app)/MovieDetails/[id]",
+				params: {
+					id: String(movieId),
+					url: item.url || item.seriesUrl || "",
+					plugin: targetPlugin,
+					movieData: JSON.stringify(movieWithPlugin),
+				},
+			});
+		},
+		[router, selectedPlatform?.name],
+	);
+
+	const playContinue = useCallback(
+		(item) => {
+			if (item.url) {
+				router.push({
+					pathname: "/player",
+					params: {
+						url: item.url,
+						title: item.title,
+						subtitle: item.episodeTitle || item.seriesTitle || "",
+						poster: item.poster,
+						id: item.id,
+						type: item.type || "movie",
+						seriesId: item.seriesId,
+						season: item.season,
+						episode: item.episode,
+						episodeTitle: item.episodeTitle,
+						currentTime: item.currentTime,
+					},
+				});
+			} else if (item.id) {
+				router.push(`/(app)/MovieDetails/${item.id}`);
+			}
+		},
+		[router],
+	);
+
+	const removeFavorite = useCallback(async (item) => {
+		await toggleFavorite(item);
+		const next = await getFavorites();
+		setFavorites(next || []);
+	}, []);
+
+	const removeHistory = useCallback(async (item) => {
+		const next = await removeFromWatchHistory(item);
+		setHistory(next || []);
+	}, []);
+
+	const removeContinue = useCallback(async (item) => {
+		const next = await removeContinueWatching(item.id ?? item);
+		setContinueWatching(next || []);
+	}, []);
+
+	const confirmClearHistory = useCallback(() => {
+		Alert.alert(
+			"İzleme geçmişini temizle",
+			"Tüm cihazlarındaki izleme geçmişi silinecek. Bu işlem geri alınamaz.",
+			[
+				{ text: "Vazgeç", style: "cancel" },
+				{
+					text: "Temizle",
+					style: "destructive",
+					onPress: async () => {
+						await clearWatchHistory();
+						setHistory([]);
+					},
+				},
+			],
+		);
+	}, []);
+
+	/**
+	 * Çıkış onayı.
+	 *
+	 * Onay isteniyor çünkü çıkış `resetSyncState()` çağırıyor: hesabın bu
+	 * cihazdaki delta damgası siliniyor ve bir sonraki giriş tam döküm
+	 * çekiyor. Kullanıcı "yanlışlıkla çıktım" deyip veri kaybı yaşamamalı.
+	 */
+	const confirmLogout = useCallback(() => {
+		Alert.alert(
+			"Çıkış yapılsın mı?",
+			"Çıkış yaptığında bu cihazdaki senkronizasyon damgan sıfırlanır. " +
+				"Verilerin silinmez; tekrar girdiğinde hesabının tamamı yeniden indirilir.",
+			[
+				{ text: "Vazgeç", style: "cancel" },
+				{
+					text: "Çıkış Yap",
+					style: "destructive",
+					onPress: () => {
+						logout().catch((err) =>
+							console.warn("Çıkış tamamlanamadı:", err?.message),
+						);
+					},
+				},
+			],
+		);
+	}, [logout]);
+
+	// ── Render ───────────────────────────────────────────────
 
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
-				edges={["top", "left", "right", "bottom"]}
-				style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+				edges={["top", "left", "right"]}
+				style={[styles.safeArea, { backgroundColor: m3.surfaceLowest }]}>
 				<StatusBar
-					barStyle={
-						theme === "dark" ? "light-content" : "dark-content"
-					}
-					backgroundColor={colors.bg}
+					barStyle={theme === "dark" ? "light-content" : "dark-content"}
+					backgroundColor={m3.surfaceLowest}
 				/>
 
-				{/* Top App Bar */}
-				<View
-					style={[
-						styles.topBar,
-						{
-							borderBottomColor: colors.border,
-							backgroundColor: colors.bg,
-						},
-					]}>
-					<TVPressable
-						onPress={handleBack}
-						style={({ focused }) => [
-							styles.backButton,
-							focused && styles.iconButtonFocused,
-						]}>
-						<Ionicons
-							name="arrow-back"
-							size={24}
-							color={colors.text}
-						/>
-					</TVPressable>
-					<Text style={[styles.topBarTitle, { color: colors.text }]}>
-						Profil
-					</Text>
-				</View>
+				<ProfileTopBar
+					onBack={handleBack}
+					syncHealthy={syncHealthy}
+					onNotifications={() =>
+						Alert.alert(
+							"Bildirimler",
+							"Henüz bildirim yok. Şu an yalnızca izleme geçmişi ve senkronizasyon durumu bu ekranda gösteriliyor.",
+						)
+					}
+					// Ayar düğmesi doğrudan SENKRONİZASYON ayarlarını açar.
+					// Genel ayarlara alt navigasyondaki "Ayarlar" girilir; buraya
+					// ikinci bir genel ayar girişi koymak yol bulmacayı dağıtıyor.
+					onSettings={() => router.push("/(app)/settings/sync")}
+				/>
 
-				<ScrollView
-					showsVerticalScrollIndicator={false}
-					contentContainerStyle={styles.scrollContainer}>
-					{/* Profile Header */}
-					<View style={styles.profileHeader}>
-						{avatarUri ? (
-							<Image
-								source={{ uri: avatarUri }}
-								style={styles.avatar}
-								contentFit="cover"
-								transition={0}
-								recyclingKey={avatarUri}
+				{/* Tüm sekme gövdeleri kendi FlatList'ini taşır; bu yüzden
+				    dışarıda bir ScrollView YOK — iç içe scroll view Android'de
+				    hem performans düşürür hem de kısayol jestini bozar. */}
+				<View style={styles.body}>
+					<ProfileHeader
+						displayName={displayName}
+						handle={`@${handle}`}
+						roleLabel="Sinefil"
+						avatarUri={avatarUri}
+						syncHealthy={syncHealthy}
+						onEdit={() => router.push("/profile/EditProfile")}
+					/>
+
+					<AccountAction
+						isLoggedIn={isLoggedIn}
+						onLogin={() => router.push("/(auth)/login")}
+						onLogout={confirmLogout}
+					/>
+
+					<ProfileStats
+						stats={stats}
+						activeKey={activeTab}
+						onSelect={(key) => setActiveTab(key)}
+					/>
+
+					<ProfileTabBar
+						tabs={TAB_ORDER}
+						activeKey={activeTab}
+						onSelect={(key) => setActiveTab(key)}
+					/>
+
+					<View style={styles.content}>
+						{activeTab === "continue" ? (
+							<ContinueWatchingList
+								items={continueWatching}
+								view={continueView}
+								onToggleView={() =>
+									setContinueView((v) => (v === "list" ? "grid" : "list"))
+								}
+								onPressItem={playContinue}
+								onRemove={removeContinue}
+							/>
+						) : activeTab === "favorites" ? (
+							<FavoriteGrid
+								items={favItems}
+								counts={favCounts}
+								filter={favFilter}
+								onFilter={setFavFilter}
+								sortLabel={SORT_LABELS[favSort]}
+								onToggleSort={() =>
+									setFavSort((s) => (s === "added" ? "title" : "added"))
+								}
+								onPressItem={openDetails}
+								onRemove={removeFavorite}
 							/>
 						) : (
-							<View
-								style={[
-									styles.avatar,
-									{ backgroundColor: colors.primary },
-								]}>
-								<Text style={styles.avatarText}>
-									{(displayName || "K")
-										.charAt(0)
-										.toUpperCase()}
-								</Text>
-							</View>
-						)}
-
-						<Text style={[styles.userName, { color: colors.text }]}>
-							{displayName}
-						</Text>
-						<Text
-							style={[
-								styles.userHandle,
-								{ color: colors.textSecondary },
-							]}>
-							{userHandle}
-						</Text>
-						{userBio ? (
-							<Text
-								style={[
-									styles.userBio,
-									{ color: colors.textSecondary },
-								]}>
-								{userBio}
-							</Text>
-						) : null}
-
-						<TVPressable
-							style={({ focused }) => [
-								styles.editButton,
-								{
-									borderColor: colors.primary,
-									backgroundColor: colors.cardBg,
-								},
-								focused && styles.buttonFocused,
-							]}
-							onPress={() => router.push("/profile/EditProfile")}>
-							<Text
-								style={[
-									styles.editButtonText,
-									{ color: colors.primary },
-								]}>
-								Profili Düzenle
-							</Text>
-						</TVPressable>
-
-						{/* Sync durumu kartı */}
-						{isLoggedIn && user ? (
-							<TVPressable
-								style={({ focused }) => [
-									styles.syncCard,
-									{
-										backgroundColor: "rgba(16, 185, 129, 0.08)",
-										borderColor: "rgba(16, 185, 129, 0.2)",
-									},
-									focused && styles.syncCardFocused,
-								]}
-								onPress={() => router.push("/(app)/settings/sync")}
-								activeOpacity={0.75}>
-								<Ionicons name="cloud-done-outline" size={18} color="#10B981" />
-								<Text style={[styles.syncCardText, { color: "#10B981" }]}>
-									Senkronizasyon Aktif • {user.email}
-								</Text>
-								<Ionicons name="chevron-forward" size={16} color="#10B981" />
-							</TVPressable>
-						) : (
-							<TVPressable
-								style={({ focused }) => [
-									styles.syncCard,
-									{
-										backgroundColor: "rgba(56, 189, 248, 0.08)",
-										borderColor: "rgba(56, 189, 248, 0.2)",
-									},
-									focused && styles.syncCardFocused,
-								]}
-								onPress={() => router.push("/(auth)/login")}
-								activeOpacity={0.75}>
-								<Ionicons name="sync-outline" size={18} color="#38bdf8" />
-								<Text style={styles.syncCardText}>
-									Giriş yap ve verilerini tüm cihazlarında senkronize et
-								</Text>
-								<Ionicons name="chevron-forward" size={16} color="#38bdf8" />
-							</TVPressable>
+							<HistoryList
+								items={historyItems}
+								weekCount={weekCount}
+								sortLabel={SORT_LABELS[historySort]}
+								onToggleSort={() =>
+									setHistorySort((s) => (s === "added" ? "title" : "added"))
+								}
+								onClear={confirmClearHistory}
+								onPressItem={openDetails}
+								onRemove={removeHistory}
+							/>
 						)}
 					</View>
-
-					{/* Stats Component */}
-					<View style={styles.statsContainer}>
-						<View
-							style={[
-								styles.statCard,
-								{ backgroundColor: colors.cardBg },
-							]}>
-							<Text
-								style={[
-									styles.statNumber,
-									{ color: colors.text },
-								]}>
-								{history.length}
-							</Text>
-							<Text
-								style={[
-									styles.statLabel,
-									{ color: colors.textSecondary },
-								]}>
-								İzlenenler
-							</Text>
-						</View>
-						<View
-							style={[
-								styles.statCard,
-								{ backgroundColor: colors.cardBg },
-							]}>
-							<Text
-								style={[
-									styles.statNumber,
-									{ color: colors.text },
-								]}>
-								{favorites.length}
-							</Text>
-							<Text
-								style={[
-									styles.statLabel,
-									{ color: colors.textSecondary },
-								]}>
-								Favoriler
-							</Text>
-						</View>
-						<View
-							style={[
-								styles.statCard,
-								{ backgroundColor: colors.cardBg },
-							]}>
-							<Text
-								style={[
-									styles.statNumber,
-									{ color: colors.text },
-								]}>
-								{continueWatching.length}
-							</Text>
-							<Text
-								style={[
-									styles.statLabel,
-									{ color: colors.textSecondary },
-								]}>
-								Devam Eden
-							</Text>
-						</View>
-					</View>
-
-					{/* Tabs */}
-					<View
-						style={[
-							styles.tabsContainer,
-							{ borderBottomColor: colors.border },
-						]}>
-						<TVPressable
-							onPress={() => setActiveTab("continue")}
-							style={({ focused }) => [
-								styles.tab,
-								{
-									borderBottomColor:
-										activeTab === "continue"
-											? colors.primary
-											: "transparent",
-								},
-								focused && styles.tabFocused,
-							]}>
-							<Text
-								style={[
-									styles.tabText,
-									{
-										color:
-											activeTab === "continue"
-												? colors.primary
-												: colors.textSecondary,
-										fontWeight:
-											activeTab === "continue"
-												? "bold"
-												: "600",
-									},
-								]}>
-								Devam Et
-								{continueWatching.length > 0
-									? ` (${continueWatching.length})`
-									: ""}
-							</Text>
-						</TVPressable>
-						<TVPressable
-							onPress={() => setActiveTab("history")}
-							style={({ focused }) => [
-								styles.tab,
-								{
-									borderBottomColor:
-										activeTab === "history"
-											? colors.primary
-											: "transparent",
-								},
-								focused && styles.tabFocused,
-							]}>
-							<Text
-								style={[
-									styles.tabText,
-									{
-										color:
-											activeTab === "history"
-												? colors.primary
-												: colors.textSecondary,
-										fontWeight:
-											activeTab === "history"
-												? "bold"
-												: "600",
-									},
-								]}>
-								İzleme Geçmişi
-							</Text>
-						</TVPressable>
-						<TVPressable
-							onPress={() => setActiveTab("favorites")}
-							style={({ focused }) => [
-								styles.tab,
-								{
-									borderBottomColor:
-										activeTab === "favorites"
-											? colors.primary
-											: "transparent",
-								},
-								focused && styles.tabFocused,
-							]}>
-							<Text
-								style={[
-									styles.tabText,
-									{
-										color:
-											activeTab === "favorites"
-												? colors.primary
-												: colors.textSecondary,
-										fontWeight:
-											activeTab === "favorites"
-												? "bold"
-												: "600",
-									},
-								]}>
-								Favoriler
-							</Text>
-						</TVPressable>
-					</View>
-
-					{/* Tab Content */}
-					{activeTab === "continue" ? (
-						<View style={styles.continueListContainer}>
-							{continueWatching.length === 0 ? (
-								<View style={styles.emptyState}>
-									<Ionicons
-										name="play-circle-outline"
-										size={48}
-										color={colors.textSecondary}
-									/>
-									<Text
-										style={[
-											styles.emptyText,
-											{ color: colors.textSecondary },
-										]}>
-										Kaldığınız yerden devam edebileceğiniz
-										içerik bulunmuyor
-									</Text>
-								</View>
-							) : (
-								continueWatching.map((item) => (
-									<ContinueWatchingCard
-										key={item.id}
-										item={item}
-										width="100%"
-										style={styles.profileContinueCard}
-										onPress={(it) => {
-											if (it.url) {
-												router.push({
-													pathname: "/player",
-													params: {
-														url: it.url,
-														title: it.title,
-														subtitle:
-															it.episodeTitle ||
-															it.seriesTitle ||
-															"",
-														poster: it.poster,
-														id: it.id,
-														type:
-															it.type || "movie",
-														seriesId: it.seriesId,
-														season: it.season,
-														episode: it.episode,
-														episodeTitle:
-															it.episodeTitle,
-														currentTime:
-															it.currentTime,
-													},
-												});
-											} else if (it.id) {
-												router.push(
-													`/(app)/MovieDetails/${it.id}`,
-												);
-											}
-										}}
-										onRemove={async (id) => {
-											const updated =
-												await removeContinueWatching(
-													id,
-												);
-											setContinueWatching(updated);
-										}}
-									/>
-								))
-							)}
-						</View>
-					) : (
-						<View style={styles.gridContainer}>
-							{displayList.length === 0 ? (
-								<View style={styles.emptyState}>
-									<Ionicons
-										name={
-											activeTab === "favorites"
-												? "heart-outline"
-												: "film-outline"
-										}
-										size={48}
-										color={colors.textSecondary}
-									/>
-									<Text
-										style={[
-											styles.emptyText,
-											{ color: colors.textSecondary },
-										]}>
-										{activeTab === "favorites"
-											? "Henüz favori içerik eklenmedi"
-											: "İzleme geçmişiniz henüz boş"}
-									</Text>
-								</View>
-							) : (
-								<FlatList
-									data={displayList}
-									keyExtractor={(item, index) =>
-										String(item.id || item.url || index)
-									}
-									numColumns={3}
-									scrollEnabled={false}
-									removeClippedSubviews={false}
-									columnWrapperStyle={styles.gridRow}
-									renderItem={({ item }) => {
-										const itemPlugin = resolvePluginName(item);
-										return (
-											<TVPressable
-												style={({ focused }) => [
-													styles.gridItem,
-													{
-														backgroundColor:
-															colors.cardBg,
-													},
-													focused && styles.gridItemFocused,
-												]}
-												onPress={() =>
-													handleItemPress(item)
-												}
-												activeOpacity={0.8}>
-												<Image
-													source={{
-														uri:
-															item.poster ||
-															item.poster_url ||
-															item.image ||
-															item.backdrop_url,
-													}}
-													style={styles.gridImage}
-													contentFit="cover"
-													contentPosition="center"
-													transition={0}
-													recyclingKey={item.poster || item.poster_url || item.image || item.backdrop_url}
-													cachePolicy="memory-disk"
-												/>
-												{/* Eklenti Adı Rozeti */}
-												{itemPlugin ? (
-													<View
-														style={
-															styles.pluginBadge
-														}>
-														<Text
-															style={
-																styles.pluginBadgeText
-															}
-															numberOfLines={1}>
-															{itemPlugin}
-														</Text>
-													</View>
-												) : null}
-											</TVPressable>
-										);
-									}}
-								/>
-							)}
-						</View>
-					)}
-				</ScrollView>
+				</View>
 			</SafeAreaView>
 		</>
 	);
@@ -654,217 +478,10 @@ const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
 	},
-	topBar: {
-		height: 60,
-		flexDirection: "row",
-		justifyContent: "space-between",
-		alignItems: "center",
-		paddingHorizontal: 16,
-		borderBottomWidth: 1,
-	},
-	backButton: {
-		width: 48,
-		height: 48,
-		justifyContent: "center",
-		alignItems: "center",
-	},
-	topBarTitle: {
+	body: {
 		flex: 1,
-		fontSize: 18,
-		fontWeight: "bold",
-		textAlign: "center",
-		letterSpacing: -0.015,
 	},
-	settingsButton: {
-		width: 48,
-		height: 48,
-		justifyContent: "center",
-		alignItems: "center",
-	},
-	scrollContainer: {
-		paddingBottom: 40,
-	},
-	profileHeader: {
-		alignItems: "center",
-		paddingVertical: 24,
-		paddingHorizontal: 16,
-	},
-	avatar: {
-		width: 100,
-		height: 100,
-		borderRadius: 50,
-		overflow: "hidden",
-		justifyContent: "center",
-		alignItems: "center",
-		marginBottom: 12,
-	},
-	avatarText: {
-		color: "#ffffff",
-		fontSize: 38,
-		fontWeight: "bold",
-	},
-	userName: {
-		fontSize: 20,
-		fontWeight: "bold",
-		marginBottom: 2,
-	},
-	userHandle: {
-		fontSize: 14,
-		fontWeight: "400",
-		marginBottom: 6,
-	},
-	userBio: {
-		fontSize: 13,
-		textAlign: "center",
-		paddingHorizontal: 20,
-		marginBottom: 12,
-	},
-	editButton: {
-		paddingHorizontal: 20,
-		paddingVertical: 8,
-		borderRadius: 20,
-		borderWidth: 1,
-		marginTop: 6,
-	},
-	editButtonText: {
-		fontSize: 13,
-		fontWeight: "600",
-	},
-	statsContainer: {
-		flexDirection: "row",
-		paddingHorizontal: 16,
-		gap: 12,
-		marginBottom: 24,
-	},
-	statCard: {
+	content: {
 		flex: 1,
-		borderRadius: 12,
-		padding: 14,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	statNumber: {
-		fontSize: 18,
-		fontWeight: "bold",
-		marginBottom: 2,
-	},
-	statLabel: {
-		fontSize: 11,
-		fontWeight: "500",
-	},
-	tabsContainer: {
-		flexDirection: "row",
-		borderBottomWidth: 1,
-		paddingHorizontal: 16,
-		marginBottom: 16,
-	},
-	tab: {
-		flex: 1,
-		paddingVertical: 14,
-		borderBottomWidth: 3,
-		alignItems: "center",
-	},
-	tabText: {
-		fontSize: 14,
-		letterSpacing: 0.015,
-	},
-	gridContainer: {
-		paddingHorizontal: 16,
-		paddingBottom: 20,
-	},
-	gridRow: {
-		justifyContent: "space-between",
-		marginBottom: 12,
-	},
-	gridItem: {
-		width: (width - 48) / 3,
-		aspectRatio: 2 / 3,
-		borderRadius: 8,
-		overflow: "hidden",
-	},
-	gridImage: {
-		width: "100%",
-		height: "100%",
-		borderRadius: 8,
-		overflow: "hidden",
-	},
-	emptyState: {
-		alignItems: "center",
-		justifyContent: "center",
-		paddingVertical: 40,
-		gap: 12,
-	},
-	emptyText: {
-		fontSize: 14,
-	},
-	continueListContainer: {
-		paddingHorizontal: 16,
-		paddingTop: 8,
-		paddingBottom: 24,
-		gap: 16,
-	},
-	profileContinueCard: {
-		marginRight: 0,
-		marginBottom: 4,
-	},
-	pluginBadge: {
-		position: "absolute",
-		top: 6,
-		left: 6,
-		backgroundColor: "rgba(15, 23, 42, 0.85)",
-		paddingHorizontal: 6,
-		paddingVertical: 2,
-		borderRadius: 4,
-		borderWidth: 0.5,
-		borderColor: "rgba(255, 255, 255, 0.25)",
-		maxWidth: "85%",
-	},
-	pluginBadgeText: {
-		color: "#38bdf8",
-		fontSize: 9,
-		fontWeight: "700",
-		textTransform: "uppercase",
-		letterSpacing: 0.3,
-	},
-	syncCard: {
-		flexDirection: "row",
-		alignItems: "center",
-		paddingHorizontal: 14,
-		paddingVertical: 10,
-		borderRadius: 12,
-		borderWidth: 1,
-		marginTop: 14,
-		gap: 10,
-	},
-	syncCardText: {
-		flex: 1,
-		fontSize: 13,
-		fontWeight: "600",
-		color: "#38bdf8",
-		lineHeight: 18,
-	},
-	iconButtonFocused: {
-		transform: [{ scale: 1.15 }],
-	},
-	buttonFocused: {
-		borderWidth: 2,
-		borderColor: "#FFFFFF",
-		transform: [{ scale: 1.05 }],
-	},
-	syncCardFocused: {
-		borderWidth: 2,
-		borderColor: "#FFFFFF",
-		transform: [{ scale: 1.02 }],
-	},
-	tabFocused: {
-		borderWidth: 1.5,
-		borderColor: "#E50914",
-		borderRadius: 8,
-		transform: [{ scale: 1.05 }],
-	},
-	gridItemFocused: {
-		transform: [{ scale: 1.05 }],
-		borderWidth: 2,
-		borderColor: "#E50914",
 	},
 });

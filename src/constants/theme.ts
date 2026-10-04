@@ -26,6 +26,86 @@ export const Colors = {
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
+/**
+ * Material 3 yüzey rampası — profil ekranı ve diğer "modern" ekranlar için.
+ *
+ * ⚠️ `Colors` içindeki `cardBg` / `text` / `textSecondary` eski ekranların
+ * kullandığı yaklaşık değerlerdir ve **dokunulmamalıdır** (21 ekran onları
+ * okuyor). Yeni tasarım dili M3 tonal rampasını kullanır; ekranlar
+ * `colors.surfaceContainerHigh` gibi yeni anahtarları tercih etmelidir.
+ *
+ * Koyu değerler referans tasarımdan birebir alınmıştır. Açık değerler aynı
+ * rampanın açık tonlarıdır (M3'in kuralı: koyu tema = koyu tonlar, açık tema =
+ * açık tonlar).
+ */
+export const ColorsM3 = {
+	light: {
+		/** primary-container — StreamPulse kırmızısı. Ana vurgu rengi. */
+		primaryContainer: "#E50914",
+		onPrimaryContainer: "#FFFFFF",
+		/** primary — M3'in "marka tonu" (tema tint'i) */
+		primary: "#B3261E",
+		onPrimary: "#FFFFFF",
+		/** tertiary — camsı mavi. Süre,rozet ve ikincil vurgular. */
+		tertiary: "#00687A",
+		onTertiary: "#FFFFFF",
+		/**
+		 * Başarı / "senkronizasyon sağlıklı" durumu.
+		 *
+		 * ⚠️ Material 3'ün rol paletinde "success" diye bir renk YOKTUR; M3
+		 * yalnızca primary/secondary/tertiary/error tanır. Bu yüzden burada
+		 * uygulamanın zaten kullandığı değer (`#10B981`, eski profil ekranındaki
+		 * syncCard) tek kaynak olarak buraya taşındı — böylece profil çerçevesi
+		 * ile ayar sayfasındaki "Bağlı" rozeti aynı yeşili gösterir.
+		 */
+		success: "#059669",
+		successSoft: "rgba(16,185,129,0.15)",
+
+		surfaceLowest: "#FFFFFF",
+		surfaceLow: "#F7F8FA",
+		surface: "#F1F3F6",
+		surfaceContainer: "#EBEDF1",
+		surfaceContainerHigh: "#E3E5EA",
+		surfaceContainerHighest: "#DBDDE3",
+
+		onSurface: "#14161A",
+		onSurfaceVariant: "#5A5F68",
+		outline: "#8A8F99",
+		outlineVariant: "#D5D8DE",
+		error: "#BA1A1A",
+		scrim: "rgba(0,0,0,0.4)",
+	},
+	dark: {
+		// ── Referans tasarımdan birebir ──
+		primaryContainer: "#e50914",
+		onPrimaryContainer: "#fff7f6",
+		primary: "#ffb4aa",
+		onPrimary: "#690003",
+		tertiary: "#4cd7f6",
+		onTertiary: "#003640",
+		// Yeşil tonları koyu temada açıklaştırılır (kontrast).
+		success: "#10b981",
+		successSoft: "rgba(16,185,129,0.15)",
+
+		surfaceLowest: "#0b0e14",
+		surfaceLow: "#191c22",
+		surface: "#10131a",
+		surfaceContainer: "#1d2026",
+		surfaceContainerHigh: "#272a31",
+		surfaceContainerHighest: "#32353c",
+
+		onSurface: "#e1e2eb",
+		onSurfaceVariant: "#e9bcb6",
+		outline: "#af8782",
+		outlineVariant: "#5e3f3b",
+		error: "#ffb4ab",
+		scrim: "rgba(0,0,0,0.55)",
+	},
+} as const;
+
+/** Ekran geneli yatay boşluk (referansta `px-margin` = 1rem). */
+export const ScreenGutter = 16;
+
 export const Fonts = Platform.select({
 	ios: {
 		/** iOS `UIFontDescriptorSystemDesignDefault` */
