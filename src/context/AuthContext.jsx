@@ -24,6 +24,7 @@ import {
 	setOnAuthExpired,
 } from "@/services/apiClient";
 import { hasSession, clearTokens } from "@/services/token";
+import { getAuthUser, saveAuthUser, clearAuthUser } from "@/utils/storage";
 import { setSyncOwner, resetSyncState } from "@/services/sync";
 
 /**
@@ -58,44 +59,82 @@ export function AuthProvider({ children }) {
 	const [status, setStatus] = useState("idle"); // idle | loading | authenticated | unauthenticated
 
 	// ─── Auth süresi doldu callback ──────────────────────
+	// Yalnızca TERMINAL bir auth hatasında tetiklenir (apiClient yalnızca
+	// 401/403'ta çağırır). Geçici hata (5xx, uçak modu) oturumu düşürmez.
 	const handleAuthExpired = useCallback(() => {
 		setUser(null);
 		setStatus("unauthenticated");
+		// Kimlik de artık geçersiz; çevrimdışı yedeğin kullanmasın
+		clearAuthUser().catch(() => {});
 	}, []);
 
 	// ─── İlk yükleme — mevcut oturumu kontrol et ────────
 	useEffect(() => {
 		let isMounted = true;
 
+		/**
+		 * Sunucuya ulaşılamadı: token'lar korunur, son girişte saklanan
+		 * kimlikle çevrimdışı kullanım sürdürülür. Kimlik de yoksa giriş
+		 * ekranına düşülür — ama token'lar YİNE silinmez.
+		 */
+		async function applyCachedSession() {
+			const cachedUser = await getAuthUser();
+			if (!isMounted) return;
+
+			if (cachedUser?.id) {
+				setUser(cachedUser);
+				setSyncOwner(cachedUser.id);
+				setStatus("authenticated");
+			} else {
+				setUser(null);
+				setStatus("unauthenticated");
+			}
+		}
+
 		async function checkSession() {
 			setStatus("loading");
 
-			const sessionExists = await hasSession();
-			if (!sessionExists) {
-				if (isMounted) setStatus("unauthenticated");
-				return;
-			}
-
-			// Token var — kullanıcı bilgisini çek
 			try {
-				const meData = await apiGetMe();
-				if (isMounted) {
-					if (meData?.user || meData?.id) {
-						setUser(meData.user || meData);
-			setSyncOwner((meData.user || meData)?.id);
-						setStatus("authenticated");
-					} else {
-						// Token geçersiz olmuş
-						await clearTokens();
+				const sessionExists = await hasSession();
+				if (!sessionExists) {
+					if (isMounted) setStatus("unauthenticated");
+					return;
+				}
+
+				// Token var — kullanıcı bilgisini çek
+				const meResult = await apiGetMe();
+				if (!isMounted) return;
+
+				// 1) Doğrulandı
+				if (meResult.ok) {
+					const meUser = meResult.user;
+					setUser(meUser);
+					setSyncOwner(meUser?.id);
+					saveAuthUser(meUser).catch(() => {});
+					setStatus("authenticated");
+					return;
+				}
+
+				// 2) Token GERÇEKTEN geçersiz (401/403) → oturumu kapat
+				if (meResult.reason === "auth") {
+					await clearTokens();
+					await clearAuthUser();
+					if (isMounted) {
+						setUser(null);
 						setStatus("unauthenticated");
 					}
+					return;
 				}
-			} catch {
-				if (isMounted) {
-					// Sunucuya ulaşılamıyor — oturumun var olduğunu varsay
-					// (çevrimdışı kullanım: senkron yapılamaz ama UI'da giriş yapmış görünür)
-					setStatus("unauthenticated");
-				}
+
+				// 3) `reason: "network" | "server"` → sunucuya ULAŞILAMADI.
+				//    Token'lar SİLİNMEZ: sunucu sözleşmesi 5xx'te "yerel veri
+				//    korunur, sessizce sonra dene" der (SYNC_AUTH_PLAN.md §5.3).
+				await applyCachedSession();
+			} catch (error) {
+				// Beklenmedik hata (güvenli depo/ayrıştırma) — muhafazakâr:
+				// oturumu düşürmeden çevrimdışı yola düş.
+				console.warn("Oturum kontrolü hatası:", error?.message);
+				await applyCachedSession();
 			}
 		}
 
@@ -106,6 +145,8 @@ export function AuthProvider({ children }) {
 
 		return () => {
 			isMounted = false;
+			// StrictMode/remount'ta bayat callback birikmesin
+			setOnAuthExpired(null);
 		};
 	}, [handleAuthExpired]);
 
@@ -123,9 +164,11 @@ export function AuthProvider({ children }) {
 				setUser(result.user);
 				// Delta damgası hesaba bağlıdır; sahibi bildir
 				setSyncOwner(result.user?.id);
+				saveAuthUser(result.user).catch(() => {});
 				setStatus("authenticated");
 				return result;
 			} catch (error) {
+				setUser(null);
 				setStatus("unauthenticated");
 				throw error;
 			}
@@ -137,12 +180,14 @@ export function AuthProvider({ children }) {
 	const login = useCallback(async ({ email, password }) => {
 		setStatus("loading");
 		try {
-			const result = await apiLogin({ email, password });
+		const result = await apiLogin({ email, password });
 			setUser(result.user);
 			setSyncOwner(result.user?.id);
+			saveAuthUser(result.user).catch(() => {});
 			setStatus("authenticated");
 			return result;
 		} catch (error) {
+			setUser(null);
 			setStatus("unauthenticated");
 			throw error;
 		}
@@ -157,6 +202,8 @@ export function AuthProvider({ children }) {
 			// istemci eski bir "son indirme" noktası bildirir ve sunucudaki veri
 			// daha eski sayılır → boş kütüphane.
 			resetSyncState();
+			// Saklanan kimlik de silinir: çıkışta kimse tanınmamalı
+			clearAuthUser().catch(() => {});
 			setUser(null);
 			setStatus("unauthenticated");
 		}
@@ -164,15 +211,14 @@ export function AuthProvider({ children }) {
 
 	// ─── Kullanıcı bilgisini yenile ─────────────────────
 	const refreshUser = useCallback(async () => {
-		try {
-			const meData = await apiGetMe();
-			if (meData?.user || meData?.id) {
-				setUser(meData.user || meData);
-			setSyncOwner((meData.user || meData)?.id);
-				setStatus("authenticated");
-			}
-		} catch {
-			// Sessiz başarısızlık — mevcut durum korunur
+		const meResult = await apiGetMe();
+		// Yalnızca doğrulandığında güncelle; 5xx/ağ hatası mevcut (veya
+		// çevrimdışı) oturumu BOZMAMALIDIR.
+		if (meResult.ok) {
+			setUser(meResult.user);
+			setSyncOwner(meResult.user?.id);
+			saveAuthUser(meResult.user).catch(() => {});
+			setStatus("authenticated");
 		}
 	}, []);
 

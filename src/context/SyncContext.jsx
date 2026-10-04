@@ -122,17 +122,47 @@ export function SyncProvider({ children }) {
 
 	// ─── 4. Oturum Değiştiğinde İlk Senkronizasyon ────────────
 	useEffect(() => {
-		if (isLoggedIn) {
-			// Giriş yapıldı -> hemen senkronize et ve cihaz listesini al
-			executeSyncNow().catch((err) => console.log("Login sync ertelendi:", err.message));
-			getConnectedDevices().then((list) => {
-				setDevices(Array.isArray(list) ? list : []);
-			}).catch(() => {});
-		} else {
+		if (!isLoggedIn) {
 			queueMicrotask(() => {
 				setDevices([]);
 			});
+			return;
 		}
+
+		// Giriş yapıldı -> hemen senkronize et ve cihaz listesini al.
+		//
+		// ⚠️ İkisi TEK bir `Promise.allSettled` içinde toplanır:
+		// 1) `executeSyncNow()` kendi içinde zaten eşzamanlı turu engelliyor,
+		//    `getConnectedDevices()` ise AYRI bir istek — ikisi aynı anda
+		//    gitmeden önce 401 alırsa ikisi de aynı anda refresh tetikler
+		//    (daha önceki hata: yenilenen token'lar birbirini eziyordu).
+		// 2) `.then().catch()` zinciri REJECT edilen bir çağrıda hata
+		//    yolunu sessizce yutuyordu; `allSettled` her sonucu ayrı ayrı
+		//    raporlar ve BİRİ başarısız olunca diğeri etkilenmez.
+		let cancelled = false;
+
+		(async () => {
+			const [syncResult, devicesResult] = await Promise.allSettled([
+				executeSyncNow(),
+				getConnectedDevices(),
+			]);
+
+			if (cancelled) return;
+
+			if (syncResult.status === "rejected") {
+				console.log("Login sync ertelendi:", syncResult.reason?.message);
+			}
+			if (devicesResult.status === "fulfilled") {
+				const list = devicesResult.value;
+				setDevices(Array.isArray(list) ? list : []);
+			} else {
+				console.warn("Cihazlar alınamadı:", devicesResult.reason?.message);
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
 	}, [isLoggedIn]);
 
 	// ─── 5. AppState (Ön Plana Geçiş) Tetikleyicisi ───────────

@@ -307,7 +307,12 @@ export default function SettingsScreen() {
 			res.success ? "Senkronizasyon tamamlandı" : "Senkronizasyon başarısız",
 			res.success
 				? "Değişiklikleriniz hesabınıza kaydedildi."
-				: `Sunucuya ulaşılamadı (${res.error}). Bağlantınızı kontrol edin.`,
+				: // ⚠️ `res.error` iç koddur ("pull_failed_503", "push_nothing_applied"
+				  // gibi). Kullanıcıya ham kod gösterilmez; sunucudan anlamlı bir
+				  // `detail` geldiyse o, yoksa genel mesaj kullanılır.
+					res.detail?.trim()
+						? String(res.detail).trim()
+						: "Sunucuya ulaşılamadı. Yerel verileriniz korundu, bağlantı sağlandığında tekrar denenecek.",
 		);
 	};
 
