@@ -347,6 +347,111 @@ export async function fetchRandomContents(
 }
 
 /**
+ * Fetch plugin health / circuit-breaker status.
+ *
+ * Backend bu hafif ucu periyodik kontrol için açık tutuyor: devrede eklenti
+ * yoksa cevap yüz baytın altında (ölçüldü: 65 bayt). `/api/plugins` ile
+ * farkı, ÖNBELLEKLENMEMESİ — devre durumu çalışma zamanında değişiyor.
+ *
+ * @returns {Promise<{kullanim_disi: Array, kullanim_disi_sayisi: number, toplam_eklenti: number}>}
+ */
+export async function fetchPluginStatus() {
+	try {
+		const response = await fetch(`${API_BASE_URL}/api/plugins/status`, {
+			headers: { "Content-Type": "application/json" },
+		});
+		if (response.ok) {
+			return await response.json();
+		}
+	} catch (error) {
+		// Yoklama arızası sessizce geçilir: kullanıcıyı rahatsız etmemeli,
+		// sıradaki tur yeniden deneyecek.
+		console.warn("API plugin status request failed:", error?.message);
+	}
+	return null;
+}
+
+/**
+ * "Kullanım dışı" durumunu platform listesine uygular.
+ *
+ * `kullanim_disi` yalnızca ŞU AN devrede olanları içerir — düzeltilmiş
+ * kaynakları içermez. Bu yüzden liste "mutlak durum" olarak değil, "şu an
+ * devrede olan küme" olarak yorumlanmalıdır:
+ *
+ *   - Kümede olan kaynak  → `devrede: true`, `kullanilabilir: false`
+ *   - Kümede olmayan kaynak → `devrede: false`, `kullanilabilir: true`
+ *
+ * Bu ikinci madde kritik. Boş küme geldiğinde liste DOKUNULMAZSA, daha önce
+ * işaretlenen kaynak kendiliğinden iyileştiğinde kartı hâlâ "Kullanım dışı"
+ * rozetiyle ve tıklanamaz gösterir; kullanıcı uygulamayı yeniden başlatana
+ * kadar kaynak seçilemez. (Bu hata canlı testte gerçekten yaşandı.)
+ *
+ * Gereksiz render'ı önlemek için: hiçbir kaydın durumu değişmiyorsa AYNI
+ * referans döner.
+ *
+ * @param {Array} platformList - Mevcut liste (dönüşmez, yerinde güncellenir)
+ * @param {Array} kullanimDisi - Backend'in döndürdüğü `durum.kullanim_disi`
+ * @returns {Array} - Uygulanmış liste (değişmediyse AYNI referans)
+ */
+export function applyDisabledPlugins(platformList, kullanimDisi) {
+	if (!Array.isArray(platformList) || platformList.length === 0) {
+		return platformList;
+	}
+
+	// Boş küme GEÇERLİDİR ve "artık devrede olan yok" demektir.
+	const devreliKayitlar = Array.isArray(kullanimDisi) ? kullanimDisi : [];
+	const devredeAdlar = new Set(
+		devreliKayitlar.map((k) => k?.eklenti || k?.ad).filter(Boolean),
+	);
+	const mesajHaritasi = new Map(
+		devreliKayitlar.map((k) => [k?.eklenti || k?.ad, k]),
+	);
+
+	let degisti = false;
+	const sonuc = platformList.map((p) => {
+		const ad = p?.name || p?.id;
+
+		if (devredeAdlar.has(ad)) {
+			const kayit = mesajHaritasi.get(ad);
+			const mesaj =
+				kayit?.mesaj || p.durum_mesaji || "Şu anda kullanım dışı.";
+			const sonHata = kayit?.son_hata || p.son_hata;
+			// Zaten doğru durumdaysa yeni nesne üretme.
+			if (
+				p.devrede === true &&
+				p.kullanilabilir === false &&
+				p.durum_mesaji === mesaj &&
+				(p.son_hata ?? null) === (sonHata ?? null)
+			) {
+				return p;
+			}
+			degisti = true;
+			return {
+				...p,
+				devrede: true,
+				kullanilabilir: false,
+				durum_mesaji: mesaj,
+				son_hata: sonHata,
+			};
+		}
+
+		// Kümede değil → devrede değildir. Önceki rozeti TEMİZLE.
+		const temizMi =
+			!p.devrede && p.kullanilabilir !== false && !p.durum_mesaji;
+		if (temizMi) return p;
+		degisti = true;
+		return {
+			...p,
+			devrede: false,
+			kullanilabilir: true,
+			durum_mesaji: null,
+		};
+	});
+
+	return degisti ? sonuc : platformList;
+}
+
+/**
  * Fetch content details
  */
 export async function fetchContentDetails(contentId) {
@@ -370,6 +475,17 @@ export async function fetchRelatedContent(contentType, currentId) {
 
 /**
  * Search content in all plugins
+ *
+ * ⚠️ DÖNÜŞ DEĞİŞTİ: artık `{ results, durum }` döner.
+ *
+ * Backend, yalnızca bir kaynak çöktüğünde gövdeye `durum` alanı ekler:
+ *   { total, results, durum: { tam, kismi, mesaj, kullanim_disi: [...] } }
+ *
+ * Bu alan UI'da "şu kaynak kullanım dışı" bildirimi için gerekliydi ve
+ * daha önce sessizce düşürülüyordu — kullanıcı "sonuçlar neden az" sorusunun
+ * cevabını alamıyordu.
+ *
+ * @returns {Promise<{results: Array, durum: object|null}>}
  */
 export async function searchContent(query) {
 	try {
@@ -382,16 +498,24 @@ export async function searchContent(query) {
 		if (response.ok) {
 			const data = await response.json();
 			const contents = Array.isArray(data) ? data : data?.results;
-			if (Array.isArray(contents)) return contents;
+			if (Array.isArray(contents)) {
+				return { results: contents, durum: data?.durum ?? null };
+			}
 		}
 	} catch (error) {
 		console.warn("API searchContent error:", error.message);
 	}
-	return [];
+	return { results: [], durum: null };
 }
 
 /**
  * Search content in a specific plugin
+ *
+ * Tek eklenti aramasıdır; backend bütün-kaynak `durum` alanını üretmez.
+ * Yine de döndürdüğümüz şekil `searchContent` ile aynı olsun ki çağıran taraf
+ * tek bir veri yapısı beklesin.
+ *
+ * @returns {Promise<{results: Array, durum: object|null}>}
  */
 export async function searchPluginContent(pluginName, query) {
 	try {
@@ -404,12 +528,14 @@ export async function searchPluginContent(pluginName, query) {
 		if (response.ok) {
 			const data = await response.json();
 			const contents = Array.isArray(data) ? data : data?.results;
-			if (Array.isArray(contents)) return contents;
+			if (Array.isArray(contents)) {
+				return { results: contents, durum: data?.durum ?? null };
+			}
 		}
 	} catch (error) {
 		console.warn("API searchPluginContent error:", error.message);
 	}
-	return [];
+	return { results: [], durum: null };
 }
 
 /**
@@ -471,6 +597,8 @@ export default {
 	fetchPlatformCategories,
 	fetchRandomContents,
 	fetchPluginDetail,
+	fetchPluginStatus,
+	applyDisabledPlugins,
 	fetchContentDetails,
 	fetchRelatedContent,
 	searchContent,
