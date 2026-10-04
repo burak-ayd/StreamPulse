@@ -1,6 +1,7 @@
 import TVPressable from "@/components/common/TVPressable";
 import ListSelectModal from "@/components/modal/ListSelectModal";
 import { fetchPluginDetail } from "@/services/api";
+import { isSeriesContent, typeLabel } from "@/utils/mediaType";
 import {
 	getContentLibraryStatus,
 	setContentLibraryList,
@@ -171,13 +172,9 @@ export default function QuickPreviewModal({
 					: currentItem.rating
 			: "8.4";
 
-	const isSeries =
-		currentItem.is_series === true ||
-		currentItem.content_type === "series" ||
-		currentItem.type === "series" ||
-		Boolean(currentItem.season || currentItem.episode || currentItem.seasons);
-
-	const typeBadgeText = isSeries ? "Dizi" : "Film";
+	// Tek kaynak: `utils/mediaType.js` (bkz. o dosyanın başlığı).
+	const isSeries = isSeriesContent(currentItem);
+	const typeBadgeText = typeLabel(currentItem);
 	const yearText =
 		currentItem.year ||
 		(currentItem.release_date ? currentItem.release_date.split("-")[0] : null) ||

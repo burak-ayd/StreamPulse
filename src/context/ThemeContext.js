@@ -1,5 +1,5 @@
 //src/context/ThemeContext.js
-import { Colors } from "@constants/theme";
+import { Colors, ColorsM3 } from "@constants/theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useState } from "react";
 import { useColorScheme } from "react-native";
@@ -50,12 +50,17 @@ export function ThemeProvider({ children }) {
 	};
 
 	const colors = Colors[theme] ?? Colors.dark; // null guard
+	// Material 3 yüzey rampası. Yeni tasarım dili (profil ekranı) eski
+	// `colors.cardBg`/`colors.text` yerine bu rampayı kullanır; iki set
+	// birbirine karışmasın diye ayrı bir alan olarak sunulur.
+	const m3 = ColorsM3[theme] ?? ColorsM3.dark;
 
 	return (
 		<ThemeContext.Provider
 			value={{
 				theme,
 				colors,
+				m3,
 				isInitialized,
 				toggleTheme,
 			}}>

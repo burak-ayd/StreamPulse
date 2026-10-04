@@ -3,6 +3,7 @@ import { notifyStorageChange } from "./storageListener";
 import { getDeviceId } from "./deviceId";
 import { now as getHlcNow } from "./hlc";
 import { filterPayload, capList, SIZE_CAPS } from "./fieldWhitelist";
+import { canonicalType } from "./mediaType";
 
 export const STORAGE_KEYS = {
 	USER_PROFILE: "user_profile",
@@ -254,8 +255,21 @@ export async function getFavorites() {
 }
 
 /**
- * Bir içeriği favorilere ekler veya favorilerden çıkarır (toggle)
+ * Bir içeriği favorilere ekler veya favorilerden çıkarır (toggle).
  * Tombstone desteği ile senkronizasyona uygundur.
+ *
+ * ⚠️ `type` ALANI BURADA NORMALLEŞTİRİLİR — kalıcı garanti noktası.
+ *
+ * Favoriye eklemenin beş ayrı çağrı yolu var (MovieDetails, QuickPreviewModal,
+ * ListSelectModal, library, …) ve hepsi farklı ölçüde veri taşıyor: kimisi
+ * `type: "series"` veriyor, kimisi yalnızca backend'in `media_type: "Dizi"`
+ * alanını, kimisi hiçbir ipucu vermiyor. Normalleştirmeyi çağrılara
+ * bırakırsak bir yerde unutulur ve dizi "Film" olarak kaydedilir
+ * (profil ekranında "Diziler (0)" çıkan bu yüzden).
+ *
+ * Bu yüzden `type`, KAYDEDİLMEK ÜZERİNE her zaman `utils/mediaType.js`
+ * tarafından yeniden hesaplanır. `type` senkronizasyonda taşınan kanonik
+ * alandır (`LIBRARY_FIELDS`), yani kayıt anında doğru yazılır.
  */
 export async function toggleFavorite(movie) {
 	return mutate(STORAGE_KEYS.FAVORITES, async () => {
@@ -265,6 +279,9 @@ export async function toggleFavorite(movie) {
 			const deviceId = await getDeviceId();
 			const hlc = getHlcNow();
 			const movieId = movie.id || movie.url;
+
+			// Kanonik tür — bkz. fonksiyon başındaki not.
+			const kanonikMovie = { ...movie, type: canonicalType(movie) };
 
 			const existingIndex = all.findIndex((item) => (item.id || item.url) === movieId);
 			let updated;
@@ -276,7 +293,7 @@ export async function toggleFavorite(movie) {
 					isNowFav = true;
 					const revived = {
 						...existing,
-						...filterPayload(movie),
+						...filterPayload(kanonikMovie),
 						_hlc: hlc,
 						_deviceId: deviceId,
 						_deleted: false,
@@ -297,7 +314,7 @@ export async function toggleFavorite(movie) {
 			} else {
 				isNowFav = true;
 				const newItem = {
-					...filterPayload(movie),
+					...filterPayload(kanonikMovie),
 					id: movieId,
 					_hlc: hlc,
 					_deviceId: deviceId,
@@ -488,6 +505,50 @@ export async function removeFromWatchHistory(target) {
 			return activeHistory;
 		} catch (error) {
 			console.error("İzleme geçmişinden silinirken hata:", error);
+			return [];
+		}
+	});
+}
+
+/**
+ * İzleme geçmişinin TAMAMINI temizler (profil → "Geçmişi Temizle").
+ *
+ * ⚠️ Neden ayrı fonksiyon: `removeFromWatchHistory` tek kaydı siler ve
+ * `_deleted` tombstone'ı yazar. Tüm listeyi boşaltmak için N kez çağırmak
+ * (a) N defa mutate + N bildirim demek, (b) her adımda ayrı HQL yazmak,
+ * (c) kullanıcı 50 kayıt varsa 50 turda gezmek anlamına gelirdi.
+ *
+ * Tek seferde tombstone'lanır: kullanıcının diğer cihazlarındaki kayıtlar da
+ * silinir (aksi halde bir sonraki pull onları geri getirirdi).
+ *
+ * @returns {Promise<Array>} Temizlenmiş (boş) aktif liste
+ */
+export async function clearWatchHistory() {
+	return mutate(STORAGE_KEYS.WATCH_HISTORY, async () => {
+		try {
+			const raw = await AsyncStorage.getItem(STORAGE_KEYS.WATCH_HISTORY);
+			const history = raw ? JSON.parse(raw) : [];
+			if (!Array.isArray(history) || history.length === 0) return [];
+
+			const deviceId = await getDeviceId();
+			const hlc = getHlcNow();
+
+			// Zaten silinmiş olanlara yeni HLC yazmayız: `_deleted` kayıtlar
+			// zaten tombstonedir, yeniden damgalamak gereksiz bildirim üretir.
+			const updated = history.map((item) =>
+				item._deleted
+					? item
+					: { ...item, _hlc: hlc, _deviceId: deviceId, _deleted: true },
+			);
+
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.WATCH_HISTORY,
+				JSON.stringify(updated),
+			);
+			notifyStorageChange(STORAGE_KEYS.WATCH_HISTORY, []);
+			return [];
+		} catch (error) {
+			console.error("İzleme geçmişi temizlenirken hata:", error);
 			return [];
 		}
 	});
@@ -1844,6 +1905,7 @@ export default {
 	getWatchHistory,
 	addToWatchHistory,
 	removeFromWatchHistory,
+	clearWatchHistory,
 	getSearchHistory,
 	addToSearchHistory,
 	removeFromSearchHistory,
