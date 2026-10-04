@@ -1,8 +1,12 @@
-import LanguageBadge from "@/components/common/LanguageBadge";
+import CategoryCard, {
+	ROW_CARD_GAP,
+	ROW_CARD_WIDTH,
+	ROW_LIST_PAD_H,
+} from "@/components/content/CategoryCard";
 import TVPressable from "@/components/common/TVPressable";
 import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
+import { contentKey } from "@/utils/contentMeta";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
 import { memo, useEffect, useState } from "react";
 import {
 	ActivityIndicator,
@@ -13,13 +17,17 @@ import {
 } from "react-native";
 
 /**
- * Kart geometrisi tek kaynaktan yönetilir; hem stiller hem de
- * getItemLayout bunları kullanır (böylece "gap" değişirse ölçüm kaymaz).
+ * Ana sayfadaki tek kategori satırı (yatay kart dizisi).
+ *
+ * ⚠️ Kartın kendisi `components/content/CategoryCard.jsx` — kategori sayfası
+ * da aynı bileşeni kullanıyor. Burada yalnızca satır kabuğu, veri çekme ve
+ * "tümünü göster" oku var. Kartın görünümüne/oynaklanmasına burada dokunma;
+ * değişiklik her ekranda otomatik uygulanır.
+ *
+ * Kart geometrisi tek kaynaktan yönetilir (`CategoryCard`); hem stiller hem
+ * `getItemLayout` aynı sabitleri kullanır, böylece ölçüm kaymaz.
  */
-const CARD_WIDTH = 124;
-const CARD_GAP = 6;
-const LIST_PAD_H = 18;
-const CARD_STRIDE = CARD_WIDTH + CARD_GAP;
+const CARD_STRIDE = ROW_CARD_WIDTH + ROW_CARD_GAP;
 
 /**
  * memo: üst bileşen (ana sayfa) yeniden render olduğunda, prop'ları değişmeyen
@@ -33,7 +41,7 @@ function MovieCategorySection({
 	onMovieLongPress,
 	onSeeAll,
 }) {
-	const initialCached = getCachedCategoryMovies(platformName, category?.url);
+	const initialCached = getCachedCategoryMovies(platformName, category?.url, 1);
 	const [movies, setMovies] = useState(initialCached || []);
 	const [loading, setLoading] = useState(
 		!initialCached || initialCached.length === 0,
@@ -46,6 +54,7 @@ function MovieCategorySection({
 			const currentCached = getCachedCategoryMovies(
 				platformName,
 				category?.url,
+				1,
 			);
 			if (currentCached && currentCached.length > 0) {
 				if (isMounted) {
@@ -118,7 +127,7 @@ function MovieCategorySection({
 			<FlatList
 				data={movies}
 				keyExtractor={(item, index) =>
-					`${item.id || item.url || category?.name || "movie"}-${index}`
+					`${contentKey(item, index)}-${category?.name || "movie"}`
 				}
 				horizontal
 				showsHorizontalScrollIndicator={false}
@@ -131,88 +140,14 @@ function MovieCategorySection({
 				// olduğu yer burası).
 				removeClippedSubviews={true}
 				getItemLayout={getItemLayout}
-				renderItem={({ item }) => {
-					const posterUri =
-						item.poster ||
-						item.poster_url ||
-						item.image ||
-						item.backdrop_url ||
-						"https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=60";
-					const rating = item.rating ? String(item.rating) : null;
-					const movieRawLang =
-						item.language ||
-						item.languages ||
-						item.lang ||
-						item.audio ||
-						item.subtitles;
-
-					return (
-						<TVPressable
-							style={styles.cardContainer}
-							focusedStyle={styles.cardContainerFocused}
-							onPress={() => onMoviePress(item)}
-							onLongPress={() => onMovieLongPress?.(item)}>
-							{({ focused }) => (
-								<View>
-									{/* Poster Image Container */}
-									<View
-										style={[
-											styles.posterWrapper,
-											focused && styles.posterWrapperFocused,
-										]}>
-										<Image
-											source={{ uri: posterUri }}
-											style={styles.poster}
-											contentFit="cover"
-											contentPosition="center"
-											// Sanallaştırılmış listede her kart için crossfade
-											// çalıştırmak decode animasyonu kuyruğunu
-											// dolduruyor. Glide'ın view-recycling davranışını
-											// tetikleyen recyclingKey veriyoruz — CloudStream'in
-											// sharedPool mantığının karşılığı.
-											recyclingKey={posterUri}
-											transition={0}
-											cachePolicy="memory-disk"
-										/>
-
-										{/* Top-left Rating Badge */}
-										{rating && (
-											<View style={styles.ratingBadge}>
-												<Ionicons
-													name="star"
-													size={10}
-													color="#FFD700"
-												/>
-												<Text style={styles.ratingText}>
-													{rating}
-												</Text>
-											</View>
-										)}
-
-										{/* Bottom-right Language Badge */}
-										{movieRawLang ? (
-											<LanguageBadge
-												language={movieRawLang}
-												size="small"
-												style={styles.languageBadge}
-											/>
-										) : null}
-									</View>
-
-									{/* Title */}
-									<Text
-										style={[
-											styles.movieTitle,
-											focused && styles.movieTitleFocused,
-										]}
-										numberOfLines={1}>
-										{item.title}
-									</Text>
-								</View>
-							)}
-						</TVPressable>
-					);
-				}}
+				renderItem={({ item }) => (
+					<CategoryCard
+						item={item}
+						variant="row"
+						onPress={() => onMoviePress(item)}
+						onLongPress={() => onMovieLongPress?.(item)}
+					/>
+				)}
 			/>
 		</View>
 	);
@@ -227,7 +162,7 @@ export default memo(MovieCategorySection);
 function getItemLayout(_data, index) {
 	return {
 		length: CARD_STRIDE,
-		offset: LIST_PAD_H + CARD_STRIDE * index,
+		offset: ROW_LIST_PAD_H + CARD_STRIDE * index,
 		index,
 	};
 }
@@ -258,78 +193,9 @@ const styles = StyleSheet.create({
 		transform: [{ scale: 1.15 }],
 	},
 	horizontalList: {
-		paddingHorizontal: LIST_PAD_H,
-		gap: CARD_GAP,
+		paddingHorizontal: ROW_LIST_PAD_H,
+		gap: ROW_CARD_GAP,
 		paddingVertical: 6,
-	},
-	cardContainer: {
-		width: CARD_WIDTH,
-	},
-	cardContainerFocused: {
-		// zIndex kaldırıldı: kardeş sıralamasını değiştirmek odak başına
-		// ayrı bir commit demek. Ölçek 1.06 ve listedeki 6dp boşluk sayesinde
-		// kart komşusunun altına girmez, görsel olarak da yeterince belirgin.
-		transform: [{ scale: 1.06 }],
-	},
-	posterWrapper: {
-		width: CARD_WIDTH,
-		height: 182,
-		borderRadius: 12,
-		overflow: "hidden",
-		backgroundColor: "#1c1e24",
-		position: "relative",
-		borderWidth: 2,
-		borderColor: "transparent",
-	},
-	posterWrapperFocused: {
-		// TV performans: odak anında elevation/shadow DEĞİŞTİRİLMEZ.
-		// Android'de elevation değişimi outline/clip-path'i geçersiz kılar ve
-		// gölge katmanını yeniden rasterize eder; kumandaya her basışta bunu
-		// yapmak geçişleri takılı kılar. Border + arka plan aynı görünümü
-		// GPU'da neredeyse bedava verir.
-		borderColor: "#FF3B30",
-		backgroundColor: "#2a1216",
-	},
-	poster: {
-		width: "100%",
-		height: "100%",
-		borderRadius: 12,
-		overflow: "hidden",
-	},
-	ratingBadge: {
-		position: "absolute",
-		top: 6,
-		left: 6,
-		backgroundColor: "rgba(0, 0, 0, 0.75)",
-		flexDirection: "row",
-		alignItems: "center",
-		paddingHorizontal: 6,
-		paddingVertical: 3,
-		borderRadius: 12,
-		gap: 3,
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.1)",
-	},
-	ratingText: {
-		color: "#ffffff",
-		fontSize: 10,
-		fontWeight: "700",
-	},
-	languageBadge: {
-		position: "absolute",
-		bottom: 6,
-		right: 6,
-	},
-	movieTitle: {
-		color: "#ffffff",
-		fontSize: 13,
-		fontWeight: "600",
-		marginTop: 6,
-		letterSpacing: -0.1,
-	},
-	movieTitleFocused: {
-		color: "#FF3B30",
-		fontWeight: "700",
 	},
 	loadingContainer: {
 		height: 140,
