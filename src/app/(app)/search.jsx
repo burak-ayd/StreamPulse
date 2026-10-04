@@ -52,6 +52,76 @@ export const resetSearchMemoryCache = () => {
 	};
 };
 
+/**
+ * Backend'in `/api/search` yanıtındaki `durum` nesnesini ekranda
+ * gösterilecek bir görünüme çevirir.
+ *
+ * Neden gerekli? `durum` YALNIZCA sorun varsa gelir ve içinde üç farklı
+ * bilgi taşıyabilir:
+ *
+ *   1) `kullanim_disi` — devreye girmiş kaynaklar. Bunlar "geçici olarak
+ *      kullanım dışı"dir ve `mesaj` alanı daima doludur.
+ *   2) `dusenler` — yalnızca BU aramada hata vermiş kaynaklar. Devre henüz
+ *      açılmamıştır, dolayısıyla `mesaj` boştur. Bu kaynaklar "kullanım
+ *      dışı" DEĞİLDİR; sadece bu sorguyu karşılamadı.
+ *   3) `mesaj` — backend'in özeti (çoğunlukla 1. durum için).
+ *
+ * Bu ayrım önemli: 2. durumda "kullanım dışı" demek yanlış bilgi olurdu.
+ * (Gerçek backend yanıtında bu ayrım ölçülerek doğrulandı: devre henüz
+ * açılmamışken `kullanim_disi` ve `mesaj` boş, yalnızca `dusenler` dolu.)
+ *
+ * @returns {{baslik: string, satirlar: string[], not: string|null}|null}
+ */
+function durumGorunum(durum) {
+	if (!durum) return null;
+
+	const devreli = durum.kullanim_disi ?? [];
+	const dusenler = durum.dusenler ?? [];
+
+	// 1) Devreye girmiş kaynaklar — en bilgilendirici durum.
+	if (devreli.length > 0) {
+		const n = devreli.length;
+		return {
+			baslik:
+				durum.mesaj ||
+				`${n} kaynak geçici olarak kullanım dışı: ` +
+					devreli.map((k) => k.eklenti).join(", "),
+			satirlar: devreli.map((k) => k.mesaj || `${k.eklenti} kullanım dışı`),
+			not:
+				n > 1 && durum.basarili > 0
+					? "Sonuçlar diğer kaynaklardan geliyor."
+					: null,
+		};
+	}
+
+	// 2) Yalnızca bu aramada düşen kaynaklar — devre henüz açılmamış.
+	if (dusenler.length > 0) {
+		const adlar = dusenler
+			.map((d) => d.eklenti)
+			.filter(Boolean)
+			.filter((v, i, a) => a.indexOf(v) === i); // yinelenenleri at
+		const n = adlar.length || dusenler.length;
+		return {
+			baslik:
+				durum.mesaj ||
+				`${n} kaynak bu aramayı karşılayamadı` +
+					(adlar.length ? `: ${adlar.join(", ")}` : ""),
+			satirlar: adlar.map((a) => `${a} yanıt vermedi`),
+			not:
+				durum.basarili > 0
+					? "Sonuçlar diğer kaynaklardan geliyor."
+					: null,
+		};
+	}
+
+	// 3) Adı geçen kaynak yok — yalnızca genel durum.
+	return {
+		baslik: durum.mesaj || "Arama kısmen tamamlanamadı.",
+		satirlar: [],
+		not: null,
+	};
+}
+
 export default function SearchScreen() {
 	const { theme, colors } = useThemeContext();
 	const router = useRouter();
@@ -77,6 +147,22 @@ export default function SearchScreen() {
 		searchMemoryCache.hasSearched,
 	);
 	const [searchHistory, setSearchHistory] = useState([]);
+
+	/*
+	 * Arama sırasında düşen kaynakların durumu.
+	 *
+	 * Backend `durum` alanını YALNIZCA sorun varsa gönderir; tam başarılı
+	 * aramada `null` gelir ve banner hiç render edilmez. Bu, ekranın normal
+	 * kullanımda tamamen değişmemiş kalmasını sağlar.
+	 */
+	const [sourceStatus, setSourceStatus] = useState(null);
+
+	// `durum` nesnesini ekran metnine çevirir. useMemo: aynı `durum`
+	// nesnesi için yeniden hesaplanmaz.
+	const sourceStatusView = useMemo(
+		() => durumGorunum(sourceStatus),
+		[sourceStatus],
+	);
 
 	useEffect(() => {
 		const onBackPress = () => {
@@ -166,19 +252,33 @@ export default function SearchScreen() {
 		const targetScope = scopeOverride || searchScope;
 
 		try {
-			let data;
+			// `searchContent` / `searchPluginContent` artık
+			// `{ results, durum }` döner. `durum` yalnızca bir kaynak
+			// çöktüğünde gelir ve "neden az sonuç var" sorusunu yanıtlar.
+			let list;
+			let durum = null;
+
 			if (targetScope === "plugin" && activePlugin) {
-				data = await searchPluginContent(activePlugin, target);
+				({ results: list, durum } = await searchPluginContent(
+					activePlugin,
+					target,
+				));
 			} else {
-				data = await searchContent(target);
+				({ results: list, durum } = await searchContent(target));
 			}
-			const list = Array.isArray(data) ? data : [];
-			setResults(list);
-			searchMemoryCache.results = list;
+
+			const sonuclar = Array.isArray(list) ? list : [];
+			setResults(sonuclar);
+			searchMemoryCache.results = sonuclar;
+
+			// Kaynak durumunu göster: devrede olan kaynakları kullanıcıya
+			// bildir. Tam başarıda `durum` null gelir ve banner gizlenir.
+			setSourceStatus(durum ?? null);
 		} catch (error) {
 			console.error("Arama hatası:", error);
 			setResults([]);
 			searchMemoryCache.results = [];
+			setSourceStatus(null);
 		} finally {
 			setLoading(false);
 		}
@@ -460,6 +560,46 @@ export default function SearchScreen() {
 					showsVerticalScrollIndicator={false}
 					keyboardShouldPersistTaps="handled"
 					contentContainerStyle={styles.scrollContainer}>
+					{/*
+					 * Kaynak Durumu Banner'ı
+					 *
+					 * Backend `durum` alanını sorun yoksa GÖNDERMEZ, bu yüzden
+					 * normal aramalarda bu blok hiç render edilmez ve ekran
+					 * yerleşimi değişmez.
+					 *
+					 * Metin `durumGorunum()` tarafından üretilir; orada
+					 * "devreye girmiş kaynak" ile "yalnızca bu aramayı
+					 * karşılamayan kaynak" ayrımı yapılır.
+					 */}
+					{!loading && sourceStatusView ? (
+						<View style={styles.sourceStatusBanner}>
+							<Ionicons
+								name="warning"
+								size={16}
+								color="#f59e0b"
+								style={styles.sourceStatusIcon}
+							/>
+							<View style={styles.sourceStatusBody}>
+								<Text style={styles.sourceStatusTitle}>
+									{sourceStatusView.baslik}
+								</Text>
+								{sourceStatusView.satirlar.map((s, i) => (
+									<Text
+										key={i}
+										style={styles.sourceStatusDetail}
+										numberOfLines={2}>
+										• {s}
+									</Text>
+								))}
+								{sourceStatusView.not ? (
+									<Text style={styles.sourceStatusNote}>
+										{sourceStatusView.not}
+									</Text>
+								) : null}
+							</View>
+						</View>
+					) : null}
+
 					{/* Yükleniyor Durumu */}
 					{loading && (
 						<View style={styles.centerState}>
@@ -883,6 +1023,42 @@ const styles = StyleSheet.create({
 	},
 	scrollContainer: {
 		paddingBottom: 80,
+	},
+	/* ── Kaynak durumu banner'ı ── */
+	sourceStatusBanner: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		backgroundColor: "rgba(245, 158, 11, 0.12)",
+		borderWidth: 1,
+		borderColor: "rgba(245, 158, 11, 0.35)",
+		borderRadius: 10,
+		padding: 12,
+		marginHorizontal: 16,
+		marginBottom: 10,
+		gap: 9,
+	},
+	sourceStatusIcon: {
+		marginTop: 1,
+	},
+	sourceStatusBody: {
+		flex: 1,
+		gap: 3,
+	},
+	sourceStatusTitle: {
+		color: "#fbbf24",
+		fontSize: 12,
+		fontWeight: "700",
+	},
+	sourceStatusDetail: {
+		color: "#fcd34d",
+		fontSize: 11,
+		lineHeight: 15,
+	},
+	sourceStatusNote: {
+		color: "#9ca3af",
+		fontSize: 10,
+		fontStyle: "italic",
+		marginTop: 1,
 	},
 	searchContainer: {
 		paddingHorizontal: 16,
