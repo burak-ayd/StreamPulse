@@ -234,6 +234,26 @@ export default function MovieDetailsScreen() {
 					seriesId: passedMovie?.seriesId,
 					seriesTitle: passedMovie?.seriesTitle,
 				}),
+				// ⚠️ `is_series` ve `media_type` AŞAĞIDA `passedMovie`'dan
+				// tamamlanıyordu; oysa detay cevabı ikisini de DOĞRU
+				// biliyor. Alanlar buraya taşınmayınca satır ~349'daki
+				// `content?.is_series ?? passedMovie?.is_series` ikisinde de
+				// boş bulup `passedMovie.media_type`'a düşüyordu.
+				//
+				// Kategori (`main-page`) listesi dizileri `media_type: "Film"`
+				// etiketiyle geliyor (arama ise doğru şekilde "Dizi" dönüyor).
+				// Sonuç: `isSeriesContent` 2. adımda "Film"e kısa devre yapıp
+				// `isSeries = false` veriyor ve `isSeries &&` kapısındaki
+				// "Bölümler" sekmesi hiç render edilmiyordu — bölümler API'de
+				// vardı, ekranda görünmüyordu.
+				//
+				// Detay cevabı liste verisinden DAHA GÜÇLÜ bir kaynaktır
+				// (`content_type` sözleşmesi + modelden türetilen `is_series`),
+				// bu yüzden öncelik ona verilir.
+				is_series:
+					pluginDetail.is_series === true ||
+					pluginDetail.is_series === "true",
+				media_type: pluginDetail.media_type || null,
 				status: pluginDetail.status || null,
 				director:
 					pluginDetail.director ||
@@ -347,7 +367,18 @@ export default function MovieDetailsScreen() {
 	const isSeries = isSeriesContent({
 		...content,
 		is_series: content?.is_series ?? passedMovie?.is_series,
-		media_type: content?.media_type ?? passedMovie?.media_type,
+		// ⚠️ `passedMovie.media_type` yalnızca `content` KENDİ tür sinyali
+		// veremiyorsa devreye girmeli.
+		//
+		// Sebep: `isSeriesContent` sırası `is_series → media_type →
+		// content_type → …` ve `media_type` BİTİŞ bir cevap verir. Liste
+		// verisi (`main-page`) dizileri `media_type: "Film"` etiketlediği
+		// için, bu fallback `content_type: "series"` (detay cevabından)
+		// gelen DOĞRU sinyali sessizce eziyordu. `content_type` zaten bir
+		// sinyal olduğundan, varken listeye düşmek yanlıştır.
+		media_type:
+			content?.media_type ??
+			(content?.content_type ? undefined : passedMovie?.media_type),
 		seriesId: content?.seriesId ?? passedMovie?.seriesId,
 		seriesTitle: content?.seriesTitle ?? passedMovie?.seriesTitle,
 		season: content?.season ?? passedMovie?.initialSeason ?? passedMovie?.season,
