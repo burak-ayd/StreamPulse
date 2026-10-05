@@ -35,6 +35,13 @@ export const STORAGE_KEYS = {
 	LAST_SYNCED_AT: "streampulse_last_synced_at",
 	PENDING_SYNC_COUNT: "streampulse_pending_sync_count",
 	SYNC_OWNER: "streampulse_sync_owner",
+	// Belge (document) senkronizasyon meta verisi:
+	//   `{ grup: { hlc, deviceId, sig } }`
+	// `hlc` = belgenin sunucuda bilinen son damgası, `sig` = son gönderilen/çekilen
+	// içeriğin imzası. ⚠️ Kullanıcı verisi DEĞİLDİR ama hesap bağımlıdır: başka
+	// hesaba geçince temizlenmeli (bkz. `setSyncOwner`), çünkü yanlış hesabın
+	// damgasıyla "değişmemiş" sanılan bir belge yeni hesabın verisini ezer.
+	DOC_SYNC_META: "streampulse_sync_doc_meta",
 };
 
 // Sıralı yazma kuyruğu — read-modify-write yarış koşullarını önler
@@ -83,6 +90,7 @@ export async function clearAllUserData() {
 		STORAGE_KEYS.LAST_SYNCED_AT,
 		STORAGE_KEYS.PENDING_SYNC_COUNT,
 		STORAGE_KEYS.SYNC_OWNER,
+		STORAGE_KEYS.DOC_SYNC_META,
 	];
 	try {
 		await AsyncStorage.multiRemove(userKeys);
