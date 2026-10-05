@@ -18,14 +18,11 @@
  * içerik dönüyor (bkz. api/routes/plugins.py:601).
  */
 
-import { useThemeContext } from "@/context/ThemeContext";
-import CategoryCard from "@/components/content/CategoryCard";
 import TVPressable from "@/components/common/TVPressable";
+import CategoryCard from "@/components/content/CategoryCard";
 import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
-import {
-	fetchPlatformMainPage,
-	getCachedCategoryMovies,
-} from "@/services/api";
+import { useThemeContext } from "@/context/ThemeContext";
+import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
 import { contentKey, yearOf } from "@/utils/contentMeta";
 import { canonicalType } from "@/utils/mediaType";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -64,7 +61,6 @@ function shortenTitle(name) {
 	return `${name.slice(0, MAX_TITLE_CHARS - 1).trimEnd()}…`;
 }
 
-
 // ════════════════════════════════════════════════════════════════
 // Ekran
 // ════════════════════════════════════════════════════════════════
@@ -96,7 +92,9 @@ export default function CategoryScreen() {
 	const [items, setItems] = useState(cachedFirstPage ?? []);
 	const [page, setPage] = useState(cachedFirstPage?.length ? 1 : 0);
 	// Önbellek varsa bekleme ekranı göstermeye gerek yok.
-	const [loading, setLoading] = useState(hasTarget && !cachedFirstPage?.length);
+	const [loading, setLoading] = useState(
+		hasTarget && !cachedFirstPage?.length,
+	);
 	const [loadingMore, setLoadingMore] = useState(false);
 	const [exhausted, setExhausted] = useState(false);
 	const [error, setError] = useState(null);
@@ -117,7 +115,8 @@ export default function CategoryScreen() {
 
 	const cardWidth =
 		layout.width > 0
-			? (layout.width - GUTTER * 2 - GAP * (layout.columns - 1)) / layout.columns
+			? (layout.width - GUTTER * 2 - GAP * (layout.columns - 1)) /
+				layout.columns
 			: 0;
 
 	const handleBack = useCallback(() => {
@@ -173,70 +172,76 @@ export default function CategoryScreen() {
 	);
 
 	// ── 2) STATE: ağ sonucunu ekrana uygular ─────────────────────────
-	const applyPage = useCallback(({ data, error: fetchError }, targetPage, append) => {
-		setLoading(false);
-		setLoadingMore(false);
+	const applyPage = useCallback(
+		({ data, error: fetchError }, targetPage, append) => {
+			setLoading(false);
+			setLoadingMore(false);
 
-		if (fetchError) {
-			console.warn("Kategori sayfası yüklenemedi:", fetchError?.message);
-			setError(fetchError?.message || "Bilinmeyen hata");
-			return;
-		}
+			if (fetchError) {
+				console.warn(
+					"Kategori sayfası yüklenemedi:",
+					fetchError?.message,
+				);
+				setError(fetchError?.message || "Bilinmeyen hata");
+				return;
+			}
 
-		// `data === null` → istek `inFlight` nedeniyle başlamadı, sessiz geç.
-		if (data === null) return;
+			// `data === null` → istek `inFlight` nedeniyle başlamadı, sessiz geç.
+			if (data === null) return;
 
-		setPage(targetPage);
-		setError(null);
+			setPage(targetPage);
+			setError(null);
 
-		// Boş sonuç = bu kategoride başka içerik yok. SONSUZ KAYDIRMA BU
-		// ŞEKİLDE BİTER; aksi hâlde liste hiç durmadan isterdi.
-		if (data.length === 0) {
-			setExhausted(true);
-			if (!append) setItems([]);
-			return;
-		}
+			// Boş sonuç = bu kategoride başka içerik yok. SONSUZ KAYDIRMA BU
+			// ŞEKİLDE BİTER; aksi hâlde liste hiç durmadan isterdi.
+			if (data.length === 0) {
+				setExhausted(true);
+				if (!append) setItems([]);
+				return;
+			}
 
-		setItems((prev) => {
-			if (!append) return data;
+			setItems((prev) => {
+				if (!append) return data;
 
-			// ⚠️ YENİ İÇERİK SAYILMASI — liste bitişinin tek güvenilir yolu.
-			//
-			// Eskiden "sayfa 20'den az döndüyse bu son sayfaydı" kuralı
-			// kullanılıyordu. Bu YANLIŞTIR: sayfa boyutu eklentiden eklentiye
-			// değişiyor ve ölçüldü:
-			//
-			//     hdfilmcehennemi → 20    fullhdfilmizlesene → 18
-			//     dizibox        → 15    (kategoriye göre 28)
-			//
-			// 18 < 20 olduğu için `fullhdfilmizlesene` ilk sayfadan sonra
-			// "bitti" sanıyordu; oysa backend 3. sayfayı da sorunsuz
-			// döndürüyor (canlıda doğrulandı).
-			//
-			// Doğru kural: bir sayfa **hiç yeni içerik getirmediyse** dur.
-			// Bu, eklenti sayfayı ilerletmiyorsa da (bazı kategoriler hep
-			// aynı sayfayı döndürüyor) sonsuz döngüyü kendiliğinden keser.
-			const seen = new Set(prev.map((i) => i.url || i.id || i.title));
-			const extra = data.filter((i) => {
-				const key = i.url || i.id || i.title;
-				if (!key || seen.has(key)) return false;
-				seen.add(key);
-				return true;
+				// ⚠️ YENİ İÇERİK SAYILMASI — liste bitişinin tek güvenilir yolu.
+				//
+				// Eskiden "sayfa 20'den az döndüyse bu son sayfaydı" kuralı
+				// kullanılıyordu. Bu YANLIŞTIR: sayfa boyutu eklentiden eklentiye
+				// değişiyor ve ölçüldü:
+				//
+				//     hdfilmcehennemi → 20    fullhdfilmizlesene → 18
+				//     dizibox        → 15    (kategoriye göre 28)
+				//
+				// 18 < 20 olduğu için `fullhdfilmizlesene` ilk sayfadan sonra
+				// "bitti" sanıyordu; oysa backend 3. sayfayı da sorunsuz
+				// döndürüyor (canlıda doğrulandı).
+				//
+				// Doğru kural: bir sayfa **hiç yeni içerik getirmediyse** dur.
+				// Bu, eklenti sayfayı ilerletmiyorsa da (bazı kategoriler hep
+				// aynı sayfayı döndürüyor) sonsuz döngüyü kendiliğinden keser.
+				const seen = new Set(prev.map((i) => i.url || i.id || i.title));
+				const extra = data.filter((i) => {
+					const key = i.url || i.id || i.title;
+					if (!key || seen.has(key)) return false;
+					seen.add(key);
+					return true;
+				});
+
+				if (extra.length === 0) {
+					// Bu sayfa tamamen mevcut — eklenti ilerlemiyor.
+					setExhausted(true);
+					return prev;
+				}
+				return [...prev, ...extra];
 			});
 
-			if (extra.length === 0) {
-				// Bu sayfa tamamen mevcut — eklenti ilerlemiyor.
-				setExhausted(true);
-				return prev;
-			}
-			return [...prev, ...extra];
-		});
-
-		// ⚠️ "Sayfa 20'den az döndüyse son sayfaydı" kuralı KALDIRILDI —
-		// sayfa boyutu eklentiden eklentiye değişiyor (18/15/20/28 ölçüldü),
-		// bu tahmin erken bitiriyordu. Bkz. yukarıdaki açıklama ve
-		// `newItems` sayımı.
-	}, []);
+			// ⚠️ "Sayfa 20'den az döndüyse son sayfaydı" kuralı KALDIRILDI —
+			// sayfa boyutu eklentiden eklentiye değişiyor (18/15/20/28 ölçüldü),
+			// bu tahmin erken bitiriyordu. Bkz. yukarıdaki açıklama ve
+			// `newItems` sayımı.
+		},
+		[],
+	);
 
 	// ── İlk yükleme ──────────────────────────────────────────────────
 	//
@@ -318,11 +323,16 @@ export default function CategoryScreen() {
 
 			const id =
 				item.id ||
-				encodeURIComponent(item.url || item.slug || item.title || "content");
+				encodeURIComponent(
+					item.url || item.slug || item.title || "content",
+				);
 
 			router.push({
 				pathname: "/(app)/MovieDetails/[id]",
-				params: { id: String(id), movieData: JSON.stringify(withPlugin) },
+				params: {
+					id: String(id),
+					movieData: JSON.stringify(withPlugin),
+				},
 			});
 		},
 		[router, platformName],
@@ -331,15 +341,18 @@ export default function CategoryScreen() {
 	// ── Uzun basma → hızlı önizleme (ana sayfayla aynı) ────────────
 	const [previewItem, setPreviewItem] = useState(null);
 
-	const handleLongPress = useCallback((item) => {
-		if (!item) return;
-		setPreviewItem({
-			...item,
-			// Modal, oynatırken/yorum eklerken eklentiye ihtiyaç duyuyor.
-			plugin: item.plugin || platformName,
-			type: canonicalType(item),
-		});
-	}, [platformName]);
+	const handleLongPress = useCallback(
+		(item) => {
+			if (!item) return;
+			setPreviewItem({
+				...item,
+				// Modal, oynatırken/yorum eklerken eklentiye ihtiyaç duyuyor.
+				plugin: item.plugin || platformName,
+				type: canonicalType(item),
+			});
+		},
+		[platformName],
+	);
 
 	const renderItem = useCallback(
 		({ item }) => (
@@ -357,7 +370,10 @@ export default function CategoryScreen() {
 		[cardWidth, handleItemPress, handleLongPress],
 	);
 
-	const keyExtractor = useCallback((item, index) => contentKey(item, index), []);
+	const keyExtractor = useCallback(
+		(item, index) => contentKey(item, index),
+		[],
+	);
 
 	const getItemLayout = useCallback(
 		(data, index) => {
@@ -377,8 +393,15 @@ export default function CategoryScreen() {
 		if (loadingMore) {
 			return (
 				<View style={styles.footer}>
-					<ActivityIndicator size="small" color={m3.primaryContainer} />
-					<Text style={[styles.footerText, { color: m3.onSurfaceVariant }]}>
+					<ActivityIndicator
+						size="small"
+						color={m3.primaryContainer}
+					/>
+					<Text
+						style={[
+							styles.footerText,
+							{ color: m3.onSurfaceVariant },
+						]}>
 						Daha fazla yükleniyor…
 					</Text>
 				</View>
@@ -387,7 +410,11 @@ export default function CategoryScreen() {
 		if (exhausted && items.length > 0) {
 			return (
 				<View style={styles.footer}>
-					<Text style={[styles.footerText, { color: m3.onSurfaceVariant }]}>
+					<Text
+						style={[
+							styles.footerText,
+							{ color: m3.onSurfaceVariant },
+						]}>
 						`${items.length} içerik gösteriliyor`
 					</Text>
 				</View>
@@ -406,7 +433,9 @@ export default function CategoryScreen() {
 				style={[styles.safeArea, { backgroundColor: m3.surfaceLowest }]}
 				onLayout={onLayout}>
 				<StatusBar
-					barStyle={theme === "dark" ? "light-content" : "dark-content"}
+					barStyle={
+						theme === "dark" ? "light-content" : "dark-content"
+					}
 					backgroundColor={m3.surfaceLowest}
 				/>
 
@@ -427,12 +456,19 @@ export default function CategoryScreen() {
 							{ backgroundColor: `${m3.surfaceContainerHigh}CC` },
 						]}
 						accessibilityLabel="Geri">
-						<Ionicons name="arrow-back" size={21} color={m3.onSurface} />
+						<Ionicons
+							name="arrow-back"
+							size={21}
+							color={m3.onSurface}
+						/>
 					</TVPressable>
 
 					<View style={styles.topBarTitleWrap}>
 						<Text
-							style={[styles.topBarTitle, { color: m3.onSurface }]}
+							style={[
+								styles.topBarTitle,
+								{ color: m3.onSurface },
+							]}
 							numberOfLines={1}>
 							{shortenTitle(categoryName)}
 						</Text>
@@ -441,11 +477,16 @@ export default function CategoryScreen() {
 								style={[
 									styles.countChip,
 									{
-										backgroundColor: m3.surfaceContainerHigh,
+										backgroundColor:
+											m3.surfaceContainerHigh,
 										borderColor: m3.outlineVariant,
 									},
 								]}>
-								<Text style={[styles.countText, { color: m3.tertiary }]}>
+								<Text
+									style={[
+										styles.countText,
+										{ color: m3.tertiary },
+									]}>
 									{items.length} içerik
 								</Text>
 							</View>
@@ -456,7 +497,11 @@ export default function CategoryScreen() {
 				{loading && items.length === 0 ? (
 					<View style={styles.center}>
 						<ActivityIndicator color={m3.primaryContainer} />
-						<Text style={[styles.footerText, { color: m3.onSurfaceVariant }]}>
+						<Text
+							style={[
+								styles.footerText,
+								{ color: m3.onSurfaceVariant },
+							]}>
 							Yükleniyor…
 						</Text>
 					</View>
@@ -467,14 +512,22 @@ export default function CategoryScreen() {
 							size={40}
 							color={m3.onSurfaceVariant}
 						/>
-						<Text style={[styles.errorText, { color: m3.onSurface }]}>
+						<Text
+							style={[styles.errorText, { color: m3.onSurface }]}>
 							Kategori yüklenemedi
 						</Text>
 						<TVPressable
 							onPress={handleRetry}
 							focusedStyle={styles.retryFocused}
-							style={[styles.retryBtn, { borderColor: m3.primaryContainer }]}>
-							<Text style={[styles.retryText, { color: m3.primaryContainer }]}>
+							style={[
+								styles.retryBtn,
+								{ borderColor: m3.primaryContainer },
+							]}>
+							<Text
+								style={[
+									styles.retryText,
+									{ color: m3.primaryContainer },
+								]}>
 								Tekrar Dene
 							</Text>
 						</TVPressable>
@@ -486,18 +539,25 @@ export default function CategoryScreen() {
 							size={40}
 							color={m3.onSurfaceVariant}
 						/>
-						<Text style={[styles.errorText, { color: m3.onSurface }]}>
+						<Text
+							style={[styles.errorText, { color: m3.onSurface }]}>
 							Bu kategoride içerik bulunamadı
 						</Text>
 					</View>
 				) : (
 					<FlatList
+						key={layout.columns}
 						data={items}
 						keyExtractor={keyExtractor}
 						renderItem={renderItem}
 						numColumns={layout.columns}
-						columnWrapperStyle={styles.row}
-						contentContainerStyle={[styles.listContent, { rowGap: GAP }]}
+						columnWrapperStyle={
+							layout.columns > 1 ? styles.row : undefined
+						}
+						contentContainerStyle={[
+							styles.listContent,
+							{ rowGap: GAP },
+						]}
 						getItemLayout={getItemLayout}
 						onEndReached={loadMore}
 						onEndReachedThreshold={0.6}
