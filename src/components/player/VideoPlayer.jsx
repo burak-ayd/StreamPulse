@@ -125,6 +125,13 @@ export default function VideoPlayer({
 	seriesInfo = null,
 	targetUrl = "",
 	plugin = null,
+	/*
+	 * `isLive`: canlı HLS yayını (bkz. `player.jsx` → `liveApi` dalı).
+	 * `initialSourceIndex`: başlangıç akışı; dizi SIRALANMAZ, yedek geçiş
+	 * bu diziden devam eder (bkz. `live/[id].jsx`).
+	 */
+	isLive = false,
+	initialSourceIndex = 0,
 }) {
 	const insets = useSafeAreaInsets();
 	const videoRef = useRef(null);
@@ -142,8 +149,17 @@ export default function VideoPlayer({
 	const seekDuration = settings?.seekDuration || 10;
 	const hideTimeoutMs = (settings?.controlsTimeout || 4) * 1000;
 
+	/*
+	 * ── `canSeek` ──
+	 *
+	 * HLS canlıda seek edilebilir aralık YOKTUR (pencere yayınla kayar).
+	 * Canlı modda seek yüzeyi ve resume mantığı TEK bayrakla kapanır; her
+	 * yola ayrı `isLive` testi yazmak bir yolun unutulmasına davet çıkarır.
+	 */
+	const canSeek = !isLive && duration > 0;
+
 	// Player state
-	const [activeSourceIndex, setActiveSourceIndex] = useState(0);
+	const [activeSourceIndex, setActiveSourceIndex] = useState(initialSourceIndex);
 	const [paused, setPaused] = useState(false);
 	const [currentTime, setCurrentTime] = useState(0);
 	const [duration, setDuration] = useState(0);
@@ -529,7 +545,9 @@ export default function VideoPlayer({
 		if (index === activeSourceIndex) return;
 
 		// Save current time so new source resumes seamlessly (if autoResume is enabled)
-		if (settings?.autoResume !== false) {
+		// Canlıda kaydedilmez: yedeğe geçince eski konuma sıçramak yayını
+		// kaçırır (HLS'te "doğru konum" diye bir şey yok) → `else` 0 yazar.
+		if (settings?.autoResume !== false && canSeek) {
 			pendingSeekTimeRef.current = currentTime;
 		} else {
 			pendingSeekTimeRef.current = 0;
@@ -599,7 +617,7 @@ export default function VideoPlayer({
 		}
 
 		// Resume seek position if pending
-		if (pendingSeekTimeRef.current > 0 && videoRef.current) {
+		if (canSeek && pendingSeekTimeRef.current > 0 && videoRef.current) {
 			const seekTarget = pendingSeekTimeRef.current;
 			pendingSeekTimeRef.current = 0;
 			setTimeout(() => {
@@ -618,7 +636,15 @@ export default function VideoPlayer({
 		}
 
 		// Kaldığın Yerden Devam Et - Progress Tracking
-		const totalDuration = durationRef.current || duration || 0;
+		//
+		// ⚠️ Canlıda `totalDuration` BİLEREK 0 → blok atlanır.
+		// `expo-video` HLS canlıda `duration`ı "oynatma penceresi" olarak
+		// bildirir ve değer BÜYÜR; normal akışta oran 0.9'u geçince içerik
+		// "bitti" işaretlenirdi. Mevcut `> 0` kapısını kullanmak, `onProgress`i
+		// yeniden yazmadan aynı sonucu verir.
+		const totalDuration = canSeek
+			? durationRef.current || duration || 0
+			: 0;
 		const id = contentId || targetUrl || currentSourceData?.result?.url;
 
 		if (id && totalDuration > 0) {
@@ -699,8 +725,9 @@ export default function VideoPlayer({
 	};
 
 	const handleEnd = () => {
+		// Canlıda "bitti" anı yoktur (`onEnd` = yayın koptu); kanal tamamlanmaz.
 		const id = contentId || targetUrl || currentSourceData?.result?.url;
-		if (id && !hasMarkedCompleteRef.current) {
+		if (id && !isLive && !hasMarkedCompleteRef.current) {
 			hasMarkedCompleteRef.current = true;
 			if (contentType === "episode") {
 				markEpisodeComplete(
@@ -799,9 +826,9 @@ export default function VideoPlayer({
 		}
 	};
 
-	// Seek helpers
+	// Seek helpers — `canSeek` tek kapı: canlıda hiçbir çağrı oynatıcıyı kilitleyemez.
 	const handleSeekBy = (deltaSeconds) => {
-		if (!videoRef.current || duration <= 0) return;
+		if (!videoRef.current || !canSeek) return;
 		const nextTime = Math.max(
 			0,
 			Math.min(duration, currentTime + deltaSeconds),
@@ -830,11 +857,13 @@ export default function VideoPlayer({
 		if (now - lastTapRef.current.time < DOUBLE_TAP_DELAY) {
 			lastTapRef.current = { time: 0, x: 0 }; // Sıfırla
 
-			if (locationX < screenW * 0.35) {
+			// Canlıda sol/sağ bölge seek DEĞİLDİR (no-op olurdu ama "rewind"
+			// bildirimi yalan olur): çift dokunma ortadaki play/pause'a düşer.
+			if (canSeek && locationX < screenW * 0.35) {
 				handleSeekBy(-seekDuration);
 				setDoubleTapInfo({ type: "rewind", delta: seekDuration });
 				setTimeout(() => setDoubleTapInfo(null), 700);
-			} else if (locationX > screenW * 0.65) {
+			} else if (canSeek && locationX > screenW * 0.65) {
 				handleSeekBy(seekDuration);
 				setDoubleTapInfo({ type: "forward", delta: seekDuration });
 				setTimeout(() => setDoubleTapInfo(null), 700);
@@ -862,13 +891,14 @@ export default function VideoPlayer({
 					setPaused((prev) => !prev);
 					return;
 				}
-				if (eventType === "left" || eventType === "rewind") {
+				// Canlıda sol/sağ seek yok → bu tuşlar kontrolleri uyandırır.
+				if (canSeek && (eventType === "left" || eventType === "rewind")) {
 					handleSeekBy(-seekDuration);
 					setDoubleTapInfo({ type: "rewind", delta: seekDuration });
 					setTimeout(() => setDoubleTapInfo(null), 800);
 					return;
 				}
-				if (eventType === "right" || eventType === "fastForward") {
+				if (canSeek && (eventType === "right" || eventType === "fastForward")) {
 					handleSeekBy(seekDuration);
 					setDoubleTapInfo({ type: "forward", delta: seekDuration });
 					setTimeout(() => setDoubleTapInfo(null), 800);
@@ -941,6 +971,13 @@ export default function VideoPlayer({
 		startHideTimerRef.current = startHideTimer;
 	}, [startHideTimer]);
 
+	// `panResponder` `[]` ile memo'landığı için (dosyadaki `*Ref` deseni)
+	// bayat kapana düşmemek adına refle taşındı.
+	const isLiveRef = useRef(isLive);
+	useEffect(() => {
+		isLiveRef.current = isLive;
+	}, [isLive]);
+
 	const panResponder = useMemo(
 		() =>
 			// eslint-disable-next-line react-hooks/refs
@@ -975,6 +1012,7 @@ export default function VideoPlayer({
 					const currentScrub = scrubPositionRef.current;
 					const currentDur = durationRef.current;
 					if (
+						!isLiveRef.current &&
 						currentScrub !== null &&
 						currentDur > 0 &&
 						videoRef.current
@@ -999,6 +1037,7 @@ export default function VideoPlayer({
 
 			if (
 				id &&
+				!isLive &&
 				curTime >= 10 &&
 				totalDuration > 0 &&
 				curTime / totalDuration < 0.9
@@ -1029,6 +1068,7 @@ export default function VideoPlayer({
 		contentType,
 		seriesInfo,
 		currentSourceData,
+		isLive,
 	]);
 
 	const progressRatio =
@@ -1254,8 +1294,14 @@ export default function VideoPlayer({
 								style={styles.centerControls}
 								pointerEvents="box-none">
 								<TVPressable
-									style={styles.seekButton}
+									style={[
+										styles.seekButton,
+										isLive && styles.seekUiHidden,
+									]}
 									focusedStyle={styles.seekButtonFocused}
+									/* `disabled` görsel için değil: TVPressable `focusable={!disabled}`
+									   uygular → düğme kumanda gezintisinden düşer. */
+									disabled={isLive}
 									onPress={() => {
 										handleSeekBy(-seekDuration);
 										startHideTimer();
@@ -1286,8 +1332,12 @@ export default function VideoPlayer({
 								</TVPressable>
 
 								<TVPressable
-									style={styles.seekButton}
+									style={[
+										styles.seekButton,
+										isLive && styles.seekUiHidden,
+									]}
 									focusedStyle={styles.seekButtonFocused}
+									disabled={isLive}
 									onPress={() => {
 										handleSeekBy(seekDuration);
 										startHideTimer();
@@ -1312,7 +1362,11 @@ export default function VideoPlayer({
 								<View
 									style={styles.bottomBarHeader}
 									pointerEvents="box-none">
-									<Text style={styles.timeText}>
+									<Text
+										style={[
+											styles.timeText,
+											isLive && styles.seekUiHidden,
+										]}>
 										{formatTime(currentTime)}
 										<Text style={styles.durationText}>
 											{" "}
@@ -1349,7 +1403,10 @@ export default function VideoPlayer({
 								</View>
 
 								<View
-									style={styles.progressContainer}
+									style={[
+										styles.progressContainer,
+										isLive && styles.seekUiHidden,
+									]}
 									onLayout={(e) => {
 										progressBarLayoutRef.current =
 											e.nativeEvent.layout;
@@ -1648,6 +1705,15 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		borderWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.15)",
+	},
+	/*
+	 * `isLive` iken seek yüzeyi (ileri/geri düğmeleri, süre yazısı, süre
+	 * çubuğu) gizlenir. Stil, JSX koşulu değil: sarmalama bu blokları ~60
+	 * satır yeniden girintilerdi. Düğmelerin TV odağını da bırakması için
+	 * ayrıca `disabled` veriliyor; düzen ve `nextFocus*` zinciri korunur.
+	 */
+	seekUiHidden: {
+		display: "none",
 	},
 	seekButtonFocused: {
 		backgroundColor: "rgba(255, 59, 48, 0.35)",

@@ -5,6 +5,7 @@ import {
 	fetchPlatforms,
 } from "@/services/api";
 import {
+	LIVE_TV_PLATFORM,
 	NONE_PLATFORM,
 	getPluginVisibilitySettings,
 	getSelectedPlatform,
@@ -12,6 +13,7 @@ import {
 } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
@@ -49,7 +51,17 @@ function devredeMi(platform) {
 	return Boolean(platform.devrede);
 }
 
-export default function PlatformList({ onSelectPlatform }) {
+export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
+	/*
+	 * Yedek yol: kart her zaman `onOpenLiveTv` çağırmak yerine önce ona
+	 * danışır. Bileşen tek başına kullanıldığında (veya çağıran bu prop'u
+	 * vermeyi unuttuğunda) kartın çalışmaz olmasındansa, doğrudan rota
+	 * bilinen `/(app)/live` adresine gitmesi yeğdir. `expo-router`'ın rota
+	 * adresinin tek doğruluk kaynağı olması da bu yüzden `liveApi.js`
+	 * tarafında bir "/live" sabiti olmamasıyla tutarlı.
+	 */
+	const router = useRouter();
+
 	const [selectedPlatformId, setSelectedPlatformId] = useState("none");
 	const [platformList, setPlatformList] = useState([]);
 	const [loading, setLoading] = useState(true);
@@ -187,6 +199,37 @@ export default function PlatformList({ onSelectPlatform }) {
 		const chosen = kullanilabilirler[randomIndex];
 		handlePlatformSelect(chosen);
 	};
+
+	/*
+	 * ── Canlı TV kartı: `handlePlatformSelect` DEĞİL, navigasyon ──────
+	 *
+	 * Bu bilinçli bir ayrım ve en sık yapılabilecek hatadır. Kartın
+	 * `handlePlatformSelect`'e verilmesi şu iki yanlışı birlikte getirirdi:
+	 *
+	 *   1. `saveSelectedPlatform(platform)` platformu KALICI olarak seçerdi.
+	 *      Kalıcı seçim, uygulama yeniden açıldığında `index.jsx`'in
+	 *      otomatik olarak `/api/plugins/{name}/main-page` (ve `categories`)
+	 *      çağırdığı akışın GİRDİSİDİR. `canli-tv` ne bir `PluginBase`
+	 *      eklentisi ne de `/api/plugins/...` ucu olan bir kaynak; kullanıcı
+	 *      uygulamayı yeniden açtığında boş ekran/404 ile karşılaşırdı.
+	 *      `LIVE_TV_PLATFORM.is_live` alanı tam olarak bu sözleşmeyi taşıyor.
+	 *   2. Seçim durumu (`platformCardActive` + onay işareti) ve "devrede"
+	 *      mantığı bu kartta anlamsız: canlı TV'nin devre durumu yoktur, M3U
+	 *      sağlığı ekranın kendi işidir.
+	 *
+	 * Alternatif düşünüldü: kartı `filteredPlatforms` içine sokup bir
+	 * `is_live` dalıyla ayırmak. Reddedildi — `filteredPlatforms` sayımı
+	 * ("Mevcut Eklentiler (N)"), arama filtresi ve devre rozetleri bu diziye
+	 * bağlı; uydurma bir eklentiyi içine almak sayaçları ve filtreleri
+	 * anlamsızlaştırırdı. Kart, Random gibi, listenin DIŞINDA durur.
+	 */
+	const canliTvAc = useCallback(() => {
+		if (onOpenLiveTv) {
+			onOpenLiveTv();
+			return;
+		}
+		router.push("/(app)/live");
+	}, [onOpenLiveTv, router]);
 
 	// Filtered platforms
 	const filteredPlatforms = useMemo(() => {
@@ -441,6 +484,65 @@ export default function PlatformList({ onSelectPlatform }) {
 						/>
 					</TVPressable>
 
+					{/* 3. Canlı TV — Random kartının BİREBİR kopyası.
+					    *
+					    * Tek farklar (bileşen, ikon, metin, `onPress`): Random bir
+					    * EYLEM kartıdır ve listede kalıcı seçim YAPMAZ; bu kart
+					    * bir VARIŞ NOKTASIdır ve yukarıdaki `canliTvAc`
+					    * gerekçesiyle seçim zincirine hiç girmemelidir. Aynı
+					    * `platformCard` + `platformCardFocused` kullanıldığı için
+					    * iki kart görsel olarak ayırt edilemez — kasıtlı: ikisi de
+					    * "listedeki bir eklenti değil, uygulamanın kendi kaynağı"
+					    * ailesinden, aynı yerde, aynı biçimde durmalı.
+					    *
+					    * ⚠️ `activeFilter === "all"` sarmalayıcısı: film/dizi/anime
+					    * hapları bir EKLENTİ içeriği türüne göre filtreler; canlı
+					    * TV ne film ne dizi ne animedir, dolayısıyla bu
+					    * filtrelerde görünmesi kullanıcıya "seçilemeyen bir kart"
+					    * izlenimi verirdi. "Tümü" altında ise kart listenin en
+					    * üstünde, her zaman ulaşılabilir durumdadır.
+					    *
+					    * ⚠️ `searchQuery` bu kartı ETKİLEMEZ (Random ile aynı
+					    * davranış, kasıtlı tutarlılık): arama kutusu "Eklenti
+					    * ara..." yazıyor ve `filteredPlatforms`'u tarıyor; canlı TV
+					    * bir eklenti olmadığı için burada listelenmesi zaten
+					    * anlamsız. Buna karşılık kullanıcı tam da "canlı" yazıp
+					    * kartı arıyorsa kart kaybolmak istemez (ve altındaki
+					    * liste süzülürken kart yerinde kalarak "arama yalnız
+					    * eklentileri etkiliyor" mesajını görsel olarak verir). */}
+					{activeFilter === "all" && (
+						<TVPressable
+							style={styles.platformCard}
+							focusedStyle={styles.platformCardFocused}
+							onPress={canliTvAc}
+							activeOpacity={0.7}>
+							<View
+								style={[
+									styles.iconContainer,
+									{ backgroundColor: "rgba(229, 9, 20, 0.15)" },
+								]}>
+								<Ionicons
+									name="tv"
+									size={20}
+									color="#E50914"
+								/>
+							</View>
+							<View style={styles.platformDetails}>
+								<Text style={styles.platformName}>
+									{LIVE_TV_PLATFORM.displayName}
+								</Text>
+								<Text style={styles.platformDesc}>
+									{LIVE_TV_PLATFORM.description}
+								</Text>
+							</View>
+							<Ionicons
+								name="chevron-forward"
+								size={18}
+								color="#6b7280"
+							/>
+						</TVPressable>
+					)}
+
 					{/* Section Divider */}
 					<View style={styles.divider}>
 						<Text style={styles.dividerText}>
@@ -448,7 +550,7 @@ export default function PlatformList({ onSelectPlatform }) {
 						</Text>
 					</View>
 
-					{/* 3. Platform List */}
+					{/* 4. Platform List */}
 					{filteredPlatforms.map((platform, index) => {
 						const key = platform.id || platform.name || index;
 						const isSelected =
