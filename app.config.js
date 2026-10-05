@@ -9,9 +9,9 @@ const getAppId = () => {
 };
 
 const getAppName = () => {
-	if (IS_DEV) return "StreamPulse (Dev)";
-	if (IS_PREVIEW) return "StreamPulse (Preview)";
-	return "StreamPulse";
+	if (IS_DEV) return "Stream Pulse (Dev)";
+	if (IS_PREVIEW) return "Stream Pulse (Preview)";
+	return "Stream Pulse";
 };
 
 export default ({ config }) => ({
@@ -32,7 +32,7 @@ export default ({ config }) => ({
 		eas: {
 			projectId: "6e7b0adb-396f-4d06-b66d-bea82406c890",
 		},
-		variant: process.env.APP_VARIANT || "production",
+		variant: process.env.APP_VARIANT || "release",
 		API_URL: IS_DEV
 			? "https://movieapi.burakaydogan.net.tr"
 			: IS_PREVIEW
