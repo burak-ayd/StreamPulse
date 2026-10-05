@@ -478,13 +478,24 @@ export default function SeasonsSection({
 
 			{/* Bölüm Listesi */}
 			<View style={styles.episodesList}>
-				{sortedEpisodes.map((ep, index) => {
+{sortedEpisodes.map((ep, index) => {
 					const epNumber = ep.episode || ep.episode_number || index + 1;
 					const rawTitle = ep.title ? ep.title.trim() : "";
-					// Ekran görüntüsündeki gibi: '1. 1. Bölüm' veya '1. Bölüm Adı'
-					const epDisplayTitle = rawTitle
-						? `${epNumber}. ${rawTitle}`
-						: `${epNumber}. ${epNumber}. Bölüm`;
+				/*
+				 * Başlık biçimi: '<sezon>. <bölüm>. Bölüm' veya
+				 * '<bölüm>. <bölüm adı>'.
+				 *
+				 * ⚠️ İlk sayı SEZON numarasıdır, bölüm numarası DEĞİL.
+				 * Eskiden `${epNumber}. ${epNumber}. Bölüm` yazıyordu ve
+				 * sezon 1'de iki sayı aynı olduğu için ("1. 1. Bölüm")
+				 * hata fark edilmiyordu; sezon 1 bölüm 2 ekranda
+				 * "2. 2. Bölüm" olarak görünüyordu — yani "2. sezon,
+				 * 2. bölüm" yanlış izlenimi veriyordu. `selectedSeason`
+				 * zaten bu satırda indirme kimliği için kullanılıyordu.
+				 */
+				const epDisplayTitle = rawTitle
+					? `${epNumber}. ${rawTitle}`
+					: `${selectedSeason}. ${epNumber}. Bölüm`;
 
 					const downloadId =
 						ep.url ||
