@@ -1,5 +1,10 @@
 import VideoPlayer from "@/components/player/VideoPlayer";
 import { extractVideoSources, fetchPluginDetail } from "@/services/api";
+import {
+	LIVE_ERROR_REASON,
+	fetchLiveStreams,
+	oynatilabilirAkislaraCevir,
+} from "@/services/liveApi";
 import { addToWatchHistory, getContinueWatching } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -14,11 +19,9 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-
 export default function PlayerScreen() {
 	const params = useLocalSearchParams();
 	const router = useRouter();
-
 	const targetUrl = params.url;
 	const title = params.title || "Video";
 	const subtitle = params.subtitle || "";
@@ -26,7 +29,36 @@ export default function PlayerScreen() {
 	const contentId = params.id || null;
 	const contentType = params.type || (params.episode ? "episode" : "movie");
 	const [dynamicNextEpisode, setDynamicNextEpisode] = useState(null);
-
+	/*
+	 * ── Canlı TV dalı ──
+	 *
+	 * `params.live` = kanal slug'ı (`live/[id].jsx` → `handleStreamPress`).
+	 * Doluluğu bir "canlı yayın modu" bayrağı gibi kullanıyoruz: film/dizi
+	 * akışı `params.url` ile gelir ve canlı TV'nin `url` parametresi YOKTUR,
+	 * çünkü adresi kanal değil, `fetchLiveStreams` cevabındaki akış kaydıdır.
+	 * `isCanli` bu yüzden `!targetUrl`'den değil `params.live`'dan türetilir:
+	 * aksi halde "adres yok" hatasını "canlı TV" sanardık.
+	 */
+	const liveKanalId = params.live || null;
+	const isCanli = Boolean(liveKanalId);
+	/*
+	 * Başlangıç akışı indeksi. `live/[id].jsx` ekranda gördüğü sıranın
+	 * `index`'ini gönderiyor ve diziyi yeniden sıralamamamızı KAPATAN bir
+	 * kararla bunu yapmamızı da yazdırmış: sırayı değiştirirsek
+	 * TrackSelectionModal'daki liste ekrandaki listeden farklılaşır ve
+	 * otomatik yedek geçişi kullanıcının seçtiği akışa değil, başka bir
+	 * akışa düşer. Bu yüzden sıra korunur, oynatıcıya başlangıç indeksi
+	 * verilir (`initialSourceIndex`) ve kopma olursa YEDEK GEÇİŞİ bu
+	 * indeksten devam eder.
+	 *
+	 * `Number(...)` geçersiz/NaN dönerse 0'a düşürülür: sıra dışı bir
+	 * indeks, sessizce "ilk akıştan başla" demekten kötüdür.
+	 */
+	const liveBaslangicIndeks = (() => {
+		if (!isCanli) return 0;
+		const ham = Number(params.liveStreamIndex);
+		return Number.isInteger(ham) && ham >= 0 ? ham : 0;
+	})();
 	const seriesInfo = useMemo(() => {
 		let base = null;
 		if (params.seriesInfo) {
@@ -78,12 +110,10 @@ export default function PlayerScreen() {
 		params.nextEpisode,
 		dynamicNextEpisode,
 	]);
-
 	// Eğer sonraki bölüm bilgisi gelmediyse, dizi detayından otomatik hesapla
 	useEffect(() => {
 		if (contentType !== "episode") return;
 		if (params.nextEpisode) return;
-
 		const sUrl =
 			params.seriesUrl ||
 			(params.seriesId && String(params.seriesId).startsWith("http")
@@ -95,21 +125,16 @@ export default function PlayerScreen() {
 		const pName = params.plugin;
 		const currSeason = params.season ? Number(params.season) : 1;
 		const currEpisode = params.episode ? Number(params.episode) : 1;
-
 		if (sUrl && pName) {
 			fetchPluginDetail(pName, sUrl)
 				.then((detail) => {
 					const seasons = detail?.seasons;
 					if (seasons && typeof seasons === "object") {
 						const currList =
-							seasons[String(currSeason)] ||
-							seasons[currSeason] ||
-							[];
+							seasons[String(currSeason)] || seasons[currSeason] || [];
 						if (Array.isArray(currList)) {
 							const idx = currList.findIndex(
-								(e) =>
-									Number(e.episode || e.episode_number) ===
-									currEpisode,
+								(e) => Number(e.episode || e.episode_number) === currEpisode,
 							);
 							if (idx !== -1 && idx + 1 < currList.length) {
 								const nextObj = currList[idx + 1];
@@ -126,8 +151,7 @@ export default function PlayerScreen() {
 									poster: nextObj.poster || poster,
 								});
 							} else {
-								const nextSeasonList =
-									seasons[String(currSeason + 1)];
+								const nextSeasonList = seasons[String(currSeason + 1)];
 								if (
 									Array.isArray(nextSeasonList) &&
 									nextSeasonList.length > 0
@@ -139,9 +163,7 @@ export default function PlayerScreen() {
 										title: nextObj.title,
 										season: currSeason + 1,
 										episode: Number(
-											nextObj.episode ||
-												nextObj.episode_number ||
-												1,
+											nextObj.episode || nextObj.episode_number || 1,
 										),
 										poster: nextObj.poster || poster,
 									});
@@ -165,18 +187,28 @@ export default function PlayerScreen() {
 		targetUrl,
 		poster,
 	]);
-
 	const [initialTime, setInitialTime] = useState(
 		params.currentTime ? Number(params.currentTime) : 0,
 	);
 	const [sources, setSources] = useState([]);
-	const [loading, setLoading] = useState(Boolean(targetUrl));
+	// Canlı TV'de `targetUrl` yoktur; yalnız `loading`'in bu yüzden `false`
+	// başlaması ekranı "bağlantı bulunamadı" hatasında açardı.
+	const [loading, setLoading] = useState(Boolean(targetUrl || liveKanalId));
 	const [error, setError] = useState(
-		!targetUrl ? "Oynatılacak video bağlantısı bulunamadı." : null,
+		!targetUrl && !liveKanalId
+			? "Oynatılacak video bağlantısı bulunamadı."
+			: null,
 	);
-
 	useEffect(() => {
 		async function checkResumePosition() {
+			/*
+			 * Canlı yayında "kaldığın yerden devam et" YOKTUR. Kanal
+			 * yayını her an baştan akar; bir resume değeri oynatıcıyı
+			 * pencerenin dışına (veya çok geriye) sıçratırdı. Üstelik
+			 * `getContinueWatching()` bir AsyncStorage okuması — canlı TV
+			 * açılışında gereksiz.
+			 */
+			if (isCanli) return;
 			if (params.currentTime) {
 				setInitialTime(Number(params.currentTime));
 				return;
@@ -196,22 +228,113 @@ export default function PlayerScreen() {
 			}
 		}
 		checkResumePosition();
-	}, [contentId, targetUrl, params.currentTime]);
-
+	}, [contentId, targetUrl, params.currentTime, isCanli]);
+	/**
+	 * Kaynakları getirir: film/dizi → extractor, canlı TV → M3U akışları.
+	 *
+	 * ───────────────────────────
+	 * ⚠️ CANLI TV EXTRACTOR ZİNCİRİNE GİRMEZ.
+	 *
+	 * Film/dizi yolunda `extractVideoSources(url)` backend'e
+	 * `/api/extract` isteği atar: sunucu `load_item()` → `load_links()`
+	 * kazıma zincirini çalıştırır, gömülü oynatıcıyı açar, iframe'i
+	 * çözer ve HLS adresini geri döndürür. Canlı TV'de bu zincirin
+	 * HİÇBİR ADIMI YOKTUR: `Core/Live` bir `PluginBase` DEĞİLDİR, içerik
+	 * sayfası yoktur ve kanal adresi M3U listesinden doğrudan gelir.
+	 * Dolayısıyla `/api/extract` çağırmak yalnızca 404 + gereksiz bir tur
+	 * demektir; doğru uç `/api/live/streams/{id}`'dir. Bu, ilk mesajdaki
+	 * mimari kararın (canlı TV ayrı bir alt sistemdir) FRONTEND karşılığıdır.
+	 * ───────────────────────────
+	 *
+	 * Dönüş `{ kaynaklar, hata }`: hata `null` yerine makine tarafı
+	 * `LIVE_ERROR_REASON` taşır, çünkü 404 ("kanal yok — tekrar denemenin
+	 * anlamı yok") ile 503/ağ hatası ("yeniden dene") farklı mesaj ister.
+	 *
+	 * `toPlayerSources` iki eleme yapar: `url` taşımayan satırları ve
+	 * HLS OLMAYAN adresleri (web sayfası/YouTube izleme sayfası) atar.
+	 * İlk eleme eskiden vardı — tek bir akışın ölü olması listenin
+	 * tamamını düşürmez, oynatıcı sıradakini dener. İkinci eleme oynatıcıya
+	 * HTML girmesini engeller; onsız ExoPlayer 23002 ("Input does not start
+	 * with the #EXTM3U header") basar ve "HLS sanılan mp4" denemesi de
+	 * onu kurtaramaz (bkz. `@/utils/hlsUrl`).
+	 *
+	 * Bir kanalın TÜM akışları elendiğinde bu ayrım önemlidir:
+	 * `kaynakHatasi` `null` (istek başarılıydı) döner, ama kullanıcıya
+	 * "sunucu akış göndermedi" demek YANLIŞ olur. O yüzden aşağıda elenen
+	 * adet de taşınır ve mesaj ayrımı yapılır.
+	 *
+	 * @returns {Promise<{ kaynaklar: Array, hata: string|null,
+	 *                     elenen: number }>}
+	 */
+	const kaynaklariGetir = useCallback(async () => {
+		if (!isCanli) {
+			const extracted = await extractVideoSources(targetUrl);
+			return { kaynaklar: extracted, hata: null, elenen: 0 };
+		}
+		const sonuc = await fetchLiveStreams(liveKanalId);
+		if (!sonuc?.ok) {
+			return { kaynaklar: [], hata: sonuc?.reason || null, elenen: 0 };
+		}
+		const { kaynaklar, elenen } = oynatilabilirAkislaraCevir(sonuc.streams);
+		return { kaynaklar, hata: null, elenen };
+	}, [isCanli, liveKanalId, targetUrl]);
+	/** Makine tarafı hata sınıfını kullanıcı metnine çevirir. */
+	const canliHataMesaji = useCallback(
+		(reason) =>
+			reason === LIVE_ERROR_REASON.NOT_FOUND
+				? "Kanal bulunamadı."
+				: "Bu kanal için yayın akışı alınamadı.",
+		[],
+	);
+	/**
+	 * Boş kaynak listesinin kullanıcı metnini ÜÇ AYRI ANLAMI ayırt ederek
+	 * TEK yerden üretir.
+	 *
+	 * ⚠️ Neden ayrı fonksiyon: bu kararı YERDE İKİ AYRI YERDE kopyalamak
+	 * (bir kez açılış `useEffect`'inde, bir kez "Tekrar Dene" düğmesinde)
+	 * tam olarak bu dosyanın başındaki uyarının konusu: iki kopya
+	 * ayrışırsa birinde "yayın adresi geçersiz" görünürken diğerinde
+	 * "yayın akışı alınamadı" görünür ve hangi mesajın doğru olduğu
+	 * belirsizleşir.
+	 *
+	 *   · `!isCanli`        → film/dizi yolu
+	 *   · `elenen > 0`      → sunucu akış GÖNDERDİ ama hepsi web sayfasıydı.
+	 *                         Bu bir yayın kesintisi DEĞİL, M3U'da
+	 *                         düzeltilecek bir satırdır; ayrı söylenmeli.
+	 *   · `kaynakHatasi`    → istek başarısız (404 / ağ / sunucu)
+	 *
+	 * @param {string|null} kaynakHatasi
+	 * @param {number} elenen - `hlsOynatilabilirMi` filtresinin attığı akış sayısı
+	 * @returns {string}
+	 */
+	const kaynakHatasiMesaji = useCallback(
+		(kaynakHatasi, elenen) => {
+			if (!isCanli) return "Bu içerik için video kaynağı bulunamadı.";
+			if (elenen > 0)
+				return "Bu kanalın yayın adresi geçersiz. Lütfen daha sonra tekrar deneyin.";
+			return canliHataMesaji(kaynakHatasi);
+		},
+		[isCanli, canliHataMesaji],
+	);
 	const loadSources = useCallback(async () => {
-		if (!targetUrl) {
+		if (!targetUrl && !liveKanalId) {
 			setError("Oynatılacak video bağlantısı bulunamadı.");
 			setLoading(false);
 			return;
 		}
-
 		try {
 			setLoading(true);
 			setError(null);
-			const extracted = await extractVideoSources(targetUrl);
-
+			const {
+				kaynaklar: extracted,
+				hata: kaynakHatasi,
+				elenen,
+			} = await kaynaklariGetir();
 			if (Array.isArray(extracted) && extracted.length > 0) {
 				setSources(extracted);
+				// Canlı TV izleme geçmişine yazılmaz (bkz. `VideoPlayer`
+				// → `isLive` yorumu: bölüm/süre kavramı yok).
+				if (isCanli) return;
 				// Add to watch history (recent play)
 				if (contentId || title) {
 					if (contentType === "episode") {
@@ -243,7 +366,7 @@ export default function PlayerScreen() {
 					}
 				}
 			} else {
-				setError("Bu içerik için video kaynağı bulunamadı.");
+				setError(kaynakHatasiMesaji(kaynakHatasi, elenen));
 			}
 		} catch (err) {
 			console.error("Player loadSources error:", err);
@@ -251,30 +374,42 @@ export default function PlayerScreen() {
 		} finally {
 			setLoading(false);
 		}
-	}, [targetUrl, contentId, title, subtitle, poster, contentType, seriesInfo, params.plugin]);
-
+	}, [
+		targetUrl,
+		liveKanalId,
+		isCanli,
+		contentId,
+		title,
+		subtitle,
+		poster,
+		contentType,
+		seriesInfo,
+		params.plugin,
+		kaynaklariGetir,
+		kaynakHatasiMesaji,
+	]);
 	useEffect(() => {
 		// Video oynatıcı açıldığında her zaman doğrudan yatay moda kilitlen
 		ScreenOrientation.lockAsync(
 			ScreenOrientation.OrientationLock.LANDSCAPE,
 		).catch(() => {});
-
 		return () => {
 			ScreenOrientation.lockAsync(
 				ScreenOrientation.OrientationLock.PORTRAIT_UP,
 			).catch(() => {});
 		};
 	}, []);
-
 	useEffect(() => {
-		if (!targetUrl) return;
-
+		if (!targetUrl && !liveKanalId) return;
 		let isMounted = true;
-		extractVideoSources(targetUrl)
-			.then((extracted) => {
+		kaynaklariGetir()
+			.then(({ kaynaklar: extracted, hata: kaynakHatasi, elenen }) => {
 				if (!isMounted) return;
 				if (Array.isArray(extracted) && extracted.length > 0) {
 					setSources(extracted);
+					// Canlı TV izleme geçmişine yazılmaz: ne bölüm ne süre
+					// vardır, "Kaldığın Yerden Devam Et" satırı da üretilmez.
+					if (isCanli) return;
 					if (contentId || title) {
 						addToWatchHistory({
 							id: contentId || targetUrl,
@@ -285,7 +420,7 @@ export default function PlayerScreen() {
 						}).catch(() => {});
 					}
 				} else {
-					setError("Bu içerik için video kaynağı bulunamadı.");
+					setError(kaynakHatasiMesaji(kaynakHatasi, elenen));
 				}
 			})
 			.catch((err) => {
@@ -296,19 +431,28 @@ export default function PlayerScreen() {
 			.finally(() => {
 				if (isMounted) setLoading(false);
 			});
-
 		return () => {
 			isMounted = false;
 		};
-	}, [targetUrl, contentId, title, subtitle, poster, params.plugin, seriesInfo]);
-
+	}, [
+		targetUrl,
+		liveKanalId,
+		isCanli,
+		contentId,
+		title,
+		subtitle,
+		poster,
+		params.plugin,
+		seriesInfo,
+		kaynaklariGetir,
+		kaynakHatasiMesaji,
+	]);
 	const handleClose = useCallback(() => {
 		ScreenOrientation.lockAsync(
 			ScreenOrientation.OrientationLock.PORTRAIT_UP,
 		).catch(() => {});
 		router.back();
 	}, [router]);
-
 	// Yükleme veya hata ekranındayken kumanda Geri tuşuyla çıkış
 	useEffect(() => {
 		if (loading || error) {
@@ -323,11 +467,9 @@ export default function PlayerScreen() {
 			return () => sub.remove();
 		}
 	}, [loading, error, handleClose]);
-
 	return (
 		<View style={styles.container}>
 			<Stack.Screen options={{ headerShown: false }} />
-
 			{loading && (
 				<View style={styles.centerContainer}>
 					<ActivityIndicator size="large" color="#FF3B30" />
@@ -339,13 +481,13 @@ export default function PlayerScreen() {
 						autoFocus={true}
 						style={[styles.backButton, { marginTop: 32 }]}
 						focusedStyle={styles.backButtonFocused}
-						onPress={handleClose}>
+						onPress={handleClose}
+					>
 						<Ionicons name="arrow-back" size={20} color="#FFFFFF" />
 						<Text style={styles.backButtonText}>Vazgeç</Text>
 					</TVPressable>
 				</View>
 			)}
-
 			{!loading && error && (
 				<View style={styles.centerContainer}>
 					<Ionicons name="alert-circle-outline" size={60} color="#FF453A" />
@@ -356,21 +498,22 @@ export default function PlayerScreen() {
 							autoFocus={true}
 							style={styles.retryButton}
 							focusedStyle={styles.retryButtonFocused}
-							onPress={loadSources}>
+							onPress={loadSources}
+						>
 							<Ionicons name="refresh" size={18} color="#FFFFFF" />
 							<Text style={styles.buttonText}>Tekrar Dene</Text>
 						</TVPressable>
 						<TVPressable
 							style={styles.backButton}
 							focusedStyle={styles.backButtonFocused}
-							onPress={handleClose}>
+							onPress={handleClose}
+						>
 							<Ionicons name="arrow-back" size={18} color="#FFFFFF" />
 							<Text style={styles.buttonText}>Geri Dön</Text>
 						</TVPressable>
 					</View>
 				</View>
 			)}
-
 			{!loading && !error && sources.length > 0 && (
 				<VideoPlayer
 					sources={sources}
@@ -384,6 +527,18 @@ export default function PlayerScreen() {
 					seriesInfo={seriesInfo}
 					targetUrl={targetUrl}
 					plugin={params.plugin || seriesInfo?.plugin}
+					/*
+					 * Canlı TV modu: iki bayrak birlikte gider.
+					 * `isLive` → seek/süre arayüzü gizlenir, izleme
+					 *   geçmişi yazılmaz (canlıda "neredeyse izliyorum"
+					 *   diye bir konum yoktur).
+					 * `initialSourceIndex` → kullanıcının kanal ekranında
+					 *   seçtiği akıştan başlar, kopmada yedek geçiş listeden
+					 *   devam eder (sıra KORUNUR, yeniden sıralama yok).
+					 * Film/dizi yolunda ikisi de 0/false → davranış aynı.
+					 */
+					isLive={isCanli}
+					initialSourceIndex={liveBaslangicIndeks}
 				/>
 			)}
 		</View>

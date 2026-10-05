@@ -110,6 +110,52 @@ export const NONE_PLATFORM = {
 	is_offline: true,
 };
 
+/**
+ * Canlı TV varış noktası.
+ *
+ * ⚠️ NEDEN `NONE_PLATFORM`'un ALTINDA VE AYRI BİR SABİT?
+ *
+ * 1. `NONE_PLATFORM` zaten platform listesinin dışında duran, ÖZEL davranışa
+ *    sahip bir ayrıcalıktır: `is_offline: true` taşır ve `index.jsx:198`'de
+ *    `platform.id === "none"` diye dallanarak içerik akışı yerine indirilenler
+ *    ekranını açar. Canlı TV de tam olarak bu sınıftadır — ikisi de "bir
+ *    eklenti değil, uygulamanın kendi veri kaynağı". Bu yüzden ikisini aynı
+ *    `is_offline` bayrağıyla birleştirmek, ekranın bu ayrımı yapamamasına
+ *    yol açardı; ayrı sabitler hem okunur hem de ileride biri silinirse diğeri
+ *    etkilenmez.
+ *
+ * 2. `is_live` ayrımı ZORUNLUDUR, lüks değildir. Bu kart bir film/dizi
+ *    içerik kaynağı DEĞİLDİR; ayrı bir varış noktasıdır. `index.jsx`'in
+ *    "seçili platform → `/api/plugins/{name}/main-page`" akışı bir içerik
+ *    kaynağı bekler, ama `canli-tv` ne bir `PluginBase` eklentisidir ne de
+ *    `/api/plugins/{name}/categories` ucu vardır. `is_live: true` olmadan bu
+ *    kart seçildiğinde uygulama var olmayan bir eklentiye gider ve boş ekran
+ *    ya da 404 alır.
+ *
+ * ⚠️ `is_live` yüzünden bu kart `saveSelectedPlatform` ile KALICI SEÇİM
+ * YAPILMAZ. Kalıcı seçim, uygulama yeniden açıldığında `index.jsx`'in
+ * otomatik olarak `/api/plugins/{name}/main-page` çağırdığı akışın girdisidir
+ * ve canlı TV o akışın dışındadır. Bu yüzden `PlatformList` bu kartı
+ * navigasyona çevirmelidir (bkz. `router.push("/live")`), `saveSelectedPlatform`
+ * çağırmadan. `is_live` alanı, çağıran tarafın bu ayrımı "destekliyor mu"
+ * diye bakacağı kalıcı sözleşmedir.
+ *
+ * Kanal/kategori sayıları (`description`) sabit yazılmıştır: bunlar ekran
+ * açılışında `/api/live/categories` ucundan gelir ve kart etiketi, liste
+ * daha önce çekilmeden önce gösterilmek zorundadır. Sayılar M3U yenilendiğinde
+ * değişebilir; ekran elindeki `fetchLiveCategories()` sonucunu varsa
+ * `description` alanını ondan tazelemekten sorumludur.
+ */
+export const LIVE_TV_PLATFORM = {
+	id: "canli-tv",
+	name: "Canlı TV",
+	displayName: "Canlı TV",
+	description: "138 canlı kanal · 7 kategori",
+	is_live: true,
+	is_offline: false,
+	language: "tr",
+};
+
 export const DEFAULT_PLAYER_SETTINGS = {
 	// Video oynatıcı ayarları
 	seekDuration: 10, // 5, 10, 15, 30 sn
@@ -1932,6 +1978,7 @@ export default {
 	removeContinueWatching,
 	markEpisodeComplete,
 	NONE_PLATFORM,
+	LIVE_TV_PLATFORM,
 	getPluginVisibilitySettings,
 	savePluginVisibility,
 	setAllPluginsVisibility,

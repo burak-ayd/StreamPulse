@@ -762,6 +762,12 @@ export default function Index() {
 					swipeable={true}>
 					<PlatformList
 						onSelectPlatform={handleSelectPlatform}
+						/* Canlı TV kartı `handlePlatformSelect`'e GİRMEZ;
+						   navigasyona çevrilir (bkz. PlatformList →
+						   `canliTvAc`). Rota burada veriliyor çünkü modal
+						   içinden `router.push` çağırmak, ekranın kendi
+						   gezinme yığınını yönetmesi demek. */
+						onOpenLiveTv={() => router.push("/(app)/live")}
 					/>
 				</BottomSheetModal>
 

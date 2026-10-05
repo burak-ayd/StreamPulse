@@ -5,7 +5,6 @@ const API_BASE_URL =
 	Constants.expoConfig?.extra?.API_URL ??
 	Constants.manifest?.extra?.API_URL ??
 	"https://api.example.com";
-console.log(Constants.expoConfig?.extra?.API_URL);
 // Default fallback platforms list
 export const DEFAULT_PLATFORMS = [
 	{
