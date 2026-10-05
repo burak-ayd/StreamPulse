@@ -12,7 +12,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authFetch, getAuthOutcome, REFRESH_OUTCOME } from "./apiClient";
 import { getDeviceId, getDeviceName, getDevicePlatform } from "@/utils/deviceId";
-import { now as getHlcNow } from "@/utils/hlc";
+import { now as getHlcNow, update as mergeHlc } from "@/utils/hlc";
 import { filterPayload } from "@/utils/fieldWhitelist";
 import { mergeFavorites } from "@/utils/merge/favorites";
 import { mergeLibraryList } from "@/utils/merge/library";
@@ -24,6 +24,7 @@ import { STORAGE_KEYS } from "@/utils/storage";
 const LAST_SYNCED_KEY = STORAGE_KEYS.LAST_SYNCED_AT;
 const PENDING_CHANGES_KEY = STORAGE_KEYS.PENDING_SYNC_COUNT;
 const SYNC_OWNER_KEY = STORAGE_KEYS.SYNC_OWNER;
+const DOC_SYNC_META_KEY = STORAGE_KEYS.DOC_SYNC_META;
 
 /**
  * Otomatik senkronize edilen ayar/kayıt grupları.
@@ -62,6 +63,86 @@ export const SYNC_GROUPS = {
 
 /** Tüm grup adları (varsayılan: hepsi = global). */
 export const ALL_SYNC_GROUPS = Object.keys(SYNC_GROUPS);
+
+// ─── Belge (document) damga yönetimi ──────────────────────────────────
+//
+// ⚠️ NEDEN GEREKLİ? Belge türü kayıtlar (favori/liste/geçmiş) DEĞİLDİR:
+// `player_settings`, `search_history`, `plugin_visibility`,
+// `category_visibility` tek bir belgedir ve sunucuda LWW ile saklanır.
+//
+// Kayıtlar `item._hlc` taşıdığı için "değişti mi" sorusu kayıt bazında
+// yanıtlanır. Belgelerde ise yerelde HLC saklanMIYORDU ve `doc()` her push'ta
+// `getHlcNow()` üretiyordu. Sonuç: sunucuya giden her belge "şu an değiştim"
+// diyor, sunucunun LWW'si de onu kabul ediyor ve **son senkronize olan cihazın
+// verisi komple eziliyor**. Cihaz A'nın 5 araması DB'ye yazılır, cihaz B
+// açılıp kendi (daha yeni damgalı) belgesini gönderir ve A'nın verileri gider.
+// `search_history` birleştirilebilir bir liste olmasına rağmen veri SUNUCUDA
+// EZİLDİĞİ için sonraki pull da onu geri getiremez.
+//
+// Çözüm: her grup için yerelde son bilinen damga + son gönderilen içeriğin
+// imzası tutulur. İmza değişmediyse eski damga yeniden kullanılır ("bir şey
+// değişmedi"), değiştiyse damga ilerletilir. Böylece yalnızca GERÇEKTEN
+// değişen bir belge sunucuda daha yeni görünür.
+
+/**
+ * Belge içeriğinin imzası. Bağımlılıksız ve yeterince çarpışma-dirençli:
+ * bu belgeler küçük JSON yapılarıdır (en büyüğü 20 sorguluk arama geçmişi).
+ * @param {any} payload
+ * @returns {string}
+ */
+function docSignature(payload) {
+	try {
+		return JSON.stringify(payload ?? null);
+	} catch {
+		// Döngüsel yapı: ölçülemezse "değişti" kabul et (yeni damga ver).
+		return `unserializable:${Date.now()}`;
+	}
+}
+
+/**
+ * Belge damga meta verisini okur.
+ * @returns {Promise<{[group: string]: {hlc: object, deviceId: string, sig: string}}>}
+ */
+async function readDocMeta() {
+	try {
+		const raw = await AsyncStorage.getItem(DOC_SYNC_META_KEY);
+		if (!raw) return {};
+		const parsed = JSON.parse(raw);
+		return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+			? parsed
+			: {};
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Belge damga temeli kurulmuş mu?
+ *
+ * ⚠️ `LAST_SYNCED_AT` DOLU OLABİLİR ama temel olmayabilir: bu düzeltmeden
+ * önce kurulmuş her sürüm belge damgasını hiç saklamıyordu. Böyle bir
+ * kurulumda "ilk sync" koşulu yanlış olur (damga boş değil) ve belge
+ * gönderimi kalıcı olarak atlanırdı. Bu yüzden koşul `since` değil,
+ * doğrudan temelin varlığıdır.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function hasDocMeta() {
+	const meta = await readDocMeta();
+	return Object.keys(meta).length > 0;
+}
+
+/**
+ * Belge damga meta verisini yazar.
+ * @param {object} meta
+ */
+async function writeDocMeta(meta) {
+	try {
+		await AsyncStorage.setItem(DOC_SYNC_META_KEY, JSON.stringify(meta || {}));
+	} catch (e) {
+		console.warn("Belge damga meta verisi yazılamadı:", e);
+	}
+}
 
 
 let _isSyncing = false;
@@ -158,7 +239,16 @@ export async function setSyncOwner(userId) {
 	try {
 		const prev = await AsyncStorage.getItem(SYNC_OWNER_KEY);
 		if (prev && prev !== userId) {
-			await AsyncStorage.multiRemove([LAST_SYNCED_KEY, PENDING_CHANGES_KEY]);
+			// ⚠️ `DOC_SYNC_META_KEY` de silinmeli. Damga metası da hesaba
+			// bağlıdır: eski hesabın "sunucuda şu içerik var" bilgisiyle yeni
+			// hesabın belgesi gönderilirse, yeni hesabın sunucusu bu belgeyi
+			// hiç görmemiş olsa bile "değişmemiş" sanılır ve kullanıcının o
+			// hesaptaki ayarları hiç yüklenmez.
+			await AsyncStorage.multiRemove([
+				LAST_SYNCED_KEY,
+				PENDING_CHANGES_KEY,
+				DOC_SYNC_META_KEY,
+			]);
 		}
 		if (prev !== userId) {
 			await AsyncStorage.setItem(SYNC_OWNER_KEY, userId);
@@ -178,6 +268,7 @@ export async function resetSyncState() {
 			LAST_SYNCED_KEY,
 			PENDING_CHANGES_KEY,
 			SYNC_OWNER_KEY,
+			DOC_SYNC_META_KEY,
 		]);
 	} catch (err) {
 		console.warn("Sync durumu sıfırlanamadı:", err);
@@ -210,6 +301,11 @@ async function collectLocalPushData() {
 	const documents = {};
 	// Gerçekte gönderilen gruplar (raporlama için)
 	const sent = [];
+	// Belge damga temeli: hangi belgenin "değişmiş" sayıldığını bilmek için.
+	const docMeta = await readDocMeta();
+	// Bu turda HESAPLANAN yeni damgalar. Push başarılı olursa `syncNow`
+	// kalıcılaştırır; başarısızsa atılır (böylece değişiklik kaybolmaz).
+	const pendingDocMeta = {};
 
 	// 1. Favoriler
 	try {
@@ -311,13 +407,50 @@ async function collectLocalPushData() {
 		try {
 			const raw = await AsyncStorage.getItem(meta.key);
 			if (raw === null || raw === undefined) return;
+			const payload = JSON.parse(raw);
+			const sig = docSignature(payload);
+
+			/*
+			 * Damga kararı — kayıtlarla AYNI disiplin, ama belgeler için.
+			 *   · temel YOK        → sunucudaki içeriği bilmiyoruz; gönderme
+			 *   · `hlc: null`      → sunucuda bu belgenin KAYDI YOK; ilk yazma
+			 *   · imza değişmemiş  → eski damga (sunucuda zaten bu içerik var)
+			 *   · imza değişmiş    → damga ilerlet (bu gerçek bir düzenleme)
+			 */
+			const known = docMeta[group];
+			if (!known) {
+				// Bu cihaz bu belgeyi HİÇ göndermemiş/çekmemiş. Elimizde
+				// sunucudaki içeriğin ne olduğunu BİLMİYORUZ. "Şu an değiştim"
+				// diyerek göndermek sunucudaki veriyi körlemesine ezer —
+				// kullanıcının bildirdiği durum tam olarak bu: cihaz A'nın
+				// verisi DB'ye yazılır, cihaz B açılıp kendi (daha yeni
+				// damgalı) belgesini gönderir, A'nın verisi gider.
+				// Bu turda belge gönderilmez; pull'dan sonra temel kurulur.
+				console.log(
+					`[sync] ${meta.label}: temel damga yok, bu tur gönderilmiyor`,
+				);
+				return;
+			}
+
+			const hlc =
+				known.sig === sig
+					? // Sunucuda kaydı yoksa ilk yazma: yeni damga ver.
+						// Kayıt varsa içerik aynı → eski damga: sunucu bunu
+						// "değişmemiş" görür, mevcut veriyi korur.
+						known.hlc || getHlcNow()
+					: getHlcNow(known.hlc || undefined);
+
 			documents[meta.doc] = {
-				payload: JSON.parse(raw),
-				hlc: getHlcNow(),
+				payload,
+				hlc,
 				device_id: deviceId,
 				client_updated_at: new Date().toISOString(),
 			};
 			sent.push(group);
+			// Damga YALNIZCA push başarılı olursa kalıcılaştırılır
+			// (bkz. `syncNow`). Push başarısızsa değişiklik kaybolmasın diye
+			// bir sonraki turun aynı içerikle yeniden denemesi gerekir.
+			pendingDocMeta[group] = { hlc, deviceId, sig };
 		} catch (e) {
 			console.warn(`${meta.label} push verisi toplanırken hata:`, e);
 		}
@@ -328,7 +461,7 @@ async function collectLocalPushData() {
 	await doc("plugin_visibility");
 	await doc("category_visibility");
 
-	return { records, documents, sentGroups: sent };
+	return { records, documents, sentGroups: sent, pendingDocMeta };
 }
 
 /**
@@ -336,9 +469,36 @@ async function collectLocalPushData() {
  * @param {object} pullData
  * @param {string[]} [groups] - Uygulanacak belge grupları (varsayılan: tümü)
  */
-async function applyPullData(pullData) {
+async function applyPullData(pullData, { full = false } = {}) {
 	if (!pullData) return;
 	const { records = [], documents = {} } = pullData;
+
+	/*
+	 * Çekilen her belge için yerel "temel damga" kurulur. Bu olmadan belge
+	 * gönderimi bilinmez durumda kalır (bkz. `collectLocalPushData` → `doc()`).
+	 *
+	 * `hlc` alanı:
+	 *   · sunucudan belge GELDİ  → yerel ve uzak damganın HLC birleşimi
+	 *                              (`mergeHlc`). Sonraki push "değişmedim"
+	 *                              der ve mevcut sunucu verisini korur.
+	 *   · sunucuda belge YOK     → `null`. Sunucuda kayıt olmadığı için ilk
+	 *                              yazmada yeni damga verilebilir; "değişmedi"
+	 *                              sanılıp hiç gönderilmemelidir.
+	 */
+	const docMeta = await readDocMeta();
+	const nextDocMeta = { ...docMeta };
+	const localDeviceId = await getDeviceId();
+	const markDoc = (group, remoteDoc, appliedPayload) => {
+		const known = docMeta[group];
+		const remoteHlc = remoteDoc?.hlc || null;
+		nextDocMeta[group] = {
+			hlc: remoteHlc
+				? mergeHlc(known?.hlc || undefined, remoteHlc)
+				: null,
+			deviceId: localDeviceId,
+			sig: docSignature(appliedPayload),
+		};
+	};
 
 	// Türlerine göre kayıtları ayır
 	const favRecords = [];
@@ -423,6 +583,7 @@ async function applyPullData(pullData) {
 			if (payload) {
 				await AsyncStorage.setItem("app_player_settings", JSON.stringify(payload));
 				notifyStorageChange("app_player_settings", payload, { source: "sync" });
+				markDoc("player_settings", documents.player_settings, payload);
 			}
 		} catch (e) {
 			console.error("Pull player_settings birleştirme hatası:", e);
@@ -440,6 +601,7 @@ async function applyPullData(pullData) {
 			const merged = mergeSearchHistory(localHistory, remoteHistory);
 			await AsyncStorage.setItem("user_search_history", JSON.stringify(merged));
 			notifyStorageChange("user_search_history", merged, { source: "sync" });
+			markDoc("search_history", documents.search_history, merged);
 		} catch (e) {
 			console.error("Pull search_history birleştirme hatası:", e);
 		}
@@ -466,10 +628,39 @@ async function applyPullData(pullData) {
 
 			await AsyncStorage.setItem(meta.key, JSON.stringify(merged));
 			notifyStorageChange(meta.key, merged, { source: "sync" });
+			markDoc(group, doc, merged);
 		} catch (e) {
 			console.error(`Pull ${SYNC_GROUPS[group].label} birleştirme hatası:`, e);
 		}
 	}
+
+	/*
+	 * Cevapta YER ALMAYAN belgeler: sunucuda hiç kaydı yok demektir. Temeli
+	 * `hlc: null` ile kuruyoruz ki yerelde bir değişiklik olduğunda bu belge
+	 * "ilk yazma" olarak gönderilebilsin. Bu turda gönderilmez; bir sonraki
+	 * turda imza değişmişse yeni damga alır.
+	 *
+	 * ⚠️ `since` ile gelen delta'ta sunucu yalnızca değişmiş belgeleri
+	 * döner. Yani "listedeki bir belge eksik" demek "sunucuda yok" DEĞİLDİR.
+	 * Bu yüzden burada yalnızca TAM çekişten sonra temel kurulur; delta
+	 * çekişte mevcut meta zaten korunur.
+	 */
+	const fullPull = full;
+	if (fullPull) {
+		for (const group of Object.keys(SYNC_GROUPS)) {
+			if (nextDocMeta[group]) continue;
+			const groupMeta = SYNC_GROUPS[group];
+			const raw = await AsyncStorage.getItem(groupMeta.key);
+			if (raw === null || raw === undefined) continue;
+			nextDocMeta[group] = {
+				hlc: null,
+				deviceId: localDeviceId,
+				sig: docSignature(JSON.parse(raw)),
+			};
+		}
+	}
+
+	await writeDocMeta(nextDocMeta);
 }
 
 /**
@@ -561,6 +752,112 @@ export async function syncNow(options = {}) {
 		const lastSynced = await getLastSyncedAt();
 		const device = await getDeviceMetadata();
 
+		const since = full ? null : lastSynced;
+
+		/**
+		 * Sunucudan delta (veya tam döküm) çeker ve yerelle birleştirir.
+		 * @returns {Promise<{serverTime: string|null, error: string|null,
+		 *                    detail: string, terminal401: boolean, ok: boolean}>}
+		 */
+		const runPull = async (useSince = since) => {
+			const pullUrl = useSince
+				? `/api/sync/pull?since=${encodeURIComponent(useSince)}`
+				: `/api/sync/pull`;
+
+			const pullRes = await authFetch(pullUrl, { method: "GET" });
+			let serverTime = useSince;
+			let error = null;
+			let detail = "";
+
+if (pullRes.ok) {
+				const pullData = await pullRes.json();
+			// `!useSince` → sunucu TAM döküm döndü (damga sorulmadı). Yalnızca
+			// bu durumda "cevapta olmayan belge = sunucuda yok" çıkarımı
+			// güvenlidir; delta çekişte eksik belge "yok" demek değildir.
+			await applyPullData(pullData, { full: !useSince });
+				// Damga PULL'dan gelir: sunucu bu değemi OKUMADAN ÖNCE hesaplar,
+				// yani okuma anında yazılan satırlar bir sonraki çekişte teslim edilir.
+				if (pullData.server_time) {
+					serverTime = pullData.server_time;
+				} else {
+					// 200 ama damga yok → veri geldi, nereden devam edeceğimiz
+					// bilinmiyor. Damgayı ilerletmek riskli, ilerletmemek güvenli:
+					// sonraki tur aynı veriyi idempotent olarak tekrar çeker, ama
+					// hiçbir kayıt kaybolmaz.
+					error = "pull_missing_server_time";
+				}
+			} else if (pullRes.status === 401) {
+				// Ayn�� kural: terminal değilse geçici hatadır, "oturum bitti" değil.
+				// ⚠️ Burada DÜŞMEK YOK: `serverTime` alanı normalde `useSince`'e
+				// eşittir ve çağıran onu `lastSynced`'a yazar. Çekiş BAŞARISIZ
+				// olduğu hâlde damga ilerletilirse veri hiç alınmamış olmasına
+				// rağmen "bugüne kadar her şeyi indirdim" denmiş olur ve
+				// `updated_at > since` filtresi o verileri kalıcı atlar. Bu
+				// yüzden terminal olmayan 401'de `serverTime` `useSince`
+				// olarak kalır; yine de çağıran dondurulur ki tur bitmesin.
+				if (getAuthOutcome(pullRes) === REFRESH_OUTCOME.TERMINAL) {
+					return { serverTime, error: null, detail: "", terminal401: true, ok: false };
+				}
+				// Not: `pullError` ile gölgelenmesin diye `authError` adı kullanıldı.
+				const authError = error || "pull_failed_401";
+				return { serverTime, error: authError, detail: "", terminal401: false, ok: false };
+			} else {
+				// ⚠️ 5xx / 429 / 400 ve ağ hatası. Damga `since` olduğu için
+				// olduğu gibi bırakılır; bir sonraki başarılı tur aynı veriyi
+				// tekrar ister (güvenli), hiçbir kayıt atlanmaz.
+				error = `pull_failed_${pullRes.status}`;
+				detail = await pullRes.text().catch(() => "");
+				console.warn("Pull başarısız oldu:", pullRes.status, detail);
+			}
+
+			return { serverTime, error, detail, terminal401: false, ok: pullRes.ok };
+		};
+
+		/*
+		 * ─── 0. BELGE TEMELİ YOKSA: ÖNCE TAM PULL ──────────────────────
+		 *
+		 * ⚠️ Belgeler (arama geçmişi, oynatıcı ayarları, görünürlük) tek parça
+		 * hâlinde LWW ile saklanır. Yerel damga temelimiz yoksa "sunucuda ne
+		 * var" bilgisine sahip değilizdir; bu durumda push, sunucudaki veriyi
+		 * KÖRLEMESİNE ezebilir. Kullanıcının bildirdiği hata tam olarak bu:
+		 * cihaz A'nın verisi DB'ye yazılır, cihaz B açılıp kendi belgesini
+		 * gönderir, A'nın verisi gider.
+		 *
+		 * Çözüm: temel kurulmadan ÖNCE tam döküm çekilir — hem kayıtlar hem
+		 * de belge temelleri kurulur — sonra push yapılır. Böylece
+		 *   · sunucunun durumu öğrenilmeden hiçbir şey gönderilmez,
+		 *   · yerelde oluşturulmuş veri de aynı turda yüklenir.
+		 *
+		 * ⚠️ Koşul `since` DEĞİL "temel var mı"dır: bu düzeltmeden önce
+		 * kurulmuş sürümlerde `LAST_SYNCED_AT` doludur ama belge damgası
+		 * hiç saklanmamıştır; "ilk sync" koşulu onları yakalayamaz ve belge
+		 * gönderimi kalıcı atlanırdı. Bu yüzden `since` BİLEREK YOK
+		 * verilir — temel kurmak için sunucudaki TÜM belgeleri görmek
+		 * zorundayız, delta eksik belgeyi "yok" sanır.
+		 */
+		let preflightPull = null;
+		if (!(await hasDocMeta())) {
+			preflightPull = await runPull(null);
+			if (preflightPull.terminal401) {
+				emitSyncState({ status: "error", lastSyncedAt: lastSynced, error: "unauthorized" });
+				return { success: false, error: "unauthorized" };
+			}
+			if (!preflightPull.ok) {
+				// Sunucudan hiçbir şey öğrenemedik. Push'u çalıştırmak riskli,
+				// bu yüzden tur push'suz kapanır; temel kurulmadığı için bir
+				// sonraki turda aynı ön kontrol tekrar denenir.
+				emitSyncState({
+					status: "error",
+					lastSyncedAt: lastSynced,
+					error: preflightPull.error,
+				});
+				return {
+					success: false,
+					error: preflightPull.error || "preflight_pull_failed",
+				};
+			}
+		}
+
 		// ─── 1. PUSH (Yerel değişiklikleri sunucuya gönder) ──────
 		const localData = await collectLocalPushData();
 		const pushRes = await authFetch("/api/sync/push", {
@@ -580,6 +877,25 @@ export async function syncNow(options = {}) {
 		if (pushRes.ok) {
 			pushed = true;
 			const pushData = await pushRes.json();
+
+			/*
+			 * ⚠️ Belge damgaları YALNIZCA push 200 döndükten SONRA yazılır.
+			 * Yazılsaydı ve push sonradan ağ hatasıyla düşseydi, "değişmiş"
+			 * sayılan belge eski damgasıyla bir sonraki turda gönderilir ve
+			 * sunucu onu "değişmemiş" diye reddedip YEREL DEĞİŞİKLİĞİ
+			 * kaybettirirdi. Yazmamak bu riski kaldırır: aynı içerik, aynı
+			 * turda yeniden denenir.
+			 */
+			const committedMeta = { ...(await readDocMeta()) };
+			let committedAny = false;
+			for (const [group, value] of Object.entries(
+				localData.pendingDocMeta || {},
+			)) {
+				committedMeta[group] = value;
+				committedAny = true;
+			}
+			if (committedAny) await writeDocMeta(committedMeta);
+
 			// Reddedilenleri yerelle uzlaştır
 			await reconcileRejectedItems(pushData.rejected, pushData.documents_rejected);
 
@@ -630,57 +946,13 @@ export async function syncNow(options = {}) {
 		}
 
 		// ─── 2. PULL (Sunucudan delta çek) ──────────────────────
-		const since = full ? null : lastSynced;
-		const pullUrl = since
-			? `/api/sync/pull?since=${encodeURIComponent(since)}`
-			: `/api/sync/pull`;
+		// İlk turda zaten ön kontrolde çekildi; aynı isteği tekrarlamıyoruz.
+		const pull = preflightPull || (await runPull());
+		const { serverTime, error: pullError, terminal401 } = pull;
 
-		const pullRes = await authFetch(pullUrl, { method: "GET" });
-		let serverTime = since;
-		let pullError = null;
-		let pullDetail = "";
-
-		if (pullRes.ok) {
-			const pullData = await pullRes.json();
-			await applyPullData(pullData);
-			// Damga PULL'dan gelir: sunucu bu değemi OKUMADAN ÖNCE hesaplar,
-			// yani okuma anında yazılan satırlar bir sonraki çekişte teslim edilir.
-			if (pullData.server_time) {
-				serverTime = pullData.server_time;
-			} else {
-				// 200 ama damga yok → veri geldi, nereden devam edeceğimiz
-				// bilinmiyor. Damgayı ilerletmek riskli, ilerletmemek güvenli:
-				// sonraki tur aynı veriyi idempotent olarak tekrar çeker, ama
-				// hiçbir kayıt kaybolmaz.
-				pullError = "pull_missing_server_time";
-			}
-		} else if (pullRes.status === 401) {
-			// Aynı kural: terminal değilse geçici hatadır, "oturum bitti" değil.
-			// ⚠️ Burada DÜŞMEK YOK: `serverTime` `since` olmadığında (ilk tam
-			// döküm) `new Date()`'e düşer ve damga ilerletilir. Veri hiç
-			// çekilmediği hâlde damga ilerletmek, bir sonraki pull'da o verilerin
-			// kalıcı atlanmasına yol açar. Bu yüzden erken dönüyoruz.
-			if (getAuthOutcome(pullRes) === REFRESH_OUTCOME.TERMINAL) {
-				emitSyncState({ status: "error", lastSyncedAt: lastSynced, error: "unauthorized" });
-				return { success: false, error: "unauthorized" };
-			}
-			// Not: `pullError` ile gölgelenmesin diye `authError` adı kullanıldı.
-			const authError = pushError || "pull_failed_401";
-			emitSyncState({ status: "error", lastSyncedAt: lastSynced, error: authError });
-			return { success: false, error: authError };
-		} else {
-			// ⚠️ 5xx / 429 / 400 ve ağ hatası. Önceden bu dal HİÇ YOKTU: kod
-			// doğrudan aşağıdaki damga satırına düşüyordu. `serverTime` `since`
-			// olduğu için, ilk sync'te (`since === null`) `new Date()`'e
-			// düşüyor ve damga "bugüne kadar her şeyi indirdim" anlamına
-			// geliyordu — oysa sunucudan HİÇBİR satır alınmamıştı. Sonraki tur
-			// `since=<bugün>` soruyor, sunucu da `updated_at > since` diye
-			// filtrelediği için hiç indirilmemiş kayıtlar KALICI olarak
-			// atlanır: kullanıcı boş kütüphane görür ve `full` seçeneği
-			// hiçbir yerden tetiklenmediği için kendi kendine toparlanamaz.
-			pullError = `pull_failed_${pullRes.status}`;
-			pullDetail = await pullRes.text().catch(() => "");
-			console.warn("Pull başarısız oldu:", pullRes.status, pullDetail);
+		if (terminal401) {
+			emitSyncState({ status: "error", lastSyncedAt: lastSynced, error: "unauthorized" });
+			return { success: false, error: "unauthorized" };
 		}
 
 		// ⚠️ Damga ilerletme kuralı: YALNIZCA pull 200 döndüyse.
@@ -688,7 +960,7 @@ export async function syncNow(options = {}) {
 		// tur aynı veriyi tekrar ister (güvenli), hiçbir kayıt atlanmaz.
 		// `lastSynced` null ise hiçbir şey YAZILMAZ — `setLastSyncedAt(null)`
 		// "null" metnini kaydedip bir sonraki turu bozardı.
-		const finalTime = pullRes.ok && serverTime ? serverTime : lastSynced;
+		const finalTime = pull.ok && serverTime ? serverTime : lastSynced;
 
 		if (finalTime) await setLastSyncedAt(finalTime);
 		await setPendingChangesCount(0);
