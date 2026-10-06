@@ -4,6 +4,7 @@ import {
 	fetchPluginStatus,
 	fetchPlatforms,
 } from "@/services/api";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import {
 	LIVE_TV_PLATFORM,
 	NONE_PLATFORM,
@@ -61,6 +62,20 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 	 * tarafında bir "/live" sabiti olmamasıyla tutarlı.
 	 */
 	const router = useRouter();
+
+	/**
+	 * TV ölçüleri.
+	 *
+	 * Bu liste TV'de 1920px genişliğinde tek sütun olarak açılıyordu: kart
+	 * solda küçücük kalıp sağında 1200px boşluk bırakıyordu. Panel artık
+	 * ortalanmış ve dar (bkz. `Bottomsheetmodal`), burada da punto, kart
+	 * yüksekliği ve boşluklar TV ölçeğine çıkarılıyor.
+	 *
+	 * Arama kutusu TV'de GİZLENİR: kumandada klavye yok, `TextInput`
+	 * odaklanamaz ve kullanıcı yazamaz — işlevsiz bir kontrol göstermek
+	 * yerine gizlemek doğrusu.
+	 */
+	const { isTV, sp, focusScale } = useTvMetrics();
 
 	const [selectedPlatformId, setSelectedPlatformId] = useState("none");
 	const [platformList, setPlatformList] = useState([]);
@@ -306,25 +321,49 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 	}, [platformList, selectedPlatformId, isNoneSelected]);
 
 	return (
-		<View style={styles.container}>
-			{/* Modal Header */}
-			<View style={styles.header}>
-				<Text style={styles.headerTitle}>Platform / Eklenti Seçimi</Text>
-				<Text style={styles.headerSubtitle}>
-					İçeriklerin getirileceği kaynağı belirleyin
+		<View
+			style={[
+				styles.container,
+				{
+					paddingHorizontal: sp(16),
+					paddingTop: sp(12),
+					paddingBottom: sp(24),
+				},
+			]}>
+			{/* Modal Header — TV'de alt başlık gizlenir: panel yüksekliği
+			    sınırlı, dikey alan kartlara daha çok ait. */}
+			<View style={[styles.header, { marginBottom: sp(isTV ? 10 : 16) }]}>
+				<Text
+					style={[styles.headerTitle, { fontSize: sp(isTV ? 18 : 21) }]}
+					numberOfLines={1}>
+					Platform / Eklenti Seçimi
 				</Text>
+				{!isTV && (
+					<Text
+						style={[
+							styles.headerSubtitle,
+							{ fontSize: sp(13), marginTop: sp(4) },
+						]}
+						numberOfLines={2}>
+						İçeriklerin getirileceği kaynağı belirleyin
+					</Text>
+				)}
 			</View>
 
 			{/* Seçili kaynak devreye girdiyse uyarı — içerik yüklenemez */}
 			{seciliDevredeMi ? (
-				<View style={styles.alertBox}>
+				<View
+					style={[
+						styles.alertBox,
+						{ padding: sp(12), marginBottom: sp(12), gap: sp(8), borderRadius: sp(12) },
+					]}>
 					<Ionicons
 						name="warning"
-						size={16}
+						size={sp(18)}
 						color="#f59e0b"
 						style={styles.alertIcon}
 					/>
-					<Text style={styles.alertText}>
+					<Text style={[styles.alertText, { fontSize: sp(13), lineHeight: sp(18) }]}>
 						Seçili kaynak geçici olarak kullanım dışı. İçerik
 						güncellenemeyebilir; başka bir kaynak seçin.
 					</Text>
@@ -333,47 +372,60 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 
 			{/* Devre özeti */}
 			{devredeOlanlar.length > 0 ? (
-				<View style={styles.infoBox}>
+				<View
+					style={[
+						styles.infoBox,
+						{ padding: sp(12), marginBottom: sp(12), gap: sp(8), borderRadius: sp(12) },
+					]}>
 					<Ionicons
 						name="information-circle"
-						size={16}
+						size={sp(18)}
 						color="#60a5fa"
 						style={styles.alertIcon}
 					/>
-					<Text style={styles.infoText}>
+					<Text style={[styles.infoText, { fontSize: sp(13), lineHeight: sp(18) }]}>
 						{devredeOlanlar.length} kaynak geçici olarak kullanım dışı
 						(devam ediyor). Kendiliğinden geri gelirler.
 					</Text>
 				</View>
 			) : null}
 
-			{/* Search Input */}
-			<View style={styles.searchBox}>
-				<Ionicons name="search" size={17} color="#9ca3af" />
-				<TextInput
-					style={styles.searchInput}
-					placeholder="Eklenti ara..."
-					placeholderTextColor="#6b7280"
-					value={searchQuery}
-					onChangeText={setSearchQuery}
-					autoCapitalize="none"
-					autoCorrect={false}
-				/>
-				{searchQuery.length > 0 && (
-					<TVPressable
-						onPress={() => setSearchQuery("")}
-						focusedStyle={styles.searchClearFocused}>
-						<Ionicons
-							name="close-circle"
-							size={16}
-							color="#9ca3af"
-						/>
-					</TVPressable>
-				)}
-			</View>
+			{/* Search Input — TV'de kumanda ile yazılamaz, gizlenir. */}
+			{!isTV && (
+				<View style={[styles.searchBox, { marginBottom: sp(12), height: sp(40), gap: sp(8) }]}>
+					<Ionicons name="search" size={sp(17)} color="#9ca3af" />
+					<TextInput
+						style={[styles.searchInput, { fontSize: sp(13) }]}
+						placeholder="Eklenti ara..."
+						placeholderTextColor="#6b7280"
+						value={searchQuery}
+						onChangeText={setSearchQuery}
+						autoCapitalize="none"
+						autoCorrect={false}
+					/>
+					{searchQuery.length > 0 && (
+						<TVPressable
+							onPress={() => setSearchQuery("")}
+							focusedStyle={{
+								backgroundColor: "rgba(229, 9, 20, 0.2)",
+								borderRadius: sp(10),
+							}}>
+							<Ionicons
+								name="close-circle"
+								size={sp(16)}
+								color="#9ca3af"
+							/>
+						</TVPressable>
+					)}
+				</View>
+			)}
 
 			{/* Filter Pills */}
-			<View style={styles.filterRow}>
+			<View
+				style={[
+					styles.filterRow,
+					{ gap: sp(9), marginBottom: sp(isTV ? 10 : 14) },
+				]}>
 				{[
 					{ id: "all", label: "Tümü" },
 					{ id: "movie", label: "Filmler" },
@@ -384,14 +436,25 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 						key={f.id}
 						style={[
 							styles.filterPill,
+							{
+								paddingHorizontal: sp(16),
+								paddingVertical: sp(isTV ? 7 : 9),
+								borderRadius: sp(18),
+							},
 							activeFilter === f.id && styles.filterPillActive,
 						]}
-						focusedStyle={styles.filterPillFocused}
+						focusedStyle={{
+							borderWidth: 2,
+							borderColor: "#E50914",
+							backgroundColor: "rgba(229, 9, 20, 0.2)",
+							transform: [{ scale: focusScale }],
+						}}
 						onPress={() => setActiveFilter(f.id)}
 						activeOpacity={0.7}>
 						<Text
 							style={[
 								styles.filterPillText,
+								{ fontSize: sp(13) },
 								activeFilter === f.id &&
 									styles.filterPillTextActive,
 							]}>
@@ -409,33 +472,61 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 			) : (
 				<ScrollView
 					style={styles.scrollView}
-					contentContainerStyle={styles.scrollContent}
+					contentContainerStyle={[styles.scrollContent, { paddingBottom: sp(20), gap: sp(10) }]}
 					showsVerticalScrollIndicator={false}>
+					{/* Kart stili — TV'de daha büyük dokunma hedefi, ama panel
+					    yüksekliği sınırlı olduğu için dikey boşluk sıkı. */}
+					{(() => {
+						const cardStyle = {
+							padding: sp(isTV ? 11 : 14),
+							gap: sp(12),
+							borderRadius: sp(14),
+						};
+						const cardFocused = {
+							borderWidth: 2,
+							borderColor: "#E50914",
+							backgroundColor: "rgba(229, 9, 20, 0.15)",
+							transform: [{ scale: focusScale }],
+						};
+						const iconBox = {
+							width: sp(isTV ? 40 : 44),
+							height: sp(isTV ? 40 : 44),
+							borderRadius: sp(12),
+						};
+
+						return (
+							<>
 					{/* 1. None Option */}
 					<TVPressable
 						style={[
 							styles.platformCard,
+							cardStyle,
 							isNoneSelected && styles.platformCardActive,
 						]}
-						focusedStyle={styles.platformCardFocused}
+						focusedStyle={cardFocused}
 						onPress={() => handlePlatformSelect(NONE_PLATFORM)}
 						activeOpacity={0.7}>
 						<View
 							style={[
 								styles.iconContainer,
+								iconBox,
 								{ backgroundColor: "rgba(107, 114, 128, 0.2)" },
 							]}>
 							<Ionicons
 								name="cloud-offline"
-								size={20}
+								size={sp(22)}
 								color="#9ca3af"
 							/>
 						</View>
 						<View style={styles.platformDetails}>
-							<Text style={styles.platformName}>
+							<Text
+								style={[styles.platformName, { fontSize: sp(15) }]}
+								numberOfLines={1}>
 								None (Hiçbiri)
 							</Text>
-							<Text style={styles.platformDesc}>
+							<Text
+								style={[styles.platformDesc, { fontSize: sp(12), marginTop: sp(3) }]}
+								numberOfLines={1}>
 								Sadece indirilen ögeleri göster (Çevrimdışı)
 							</Text>
 						</View>
@@ -443,43 +534,53 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 							{isNoneSelected ? (
 								<Ionicons
 									name="checkmark-circle"
-									size={22}
+									size={sp(24)}
 									color="#2563EB"
 								/>
 							) : (
-								<View style={styles.radioCircle} />
+								<View
+									style={[
+										styles.radioCircle,
+										{ width: sp(22), height: sp(22), borderRadius: sp(11) },
+									]}
+								/>
 							)}
 						</View>
 					</TVPressable>
 
 					{/* 2. Random Option */}
 					<TVPressable
-						style={styles.platformCard}
-						focusedStyle={styles.platformCardFocused}
+						style={[styles.platformCard, cardStyle]}
+						focusedStyle={cardFocused}
 						onPress={handleSelectRandom}
 						activeOpacity={0.7}>
 						<View
 							style={[
 								styles.iconContainer,
+								iconBox,
 								{ backgroundColor: "rgba(37, 99, 235, 0.15)" },
 							]}>
 							<Ionicons
 								name="shuffle"
-								size={20}
+								size={sp(22)}
 								color="#38bdf8"
 							/>
 						</View>
 						<View style={styles.platformDetails}>
-							<Text style={styles.platformName}>
+							<Text
+								style={[styles.platformName, { fontSize: sp(15) }]}
+								numberOfLines={1}>
 								Random (Rastgele)
 							</Text>
-							<Text style={styles.platformDesc}>
+							<Text
+								style={[styles.platformDesc, { fontSize: sp(12), marginTop: sp(3) }]}
+								numberOfLines={1}>
 								Aktif eklentiler arasından rastgele birini seç
 							</Text>
 						</View>
 						<Ionicons
 							name="chevron-forward"
-							size={18}
+							size={sp(20)}
 							color="#6b7280"
 						/>
 					</TVPressable>
@@ -490,8 +591,8 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 					    * EYLEM kartıdır ve listede kalıcı seçim YAPMAZ; bu kart
 					    * bir VARIŞ NOKTASIdır ve yukarıdaki `canliTvAc`
 					    * gerekçesiyle seçim zincirine hiç girmemelidir. Aynı
-					    * `platformCard` + `platformCardFocused` kullanıldığı için
-					    * iki kart görsel olarak ayırt edilemez — kasıtlı: ikisi de
+					    * `platformCard` + odak stili kullanıldığı için iki kart
+					    * görsel olarak ayırt edilemez — kasıtlı: ikisi de
 					    * "listedeki bir eklenti değil, uygulamanın kendi kaynağı"
 					    * ailesinden, aynı yerde, aynı biçimde durmalı.
 					    *
@@ -512,40 +613,49 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 					    * eklentileri etkiliyor" mesajını görsel olarak verir). */}
 					{activeFilter === "all" && (
 						<TVPressable
-							style={styles.platformCard}
-							focusedStyle={styles.platformCardFocused}
+							style={[styles.platformCard, cardStyle]}
+							focusedStyle={cardFocused}
 							onPress={canliTvAc}
 							activeOpacity={0.7}>
 							<View
 								style={[
 									styles.iconContainer,
+									iconBox,
 									{ backgroundColor: "rgba(229, 9, 20, 0.15)" },
 								]}>
 								<Ionicons
 									name="tv"
-									size={20}
+									size={sp(22)}
 									color="#E50914"
 								/>
 							</View>
 							<View style={styles.platformDetails}>
-								<Text style={styles.platformName}>
+								<Text
+									style={[styles.platformName, { fontSize: sp(15) }]}
+									numberOfLines={1}>
 									{LIVE_TV_PLATFORM.displayName}
 								</Text>
-								<Text style={styles.platformDesc}>
+								<Text
+									style={[styles.platformDesc, { fontSize: sp(12), marginTop: sp(3) }]}
+									numberOfLines={1}>
 									{LIVE_TV_PLATFORM.description}
 								</Text>
 							</View>
 							<Ionicons
 								name="chevron-forward"
-								size={18}
+								size={sp(20)}
 								color="#6b7280"
 							/>
 						</TVPressable>
 					)}
 
 					{/* Section Divider */}
-					<View style={styles.divider}>
-						<Text style={styles.dividerText}>
+					<View style={[styles.divider, { marginTop: sp(8), marginBottom: sp(4) }]}>
+						<Text
+							style={[
+								styles.dividerText,
+								{ fontSize: sp(12), letterSpacing: sp(0.6) },
+							]}>
 							Mevcut Eklentiler ({filteredPlatforms.length})
 						</Text>
 					</View>
@@ -567,12 +677,11 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 								disabled={kapali}
 								style={[
 									styles.platformCard,
+									cardStyle,
 									isSelected && !kapali && styles.platformCardActive,
 									kapali && styles.platformCardDisabled,
 								]}
-								focusedStyle={
-									kapali ? undefined : styles.platformCardFocused
-								}
+								focusedStyle={kapali ? undefined : cardFocused}
 								onPress={() => handlePlatformSelect(platform)}
 								activeOpacity={0.7}>
 								{platform.favicon ? (
@@ -580,6 +689,7 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 										source={{ uri: platform.favicon }}
 										style={[
 											styles.platformImage,
+											iconBox,
 											kapali && styles.platformImageDisabled,
 										]}
 										contentFit="contain"
@@ -588,39 +698,69 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 										cachePolicy="memory-disk"
 									/>
 								) : (
-									<View style={styles.iconContainer}>
-										<Text style={styles.flagEmoji}>🇹🇷</Text>
+									<View style={[styles.iconContainer, iconBox]}>
+										<Text style={[styles.flagEmoji, { fontSize: sp(20) }]}>
+											🇹🇷
+										</Text>
 									</View>
 								)}
 
 								<View style={styles.platformDetails}>
-									<View style={styles.titleRow}>
+									<View style={[styles.titleRow, { gap: sp(7) }]}>
 										<Text
 											style={[
 												styles.platformName,
+												{ fontSize: sp(15) },
 												kapali && styles.platformNameDisabled,
 											]}
 											numberOfLines={1}>
 											{platform.name}
 										</Text>
 										{platform.language && (
-											<View style={styles.langBadge}>
-												<Text style={styles.langText}>
+											<View
+												style={[
+													styles.langBadge,
+													{
+														paddingHorizontal: sp(6),
+														paddingVertical: sp(2),
+														borderRadius: sp(5),
+													},
+												]}>
+												<Text
+													style={[
+														styles.langText,
+														{ fontSize: sp(10) },
+													]}>
 													{platform.language.toUpperCase()}
 												</Text>
 											</View>
 										)}
 										{/* Rozet — yalnız devrede olanlarda */}
 										{kapali ? (
-											<View style={styles.disabledBadge}>
-												<Text style={styles.disabledBadgeText}>
+											<View
+												style={[
+													styles.disabledBadge,
+													{
+														paddingHorizontal: sp(7),
+														paddingVertical: sp(3),
+														borderRadius: sp(5),
+													},
+												]}>
+												<Text
+													style={[
+														styles.disabledBadgeText,
+														{ fontSize: sp(10) },
+													]}>
 													Kullanım dışı
 												</Text>
 											</View>
 										) : null}
 									</View>
 									<Text
-										style={styles.platformDesc}
+										style={[
+											styles.platformDesc,
+											{ fontSize: sp(12), marginTop: sp(3) },
+										]}
 										numberOfLines={1}>
 										{platform.description ||
 											(platform.categories
@@ -630,7 +770,10 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 									{/* Sebep — rozeti tek başına yetersiz */}
 									{kapali ? (
 										<Text
-											style={styles.disabledReason}
+											style={[
+												styles.disabledReason,
+												{ fontSize: sp(11), marginTop: sp(4), lineHeight: sp(15) },
+											]}
 											numberOfLines={2}>
 											{platform.son_hata ||
 												platform.durum_mesaji ||
@@ -646,17 +789,22 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 										   bir ikon gösteriyoruz. */
 										<Ionicons
 											name="ban"
-											size={20}
+											size={sp(22)}
 											color="#6b7280"
 										/>
 									) : isSelected ? (
 										<Ionicons
 											name="checkmark-circle"
-											size={22}
+											size={sp(24)}
 											color="#2563EB"
 										/>
 									) : (
-										<View style={styles.radioCircle} />
+										<View
+											style={[
+												styles.radioCircle,
+												{ width: sp(22), height: sp(22), borderRadius: sp(11) },
+											]}
+										/>
 									)}
 								</View>
 							</TVPressable>
@@ -664,12 +812,15 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 					})}
 
 					{filteredPlatforms.length === 0 && (
-						<View style={styles.emptyContainer}>
-							<Text style={styles.emptyText}>
+						<View style={[styles.emptyContainer, { padding: sp(32) }]}>
+							<Text style={[styles.emptyText, { fontSize: sp(14) }]}>
 								Eşleşen eklenti bulunamadı.
 							</Text>
 						</View>
 					)}
+							</>
+						);
+					})()}
 				</ScrollView>
 			)}
 		</View>
@@ -679,23 +830,15 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		paddingHorizontal: 16,
-		paddingTop: 8,
-		paddingBottom: 24,
 	},
-	header: {
-		marginBottom: 14,
-	},
+	header: {},
 	headerTitle: {
 		color: "#ffffff",
-		fontSize: 18,
 		fontWeight: "700",
 		letterSpacing: -0.3,
 	},
 	headerSubtitle: {
 		color: "#9ca3af",
-		fontSize: 12,
-		marginTop: 3,
 	},
 	searchBox: {
 		flexDirection: "row",
@@ -703,26 +846,17 @@ const styles = StyleSheet.create({
 		backgroundColor: "#161b22",
 		borderRadius: 12,
 		paddingHorizontal: 12,
-		height: 40,
 		borderWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.08)",
-		marginBottom: 12,
-		gap: 8,
 	},
 	searchInput: {
 		flex: 1,
 		color: "#ffffff",
-		fontSize: 13,
 	},
 	filterRow: {
 		flexDirection: "row",
-		gap: 8,
-		marginBottom: 14,
 	},
 	filterPill: {
-		paddingHorizontal: 14,
-		paddingVertical: 5,
-		borderRadius: 14,
 		backgroundColor: "#161b22",
 		borderWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.06)",
@@ -733,7 +867,6 @@ const styles = StyleSheet.create({
 	},
 	filterPillText: {
 		color: "#9ca3af",
-		fontSize: 12,
 		fontWeight: "500",
 	},
 	filterPillTextActive: {
@@ -743,39 +876,24 @@ const styles = StyleSheet.create({
 	scrollView: {
 		flex: 1,
 	},
-	scrollContent: {
-		paddingBottom: 20,
-		gap: 8,
-	},
+	scrollContent: {},
 	platformCard: {
 		flexDirection: "row",
 		alignItems: "center",
 		backgroundColor: "#161b22",
-		borderRadius: 12,
-		padding: 12,
 		borderWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.06)",
-		gap: 12,
 	},
 	platformCardActive: {
 		borderColor: "#2563EB",
 		backgroundColor: "rgba(37, 99, 235, 0.12)",
 	},
 	iconContainer: {
-		width: 38,
-		height: 38,
-		borderRadius: 10,
-		backgroundColor: "#21262d",
 		justifyContent: "center",
 		alignItems: "center",
 	},
-	flagEmoji: {
-		fontSize: 18,
-	},
+	flagEmoji: {},
 	platformImage: {
-		width: 38,
-		height: 38,
-		borderRadius: 10,
 		overflow: "hidden",
 		backgroundColor: "#21262d",
 	},
@@ -785,49 +903,34 @@ const styles = StyleSheet.create({
 	titleRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 6,
 	},
 	platformName: {
 		color: "#ffffff",
-		fontSize: 14,
 		fontWeight: "600",
+		flexShrink: 1,
 	},
 	langBadge: {
 		backgroundColor: "rgba(255, 255, 255, 0.1)",
-		paddingHorizontal: 5,
-		paddingVertical: 1,
-		borderRadius: 4,
 	},
 	langText: {
 		color: "#9ca3af",
-		fontSize: 9,
 		fontWeight: "700",
 	},
 	platformDesc: {
 		color: "#9ca3af",
-		fontSize: 11,
-		marginTop: 2,
 	},
 	radioWrapper: {
 		paddingLeft: 6,
 	},
 	radioCircle: {
-		width: 20,
-		height: 20,
-		borderRadius: 10,
 		borderWidth: 2,
 		borderColor: "#4b5563",
 	},
-	divider: {
-		marginTop: 8,
-		marginBottom: 4,
-	},
+	divider: {},
 	dividerText: {
 		color: "#6b7280",
-		fontSize: 11,
 		fontWeight: "600",
 		textTransform: "uppercase",
-		letterSpacing: 0.5,
 	},
 	loadingContainer: {
 		padding: 40,
@@ -835,28 +938,10 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	emptyContainer: {
-		padding: 30,
 		alignItems: "center",
 	},
 	emptyText: {
 		color: "#6b7280",
-		fontSize: 13,
-	},
-	filterPillFocused: {
-		borderWidth: 1.5,
-		borderColor: "#E50914",
-		backgroundColor: "rgba(229, 9, 20, 0.2)",
-		transform: [{ scale: 1.05 }],
-	},
-	platformCardFocused: {
-		borderWidth: 1.5,
-		borderColor: "#E50914",
-		backgroundColor: "rgba(229, 9, 20, 0.15)",
-		transform: [{ scale: 1.02 }],
-	},
-	searchClearFocused: {
-		backgroundColor: "rgba(229, 9, 20, 0.2)",
-		borderRadius: 10,
 	},
 
 	/*
@@ -883,20 +968,13 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(239, 68, 68, 0.15)",
 		borderWidth: 1,
 		borderColor: "rgba(239, 68, 68, 0.4)",
-		paddingHorizontal: 6,
-		paddingVertical: 2,
-		borderRadius: 4,
 	},
 	disabledBadgeText: {
 		color: "#f87171",
-		fontSize: 9,
 		fontWeight: "700",
 	},
 	disabledReason: {
 		color: "#6b7280",
-		fontSize: 10,
-		marginTop: 3,
-		lineHeight: 13,
 	},
 	alertBox: {
 		flexDirection: "row",
@@ -904,10 +982,6 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(245, 158, 11, 0.12)",
 		borderWidth: 1,
 		borderColor: "rgba(245, 158, 11, 0.35)",
-		borderRadius: 10,
-		padding: 10,
-		marginBottom: 12,
-		gap: 8,
 	},
 	alertIcon: {
 		marginTop: 1,
@@ -915,8 +989,6 @@ const styles = StyleSheet.create({
 	alertText: {
 		flex: 1,
 		color: "#fbbf24",
-		fontSize: 11,
-		lineHeight: 15,
 	},
 	infoBox: {
 		flexDirection: "row",
@@ -924,15 +996,9 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(37, 99, 235, 0.10)",
 		borderWidth: 1,
 		borderColor: "rgba(96, 165, 250, 0.25)",
-		borderRadius: 10,
-		padding: 10,
-		marginBottom: 12,
-		gap: 8,
 	},
 	infoText: {
 		flex: 1,
 		color: "#93c5fd",
-		fontSize: 11,
-		lineHeight: 15,
 	},
 });

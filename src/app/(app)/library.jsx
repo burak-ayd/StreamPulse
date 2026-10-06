@@ -1,5 +1,6 @@
 import BottomNavigation from "@/components/BottomNavigation";
 import { useNavLayout } from "@/hooks/useNavLayout";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import LibraryItemActionModal from "@/components/modal/LibraryItemActionModal";
 import ListSelectModal from "@/components/modal/ListSelectModal";
 import {
@@ -25,7 +26,6 @@ import TVPressable from "@/components/common/TVPressable";
 import {
 	ActivityIndicator,
 	BackHandler,
-	Dimensions,
 	FlatList,
 	Modal,
 	Pressable,
@@ -40,10 +40,22 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const { width } = Dimensions.get("window");
 const CARD_GAP = 14;
 const PADDING_HORIZONTAL = 16;
-const CARD_WIDTH = (width - PADDING_HORIZONTAL * 2 - CARD_GAP) / 2;
+
+/**
+ * Kart genişliği ekranın genişliğine göre HESAPLANIR.
+ *
+ * Sabit bir `Dimensions.get("window")` değeri TV'de 1920px'i veriyordu ve
+ * 2 sütunla birlikte kart başına ~940px çıkıyordu. Artık sütun sayısı
+ * TV'de 4 olduğu için (`isTV`), ölçümü ekranın kendisinden alıyoruz.
+ */
+function cardWidthFor(screenWidth, numColumns) {
+	return (
+		(screenWidth - PADDING_HORIZONTAL * 2 - CARD_GAP * (numColumns - 1)) /
+		numColumns
+	);
+}
 
 // Göreceli zaman biçimlendirici (Türkçe)
 function formatRelativeTime(dateString) {
@@ -67,6 +79,30 @@ export default function LibraryScreen() {
 	const router = useRouter();
 	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
 	const { contentPaddingLeft } = useNavLayout();
+
+	/**
+	 * TV ölçüleri.
+	 *
+	 * 1. `contentMaxWidth`: kitaplık ızgarası TV'de 1920px'e yayılıyordu;
+	 *    iki kart, ekranın iki ucunu dolduruyor, ortası bomboştu.
+	 * 2. `columns`: kart sayısı SABİT 2'ydi (`numColumns={2}`). 1080p'de
+	 *    bu 900px'lik kartlar demek; oysa ana sayfa ve kategori sayfası
+	 *    TV'de 4 sütun kullanıyor. TV'de 4'e çıkarmak hem kart boyutunu
+	 *    makul tutuyor hem de ızgarayı ana sayfayla aynı ritme getiriyor.
+	 */
+	const { isTV, sp, contentMaxWidth, width: screenWidth } = useTvMetrics();
+	const columns = isTV ? 4 : 2;
+	/**
+	 * Kart genişliği, ızgaranın oturacağı KUTudan hesaplanır —
+	 * `contentMaxWidth ?? screenWidth`.
+	 *
+	 * ⚠️ Burada `FlatList`'in `onLayout` ölçümü KULLANILMAZ: FlatList'in
+	 * kendisi her zaman tam ekran genişliğindedir (içerik kabı
+	 * `contentContainerStyle` ile daraltılıyor), dolayısıyla ölçüm ekranı
+	 * verir ve 4 kart daraltılmış kaba SIĞMAZ, taşıp ekranın sağından
+	 * kırpılırdı.
+	 */
+	const cardWidth = cardWidthFor(contentMaxWidth ?? screenWidth, columns);
 
 	// Durum Sekmeleri (Beklemede ve Bırakıldı kaldırıldı)
 	const [activeTab, setActiveTab] = useState("watching"); // 'watching' | 'completed' | 'planned' | 'favorites'
@@ -740,7 +776,10 @@ export default function LibraryScreen() {
 
 		return (
 			<TVPressable
-				style={styles.card}
+				style={[
+					styles.card,
+					{ width: cardWidth, borderRadius: sp(16) },
+				]}
 				focusedStyle={styles.cardFocused}
 				onPress={() => handleOpenDetails(item)}>
 				{/* Poster & Overlays */}
@@ -906,7 +945,17 @@ export default function LibraryScreen() {
 				<StatusBar barStyle="light-content" backgroundColor="#0B0E14" />
 
 				{/* 1. ÜST ARAMA VE EYLEM ÇUBUĞU */}
-				<View style={styles.topBar}>
+				<View
+					style={[
+						styles.topBar,
+						contentMaxWidth
+							? {
+									width: "100%",
+									maxWidth: contentMaxWidth,
+									alignSelf: "center",
+								}
+							: null,
+					]}>
 					{/* Arama Kutusu */}
 					<View style={styles.searchContainer}>
 						<Ionicons
@@ -1058,13 +1107,21 @@ export default function LibraryScreen() {
 
 				{/* 4. MEDYA LİSTESİ (IZGARA / BOŞ DURUM) */}
 				<FlatList
+					contentInsetAdjustmentBehavior="automatic"
 					data={displayedItems}
 					renderItem={renderGridCard}
 					keyExtractor={gridKeyExtractor}
-					numColumns={2}
+					numColumns={columns}
 					contentContainerStyle={[
 						styles.listContent,
 						displayedItems.length === 0 && styles.listContentEmpty,
+						contentMaxWidth
+							? {
+									alignSelf: "center",
+									width: "100%",
+									maxWidth: contentMaxWidth,
+								}
+							: null,
 					]}
 					columnWrapperStyle={
 						displayedItems.length > 0
@@ -1642,9 +1699,7 @@ const styles = StyleSheet.create({
 		marginBottom: CARD_GAP,
 	},
 	card: {
-		width: CARD_WIDTH,
 		backgroundColor: "#161B24",
-		borderRadius: 16,
 		overflow: "hidden",
 		borderWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.07)",

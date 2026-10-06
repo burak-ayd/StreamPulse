@@ -1,3 +1,4 @@
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { useThemeContext } from "@/context/ThemeContext";
 import {
 	clearPluginCache,
@@ -36,6 +37,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function PluginSettingsScreen() {
 	const { theme, colors } = useThemeContext();
 	const router = useRouter();
+	// TV: eklenti satırları ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
+	const { contentMaxWidth } = useTvMetrics();
 
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
@@ -369,7 +372,18 @@ export default function PluginSettingsScreen() {
 				</View>
 
 				<ScrollView
-					contentContainerStyle={styles.scrollContent}
+					contentInsetAdjustmentBehavior="automatic"
+					contentContainerStyle={[
+						styles.scrollContent,
+						// TV: eklenti satırları ortalanmış sütunda kalsın.
+						contentMaxWidth
+							? {
+									alignSelf: "center",
+									width: "100%",
+									maxWidth: contentMaxWidth,
+								}
+							: null,
+					]}
 					showsVerticalScrollIndicator={false}
 					refreshControl={
 						<RefreshControl

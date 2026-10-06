@@ -43,6 +43,7 @@ import {
 	resolvePluginName,
 	toggleFavorite,
 } from "@/utils/storage";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import {
 	filterFavorites,
 	isSeries,
@@ -71,6 +72,8 @@ const SORT_LABELS = {
 
 export default function ProfileScreen() {
 	const { m3, theme } = useThemeContext();
+	// TV ölçüleri — bkz. utils/tvMetrics.js
+	const { contentMaxWidth } = useTvMetrics();
 	const { isLoggedIn, user, logout } = useAuth();
 	const { status: syncStatus } = useSync();
 	const router = useRouter();
@@ -378,7 +381,19 @@ export default function ProfileScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right"]}
-				style={[styles.safeArea, { backgroundColor: m3.surfaceLowest }]}>
+				style={[
+					styles.safeArea,
+					{ backgroundColor: m3.surfaceLowest },
+					// TV: profil govdesi ekranı kenardan kenara dolduruyordu;
+					// ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
+					contentMaxWidth
+						? {
+								width: "100%",
+								maxWidth: contentMaxWidth,
+								alignSelf: "center",
+							}
+						: null,
+				]}>
 				<StatusBar
 					barStyle={theme === "dark" ? "light-content" : "dark-content"}
 					backgroundColor={m3.surfaceLowest}

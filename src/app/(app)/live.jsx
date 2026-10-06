@@ -61,6 +61,7 @@ import CategoryRail from "@/components/live/CategoryRail";
 import ChannelCard from "@/components/live/ChannelCard";
 import TVPressable from "@/components/common/TVPressable";
 import { useNavLayout } from "@/hooks/useNavLayout";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import {
 	CANLI_TV_KATEGORI_TUMU,
 	LIVE_ERROR_REASON,
@@ -179,6 +180,8 @@ export default function LiveScreen() {
 	// Sol ray (TV / yatay tablet) varken içerik sola kayar — tüm ekranlar
 	// aynı kararı vermek zorunda (bkz. hooks/useNavLayout.js).
 	const { contentPaddingLeft } = useNavLayout();
+	// TV: kanal ızgarası ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
+	const { contentMaxWidth } = useTvMetrics();
 
 	// ── Kategori ──────────────────────────────────────────────────
 	const [kategoriler, setKategoriler] = useState([]);
@@ -642,6 +645,7 @@ export default function LiveScreen() {
 					renderHataDurumu()
 				) : gosterIzgara ? (
 					<FlatList
+						contentInsetAdjustmentBehavior="automatic"
 						/*
 						 * `numColumns` çalışma anında değişir (dönme / TV-mobil
 						 * geçişi). React Native bunu desteklemez ve "Changing
@@ -660,6 +664,14 @@ export default function LiveScreen() {
 						contentContainerStyle={[
 							styles.listContent,
 							kanallar.length === 0 && styles.listContentEmpty,
+							// TV: kanal ızgarası ortalanmış sütunda kalsın.
+							contentMaxWidth
+								? {
+										alignSelf: "center",
+										width: "100%",
+										maxWidth: contentMaxWidth,
+									}
+								: null,
 						]}
 						showsVerticalScrollIndicator={false}
 						/*

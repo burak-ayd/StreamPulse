@@ -5,6 +5,7 @@ import {
 	Dimensions,
 	Modal,
 	PanResponder,
+	Platform,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -12,10 +13,26 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const SWIPE_CLOSE_THRESHOLD = 80;
 const SWIPE_VELOCITY_THRESHOLD = 0.4;
+
+/**
+ * TV'de alt sayfa değil, ortalanmış bir PANEL.
+ *
+ * Bottom sheet telefon içindir: parmakla alttan yukarı sürüklenir, ekranın
+ * altına yapışır. TV'de sürükleme yoktur ve 1920px genişliğinde bir
+ * yapışkan sayfa, içindeki 38dp kartlarla birlikte boş bir bant gibi
+ * görünüyordu. TV'de bu yüzden:
+ *
+ *   • panel ortalanır ve `maxWidth` ile daralır,
+ *   • dört köşesi yuvarlatılır, sürükleme tutamağı gösterilmez,
+ *   • `snapToHeight` oranı ekran YÜKSEKLİĞİ yerine en-boy oranıyla
+ *     sınırlanır (0.78 × 1080 = 843px, panelin içi boş kalıyordu).
+ */
+const TV_PANEL_WIDTH_RATIO = 0.46;
+const TV_PANEL_MAX_WIDTH = 900;
 
 /**
  * BottomSheetModal
@@ -46,11 +63,36 @@ const BottomSheetModal = ({
 }) => {
 	const insets = useSafeAreaInsets();
 	const isAuto = fitContent || snapToHeight === "auto";
+	const isTV = Platform.isTV;
+
+	/** TV'de panel ortada durur; genişliği ekranın oranıyla sınırlanır. */
+	const tvPanelWidth = Math.min(
+		SCREEN_WIDTH * TV_PANEL_WIDTH_RATIO,
+		TV_PANEL_MAX_WIDTH,
+	);
+
+	/**
+	 * TV panel YÜKSEKLİĞİ — ekranın %88'i, en-boy tavanıyla.
+	 *
+	 * `snapToHeight` (0.78) ekranın %78'idir ve 1080p'de 843px'tir;
+	 * en-boy katsayısıyla (2.35) daraltılınca ≈600px'e düşüyor ve liste
+	 * yalnızca 1.5 kart gösteriyordu. Burada tavanı doğrudan ekranın
+	 * yüksekliğinden türetiyoruz: TV'de dikey kaydırma zaten var, asıl
+	 * derd dar panelin BİTMEKTE zorlamasıydı.
+	 */
+	const tvPanelHeight = Math.min(
+		SCREEN_HEIGHT * 0.88,
+		tvPanelWidth * (SCREEN_HEIGHT / SCREEN_WIDTH) * 2.6,
+	);
 
 	const fixedHeight =
 		typeof snapToHeight === "number"
-			? SCREEN_HEIGHT * snapToHeight
-			: SCREEN_HEIGHT * 0.5;
+			? isTV
+				? tvPanelHeight
+				: SCREEN_HEIGHT * snapToHeight
+			: isTV
+				? tvPanelHeight
+				: SCREEN_HEIGHT * 0.5;
 
 	const [measuredHeight, setMeasuredHeight] = useState(0);
 
@@ -158,10 +200,15 @@ const BottomSheetModal = ({
 	};
 
 	// ─── PanResponder ────────────────────────────────────────────────────────
+	//
+	// TV'de sürükleme YOKTUR (kumanda yok); PanResponder devreye girmese de
+	// `onMoveShouldSetPanResponder` TV'de panelin kaymasını engellemek için
+	// yanlışlıkla devreye girebilirdi.
 	const panResponder = useRef(
 		PanResponder.create({
-			onStartShouldSetPanResponder: () => swipeable,
-			onMoveShouldSetPanResponder: (_, gs) => swipeable && gs.dy > 5,
+			onStartShouldSetPanResponder: () => swipeable && !isTV,
+			onMoveShouldSetPanResponder: (_, gs) =>
+				swipeable && !isTV && gs.dy > 5,
 
 			onPanResponderGrant: () => {
 				translateY.extractOffset();
@@ -246,22 +293,27 @@ const BottomSheetModal = ({
 			</Animated.View>
 
 			{/* Sheet */}
+			<View
+				style={[StyleSheet.absoluteFill, isTV && styles.tvCenter]}
+				pointerEvents="box-none">
 			<Animated.View
 				onLayout={handleLayout}
 				style={[
 					styles.sheet,
+					isTV && styles.sheetTv,
+					isTV ? { width: tvPanelWidth, height: sheetHeight } : null,
 					isAuto
 						? { maxHeight: SCREEN_HEIGHT * 0.85 }
 						: { height: sheetHeight },
 					{ transform: [{ translateY }] },
 				]}
 				{...panResponder.panHandlers}>
-				{/* Drag handle */}
-				{handle && (
+				{/* Drag handle — telefonda var, TV'de anlamsız */}
+				{handle && !isTV ? (
 					<View style={styles.handleContainer}>
 						<View style={styles.handle} />
 					</View>
-				)}
+				) : null}
 
 				{/* Başlık */}
 				{title ? (
@@ -280,6 +332,7 @@ const BottomSheetModal = ({
 					{children}
 				</View>
 			</Animated.View>
+			</View>
 		</Modal>
 	);
 };
@@ -302,6 +355,23 @@ const styles = StyleSheet.create({
 		shadowOpacity: 0.12,
 		shadowRadius: 16,
 		elevation: 24,
+	},
+	/** TV: ekranın ortasında duran, dört köşesi yuvarlatılmış panel. */
+	sheetTv: {
+		position: "relative",
+		borderRadius: 20,
+		borderWidth: 1,
+		borderColor: "rgba(255, 255, 255, 0.14)",
+		shadowOffset: { width: 0, height: 12 },
+		shadowOpacity: 0.55,
+		elevation: 28,
+	},
+	/** TV: paneli ekranın ortasında tutan sarmalayıcı. */
+	tvCenter: {
+		justifyContent: "center",
+		alignItems: "center",
+		paddingHorizontal: 40,
+		paddingVertical: 24,
 	},
 	handleContainer: {
 		alignItems: "center",

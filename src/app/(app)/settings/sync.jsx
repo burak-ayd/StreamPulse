@@ -11,6 +11,7 @@
 import TVPressable from "@/components/common/TVPressable";
 import { useAuth } from "@/context/AuthContext";
 import { useSync } from "@/context/SyncContext";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
@@ -30,6 +31,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SyncSettingsScreen() {
 	const { colors, theme } = useThemeContext();
+	// TV: ayar satırları ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
+	const { contentMaxWidth } = useTvMetrics();
 	const { user, isLoggedIn, logout } = useAuth();
 	const {
 		status: syncStatus,
@@ -198,7 +201,17 @@ export default function SyncSettingsScreen() {
 				</View>
 
 				<ScrollView
-					contentContainerStyle={styles.scrollContent}
+					contentInsetAdjustmentBehavior="automatic"
+					contentContainerStyle={[
+						styles.scrollContent,
+						contentMaxWidth
+							? {
+									alignSelf: "center",
+									width: "100%",
+									maxWidth: contentMaxWidth,
+								}
+							: null,
+					]}
 					showsVerticalScrollIndicator={false}>
 					{/* Hesap Kartı */}
 					{isLoggedIn && user ? (

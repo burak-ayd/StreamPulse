@@ -554,6 +554,7 @@ export default function Index() {
 					</View>
 				) : (
 					<FlatList
+						contentInsetAdjustmentBehavior="automatic"
 						data={visibleCategories}
 						keyExtractor={categoryKeyExtractor}
 						renderItem={renderCategoryRow}

@@ -1,3 +1,4 @@
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { useThemeContext } from "@/context/ThemeContext";
 import { usePlayerSettings } from "@/context/PlayerSettingsContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -61,6 +62,8 @@ const DEFAULT_LANG_OPTIONS = [
 export default function PlayerSettingsScreen() {
 	const { colors } = useThemeContext();
 	const router = useRouter();
+	// TV: oynatıcı ayarları ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
+	const { contentMaxWidth } = useTvMetrics();
 	const { settings, updateSettings, resetSettings } = usePlayerSettings();
 
 	useFocusEffect(
@@ -153,8 +156,18 @@ export default function PlayerSettingsScreen() {
 				</View>
 
 				<ScrollView
+					contentInsetAdjustmentBehavior="automatic"
 					showsVerticalScrollIndicator={false}
-					contentContainerStyle={styles.scrollContainer}>
+					contentContainerStyle={[
+						styles.scrollContainer,
+						contentMaxWidth
+							? {
+									alignSelf: "center",
+									width: "100%",
+									maxWidth: contentMaxWidth,
+								}
+							: null,
+					]}>
 					{/* Canlı Altyazı Önizleme Kartı */}
 					<View style={styles.previewSection}>
 						<View style={styles.previewHeaderRow}>

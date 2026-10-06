@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useThemeContext } from "@context/ThemeContext";
+import { useTvMetrics } from "@/utils/tvMetrics";
 
 /**
  * CastSection – Mockup tasarımındaki "Oyuncular" bölümü.
@@ -13,6 +14,7 @@ const SHOW_AVATARS = false;
 
 export default function CastSection({ cast }) {
 	const { colors, theme } = useThemeContext();
+	const { sp, gutter } = useTvMetrics();
 
 	if (!cast || cast.length === 0) return null;
 
@@ -20,11 +22,21 @@ export default function CastSection({ cast }) {
 	const surfaceBorder = theme === "dark" ? "#232A36" : "#E2E8F0";
 
 	return (
-		<View style={styles.container}>
+		<View style={[styles.container, { marginBottom: sp(24) }]}>
 			{/* Section Title with red accent bar */}
-			<View style={styles.titleRow}>
-				<View style={styles.accentBar} />
-				<Text style={[styles.sectionTitle, { color: colors.text }]}>
+			<View
+				style={[styles.titleRow, { gap: sp(12), marginBottom: sp(14) }]}>
+				<View
+					style={[
+						styles.accentBar,
+						{ width: sp(5), height: sp(26), borderRadius: sp(3) },
+					]}
+				/>
+				<Text
+					style={[
+						styles.sectionTitle,
+						{ color: colors.text, fontSize: sp(21) },
+					]}>
 					Oyuncular
 				</Text>
 			</View>
@@ -36,7 +48,10 @@ export default function CastSection({ cast }) {
 				<ScrollView
 					horizontal
 					showsHorizontalScrollIndicator={false}
-					contentContainerStyle={styles.avatarScrollContent}>
+					contentContainerStyle={[
+						styles.avatarScrollContent,
+						{ gap: sp(14), paddingRight: 20 + gutter },
+					]}>
 					{cast.map((actor, index) => (
 						<View
 							key={index}
@@ -45,21 +60,33 @@ export default function CastSection({ cast }) {
 								{
 									backgroundColor: surfaceBg,
 									borderColor: surfaceBorder,
+									width: sp(120),
+									padding: sp(14),
+									borderRadius: sp(14),
 								},
 							]}>
 							<View
 								style={[
 									styles.avatar,
-									{ backgroundColor: surfaceBorder },
+									{
+										backgroundColor: surfaceBorder,
+										width: sp(70),
+										height: sp(70),
+										borderRadius: sp(35),
+										marginBottom: sp(10),
+									},
 								]}>
 								<Ionicons
 									name="person"
-									size={24}
+									size={sp(30)}
 									color={colors.textSecondary}
 								/>
 							</View>
 							<Text
-								style={[styles.actorName, { color: colors.text }]}
+								style={[
+									styles.actorName,
+									{ color: colors.text, fontSize: sp(13) },
+								]}
 								numberOfLines={2}>
 								{actor}
 							</Text>
@@ -73,7 +100,10 @@ export default function CastSection({ cast }) {
 				<ScrollView
 					horizontal
 					showsHorizontalScrollIndicator={false}
-					contentContainerStyle={styles.chipsScrollContent}>
+					contentContainerStyle={[
+						styles.chipsScrollContent,
+						{ gap: sp(10), paddingRight: 20 + gutter },
+					]}>
 					{cast.map((actor, index) => (
 						<View
 							key={index}
@@ -82,19 +112,31 @@ export default function CastSection({ cast }) {
 								{
 									backgroundColor: surfaceBg,
 									borderColor: surfaceBorder,
+									paddingHorizontal: sp(14),
+									paddingVertical: sp(10),
+									borderRadius: sp(14),
+									gap: sp(8),
 								},
 							]}>
-							<View style={styles.chipAvatarSmall}>
+							<View
+								style={[
+									styles.chipAvatarSmall,
+									{
+										width: sp(30),
+										height: sp(30),
+										borderRadius: sp(15),
+									},
+								]}>
 								<Ionicons
 									name="person"
-									size={12}
+									size={sp(16)}
 									color={colors.textSecondary}
 								/>
 							</View>
 							<Text
 								style={[
 									styles.actorChipText,
-									{ color: colors.text },
+									{ color: colors.text, fontSize: sp(15) },
 								]}>
 								{actor}
 							</Text>
@@ -107,76 +149,45 @@ export default function CastSection({ cast }) {
 }
 
 const styles = StyleSheet.create({
-	container: {
-		marginBottom: 20,
-	},
+	container: {},
 	titleRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 10,
-		marginBottom: 12,
 	},
 	accentBar: {
-		width: 4,
-		height: 22,
-		borderRadius: 2,
 		backgroundColor: "#E50914",
 	},
 	sectionTitle: {
-		fontSize: 18,
 		fontWeight: "700",
 		letterSpacing: -0.2,
 	},
 	/* Sadece isim (chip) stilleri */
-	chipsScrollContent: {
-		gap: 8,
-		paddingRight: 20,
-	},
+	chipsScrollContent: {},
 	actorChip: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: 10,
-		paddingVertical: 7,
-		borderRadius: 12,
 		borderWidth: 1,
-		gap: 6,
 	},
 	chipAvatarSmall: {
-		width: 24,
-		height: 24,
-		borderRadius: 12,
 		backgroundColor: "rgba(148,163,184,0.15)",
 		justifyContent: "center",
 		alignItems: "center",
 	},
 	actorChipText: {
-		fontSize: 12,
 		fontWeight: "600",
 	},
 	/* Resimli / Avatarlı versiyon stilleri (ilerisi için korundu) */
-	avatarScrollContent: {
-		gap: 12,
-		paddingRight: 20,
-	},
+	avatarScrollContent: {},
 	castCard: {
-		width: 100,
 		alignItems: "center",
-		padding: 12,
-		borderRadius: 12,
 		borderWidth: 1,
 	},
 	avatar: {
-		width: 60,
-		height: 60,
-		borderRadius: 30,
 		justifyContent: "center",
 		alignItems: "center",
-		marginBottom: 8,
 	},
 	actorName: {
-		fontSize: 12,
 		fontWeight: "600",
 		textAlign: "center",
-		lineHeight: 16,
 	},
 });
