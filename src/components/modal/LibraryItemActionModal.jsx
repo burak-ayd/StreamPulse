@@ -1,4 +1,4 @@
-import TVPressable from "@/components/common/TVPressable";
+import TVPressable, { isTVPressSuppressed } from "@/components/common/TVPressable";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import React, { useEffect } from "react";
@@ -61,7 +61,12 @@ export default function LibraryItemActionModal({
 			animationType="fade"
 			statusBarTranslucent
 			onRequestClose={onClose}>
-			<Pressable style={styles.backdrop} onPress={onClose}>
+			<Pressable
+				style={styles.backdrop}
+				onPress={() => {
+					if (isTVPressSuppressed()) return;
+					onClose?.();
+				}}>
 				<Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
 					{/* Drag handle */}
 					<View style={styles.dragHandle} />

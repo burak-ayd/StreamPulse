@@ -1,4 +1,4 @@
-import TVPressable from "@components/common/TVPressable";
+import TVPressable, { isTVPressSuppressed } from "@components/common/TVPressable";
 import {
 	getContentLibraryStatus,
 	setContentLibraryList,
@@ -127,7 +127,12 @@ export default function ListSelectModal({
 			animationType="fade"
 			statusBarTranslucent
 			onRequestClose={onClose}>
-			<Pressable style={styles.backdrop} onPress={onClose}>
+			<Pressable
+				style={styles.backdrop}
+				onPress={() => {
+					if (isTVPressSuppressed()) return;
+					onClose?.();
+				}}>
 				<Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
 					{/* Drag Handle */}
 					<View style={styles.dragHandle} />
