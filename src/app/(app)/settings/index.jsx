@@ -1,5 +1,6 @@
 import BottomNavigation from "@/components/BottomNavigation";
 import { useNavLayout } from "@/hooks/useNavLayout";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { useAuth } from "@/context/AuthContext";
 import LanguageBadge from "@/components/common/LanguageBadge";
 import {
@@ -173,6 +174,10 @@ export default function SettingsScreen() {
 	const router = useRouter();
 	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
 	const { contentPaddingLeft } = useNavLayout();
+	// TV: ayar satırları 1920px boyunca uzanıyordu; ikon solda, değer
+	// tamamen sağda kalıyor ve aradaki boşluk okunmuyordu. `contentMaxWidth`
+	// hepsini ortalanmış bir sütuna toplar.
+	const { contentMaxWidth } = useTvMetrics();
 
 	const [userProfile, setUserProfile] = useState(null);
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
@@ -330,8 +335,18 @@ export default function SettingsScreen() {
 				/>
 
 				<ScrollView
+					contentInsetAdjustmentBehavior="automatic"
 					showsVerticalScrollIndicator={false}
-					contentContainerStyle={styles.scrollContent}>
+					contentContainerStyle={[
+						styles.scrollContent,
+						contentMaxWidth
+							? {
+									alignSelf: "center",
+									width: "100%",
+									maxWidth: contentMaxWidth,
+								}
+							: null,
+					]}>
 					{/* Profile Header Card */}
 					<TVPressable
 						style={[

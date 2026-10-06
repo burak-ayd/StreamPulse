@@ -10,6 +10,7 @@ import {
 	getSelectedPlatform,
 	removeFromSearchHistory,
 } from "@/utils/storage";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -127,6 +128,11 @@ export default function SearchScreen() {
 	const router = useRouter();
 	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
 	const { contentPaddingLeft } = useNavLayout();
+	// TV: arama kutusu, kapsam hapları ve sonuç ızgarası ekranı
+	// kenardan kenara dolduruyordu. `contentMaxWidth` hepsini ortalanmış
+	// bir sütuna toplar; telefon/tablette değer `undefined`, yerleşim aynen
+	// korunur.
+	const { contentMaxWidth, gutter } = useTvMetrics();
 	const params = useLocalSearchParams();
 	const scrollViewRef = useRef(null);
 
@@ -373,6 +379,11 @@ export default function SearchScreen() {
 							borderBottomColor: colors.border,
 							backgroundColor: colors.bg,
 						},
+						// TV: başlık da ortalanmış sütunla hizalansın ki
+						// "Arama" yazısı sonuçların üstünde ortada dursun.
+						contentMaxWidth
+							? { width: "100%", maxWidth: contentMaxWidth, alignSelf: "center" }
+							: null,
 					]}>
 					<Text style={[styles.headerTitle, { color: colors.text }]}>
 						Arama
@@ -380,7 +391,13 @@ export default function SearchScreen() {
 				</View>
 
 				{/* Search Input & Button Row */}
-				<View style={styles.searchContainer}>
+				<View
+					style={[
+						styles.searchContainer,
+						contentMaxWidth
+							? { width: "100%", maxWidth: contentMaxWidth, alignSelf: "center" }
+							: null,
+					]}>
 					<View style={styles.searchRow}>
 						<View
 							style={[
@@ -551,6 +568,7 @@ export default function SearchScreen() {
 
 				<ScrollView
 					ref={scrollViewRef}
+					contentInsetAdjustmentBehavior="automatic"
 					onScroll={(e) => {
 						searchMemoryCache.scrollPosition =
 							e.nativeEvent.contentOffset.y;
@@ -559,7 +577,18 @@ export default function SearchScreen() {
 					onContentSizeChange={handleContentSizeChange}
 					showsVerticalScrollIndicator={false}
 					keyboardShouldPersistTaps="handled"
-					contentContainerStyle={styles.scrollContainer}>
+					contentContainerStyle={[
+						styles.scrollContainer,
+						contentMaxWidth
+							? {
+								// TV: sonuçlar ortalanmış sütunda kalsın.
+								alignSelf: "center",
+								width: "100%",
+								maxWidth: contentMaxWidth,
+								paddingHorizontal: gutter,
+							}
+							: null,
+					]}>
 					{/*
 					 * Kaynak Durumu Banner'ı
 					 *

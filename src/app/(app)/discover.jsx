@@ -1,5 +1,6 @@
 import BottomNavigation from "@components/BottomNavigation";
 import { useNavLayout } from "@/hooks/useNavLayout";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import TVPressable from "@/components/common/TVPressable";
 import { CATEGORIES } from "@constants/data";
 import { useThemeContext } from "@context/ThemeContext";
@@ -23,6 +24,8 @@ export default function DiscoverScreen() {
 	const router = useRouter();
 	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
 	const { contentPaddingLeft } = useNavLayout();
+	// TV: keşfet ızgarası ekranı kenardan kenara dolduruyordu.
+	const { isTV, contentMaxWidth } = useTvMetrics();
 
 	useEffect(() => {
 		const onBackPress = () => {
@@ -46,38 +49,55 @@ export default function DiscoverScreen() {
 					backgroundColor={colors.bg}
 				/>
 
-				{/* Header */}
-				<View
-					style={[
-						styles.header,
-						{
-							borderBottomColor: colors.border,
-							backgroundColor: colors.bg,
-						},
-					]}>
-					<Text style={[styles.headerTitle, { color: colors.text }]}>
-						Keşfet
-					</Text>
-				</View>
+			{/* Header */}
+			<View
+				style={[
+					styles.header,
+					{
+						borderBottomColor: colors.border,
+						backgroundColor: colors.bg,
+					},
+					contentMaxWidth
+						? {
+								width: "100%",
+								maxWidth: contentMaxWidth,
+								alignSelf: "center",
+							}
+						: null,
+				]}>
+				<Text style={[styles.headerTitle, { color: colors.text }]}>
+					Keşfet
+				</Text>
+			</View>
 
-				<ScrollView
-					showsVerticalScrollIndicator={false}
-					contentContainerStyle={styles.scrollContainer}>
-					{/* Categories Section */}
-					<View style={styles.sectionContainer}>
-						<Text
-							style={[
-								styles.sectionTitle,
-								{ color: colors.text },
-							]}>
-							Kategorilere Göre Göz At
-						</Text>
-						<FlatList
-							data={CATEGORIES}
-							keyExtractor={(item) => item.id}
-							numColumns={2}
-							scrollEnabled={false}
-							columnWrapperStyle={styles.categoryRow}
+			<ScrollView
+				contentInsetAdjustmentBehavior="automatic"
+				showsVerticalScrollIndicator={false}
+				contentContainerStyle={[
+					styles.scrollContainer,
+					contentMaxWidth
+						? {
+								alignSelf: "center",
+								width: "100%",
+								maxWidth: contentMaxWidth,
+							}
+						: null,
+				]}>
+				{/* Categories Section */}
+				<View style={styles.sectionContainer}>
+					<Text
+						style={[
+							styles.sectionTitle,
+							{ color: colors.text },
+						]}>
+						Kategorilere Göre Göz At
+					</Text>
+					<FlatList
+						data={CATEGORIES}
+						keyExtractor={(item) => item.id}
+						numColumns={isTV ? 4 : 2}
+						scrollEnabled={false}
+						columnWrapperStyle={styles.categoryRow}
 							renderItem={({ item, index }) => (
 								<TVPressable
 									autoFocus={index === 0}

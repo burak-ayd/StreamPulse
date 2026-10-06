@@ -1,5 +1,6 @@
 import TVPressable from "@components/common/TVPressable";
 import { useAuth } from "@/context/AuthContext";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { useThemeContext } from "@/context/ThemeContext";
 import { getUserProfile, saveUserProfile } from "@/utils/storage";
 import DateTimePicker from "@expo/ui/community/datetime-picker";
@@ -27,6 +28,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function EditProfile() {
 	const { theme, colors } = useThemeContext();
+	// TV: profil formu ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
+	const { contentMaxWidth } = useTvMetrics();
 	const { user, isLoggedIn } = useAuth();
 	const router = useRouter();
 	const [isLoading, setIsLoading] = useState(false);
@@ -267,8 +270,19 @@ export default function EditProfile() {
 					behavior={Platform.OS === "ios" ? "padding" : "height"}
 					style={styles.keyboardAvoid}>
 					<ScrollView
+						contentInsetAdjustmentBehavior="automatic"
 						showsVerticalScrollIndicator={false}
-						contentContainerStyle={styles.scrollContainer}
+						contentContainerStyle={[
+							styles.scrollContainer,
+							// TV: form ortalanmış sütunda kalsın.
+							contentMaxWidth
+								? {
+										alignSelf: "center",
+										width: "100%",
+										maxWidth: contentMaxWidth,
+									}
+								: null,
+						]}
 						keyboardShouldPersistTaps="handled">
 						{/* Profile Picture Section */}
 						<View

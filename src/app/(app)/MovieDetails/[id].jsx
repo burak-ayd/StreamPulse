@@ -1,5 +1,6 @@
 import { useThemeContext } from "@/context/ThemeContext";
 import { fetchPluginDetail } from "@/services/api";
+import { canonicalType, isSeriesContent } from "@/utils/mediaType";
 import {
 	getContentLibraryStatus,
 	getContentWatchProgress,
@@ -9,12 +10,17 @@ import {
 	toggleFavorite,
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
-import { canonicalType, isSeriesContent } from "@/utils/mediaType";
-import ListSelectModal from "@components/modal/ListSelectModal";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import TVPressable from "@components/common/TVPressable";
+import ListSelectModal from "@components/modal/ListSelectModal";
 import { useContentDetails } from "@hooks/useContentDetails";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import {
+	Stack,
+	useFocusEffect,
+	useLocalSearchParams,
+	useRouter,
+} from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -25,7 +31,6 @@ import {
 	Share,
 	StyleSheet,
 	Text,
-	TouchableOpacity,
 	View,
 } from "react-native";
 
@@ -78,6 +83,18 @@ export default function MovieDetailsScreen() {
 	const { colors, theme } = useThemeContext();
 	const router = useRouter();
 
+	/**
+	 * TV ölçüleri (bkz. `utils/tvMetrics.js`).
+	 *
+	 * Bu ekran TV'de en çok şikâyet edilen ekranlardan biriydi: her
+	 * bölüm 1920px'in tamamına yayılıyor, sekmeler telefon ölçüsünde
+	 * küçük kalıyor, "Ses & Altyazı" satırı iki ucu ekranın iki kenarına
+	 * yapışıyordu. `contentMaxWidth` içeriği ortalanmış bir sütuna
+	 * topluyor, `sp` punto/boşlukları büyütüyor.
+	 */
+	const { isTV, sp, gutter, contentMaxWidth, textMaxWidth, focusScale } =
+		useTvMetrics();
+
 	const [selectedPlatformName, setSelectedPlatformName] = useState(null);
 
 	useEffect(() => {
@@ -120,11 +137,11 @@ export default function MovieDetailsScreen() {
 	// Sadece ve sadece statik mock kimlikler için useContentDetails çağrılır
 	const isPureStaticContent = Boolean(
 		!movieUrl &&
-			!passedMovie &&
-			id &&
-			!String(id).startsWith("http") &&
-			!String(id).includes("/") &&
-			!String(id).includes("_"),
+		!passedMovie &&
+		id &&
+		!String(id).startsWith("http") &&
+		!String(id).includes("/") &&
+		!String(id).includes("_"),
 	);
 
 	// Normal statik / CMS içerikleri için hook (plugin değilse çağrılır)
@@ -381,9 +398,14 @@ export default function MovieDetailsScreen() {
 			(content?.content_type ? undefined : passedMovie?.media_type),
 		seriesId: content?.seriesId ?? passedMovie?.seriesId,
 		seriesTitle: content?.seriesTitle ?? passedMovie?.seriesTitle,
-		season: content?.season ?? passedMovie?.initialSeason ?? passedMovie?.season,
+		season:
+			content?.season ??
+			passedMovie?.initialSeason ??
+			passedMovie?.season,
 		episode:
-			content?.episode ?? passedMovie?.initialEpisode ?? passedMovie?.episode,
+			content?.episode ??
+			passedMovie?.initialEpisode ??
+			passedMovie?.episode,
 		category: passedMovie?.category ?? content?.category,
 		url: content?.url ?? movieUrl,
 	});
@@ -480,9 +502,12 @@ export default function MovieDetailsScreen() {
 
 	useEffect(() => {
 		if (totalEpisodesCount > 0) {
-			if (content?.id) saveSeriesTotalEpisodes(content.id, totalEpisodesCount);
-			if (content?.url) saveSeriesTotalEpisodes(content.url, totalEpisodesCount);
-			if (content?.title) saveSeriesTotalEpisodes(content.title, totalEpisodesCount);
+			if (content?.id)
+				saveSeriesTotalEpisodes(content.id, totalEpisodesCount);
+			if (content?.url)
+				saveSeriesTotalEpisodes(content.url, totalEpisodesCount);
+			if (content?.title)
+				saveSeriesTotalEpisodes(content.title, totalEpisodesCount);
 		}
 	}, [totalEpisodesCount, content?.id, content?.url, content?.title]);
 
@@ -685,6 +710,7 @@ export default function MovieDetailsScreen() {
 
 			<ScrollView
 				style={[styles.container, { backgroundColor: colors.bg }]}
+				contentInsetAdjustmentBehavior="automatic"
 				showsVerticalScrollIndicator={false}>
 				{/* 1. HERO SECTION - Backdrop, başlık, rozetler, geri & paylaş */}
 				<HeroSection
@@ -694,7 +720,20 @@ export default function MovieDetailsScreen() {
 				/>
 
 				{/* 2. ANA İÇERİK ALANI */}
-				<View style={styles.contentWrapper}>
+				<View
+					style={[
+						styles.contentWrapper,
+						{
+							paddingHorizontal: 20 + gutter,
+							paddingTop: sp(10),
+							paddingBottom: sp(80),
+							// TV'de her bölüm 1920px'e yayılıyordu; ortalanmış
+							// bir sütun hem okunur hem de "tek ekran" hissi verir.
+							width: "100%",
+							maxWidth: contentMaxWidth,
+							alignSelf: "center",
+						},
+					]}>
 					{/* Meta Hapları (Süre, Yıl, Yaş Sınırı, Kalite, Durum) */}
 					{DETAIL_SECTIONS_CONFIG.showMetadata && (
 						<MetadataSection content={content} />
@@ -723,23 +762,36 @@ export default function MovieDetailsScreen() {
 								{
 									backgroundColor: surfaceBg,
 									borderColor: surfaceBorder,
+									// TV'de "Ses & Altyazı:" etiketi ekranın sol
+									// ucuna, rozetler sağ ucuna savruluyordu;
+									// ikisi tek satırda, aralarında sabit boşlukla.
+									flexDirection: "row",
+									alignItems: "center",
+									gap: sp(12),
+									paddingHorizontal: sp(14),
+									paddingVertical: sp(11),
+									borderRadius: sp(14),
+									marginBottom: sp(16),
 								},
 							]}>
-							<View style={styles.audioLeft}>
+							<View style={[styles.audioLeft, { gap: sp(7) }]}>
 								<Ionicons
 									name="chatbubbles-outline"
-									size={16}
+									size={sp(16)}
 									color="#E50914"
 								/>
 								<Text
 									style={[
 										styles.audioLabel,
-										{ color: colors.textSecondary },
+										{
+											color: colors.textSecondary,
+											fontSize: sp(12.5),
+										},
 									]}>
 									Ses & Altyazı:
 								</Text>
 							</View>
-							<View style={styles.audioChips}>
+							<View style={[styles.audioChips, { gap: sp(7) }]}>
 								{audioSubtitleOptions.map((optionText, idx) => (
 									<View
 										key={idx}
@@ -751,12 +803,18 @@ export default function MovieDetailsScreen() {
 														? "#0B0E14"
 														: "#f1f5f9",
 												borderColor: surfaceBorder,
+												paddingHorizontal: sp(10),
+												paddingVertical: sp(5),
+												borderRadius: sp(9),
 											},
 										]}>
 										<Text
 											style={[
 												styles.audioChipText,
-												{ color: colors.text },
+												{
+													color: colors.text,
+													fontSize: sp(12),
+												},
 											]}>
 											{optionText}
 										</Text>
@@ -770,15 +828,29 @@ export default function MovieDetailsScreen() {
 					<View
 						style={[
 							styles.tabBar,
-							{ borderBottomColor: surfaceBorder },
+							{
+								borderBottomColor: surfaceBorder,
+								marginBottom: sp(24),
+								gap: sp(isTV ? 10 : 24),
+							},
 						]}>
 						{/* Tab 1: Genel Bakış */}
 						<TVPressable
 							style={({ focused }) => [
 								styles.tabItem,
+								{
+									paddingVertical: sp(8),
+									paddingHorizontal: sp(13),
+									borderRadius: sp(12),
+								},
 								activeTab === "overview" &&
 									styles.tabItemActive,
-								focused && styles.tabItemFocused,
+								focused && {
+									backgroundColor: "rgba(229, 9, 20, 0.22)",
+									borderWidth: 2,
+									borderColor: "#E50914",
+									transform: [{ scale: focusScale }],
+								},
 							]}
 							onPress={() => setActiveTab("overview")}
 							activeOpacity={0.7}>
@@ -794,6 +866,7 @@ export default function MovieDetailsScreen() {
 											activeTab === "overview"
 												? "800"
 												: "600",
+										fontSize: sp(15),
 									},
 								]}>
 								Genel Bakış
@@ -807,13 +880,28 @@ export default function MovieDetailsScreen() {
 							<TVPressable
 								style={({ focused }) => [
 									styles.tabItem,
+									{
+										paddingVertical: sp(8),
+									paddingHorizontal: sp(13),
+										borderRadius: sp(12),
+									},
 									activeTab === "episodes" &&
 										styles.tabItemActive,
-									focused && styles.tabItemFocused,
+									focused && {
+										backgroundColor:
+											"rgba(229, 9, 20, 0.22)",
+										borderWidth: 2,
+										borderColor: "#E50914",
+										transform: [{ scale: focusScale }],
+									},
 								]}
 								onPress={() => setActiveTab("episodes")}
 								activeOpacity={0.7}>
-								<View style={styles.tabWithBadge}>
+								<View
+									style={[
+										styles.tabWithBadge,
+										{ gap: sp(8) },
+									]}>
 									<Text
 										style={[
 											styles.tabText,
@@ -826,13 +914,26 @@ export default function MovieDetailsScreen() {
 													activeTab === "episodes"
 														? "800"
 														: "600",
+												fontSize: sp(15),
 											},
 										]}>
 										Bölümler
 									</Text>
 									{totalEpisodesCount > 0 && (
-										<View style={styles.tabCountBadge}>
-											<Text style={styles.tabCountText}>
+										<View
+											style={[
+												styles.tabCountBadge,
+												{
+													paddingHorizontal: sp(8),
+													paddingVertical: sp(2),
+													borderRadius: sp(12),
+												},
+											]}>
+											<Text
+												style={[
+													styles.tabCountText,
+													{ fontSize: sp(13) },
+												]}>
 												{totalEpisodesCount}
 											</Text>
 										</View>
@@ -848,8 +949,18 @@ export default function MovieDetailsScreen() {
 						<TVPressable
 							style={({ focused }) => [
 								styles.tabItem,
+								{
+									paddingVertical: sp(8),
+									paddingHorizontal: sp(13),
+									borderRadius: sp(12),
+								},
 								activeTab === "related" && styles.tabItemActive,
-								focused && styles.tabItemFocused,
+								focused && {
+									backgroundColor: "rgba(229, 9, 20, 0.22)",
+									borderWidth: 2,
+									borderColor: "#E50914",
+									transform: [{ scale: focusScale }],
+								},
 							]}
 							onPress={() => setActiveTab("related")}
 							activeOpacity={0.7}>
@@ -865,6 +976,7 @@ export default function MovieDetailsScreen() {
 											activeTab === "related"
 												? "800"
 												: "600",
+										fontSize: sp(15),
 									},
 								]}>
 								Benzerler
@@ -929,15 +1041,31 @@ export default function MovieDetailsScreen() {
 										{
 											backgroundColor: surfaceBg,
 											borderColor: surfaceBorder,
+											paddingHorizontal: sp(16),
+											paddingVertical: sp(11),
+											borderRadius: sp(14),
+														// Etiket ile değer arası 1300px'e yayılıyordu
+											// ("Orijinal Dil" … "Dublaj & Altyazılı");
+											// ikisi de kısa metin, aralarındaki boşluk
+											// anlamsız. Metin sütununun genişliğine sabitleniyor.
+											width: "100%",
+											maxWidth: textMaxWidth,
+											alignSelf: "flex-start",
+											marginBottom: sp(18),
 										},
 									]}>
 									{Boolean(content.director) && (
-										<View style={styles.detailsRow}>
+										<View
+											style={[
+												styles.detailsRow,
+												{ paddingVertical: sp(10) },
+											]}>
 											<Text
 												style={[
 													styles.detailsLabel,
 													{
 														color: colors.textSecondary,
+														fontSize: sp(13.5),
 													},
 												]}>
 												Yönetmen
@@ -945,7 +1073,10 @@ export default function MovieDetailsScreen() {
 											<Text
 												style={[
 													styles.detailsValue,
-													{ color: colors.text },
+													{
+														color: colors.text,
+														fontSize: sp(13.5),
+													},
 												]}>
 												{content.director}
 											</Text>
@@ -969,12 +1100,17 @@ export default function MovieDetailsScreen() {
 									)}
 
 									{Boolean(content.language) && (
-										<View style={styles.detailsRow}>
+										<View
+											style={[
+												styles.detailsRow,
+												{ paddingVertical: sp(10) },
+											]}>
 											<Text
 												style={[
 													styles.detailsLabel,
 													{
 														color: colors.textSecondary,
+														fontSize: sp(13.5),
 													},
 												]}>
 												Orijinal Dil
@@ -982,7 +1118,10 @@ export default function MovieDetailsScreen() {
 											<Text
 												style={[
 													styles.detailsValue,
-													{ color: colors.text },
+													{
+														color: colors.text,
+														fontSize: sp(13.5),
+													},
 												]}>
 												{content.language}
 											</Text>
@@ -1005,12 +1144,17 @@ export default function MovieDetailsScreen() {
 									)}
 
 									{Boolean(content.production_co) && (
-										<View style={styles.detailsRow}>
+										<View
+											style={[
+												styles.detailsRow,
+												{ paddingVertical: sp(10) },
+											]}>
 											<Text
 												style={[
 													styles.detailsLabel,
 													{
 														color: colors.textSecondary,
+														fontSize: sp(13.5),
 													},
 												]}>
 												Yayıncı Ağ
@@ -1018,7 +1162,10 @@ export default function MovieDetailsScreen() {
 											<Text
 												style={[
 													styles.detailsValue,
-													{ color: colors.text },
+													{
+														color: colors.text,
+														fontSize: sp(13.5),
+													},
 												]}>
 												{content.production_co}
 											</Text>
@@ -1123,44 +1270,29 @@ const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 	},
-	contentWrapper: {
-		paddingHorizontal: 20,
-		paddingTop: 8,
-		paddingBottom: 70,
-	},
+	contentWrapper: {},
 
 	/* Ses & Altyazı Bilgi Çubuğu */
 	audioSubtitleRow: {
 		flexDirection: "row",
-		alignItems: "center",
 		justifyContent: "space-between",
-		paddingHorizontal: 14,
-		paddingVertical: 10,
-		borderRadius: 14,
 		borderWidth: 1,
-		marginBottom: 18,
 	},
 	audioLeft: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 8,
 	},
 	audioLabel: {
-		fontSize: 12,
 		fontWeight: "600",
 	},
 	audioChips: {
 		flexDirection: "row",
-		gap: 6,
+		flexWrap: "wrap",
 	},
 	audioChip: {
-		paddingHorizontal: 8,
-		paddingVertical: 4,
-		borderRadius: 8,
 		borderWidth: 1,
 	},
 	audioChipText: {
-		fontSize: 11,
 		fontWeight: "600",
 	},
 
@@ -1168,30 +1300,20 @@ const styles = StyleSheet.create({
 	tabBar: {
 		flexDirection: "row",
 		borderBottomWidth: 1,
-		marginBottom: 20,
-		gap: 24,
 	},
 	tabItem: {
-		paddingBottom: 12,
 		position: "relative",
 	},
 	tabItemActive: {},
 	tabWithBadge: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 6,
 	},
-	tabText: {
-		fontSize: 15,
-	},
+	tabText: {},
 	tabCountBadge: {
 		backgroundColor: "rgba(100, 116, 139, 0.25)",
-		paddingHorizontal: 6,
-		paddingVertical: 1,
-		borderRadius: 10,
 	},
 	tabCountText: {
-		fontSize: 11,
 		fontWeight: "700",
 		color: "#94a3b8",
 	},
@@ -1215,24 +1337,17 @@ const styles = StyleSheet.create({
 
 	/* Detay Bilgileri Tablosu */
 	detailsTableCard: {
-		borderRadius: 16,
 		borderWidth: 1,
-		paddingHorizontal: 16,
-		paddingVertical: 12,
-		marginBottom: 22,
 	},
 	detailsRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		paddingVertical: 8,
 	},
 	detailsLabel: {
-		fontSize: 13,
 		fontWeight: "500",
 	},
 	detailsValue: {
-		fontSize: 13,
 		fontWeight: "700",
 	},
 	detailsDivider: {
@@ -1257,11 +1372,5 @@ const styles = StyleSheet.create({
 		shadowRadius: 8,
 		elevation: 8,
 		zIndex: 99,
-	},
-	tabItemFocused: {
-		transform: [{ scale: 1.06 }],
-		borderWidth: 1.5,
-		borderColor: "#E50914",
-		borderRadius: 8,
 	},
 });

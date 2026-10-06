@@ -1,5 +1,6 @@
 import TVPressable from "@/components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
@@ -36,6 +37,9 @@ export default function ActionButtons({
 }) {
 	const { colors, theme } = useThemeContext();
 	const router = useRouter();
+
+	// TV: punto, yükseklik ve odak ölçeği büyür (bkz. utils/tvMetrics.js).
+	const { sp, isTV, focusScale } = useTvMetrics();
 
 	// Tek kaynak: `utils/mediaType.js` (bkz. o dosyanın başlığı).
 	const isSeries = isSeriesContent(content);
@@ -273,7 +277,19 @@ export default function ActionButtons({
 	const surfaceBg = theme === "dark" ? "#161B24" : "#ffffff";
 	const surfaceBorder = theme === "dark" ? "#232A36" : "#E2E8F0";
 
-	let buttonTitle = "Hemen Şimdi İzle";
+	/**
+	 * Buton metinleri.
+	 *
+	 * Varsayılan "Oynat": TV'de CTA 300dp genişliğinde yan yana duruyor ve
+	 * "Hemen Şimdi İzle" (14 karakter) sığmıyor — kırpılıyordu. Tek
+	 * kelime hem sığar hem de ikonu (oynat üçgeni) tek başına anlatır.
+	 * Ana sayfadaki hero butonu da zaten "Oynat" diyor; iki ekran artık
+	 * aynı kelimeyi kullanıyor.
+	 *
+	 * Durum metinleri ("Tekrar İzle", "Kaldığın Yerden Devam Et") korunur —
+	 * bunlar kullanıcıya ne olacağını anlatır, kısaltılamaz.
+	 */
+	let buttonTitle = "Oynat";
 	let buttonSubtitle = null;
 	let buttonIcon = "play";
 
@@ -291,82 +307,158 @@ export default function ActionButtons({
 		}
 	}
 
-	return (
-		<View style={styles.container}>
-			{/* Kaldığın Yerden Devam Et Kartı VEYA Ana CTA Butonu */}
-			{isInProgress ? (
-				<ContinueWatchingCard
-					content={content}
-					watchProgress={watchProgress}
-					isSeries={isSeries}
-					onPress={handleWatch}
-				/>
-			) : (
-				<TVPressable
-					autoFocus={true}
-					style={({ focused }) => [
-						styles.primaryButton,
-						isCompleted && styles.primaryButtonCompleted,
-						focused && styles.primaryButtonFocused,
-					]}
-					onPress={handleWatch}
-					activeOpacity={0.85}>
-					<Ionicons name={buttonIcon} size={22} color="#ffffff" />
-					<View style={styles.primaryButtonTextWrapper}>
-						<Text style={styles.primaryButtonText}>{buttonTitle}</Text>
-						{buttonSubtitle ? (
-							<Text style={styles.primaryButtonSubtext}>
-								{buttonSubtitle}
-							</Text>
-						) : null}
-					</View>
-				</TVPressable>
-			)}
+	/**
+	 * TV yerleşimi: CTA ve 4'lü eylem grid'i YAN YANA.
+	 *
+	 * Önceki denemede CTA kendi satırında tam genişlikteydi ve TV'de ekranı
+	 * boydan boya kaplayan dev bir kırmızı bant oluyordu. Grid'i yanına
+	 * alınca kartlara ~200dp düştü ve "İzleniyor/Favori/İndir/Fragman"
+	 * etiketleri kırpıldı — kumandada hedefi belli olmayan düğmeler.
+	 *
+	 * Çözüm: CTA'ya sabit bir taban verip kalanı grid'e bırakmak.
+	 * 1080p'de ölçek 1.2, sütun ≈864dp: CTA `sp(250)` ≈300dp, kalan
+	 * ≈550dp. Grid kartları `flexBasis: "22%"` + `flexGrow` ile eşit
+	 * paylaşır → kart başına ≈125dp; en uzun etiket "Tamamlandı"
+	 * (10 karakter) `sp(12.5)` ≈15dp puntoyla ≈78dp — rahat sığar.
+	 *
+	 * `flexShrink: 0` CTA'nın grid altına sıkışmasını engeller; grid
+	 * `flexWrap` ile yine de taşarsa alt satıra iner, ekran taşmaz.
+	 */
+	const primaryButtonStyle = [
+		styles.primaryButton,
+		{
+			gap: sp(10),
+			paddingVertical: sp(15),
+			paddingHorizontal: sp(24),
+			borderRadius: sp(14),
+		},
+		isTV && {
+			flexGrow: 0,
+			flexShrink: 0,
+			width: sp(250),
+		},
+	];
 
-			{/* 4-Column Action Grid */}
-			<View style={styles.gridRow}>
-				{gridActions.map((action) => (
+	return (
+		<View style={[styles.container, { marginBottom: sp(18), gap: sp(12) }]}>
+			<View style={[styles.actionRow, isTV && styles.actionRowTv]}>
+				{/* Kaldığın Yerden Devam Et Kartı VEYA Ana CTA Butonu */}
+				{isInProgress ? (
+					<ContinueWatchingCard
+						content={content}
+						watchProgress={watchProgress}
+						isSeries={isSeries}
+						onPress={handleWatch}
+					/>
+				) : (
 					<TVPressable
-						key={action.key}
+						autoFocus={true}
 						style={({ focused }) => [
-							styles.gridItem,
-							{
-								backgroundColor: surfaceBg,
-								borderColor: action.active
-									? "rgba(229,9,20,0.3)"
-									: surfaceBorder,
+							primaryButtonStyle,
+							isCompleted && styles.primaryButtonCompleted,
+							focused && {
+								borderWidth: 2,
+								borderColor: "#FFFFFF",
+								transform: [{ scale: focusScale }],
 							},
-							focused && styles.gridItemFocused,
 						]}
-						onPress={action.onPress}
-						activeOpacity={0.7}>
-						<Ionicons
-							name={action.icon}
-							size={22}
-							color={action.color}
-						/>
-						<Text
-							style={[
-								styles.gridLabel,
+						onPress={handleWatch}
+						activeOpacity={0.85}>
+						<Ionicons name={buttonIcon} size={sp(22)} color="#ffffff" />
+						<View style={styles.primaryButtonTextWrapper}>
+							<Text
+								style={[
+									styles.primaryButtonText,
+									{ fontSize: sp(17) },
+								]}>
+								{buttonTitle}
+							</Text>
+							{buttonSubtitle ? (
+								<Text
+									style={[
+										styles.primaryButtonSubtext,
+										{ fontSize: sp(12) },
+									]}>
+									{buttonSubtitle}
+								</Text>
+							) : null}
+						</View>
+					</TVPressable>
+				)}
+
+				{/* 4-Column Action Grid — TV'de CTA'nın yanında, esnek */}
+				<View
+					style={[
+						styles.gridRow,
+						{
+							gap: sp(10),
+							flex: isTV ? 1 : undefined,
+							minWidth: 0,
+							flexWrap: isTV ? "wrap" : "nowrap",
+						},
+					]}>
+					{gridActions.map((action) => (
+						<TVPressable
+							key={action.key}
+							style={({ focused }) => [
+								styles.gridItem,
 								{
-									color: action.active
-										? colors.primary
-										: colors.textSecondary,
+									backgroundColor: surfaceBg,
+									borderColor: action.active
+										? "rgba(229,9,20,0.3)"
+										: surfaceBorder,
+									gap: sp(6),
+									paddingVertical: sp(13),
+									paddingHorizontal: sp(8),
+									borderRadius: sp(13),
+									// TV: kart tabanı yok, esnek — grid kalan
+									// genişliği eşit paylaşır, taşarsa alt satır.
+									flexBasis: isTV ? "22%" : undefined,
+									flexGrow: isTV ? 1 : undefined,
+									minWidth: isTV ? sp(92) : undefined,
+								},
+								focused && {
+									borderWidth: 2,
+									borderColor: "#E50914",
+									backgroundColor: "rgba(229, 9, 20, 0.18)",
+									transform: [{ scale: focusScale }],
 								},
 							]}
-							numberOfLines={1}>
-							{action.label}
-						</Text>
-					</TVPressable>
-				))}
+							onPress={action.onPress}
+							activeOpacity={0.7}>
+							<Ionicons
+								name={action.icon}
+								size={sp(21)}
+								color={action.color}
+							/>
+							<Text
+								style={[
+									styles.gridLabel,
+									{
+										color: action.active
+											? colors.primary
+											: colors.textSecondary,
+										fontSize: sp(12.5),
+									},
+								]}
+								numberOfLines={1}>
+								{action.label}
+							</Text>
+						</TVPressable>
+					))}
+				</View>
 			</View>
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
-	container: {
-		marginBottom: 16,
+	container: {},
+	/** CTA ve eylem grid'i TV'de yan yana durur. */
+	actionRow: {},
+	actionRowTv: {
+		flexDirection: "row",
+		alignItems: "center",
 		gap: 12,
 	},
 	primaryButton: {
@@ -374,9 +466,6 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "center",
-		gap: 10,
-		paddingVertical: 13,
-		borderRadius: 16,
 		shadowColor: "#E50914",
 		shadowOffset: { width: 0, height: 4 },
 		shadowOpacity: 0.45,
@@ -395,42 +484,24 @@ const styles = StyleSheet.create({
 	},
 	primaryButtonText: {
 		color: "#ffffff",
-		fontSize: 16,
 		fontWeight: "800",
 		letterSpacing: 0.3,
 	},
 	primaryButtonSubtext: {
 		color: "rgba(255, 255, 255, 0.85)",
-		fontSize: 12,
 		fontWeight: "600",
 		marginTop: 2,
 	},
 	gridRow: {
 		flexDirection: "row",
-		gap: 10,
 	},
 	gridItem: {
 		flex: 1,
 		alignItems: "center",
 		justifyContent: "center",
-		gap: 6,
-		paddingVertical: 14,
-		paddingHorizontal: 6,
-		borderRadius: 14,
 		borderWidth: 1,
 	},
 	gridLabel: {
-		fontSize: 11,
 		fontWeight: "500",
-	},
-	primaryButtonFocused: {
-		borderWidth: 2,
-		borderColor: "#FFFFFF",
-		transform: [{ scale: 1.03 }],
-	},
-	gridItemFocused: {
-		borderWidth: 2,
-		borderColor: "#E50914",
-		transform: [{ scale: 1.08 }],
 	},
 });

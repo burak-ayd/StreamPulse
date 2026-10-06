@@ -546,6 +546,7 @@ export default function CategoryScreen() {
 					</View>
 				) : (
 					<FlatList
+						contentInsetAdjustmentBehavior="automatic"
 						key={layout.columns}
 						data={items}
 						keyExtractor={keyExtractor}

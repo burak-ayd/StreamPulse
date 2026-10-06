@@ -1,5 +1,6 @@
 import BottomNavigation from "@/components/BottomNavigation";
 import { useNavLayout } from "@/hooks/useNavLayout";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import TVPressable from "@/components/common/TVPressable";
 import { getDownloads } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -19,6 +20,9 @@ export default function DownloadsScreen() {
 	const router = useRouter();
 	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
 	const { contentPaddingLeft } = useNavLayout();
+	// TV: indirme listesi ve "geliştirme aşamasında" kartı ekranı
+	// kenardan kenara dolduruyordu; ortalanmış sütuna alınır.
+	const { contentMaxWidth } = useTvMetrics();
 	const [downloads, setDownloads] = useState([]);
 
 	useEffect(() => {
@@ -43,7 +47,17 @@ export default function DownloadsScreen() {
 				<StatusBar barStyle="light-content" backgroundColor="#0d0e12" />
 
 				{/* Header */}
-				<View style={styles.header}>
+				<View
+					style={[
+						styles.header,
+						contentMaxWidth
+							? {
+									width: "100%",
+									maxWidth: contentMaxWidth,
+									alignSelf: "center",
+								}
+							: null,
+					]}>
 					<TVPressable
 						onPress={() => router.back()}
 						style={styles.backButton}>
@@ -54,7 +68,17 @@ export default function DownloadsScreen() {
 				</View>
 
 				<ScrollView
-					contentContainerStyle={styles.scrollContent}
+					contentInsetAdjustmentBehavior="automatic"
+					contentContainerStyle={[
+						styles.scrollContent,
+						contentMaxWidth
+							? {
+									alignSelf: "center",
+									width: "100%",
+									maxWidth: contentMaxWidth,
+								}
+							: null,
+					]}
 					showsVerticalScrollIndicator={false}>
 					{/* Under Construction Banner Card */}
 					<View style={styles.underConstructionCard}>

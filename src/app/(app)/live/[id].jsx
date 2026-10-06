@@ -50,6 +50,7 @@ import {
 	fetchLiveChannel,
 } from "@/services/liveApi";
 import { ColorsM3, ScreenGutter } from "@/constants/theme";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import {
@@ -171,6 +172,8 @@ const ABONELIK_NOTU =
 export default function LiveChannelScreen() {
 	const { id } = useLocalSearchParams();
 	const router = useRouter();
+	// TV: kanal detayı ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
+	const { contentMaxWidth } = useTvMetrics();
 
 	/*
 	 * `useLocalSearchParams` değeri `string | string[]` olabilir (yol
@@ -505,8 +508,19 @@ useEffect(() => {
 				 * ek yük olurdu.
 				 */}
 				<ScrollView
+					contentInsetAdjustmentBehavior="automatic"
 					showsVerticalScrollIndicator={false}
-					contentContainerStyle={styles.scroll}>
+					contentContainerStyle={[
+						styles.scroll,
+						// TV: kanal detayı ortalanmış sütunda kalsın.
+						contentMaxWidth
+							? {
+									alignSelf: "center",
+									width: "100%",
+									maxWidth: contentMaxWidth,
+								}
+							: null,
+					]}>
 					{/* Kanal başlığı */}
 					<View style={styles.head}>
 						<View

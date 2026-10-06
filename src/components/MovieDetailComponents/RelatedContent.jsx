@@ -1,5 +1,6 @@
 import TVPressable from "@components/common/TVPressable";
 import { useThemeContext } from "@context/ThemeContext";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { fetchRelatedContent as getRelatedApiContent } from "@/services/api";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
@@ -24,6 +25,7 @@ export default function RelatedContent({
 }) {
 	const { colors, theme } = useThemeContext();
 	const router = useRouter();
+	const { sp, gutter, focusScale } = useTvMetrics();
 
 	const hasPluginRelated = Array.isArray(pluginRelated) && pluginRelated.length > 0;
 	const [apiRelated, setApiRelated] = useState([]);
@@ -83,11 +85,21 @@ export default function RelatedContent({
 	const surfaceBorder = theme === "dark" ? "#232A36" : "#E2E8F0";
 
 	return (
-		<View style={styles.container}>
+		<View style={[styles.container, { marginBottom: sp(28) }]}>
 			{/* Section Title with red accent bar */}
-			<View style={styles.titleRow}>
-				<View style={styles.accentBar} />
-				<Text style={[styles.sectionTitle, { color: colors.text }]}>
+			<View
+				style={[styles.titleRow, { gap: sp(12), marginBottom: sp(16) }]}>
+				<View
+					style={[
+						styles.accentBar,
+						{ width: sp(5), height: sp(26), borderRadius: sp(3) },
+					]}
+				/>
+				<Text
+					style={[
+						styles.sectionTitle,
+						{ color: colors.text, fontSize: sp(21) },
+					]}>
 					Benzer İçerikler
 				</Text>
 			</View>
@@ -96,7 +108,10 @@ export default function RelatedContent({
 				horizontal
 				showsHorizontalScrollIndicator={false}
 				removeClippedSubviews={false}
-				contentContainerStyle={styles.scrollContent}>
+				contentContainerStyle={[
+					styles.scrollContent,
+					{ gap: sp(14), paddingRight: 20 + gutter },
+				]}>
 				{displayList.map((item, index) => {
 					const posterUri =
 						item.poster_url || item.poster || item.image;
@@ -106,7 +121,10 @@ export default function RelatedContent({
 							key={item.id || item.url || index}
 							style={({ focused }) => [
 								styles.contentCard,
-								focused && styles.contentCardFocused,
+								{ width: sp(140) },
+								focused && {
+									transform: [{ scale: focusScale }],
+								},
 							]}
 							onPress={() => handleContentPress(item)}
 							activeOpacity={0.8}>
@@ -115,7 +133,13 @@ export default function RelatedContent({
 									<View
 										style={[
 											styles.posterContainer,
-											{ borderColor: surfaceBorder },
+											{
+												borderColor: surfaceBorder,
+												width: sp(140),
+												height: sp(204),
+												borderRadius: sp(16),
+												marginBottom: sp(10),
+											},
 											focused && styles.posterContainerFocused,
 										]}>
 										{posterUri ? (
@@ -136,20 +160,34 @@ export default function RelatedContent({
 												]}>
 												<Ionicons
 													name="film-outline"
-													size={32}
+													size={sp(36)}
 													color={colors.textSecondary}
 												/>
 											</View>
 										)}
 
 										{item.rating && (
-											<View style={styles.ratingBadge}>
+											<View
+												style={[
+													styles.ratingBadge,
+													{
+														top: sp(7),
+														left: sp(7),
+														paddingHorizontal: sp(7),
+														paddingVertical: sp(3),
+														borderRadius: sp(8),
+													},
+												]}>
 												<Ionicons
 													name="star"
-													size={10}
+													size={sp(12)}
 													color="#FBBF24"
 												/>
-												<Text style={styles.ratingText}>
+												<Text
+													style={[
+														styles.ratingText,
+														{ fontSize: sp(13) },
+													]}>
 													{Number(item.rating).toFixed(1)}
 												</Text>
 											</View>
@@ -159,7 +197,11 @@ export default function RelatedContent({
 									<Text
 										style={[
 											styles.contentTitle,
-											{ color: colors.text },
+											{
+												color: colors.text,
+												fontSize: sp(15),
+												lineHeight: sp(20),
+											},
 										]}
 										numberOfLines={2}>
 										{item.title || item.name}
@@ -175,39 +217,22 @@ export default function RelatedContent({
 }
 
 const styles = StyleSheet.create({
-	container: {
-		marginBottom: 24,
-	},
+	container: {},
 	titleRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 10,
-		marginBottom: 14,
 	},
 	accentBar: {
-		width: 4,
-		height: 22,
-		borderRadius: 2,
 		backgroundColor: "#E50914",
 	},
 	sectionTitle: {
-		fontSize: 18,
 		fontWeight: "700",
 		letterSpacing: -0.2,
 	},
-	scrollContent: {
-		gap: 12,
-		paddingRight: 20,
-	},
-	contentCard: {
-		width: 120,
-	},
+	scrollContent: {},
+	contentCard: {},
 	posterContainer: {
-		width: 120,
-		height: 175,
-		borderRadius: 14,
 		overflow: "hidden",
-		marginBottom: 8,
 		borderWidth: 1,
 		backgroundColor: "rgba(0,0,0,0.2)",
 	},
@@ -223,28 +248,17 @@ const styles = StyleSheet.create({
 	},
 	ratingBadge: {
 		position: "absolute",
-		top: 6,
-		left: 6,
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 3,
 		backgroundColor: "rgba(0, 0, 0, 0.75)",
-		paddingHorizontal: 6,
-		paddingVertical: 3,
-		borderRadius: 6,
 	},
 	ratingText: {
 		color: "#FBBF24",
-		fontSize: 11,
 		fontWeight: "700",
 	},
 	contentTitle: {
-		fontSize: 13,
 		fontWeight: "600",
-		lineHeight: 18,
-	},
-	contentCardFocused: {
-		transform: [{ scale: 1.08 }],
 	},
 	posterContainerFocused: {
 		borderColor: "#E50914",

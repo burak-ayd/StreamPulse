@@ -1,5 +1,6 @@
 import TVPressable from "@components/common/TVPressable";
 import { useThemeContext } from "@context/ThemeContext";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -26,7 +27,41 @@ export default function HeroSection({ content, onShare, genreList = [] }) {
 	const router = useRouter();
 	const { width, height } = useWindowDimensions();
 
-	const BACKDROP_HEIGHT = width > 768 ? height * 0.65 : height * 0.48;
+	// TV: 3 metre öteden okunabilirlik için punto ve dokunma hedefleri
+	// büyür; telefon/tablet ölçüleri olduğu gibi kalır (scale = 1).
+	const { isTV, sp, gutter, textMaxWidth, focusScale } = useTvMetrics();
+
+	/**
+	 * Backdrop yüksekliği.
+	 *
+	 * Hero, TV'de ekranın altındaki geri/paylaş düğmeleriyle BİRLİKTE
+	 * sığmalı: düğmeler mutlak konumlu ve üstte, başlık+rozetler altta
+	 * duruyor. 1080p'de büyütülmüş başlık (2 satır ≈ 110dp) + rozet +
+	 * altyazı hero alanını AŞIYOR ve içerik yukarı doğru taşıp geri
+	 * düğmesinin üstüne biniyordu.
+	 *
+	 * Bu yüzden TV'de rozet satırı ile üstteki geri/paylaş düğmeleri
+	 * çakışmasın diye oran 0.65 → 0.66'ya (≈356dp) ve başlık puntosu
+	 * ölçekte bir tık kısıldı (sp(30)): okunabilirlik telefonun ~2 katı,
+	 * ama hero artık taşmıyor ve düğmeler rozetlerin üstüne binmiyor.
+	 */
+	const backdropFraction = width > 768 ? 0.65 : 0.48;
+	/**
+	 * Hero başlığı.
+	 *
+	 * `sp(30)` ölçekle birlikte 1080p'de ≈36dp'e çıkıyordu — ana sayfa
+	 * hero'sunun (`HeroBanner`, `titleSize: 26×1.0 ≈ 26dp`) 1.4 katı.
+	 * Detay ekranı ana sayfadan daha büyük bir başlıkla açılınca ekran
+	 * "büyütülmüş telefon" gibi duruyordu. `sp(24)` → ≈29dp: hâlâ açıkça
+	 * en büyük metin, ama ana sayfayla aynı ağırlık sınıfında.
+	 *
+	 * Hero oranı da buna göre biraz kısaldı: büyütülmüş metin artık
+	 * üstteki geri/paylaş düğmeleriyle çakışmıyor.
+	 */
+	const titleSize = sp(24);
+	const titleLineHeight = sp(30);
+	const BACKDROP_HEIGHT =
+		height * (isTV ? backdropFraction - 0.06 : backdropFraction);
 
 	const ratingText =
 		content.rating != null
@@ -111,12 +146,22 @@ export default function HeroSection({ content, onShare, genreList = [] }) {
 			<TVPressable
 				style={({ focused }) => [
 					styles.headerButton,
-					focused && styles.headerButtonFocused,
+					{ top: TOP_INSET, left: 16 + gutter },
+					focused && {
+						transform: [{ scale: focusScale + 0.06 }],
+						borderWidth: 2,
+						borderColor: "#E50914",
+						borderRadius: sp(24),
+					},
 				]}
 				onPress={() => router.back()}
 				activeOpacity={0.8}>
-				<View style={styles.headerButtonInner}>
-					<Ionicons name="arrow-back" size={22} color="#ffffff" />
+				<View
+					style={[
+						styles.headerButtonInner,
+						{ width: sp(42), height: sp(42), borderRadius: sp(21) },
+					]}>
+					<Ionicons name="arrow-back" size={sp(22)} color="#ffffff" />
 				</View>
 			</TVPressable>
 
@@ -125,15 +170,24 @@ export default function HeroSection({ content, onShare, genreList = [] }) {
 				<TVPressable
 					style={({ focused }) => [
 						styles.headerButton,
-						styles.headerButtonRight,
-						focused && styles.headerButtonFocused,
+						{ top: TOP_INSET, right: 16 + gutter },
+						focused && {
+							transform: [{ scale: focusScale + 0.06 }],
+							borderWidth: 2,
+							borderColor: "#E50914",
+							borderRadius: sp(24),
+						},
 					]}
 					onPress={onShare}
 					activeOpacity={0.8}>
-					<View style={styles.headerButtonInner}>
+					<View
+						style={[
+							styles.headerButtonInner,
+							{ width: sp(42), height: sp(42), borderRadius: sp(21) },
+						]}>
 						<Ionicons
 							name="share-social-outline"
-							size={20}
+							size={sp(20)}
 							color="#ffffff"
 						/>
 					</View>
@@ -141,28 +195,53 @@ export default function HeroSection({ content, onShare, genreList = [] }) {
 			)}
 
 			{/* Content Info (backdrop alt kısmı) */}
-			<View style={styles.contentInfo}>
+			<View
+				style={[
+					styles.contentInfo,
+					{
+						left: 20 + gutter,
+						right: 20 + gutter,
+						maxWidth: textMaxWidth,
+						bottom: sp(24),
+					},
+				]}>
 				{/* Badges Row: [Platform] [★ Rating] */}
-				<View style={styles.badgesRow}>
+				<View style={[styles.badgesRow, { gap: sp(8) }]}>
 					{content.plugin && (
-						<View style={styles.pluginBadge}>
-							<Text style={styles.pluginBadgeText}>
+						<View
+							style={[
+								styles.pluginBadge,
+								{
+									paddingHorizontal: sp(12),
+									paddingVertical: sp(5),
+									borderRadius: sp(8),
+								},
+							]}>
+							<Text style={[styles.pluginBadgeText, { fontSize: sp(11.5) }]}>
 								{content.plugin.toUpperCase()}
 							</Text>
 						</View>
 					)}
 					{ratingText && (
-						<View style={styles.ratingBadge}>
+						<View
+							style={[
+								styles.ratingBadge,
+								{
+									paddingHorizontal: sp(11),
+									paddingVertical: sp(6),
+									borderRadius: sp(8),
+								},
+							]}>
 							<Ionicons
 								name="star"
-								size={12}
+								size={sp(14)}
 								color="#FBBF24"
 							/>
-							<Text style={styles.ratingText}>
-								{ratingText} / 10
-							</Text>
-							{voteText && (
-								<Text style={styles.ratingSubText}>
+<Text style={[styles.ratingText, { fontSize: sp(12.5) }]}>
+							{ratingText} / 10
+						</Text>
+						{voteText && (
+							<Text style={[styles.ratingSubText, { fontSize: sp(11) }]}>
 									{voteText}
 								</Text>
 							)}
@@ -171,13 +250,17 @@ export default function HeroSection({ content, onShare, genreList = [] }) {
 				</View>
 
 				{/* Title */}
-				<Text style={styles.title} numberOfLines={2}>
+				<Text
+					style={[styles.title, { fontSize: titleSize, lineHeight: titleLineHeight }]}
+					numberOfLines={2}>
 					{content.title}
 				</Text>
 
 				{/* Genre / Tagline */}
 				{genreTagline && (
-					<Text style={styles.tagline} numberOfLines={2}>
+					<Text
+						style={[styles.tagline, { fontSize: sp(12.5) }]}
+						numberOfLines={2}>
 						{genreTagline}
 					</Text>
 				)}
@@ -227,13 +310,7 @@ const styles = StyleSheet.create({
 	/* Header Buttons */
 	headerButton: {
 		position: "absolute",
-		top: TOP_INSET,
-		left: 16,
 		zIndex: 10,
-	},
-	headerButtonRight: {
-		left: undefined,
-		right: 16,
 	},
 	headerButtonInner: {
 		width: 40,
@@ -249,22 +326,15 @@ const styles = StyleSheet.create({
 	/* Content Info */
 	contentInfo: {
 		position: "absolute",
-		bottom: 24,
-		left: 20,
-		right: 20,
 		gap: 6,
 	},
 	badgesRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 8,
 		marginBottom: 2,
 	},
 	pluginBadge: {
 		backgroundColor: "#E50914",
-		paddingHorizontal: 8,
-		paddingVertical: 3,
-		borderRadius: 6,
 		shadowColor: "#E50914",
 		shadowOffset: { width: 0, height: 2 },
 		shadowOpacity: 0.4,
@@ -273,43 +343,34 @@ const styles = StyleSheet.create({
 	},
 	pluginBadgeText: {
 		color: "#ffffff",
-		fontSize: 10,
 		fontWeight: "900",
 		letterSpacing: 0.8,
 	},
 	ratingBadge: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 4,
+		gap: 5,
 		backgroundColor: "rgba(0,0,0,0.55)",
 		borderWidth: StyleSheet.hairlineWidth,
 		borderColor: "rgba(251,191,36,0.3)",
-		paddingHorizontal: 8,
-		paddingVertical: 4,
-		borderRadius: 6,
 	},
 	ratingText: {
 		color: "#FBBF24",
-		fontSize: 12,
 		fontWeight: "700",
 	},
 	ratingSubText: {
 		color: "#94a3b8",
-		fontSize: 10,
 		fontWeight: "400",
 	},
 	title: {
-		fontSize: 28,
 		fontWeight: "900",
 		color: "#ffffff",
 		letterSpacing: -0.5,
-		lineHeight: 34,
 		textShadowColor: "rgba(0,0,0,0.4)",
 		textShadowOffset: { width: 0, height: 2 },
 		textShadowRadius: 6,
 	},
 	tagline: {
-		fontSize: 12,
 		fontWeight: "500",
 		color: "#cbd5e1",
 		fontStyle: "italic",
