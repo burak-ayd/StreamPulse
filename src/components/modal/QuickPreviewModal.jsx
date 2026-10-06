@@ -1,4 +1,4 @@
-import TVPressable from "@/components/common/TVPressable";
+import TVPressable, { isTVPressSuppressed } from "@/components/common/TVPressable";
 import ListSelectModal from "@/components/modal/ListSelectModal";
 import { fetchPluginDetail } from "@/services/api";
 import { isSeriesContent, typeLabel } from "@/utils/mediaType";
@@ -331,7 +331,12 @@ export default function QuickPreviewModal({
 			animationType="fade"
 			statusBarTranslucent
 			onRequestClose={onClose}>
-			<Pressable style={styles.backdropOverlay} onPress={onClose}>
+			<Pressable
+				style={styles.backdropOverlay}
+				onPress={() => {
+					if (isTVPressSuppressed()) return;
+					onClose?.();
+				}}>
 				<Pressable style={styles.sheetContainer} onPress={(e) => e.stopPropagation()}>
 					{/* 1. Üst Tutamaç (Drag Handle) */}
 					<View style={styles.dragHandle} />
