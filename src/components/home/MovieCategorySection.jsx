@@ -3,17 +3,19 @@ import CategoryCard, {
 	ROW_CARD_WIDTH,
 	ROW_LIST_PAD_H,
 } from "@/components/content/CategoryCard";
+import CategoryCardSkeleton from "@/components/content/CategoryCardSkeleton";
 import TVPressable from "@/components/common/TVPressable";
+import { SkeletonBlock, SkeletonLine } from "@/components/common/Skeleton";
 import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
 import { contentKey } from "@/utils/contentMeta";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
-	ActivityIndicator,
 	FlatList,
 	StyleSheet,
 	Text,
 	View,
+	useWindowDimensions,
 } from "react-native";
 
 /**
@@ -98,12 +100,16 @@ function MovieCategorySection({
 		};
 	}, [platformName, category?.url, category?.name]);
 
+	/*
+	 * Satır yüklenirken spinner DEĞİL, iskelet.
+	 *
+	 * Spinner 140px'lik ince bir şeritti; satırın gerçek yüksekliği
+	 * başlık + 124×182 kart + başlık satırı ≈ 230px. İçerik gelince
+	 * ekran zıplıyordu. `MovieCategoryRowSkeleton` aynı başlığı, aynı
+	 * kenar boşluğunu ve aynı kart boyutunu kullanıyor.
+	 */
 	if (loading) {
-		return (
-			<View style={styles.loadingContainer}>
-				<ActivityIndicator size="small" color="#2563EB" />
-			</View>
-		);
+		return <MovieCategoryRowSkeleton categoryName={category?.name} />;
 	}
 
 	if (!movies || movies.length === 0) {
@@ -156,6 +162,59 @@ function MovieCategorySection({
 export default memo(MovieCategorySection);
 
 /**
+ * Yüklenen kategori satırının iskeleti.
+ *
+ * Satırın gerçek geometrisinin TAMAMINI taklit eder:
+ *   • başlık + ok yerleşimi → `styles.sectionHeader`
+ *   • kart genişliği / aralığı / kenar payı → `CategoryCard` sabitleri
+ *   • kart içi → `CategoryCardSkeleton`
+ *
+ * Görünen kart adedi EKRANA GÖRE hesaplanır (sabit sayı değil): 360dp
+ * telefonda ~3, 1080p TV'de ~9 kart sığar. Sabit bir sayı TV'de satırın
+ * yarısını boş bırakır, telefonda ise taşıp kırpılırdı.
+ *
+ * ⚠️ Başlık iskelet DEĞİL, gerçek metindir: kategori adı satır render
+ * edildiği anda elimizdedir. Başlığı da iskelet yapmak ekranı daha da
+ * boş gösterirdi, üstelik içerik gelince metin zıplardı.
+ */
+export function MovieCategoryRowSkeleton({ categoryName }) {
+	const { width } = useWindowDimensions();
+
+	const visibleCount = useMemo(() => {
+		const usable = width - ROW_LIST_PAD_H * 2;
+		const fit = Math.floor(
+			(usable + ROW_CARD_GAP) / (ROW_CARD_WIDTH + ROW_CARD_GAP),
+		);
+		// En az 3: çok dar ekranda bile satır "yükleniyor" gibi görünmeli.
+		return Math.max(3, fit);
+	}, [width]);
+
+	return (
+		<View style={styles.sectionContainer} pointerEvents="none">
+			<View style={styles.sectionHeader}>
+				{categoryName ? (
+					<Text style={styles.sectionTitle} numberOfLines={1}>
+						{categoryName}
+					</Text>
+				) : (
+					<SkeletonLine width={140} height={16} />
+				)}
+				{/* Ok yerine iskelet daire — başlıkla hizalı kalsın. */}
+				<SkeletonBlock width={18} height={18} radius={9} />
+			</View>
+
+			<View style={styles.horizontalList}>
+				<CategoryCardSkeleton
+					variant="row"
+					count={visibleCount}
+					gap={ROW_CARD_GAP}
+				/>
+			</View>
+		</View>
+	);
+}
+
+/**
  * Kart yüksekliği sabit olduğu için ölçüm hesabı tamamen atlanabilir.
  * `gap` içerik konteynerinde olduğu için adım uzunluğuna eklenmeli.
  */
@@ -196,10 +255,5 @@ const styles = StyleSheet.create({
 		paddingHorizontal: ROW_LIST_PAD_H,
 		gap: ROW_CARD_GAP,
 		paddingVertical: 6,
-	},
-	loadingContainer: {
-		height: 140,
-		justifyContent: "center",
-		alignItems: "center",
 	},
 });

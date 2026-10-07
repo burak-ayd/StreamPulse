@@ -74,6 +74,19 @@ export const ColorsM3 = {
 		outlineVariant: "#D5D8DE",
 		error: "#BA1A1A",
 		scrim: "rgba(0,0,0,0.4)",
+
+		/**
+		 * Yükleniyor iskeleti (CloudStream yaklaşımı).
+		 *
+		 * Düz, ANİMASYONSUZ bloklar. Shimmer/parlama yok: 1080p TV'de
+		 * sürekli animasyonlu 40+ blok kare düşürüyor ve kullanıcıya
+		 * "içerik geliyor" bilgisinden fazlasını veriyordu.
+		 *
+		 * `block` = poster/logo/hero gibi büyük yüzeyler,
+		 * `line`  = başlık/metin çubukları (bir tık daha koyu).
+		 */
+		skeletonBlock: "#E9EBF0",
+		skeletonLine: "#DCE0E7",
 	},
 	dark: {
 		// ── Referans tasarımdan birebir ──
@@ -100,6 +113,10 @@ export const ColorsM3 = {
 		outlineVariant: "#5e3f3b",
 		error: "#ffb4ab",
 		scrim: "rgba(0,0,0,0.55)",
+
+		// Bkz. light.skeletonBlock notu.
+		skeletonBlock: "#1b1d24",
+		skeletonLine: "#242730",
 	},
 } as const;
 

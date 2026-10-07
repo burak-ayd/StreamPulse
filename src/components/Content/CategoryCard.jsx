@@ -50,6 +50,20 @@ export const ROW_LIST_PAD_H = 18;
 /** Ana sayfadaki kartlar arası boşluk. */
 export const ROW_CARD_GAP = 6;
 
+/**
+ * Kart geometrisinin SAYILARI — iskelet de gerçek kart da bunları okur.
+ *
+ * Poster kutusu `styles.poster` içinde `aspectRatio` ile tanımlı; stil
+ * nesnesinden okunamadığı için iskelet de aynı sayıyı kullanmak zorunda.
+ * Kaynak: `styles.poster` / `styles.title` / `styles.year`.
+ */
+export const CARD_POSTER_RATIO = 2 / 3;
+export const CARD_POSTER_RADIUS = 12;
+export const CARD_TITLE_HEIGHT = 17; // lineHeight
+export const CARD_TITLE_MARGIN_TOP = 6;
+export const CARD_YEAR_HEIGHT = 15; // lineHeight
+export const CARD_YEAR_MARGIN_TOP = 1;
+
 function CategoryCard({
 	item,
 	/** "row" (ana sayfa) | "grid" (kategori sayfası) */
@@ -162,8 +176,8 @@ const styles = StyleSheet.create({
 		width: "100%",
 		// Ana sayfada 124×182 ≈ 2:3 idi; ızgara da 2:3. Tek oran kullanmak
 		// iki ekranın kartlarını görsel olarak hizalıyor.
-		aspectRatio: 2 / 3,
-		borderRadius: 12,
+		aspectRatio: CARD_POSTER_RATIO,
+		borderRadius: CARD_POSTER_RADIUS,
 		overflow: "hidden",
 		borderWidth: 2,
 		borderColor: "transparent",
@@ -205,14 +219,14 @@ const styles = StyleSheet.create({
 	},
 	title: {
 		fontSize: 13,
-		lineHeight: 17,
+		lineHeight: CARD_TITLE_HEIGHT,
 		fontWeight: "600",
-		marginTop: 6,
+		marginTop: CARD_TITLE_MARGIN_TOP,
 		letterSpacing: -0.1,
 	},
 	year: {
 		fontSize: 11,
-		lineHeight: 15,
-		marginTop: 1,
+		lineHeight: CARD_YEAR_HEIGHT,
+		marginTop: CARD_YEAR_MARGIN_TOP,
 	},
 });

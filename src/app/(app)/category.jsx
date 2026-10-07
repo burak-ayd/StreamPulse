@@ -20,6 +20,7 @@
 
 import TVPressable from "@/components/common/TVPressable";
 import CategoryCard from "@/components/content/CategoryCard";
+import CategoryCardSkeleton from "@/components/content/CategoryCardSkeleton";
 import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
 import { useThemeContext } from "@/context/ThemeContext";
 import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
@@ -389,6 +390,23 @@ export default function CategoryScreen() {
 		[layout.columns, cardWidth],
 	);
 
+	/**
+	 * İlk yükleme iskeleti.
+	 *
+	 * Spinner'sün yerine: ekranın gerçek ızgara geometrisi (GUTTER, GAP,
+	 * sütun sayısı, kart genişliği) BIREBIR kullanılıyor. Kategori
+	 * adı elimizde olduğu için başlık çubuğu da gerçek metin; sadece
+	 * "N içerik" rozeti iskelet. Böylece veri gelince hiçbir şey
+	 * zıplamıyor — kullanıcı listede ilerlediğini anında fark ediyor.
+	 */
+	const skeletonRows = useMemo(() => {
+		if (cardWidth <= 0) return [];
+		const perRow = layout.columns;
+		// Üç satı: bir telefon ekranını doldurur, TV'de gereksiz uzun
+		// boş alan bırakmaz.
+		return Array.from({ length: perRow * 3 });
+	}, [cardWidth, layout.columns]);
+
 	const footer = useMemo(() => {
 		if (loadingMore) {
 			return (
@@ -495,15 +513,37 @@ export default function CategoryScreen() {
 				</View>
 
 				{loading && items.length === 0 ? (
-					<View style={styles.center}>
-						<ActivityIndicator color={m3.primaryContainer} />
-						<Text
-							style={[
-								styles.footerText,
-								{ color: m3.onSurfaceVariant },
-							]}>
-							Yükleniyor…
-						</Text>
+					/*
+					 * Izgara iskeleti. Kart genişliği `cardWidth`'tan gelir,
+					 * yani ilk satır gerçek kartlarla birebir aynı yerde
+					 * durur — veri geldiğinde liste "yerine oturur".
+					 */
+					<View
+						style={[
+							styles.listContent,
+							{ rowGap: GAP },
+						]}
+						pointerEvents="none">
+						{Array.from({ length: Math.ceil(skeletonRows.length / layout.columns) }).map(
+							(_unused, rowIndex) => (
+								<View
+									key={`sk-row-${rowIndex}`}
+									style={[styles.row, { gap: GAP }]}>
+									{skeletonRows
+										.slice(
+											rowIndex * layout.columns,
+											(rowIndex + 1) * layout.columns,
+										)
+										.map((_, cardIndex) => (
+											<CategoryCardSkeleton
+												key={`sk-card-${rowIndex}-${cardIndex}`}
+												variant="grid"
+												width={cardWidth}
+											/>
+										))}
+								</View>
+							),
+						)}
 					</View>
 				) : error && items.length === 0 ? (
 					<View style={styles.center}>
