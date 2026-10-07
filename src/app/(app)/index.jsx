@@ -1,7 +1,10 @@
 import PlatformList from "@/components/content/PlatformList";
 import ContinueWatchingSection from "@/components/home/ContinueWatchingSection";
 import HeroBanner from "@/components/home/HeroBanner";
-import MovieCategorySection from "@/components/home/MovieCategorySection";
+import MovieCategorySection, {
+	MovieCategoryRowSkeleton,
+} from "@/components/home/MovieCategorySection";
+import HomeSkeleton from "@/components/home/HomeSkeleton";
 import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
 import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
 import ListSelectModal from "@/components/modal/ListSelectModal";
@@ -33,10 +36,8 @@ import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-rou
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import TVPressable from "@/components/common/TVPressable";
 import {
-	ActivityIndicator,
 	BackHandler,
 	FlatList,
-	Platform,
 	RefreshControl,
 	ScrollView,
 	StatusBar,
@@ -44,6 +45,7 @@ import {
 	Text,
 	TouchableOpacity,
 	View,
+	useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -56,6 +58,9 @@ export default function Index() {
 	const { contentPaddingLeft } = useNavLayout();
 	const params = useLocalSearchParams();
 	const insets = useSafeAreaInsets();
+	// İskelet satır sayısı ekranın YÖNÜNE göre değişir (bkz.
+	// `skeletonRowCount`): TV yatay → az satır, telefon dikey → çok satır.
+	const { width: winW, height: winH } = useWindowDimensions();
 
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
 	const [loadingPlatform, setLoadingPlatform] = useState(true);
@@ -194,8 +199,20 @@ export default function Index() {
 		[hydrateHeroBackdrop],
 	);
 
+	/*
+	 * Eklenti içeriği (kategoriler + hero) ağdan gelene kadar "busy".
+	 *
+	 * ⚠️ `featuredMovie === null` BUNUN İÇİN KULLANILMAZ. Hero iskeleti
+	 * `loadingContent`'e bağlıdır; çünkü istek BAŞARISIZ olursa
+	 * `featuredMovie` hep null kalır ve `null`'a bakarsak ekran sonsuza
+	 * dek iskelette kilitlenir. Oysa hata halinde gerçek (boş) hero
+	 * gösterilmelidir.
+	 */
+	const [loadingContent, setLoadingContent] = useState(false);
+
 	const fetchPlatformData = useCallback(async (platform, force = false) => {
 		if (!platform || platform.id === "none" || platform.name === "None") {
+			setLoadingContent(false);
 			setCategories([]);
 			const downloads = await getDownloads();
 			setDownloadedItems(downloads || []);
@@ -218,6 +235,9 @@ export default function Index() {
 			const cachedCats = getCachedCategories(platform.name);
 			const cachedHero = getCachedHeroMovie(platform.name);
 			if (cachedCats && cachedHero) {
+				// Önbellek anında geliyor: iskelet hiç gösterilmemeli,
+				// yoksa içerik zaten ekrandayken bir kez titreriz.
+				setLoadingContent(false);
 				const catList = cachedCats?.categories || (Array.isArray(cachedCats) ? cachedCats : []);
 				setCategories(catList);
 				const heroItem = Array.isArray(cachedHero) && cachedHero.length > 0 ? cachedHero[0] : cachedHero;
@@ -232,6 +252,7 @@ export default function Index() {
 		}
 
 		try {
+			setLoadingContent(true);
 			const [catRes, randRes] = await Promise.all([
 				fetchPlatformCategories(platform.name, force),
 				fetchRandomContents(platform.name, 1, force),
@@ -255,6 +276,10 @@ export default function Index() {
 			}
 		} catch (error) {
 			console.error("Platform içeriği yüklenirken hata:", error);
+		} finally {
+			// Hata da olsa iskelet kalkmalı: aksi halde ekran kalıcı olarak
+			// iskelette kilitlenir ve kullanıcı "yükleniyor" sanar.
+			setLoadingContent(false);
 		}
 	}, [setFeaturedMovieWithBackdrop]);
 
@@ -497,6 +522,29 @@ export default function Index() {
 		[isNoneMode, categories, visibleCount],
 	);
 
+	/*
+	 * Kategori listesi gelene kadar gösterilecek iskelet satır sayısı.
+	 *
+	 * Ekrana göre: TV'de hero yüksekliği ekranın ~%60'ını kapladığı için
+	 * 2 satır yeter; telefonda hero kısa olduğu için daha çok satır
+	 * görünmeli (aksi halde ekranın alt yarısı boş kalır).
+	 *
+	 * Sabit sayı KULLANILMAZ: 1080p TV'de telefonun katsayısıyla 5 satır
+	 * çizilirse ekran taşar, telefonda 2 satır çizilirse ekran boş görünür.
+	 */
+	const skeletonRowCount = useMemo(() => {
+		const landscape = winW > winH;
+		return landscape ? 2 : 4;
+	}, [winW, winH]);
+
+	/*
+	 * Satır iskeletleri yalnızca liste BOŞKEN gösterilir. Kategoriler
+	 * geldiğinde her satır kendi yükleme durumunu kendi yönetir
+	 * (`MovieCategorySection`), yani iki mekanizma asla çakışmaz.
+	 */
+	const showSkeletonRows =
+		loadingContent && !isNoneMode && visibleCategories.length === 0;
+
 	const categoryKeyExtractor = useCallback(
 		(category, index) => category.url || category.name || `cat-${index}`,
 		[],
@@ -548,10 +596,24 @@ export default function Index() {
 					backgroundColor="transparent"
 				/>
 
+				{/*
+				 * ⚠️ ESKİ DAVRANIŞ: `loadingPlatform` sırasında ekranın TAMAMI
+				 * spinner ile değiştiriliyordu. İçerik gelince hero + kategori
+				 * satırları ekrana giriyor ve kullanıcı "sayfa belirdi" diye
+				 * algılıyordu — aslında iki farklı düzen çiziliyordu.
+				 *
+				 * YENİ: liste render ediliyor, veri gelene kadar iskeletler
+				 * duruyor. Hero kendi geometrisini (`skeleton` prop'u),
+				 * kategoriler de `MovieCategoryRowSkeleton` ile çiziyor.
+				 */}
 				{loadingPlatform ? (
-					<View style={styles.centerLoading}>
-						<ActivityIndicator size="large" color="#2563EB" />
-					</View>
+					<HomeSkeleton
+						platform={selectedPlatform}
+						userAvatarUrl={userAvatarUrl}
+						onPlatformPress={() => setIsPlatformModalVisible(true)}
+						onSearchPress={handleHeaderSearch}
+						onProfilePress={() => router.push("/(app)/profile")}
+					/>
 				) : (
 					<FlatList
 						contentInsetAdjustmentBehavior="automatic"
@@ -585,6 +647,13 @@ export default function Index() {
 							movie={featuredMovie}
 							platform={selectedPlatform}
 							isInList={isInList}
+						/*
+						 * İskelet, içerik ağdan gelene kadar. `movie={null}` iken
+						 * HeroBanner eskiden uydurma bir başlık ("StreamPulse") ve
+						 * örnek poster gösteriyor, sonra gerçek içerikle
+						 * değişiyordu — ekran iki kez yer değiştiriyordu.
+						 */
+						skeleton={loadingContent}
 							userAvatarUrl={userAvatarUrl}
 							onPlayPress={() => handleMoviePress(featuredMovie)}
 							onInfoPress={() => handleMoviePress(featuredMovie)}
@@ -600,7 +669,21 @@ export default function Index() {
 							onProfilePress={() => router.push("/(app)/profile")}
 						/>
 
-						{/* 2. Offline Mode State or Normal Categories */}
+						{/*
+					 * Kategori listesi gelene kadar satır iskeletleri.
+					 *
+					 * Kategoriler boşken `FlatList` hiç render etmiyor ve
+					 * ekran "hero + boşluk" görünüyordu. Satır sayısı ekran
+					 * YÜKSEKLİĞİNE göre: telefonda daha çok, TV'de daha az
+					 * (TV'de hero çok daha uzun yer kaplıyor).
+					 */}
+					{showSkeletonRows
+						? Array.from({ length: skeletonRowCount }).map((_, i) => (
+								<MovieCategoryRowSkeleton key={`sk-satir-${i}`} />
+							))
+						: null}
+
+					{/* 2. Offline Mode State or Normal Categories */}
 						{isNoneMode ? (
 							<View style={styles.offlineSection}>
 								{/* Downloaded Items */}
@@ -806,11 +889,6 @@ const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 		backgroundColor: "#0d0e12",
-	},
-	centerLoading: {
-		flex: 1,
-		justifyContent: "center",
-		alignItems: "center",
 	},
 	scrollContent: {
 		paddingBottom: 24,

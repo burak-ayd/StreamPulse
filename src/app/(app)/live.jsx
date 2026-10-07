@@ -59,6 +59,7 @@
 
 import CategoryRail from "@/components/live/CategoryRail";
 import ChannelCard from "@/components/live/ChannelCard";
+import ChannelCardSkeleton from "@/components/live/ChannelCardSkeleton";
 import TVPressable from "@/components/common/TVPressable";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { useTvMetrics } from "@/utils/tvMetrics";
@@ -635,11 +636,39 @@ export default function LiveScreen() {
 
 				{/* Gövde — üç ayrı durum + ızgara */}
 				{gosterYukleniyor ? (
-					<View style={styles.center}>
-						<ActivityIndicator color={c.primaryContainer} />
-						<Text style={[styles.centerText, { color: c.onSurfaceVariant }]}>
-							Kanallar yükleniyor…
-						</Text>
+					/*
+					 * Izgara iskeleti. Aynı `sutunSayisi` / `kartGenisligi`
+					 * hesabını kullanıyor; kanallar geldiğinde birebir yerine
+					 * oturuyor. Önceden "Kanallar yükleniyor" yazısı vardı —
+					 * o metin yerine gerçek yerleşim çiziliyor.
+					 */
+					<View
+						style={[
+							styles.listContent,
+							styles.listContentEmpty,
+							contentMaxWidth
+								? {
+										alignSelf: "center",
+										width: "100%",
+										maxWidth: contentMaxWidth,
+									}
+								: null,
+						]}
+						pointerEvents="none">
+						{Array.from({ length: sutunSayisi * 4 }).map((_, index) => (
+							<View
+								key={`sk-kanal-${index}`}
+								style={{
+									width: kartGenisligi,
+									marginRight:
+										(index % sutunSayisi) === sutunSayisi - 1
+											? 0
+											: GRID_GAP,
+									marginBottom: GRID_GAP,
+								}}>
+								<ChannelCardSkeleton width={kartGenisligi} />
+							</View>
+						))}
 					</View>
 				) : gosterHata ? (
 					renderHataDurumu()

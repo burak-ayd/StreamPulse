@@ -1,6 +1,7 @@
 import BottomNavigation from "@components/BottomNavigation";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import TVPressable from "@components/common/TVPressable";
+import { SkeletonBlock, SkeletonLine } from "@components/common/Skeleton";
 import { useThemeContext } from "@context/ThemeContext";
 import { searchContent, searchPluginContent } from "@/services/api";
 import {
@@ -24,7 +25,6 @@ import {
 	StyleSheet,
 	Text,
 	TextInput,
-	TouchableOpacity,
 	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -630,19 +630,66 @@ export default function SearchScreen() {
 					) : null}
 
 					{/* Yükleniyor Durumu */}
+					{/*
+					 * Sonuç kartı iskeleti. Gerçek sonuç satırının
+					 * geometrisi (58×86 poster + 12px yarıçap + 12px satır
+					 * yüksekliği) birebir taklit ediliyor; arama bitince
+					 * sonuçlar yerine oturuyor, sayfa zıplamıyor.
+					 */}
 					{loading && (
-						<View style={styles.centerState}>
-							<ActivityIndicator
-								size="large"
-								color={colors.primary}
+						<View style={styles.resultsContainer} pointerEvents="none">
+							<SkeletonLine
+								width={180}
+								height={13}
+								color={colors.border}
+								style={{ marginBottom: 12 }}
 							/>
-							<Text
-								style={[
-									styles.stateSubText,
-									{ color: colors.textSecondary },
-								]}>
-								"{lastSearchedQuery}" aranıyor...
-							</Text>
+							<View style={styles.cardsList}>
+								{Array.from({ length: 6 }).map((_, index) => (
+									<View
+										key={`sk-sonuc-${index}`}
+										style={[
+											styles.resultCard,
+											{
+												backgroundColor: colors.cardBg,
+												borderColor: colors.border,
+											},
+										]}>
+										<SkeletonBlock
+											width={58}
+											height={86}
+											radius={8}
+											color={colors.border}
+										/>
+										<View style={styles.cardDetails}>
+											<SkeletonLine
+												width="82%"
+												height={14}
+												color={colors.border}
+											/>
+											<SkeletonLine
+												width="52%"
+												height={12}
+												color={colors.border}
+											/>
+											<View style={styles.badgesRow}>
+												<SkeletonBlock
+													width={54}
+													height={20}
+													radius={6}
+													color={colors.border}
+												/>
+												<SkeletonBlock
+													width={40}
+													height={20}
+													radius={6}
+													color={colors.border}
+												/>
+											</View>
+										</View>
+									</View>
+								))}
+							</View>
 						</View>
 					)}
 

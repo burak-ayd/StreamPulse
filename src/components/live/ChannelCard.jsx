@@ -65,6 +65,16 @@ const PAY_TV_INK = "#1a1200";
  */
 const COMPACT_UNDER = 110;
 
+/**
+ * Kanal kartı geometrisinin SAYILARI — iskelet de gerçek kart da bunları
+ * okur. Kaynak: `styles.logoBox` / `styles.name` / `styles.nameCompact`.
+ */
+export const CHANNEL_LOGO_RADIUS = 12;
+export const CHANNEL_NAME_HEIGHT = 17; // lineHeight
+export const CHANNEL_NAME_MARGIN_TOP = 6;
+export const CHANNEL_NAME_COMPACT_HEIGHT = 13;
+export const CHANNEL_NAME_COMPACT_MARGIN_TOP = 5;
+
 function ChannelCard({ channel, onPress, width }) {
 	/*
 	 * Ölçüm tamamlanmadan (genişlik 0) kart render EDİLMEZ. `width: 0`
@@ -177,7 +187,7 @@ const styles = StyleSheet.create({
 		// Kare kutu: logolar kareye yakın ama tutarsız; sabit kutu + `contain`
 		// ızgaranın satır yüksekliğini sabit tutar.
 		aspectRatio: 1,
-		borderRadius: 12,
+		borderRadius: CHANNEL_LOGO_RADIUS,
 		overflow: "hidden",
 		borderWidth: 2,
 		borderColor: "transparent",
@@ -205,15 +215,15 @@ const styles = StyleSheet.create({
 	},
 	name: {
 		fontSize: 13,
-		lineHeight: 17,
+		lineHeight: CHANNEL_NAME_HEIGHT,
 		fontWeight: "600",
-		marginTop: 6,
+		marginTop: CHANNEL_NAME_MARGIN_TOP,
 		letterSpacing: -0.1,
 	},
 	nameCompact: {
 		fontSize: 10,
-		lineHeight: 13,
+		lineHeight: CHANNEL_NAME_COMPACT_HEIGHT,
 		fontWeight: "500",
-		marginTop: 5,
+		marginTop: CHANNEL_NAME_COMPACT_MARGIN_TOP,
 	},
 });

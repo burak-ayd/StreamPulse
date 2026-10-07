@@ -1,5 +1,10 @@
 import LanguageBadge from "@/components/common/LanguageBadge";
 import TVPressable from "@/components/common/TVPressable";
+import {
+	SkeletonBlock,
+	SkeletonLine,
+	useSkeletonColors,
+} from "@/components/common/Skeleton";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -63,9 +68,20 @@ export default function HeroBanner({
 	onPlatformPress,
 	onSearchPress,
 	onProfilePress,
+	/**
+	 * İskelet modu — `movie` henüz yokken.
+	 *
+	 * Hero, ekranın en büyük ve en çok yer değiştiren bloğu. Ayrı bir
+	 * "yükleniyor" ekranı çizmek bu yüzden kötüydü: spinner'ın yüksekliği
+	 * kartınkiyle tutmuyordu, içerik gelince tüm ekran aşağı zıplıyordu.
+	 * Bunun yerine hero bloğu KENDİ geometrisini iskelet olarak çiziyor;
+	 * `movie` geldiğinde aynı ölçüler doluyor, kayma olmuyor.
+	 */
+	skeleton = false,
 }) {
 	const insets = useSafeAreaInsets();
 	const { width: winW, height: winH } = useWindowDimensions();
+	const skeletonColors = useSkeletonColors();
 
 	// İçerik alanının gerçek genişliği. Sol ray (TV / tablet yatay) açıkken
 	// ekran genişliğinden küçüktür; bu yüzden tahmin etmiyoruz, ölçüyoruz.
@@ -97,7 +113,15 @@ export default function HeroBanner({
 		backdropUri ||
 		"https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=60";
 
-	const hasBackdrop = !!backdropUri;
+	/*
+	 * İskelette kart oranı: yatay (backdrop) varsayılır.
+	 *
+	 * Gerçek içerik geldiğinde `hasBackdrop` çoğunlukla `true` (hero
+	 * backdrop'ı hydrate ediliyor). İskelet poster oranını seçerse
+	 * içerik gelince kart 0.78 → 1.9 oranına zıplar ve sayfa yeniden
+	 * yerleşir — tam olarak kaçınmak istediğimiz şey.
+	 */
+	const hasBackdrop = skeleton ? true : !!backdropUri;
 
 	const ui = useMemo(() => {
 		const w = boxW > 0 ? boxW : winW;
@@ -305,97 +329,193 @@ export default function HeroBanner({
 		</View>
 	);
 
-	const renderActions = (align) => (
-		<View
-			style={[
-				styles.buttonsRow,
-				{ gap: ui.buttonsGap, justifyContent: align },
-			]}>
-			<TVPressable
-				style={[styles.actionColumn, { width: ui.actionColW }]}
-				focusedStyle={styles.actionColumnFocused}
-				onPress={onToggleList}>
-				<Ionicons
-					name={isInList ? "checkmark" : "add"}
-					size={ui.actionIcon}
-					color="#ffffff"
-				/>
-				<Text style={[styles.actionLabel, { fontSize: ui.actionLabel }]}>
-					{isInList ? "Listede" : "Listem"}
-				</Text>
-			</TVPressable>
+	const renderActions = (align) => {
+		/*
+		 * İskelet: ikon+etiket sütunları ve "Oynat" hapı aynı genişlik/
+		 * yükseklikte bloklarla temsil edilir. `actionColW` ve `playPad*`
+		 * gerçek butonlarla AYNİ sabitlerden geldiği için butonlar
+		 * göründüğünde satır yerinden oynamaz.
+		 */
+		if (skeleton) {
+			const actionColH = ui.actionIcon + ui.actionLabel + 14;
+			return (
+				<View
+					style={[
+						styles.buttonsRow,
+						{ gap: ui.buttonsGap, justifyContent: align },
+					]}
+					pointerEvents="none">
+					<SkeletonBlock
+						width={ui.actionColW}
+						height={actionColH}
+						radius={12}
+					/>
+					<SkeletonBlock
+						width={ui.playPadH * 2 + ui.playIcon * 2.2}
+						height={ui.playIcon + ui.playPadV * 1.6}
+						radius={Math.round(ui.playPadV * 3)}
+					/>
+					<SkeletonBlock
+						width={ui.actionColW}
+						height={actionColH}
+						radius={12}
+					/>
+				</View>
+			);
+		}
 
-			<TVPressable
-				autoFocus={true}
+		return (
+			<View
 				style={[
-					styles.playButton,
-					{
-						paddingHorizontal: ui.playPadH,
-						paddingVertical: ui.playPadV,
-						borderRadius: Math.round(ui.playPadV * 3),
-					},
-				]}
-				focusedStyle={styles.playButtonFocused}
-				onPress={onPlayPress}>
-				<Ionicons
-					name="play"
-					size={ui.playIcon}
-					color="#000000"
-					style={{ marginLeft: 2 }}
-				/>
-				<Text style={[styles.playButtonText, { fontSize: ui.playText }]}>
-					Oynat
-				</Text>
-			</TVPressable>
+					styles.buttonsRow,
+					{ gap: ui.buttonsGap, justifyContent: align },
+				]}>
+				<TVPressable
+					style={[styles.actionColumn, { width: ui.actionColW }]}
+					focusedStyle={styles.actionColumnFocused}
+					onPress={onToggleList}>
+					<Ionicons
+						name={isInList ? "checkmark" : "add"}
+						size={ui.actionIcon}
+						color="#ffffff"
+					/>
+					<Text
+						style={[styles.actionLabel, { fontSize: ui.actionLabel }]}>
+						{isInList ? "Listede" : "Listem"}
+					</Text>
+				</TVPressable>
 
-			<TVPressable
-				style={[styles.actionColumn, { width: ui.actionColW }]}
-				focusedStyle={styles.actionColumnFocused}
-				onPress={onInfoPress}>
-				<Ionicons
-					name="information-circle-outline"
-					size={ui.actionIcon}
-					color="#ffffff"
-				/>
-				<Text style={[styles.actionLabel, { fontSize: ui.actionLabel }]}>
-					Bilgi
-				</Text>
-			</TVPressable>
-		</View>
-	);
+				<TVPressable
+					autoFocus={!skeleton}
+					style={[
+						styles.playButton,
+						{
+							paddingHorizontal: ui.playPadH,
+							paddingVertical: ui.playPadV,
+							borderRadius: Math.round(ui.playPadV * 3),
+						},
+					]}
+					focusedStyle={styles.playButtonFocused}
+					onPress={onPlayPress}>
+					<Ionicons
+						name="play"
+						size={ui.playIcon}
+						color="#000000"
+						style={{ marginLeft: 2 }}
+					/>
+					<Text style={[styles.playButtonText, { fontSize: ui.playText }]}>
+						Oynat
+					</Text>
+				</TVPressable>
 
-	const renderTitle = (align, maxWidth) => (
-		<Text
-			style={[
-				styles.heroTitle,
-				{ fontSize: ui.titleSize, textAlign: align, maxWidth },
-			]}
-			numberOfLines={2}>
-			{title}
-		</Text>
-	);
+				<TVPressable
+					style={[styles.actionColumn, { width: ui.actionColW }]}
+					focusedStyle={styles.actionColumnFocused}
+					onPress={onInfoPress}>
+					<Ionicons
+						name="information-circle-outline"
+						size={ui.actionIcon}
+						color="#ffffff"
+					/>
+					<Text style={[styles.actionLabel, { fontSize: ui.actionLabel }]}>
+						Bilgi
+					</Text>
+				</TVPressable>
+			</View>
+		);
+	};
 
-	const renderMeta = (align, maxWidth) => (
-		<View
-			style={[
-				styles.metaRow,
-				{
-					maxWidth,
-					alignSelf: align === "center" ? "center" : "flex-start",
-					justifyContent:
-						align === "center" ? "center" : "flex-start",
-				},
-			]}>
-			{movieRawLang ? (
-				<LanguageBadge language={movieRawLang} size="small" />
-			) : null}
+	/*
+	 * Başlık: iki satırlık gerçek metnin yüksekliği kadar yer kaplar
+	 * (`ui.titleSize × 1.2`). `numberOfLines={2}` olduğu için en az bir,
+	 * en çok iki satır görünür; iskelet iki çubuk çizerek ikisini de
+	 * karşılar.
+	 */
+	const renderTitle = (align, maxWidth) => {
+		if (skeleton) {
+			return (
+				<View
+					style={{
+						maxWidth,
+						alignSelf: align === "center" ? "center" : "flex-start",
+					}}
+					pointerEvents="none">
+					<SkeletonLine
+						width={Math.min(maxWidth, 220 * ui.s)}
+						height={Math.round(ui.titleSize * 0.62)}
+						radius={Math.round(ui.titleSize * 0.2)}
+					/>
+					<SkeletonLine
+						width={Math.min(maxWidth, 140 * ui.s)}
+						height={Math.round(ui.titleSize * 0.62)}
+						radius={Math.round(ui.titleSize * 0.2)}
+						style={{ marginTop: Math.round(ui.titleSize * 0.22) }}
+					/>
+				</View>
+			);
+		}
+		return (
 			<Text
-				style={[styles.metaText, { fontSize: ui.metaSize }]}
+				style={[
+					styles.heroTitle,
+					{ fontSize: ui.titleSize, textAlign: align, maxWidth },
+				]}
 				numberOfLines={2}>
-				{genres}
+				{title}
 			</Text>
-		</View>
-	);
+		);
+	};
+
+	const renderMeta = (align, maxWidth) => {
+		if (skeleton) {
+			return (
+				<View
+					style={[
+						styles.metaRow,
+						{
+							maxWidth,
+							alignSelf: align === "center" ? "center" : "flex-start",
+						},
+					]}
+					pointerEvents="none">
+					{/* Dil rozeti genişliği */}
+					<SkeletonBlock
+						width={Math.round(38 * ui.s)}
+						height={Math.round(18 * ui.s)}
+						radius={Math.round(9 * ui.s)}
+					/>
+					<SkeletonLine
+						width={Math.min(
+							maxWidth,
+							Math.round((movieRawLang ? 90 : 160) * ui.s),
+						)}
+						height={Math.round(ui.metaSize * 0.72)}
+					/>
+				</View>
+			);
+		}
+		return (
+			<View
+				style={[
+					styles.metaRow,
+					{
+						maxWidth,
+						alignSelf: align === "center" ? "center" : "flex-start",
+						justifyContent:
+							align === "center" ? "center" : "flex-start",
+					},
+				]}>
+				{movieRawLang ? (
+					<LanguageBadge language={movieRawLang} size="small" />
+				) : null}
+				<Text
+					style={[styles.metaText, { fontSize: ui.metaSize }]}
+					numberOfLines={2}>
+					{genres}
+				</Text>
+			</View>
+		);
+	};
 
 	// ------------------------------------------------------------------
 	// Hero görseli: her modda aynı yuvarlak kart
@@ -410,15 +530,29 @@ export default function HeroBanner({
 					borderRadius: ui.radius,
 				},
 			]}>
-			<Image
-				source={{ uri: hasBackdrop ? backdropUri : posterUri }}
-				style={styles.heroCardImage}
-				contentFit="cover"
-				contentPosition={ui.contentPosition}
-				recyclingKey={hasBackdrop ? backdropUri : posterUri}
-				transition={0}
-				cachePolicy="memory-disk"
-			/>
+			{skeleton ? (
+				/*
+				 * Görsel yerine düz blok. `styles.heroCard` zaten `#1c1e24`
+				 * zeminli; iskelet tonuyla kaplanınca "görsel yükleniyor"
+				 * durumu okunur ama kart ölçüsü birebir korunur.
+				 */
+				<View
+					style={[
+						styles.heroCardImage,
+						{ backgroundColor: skeletonColors.block, borderRadius: ui.radius },
+					]}
+				/>
+			) : (
+				<Image
+					source={{ uri: hasBackdrop ? backdropUri : posterUri }}
+					style={styles.heroCardImage}
+					contentFit="cover"
+					contentPosition={ui.contentPosition}
+					recyclingKey={hasBackdrop ? backdropUri : posterUri}
+					transition={0}
+					cachePolicy="memory-disk"
+				/>
+			)}
 
 			{withOverlayContent ? (
 				<>
