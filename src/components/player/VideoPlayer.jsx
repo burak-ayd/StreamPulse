@@ -980,7 +980,6 @@ export default function VideoPlayer({
 
 	const panResponder = useMemo(
 		() =>
-			// eslint-disable-next-line react-hooks/refs
 			PanResponder.create({
 				onStartShouldSetPanResponder: () => true,
 				onMoveShouldSetPanResponder: () => true,

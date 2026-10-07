@@ -16,7 +16,6 @@ import {
 	getSelectedPlatform,
 	getUserProfile,
 } from "@/utils/storage";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import TVPressable from "@/components/common/TVPressable";
@@ -31,7 +30,6 @@ import {
 	StyleSheet,
 	Switch,
 	Text,
-	TouchableOpacity,
 	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";

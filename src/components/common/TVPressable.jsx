@@ -40,8 +40,17 @@ export function isTVPressSuppressed() {
  * TVPressable
  * Hem dokunmatik mobil cihazlarda hem de Android TV'de kumanda (D-Pad) ile
  * uyumlu çalışan evrensel buton bileşeni.
+ *
+ * ⚠️ YALNIZCA `default` olarak dışa açılır.
+ *
+ * Bu bileşen `export const TVPressable` VE `export default TVPressable`
+ * olarak İKİ KEZ dışa açıldığı için `import/no-named-as-default` kuralı,
+ * dosyayı default olarak import eden 38 dosyanın HEPSİNDE aynı uyarıyı
+ * üretiyordu. Projede tek bir import biçimi kullanıldığı için isimli
+ * export kaldırıldı: `import TVPressable from "..."` artık uyarısız.
+ * (Dışa açılan tek isimli export `isTVPressSuppressed`, o korunuyor.)
  */
-export const TVPressable = forwardRef(function TVPressable(
+const TVPressable = forwardRef(function TVPressable(
 	{
 		style,
 		focusedStyle,
