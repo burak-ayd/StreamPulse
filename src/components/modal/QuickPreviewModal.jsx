@@ -12,9 +12,8 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-	ActivityIndicator,
 	Alert,
 	BackHandler,
 	Modal,
@@ -23,7 +22,6 @@ import {
 	Share,
 	StyleSheet,
 	Text,
-	TouchableOpacity,
 	Vibration,
 	View,
 } from "react-native";
@@ -56,9 +54,7 @@ export default function QuickPreviewModal({
 	const { isTV, sp, focusScale, height, width: windowWidth } = useTvMetrics();
 
 	const [enrichedMovie, setEnrichedMovie] = useState(movie || null);
-	const [loadingDetails, setLoadingDetails] = useState(false);
 	const [isFav, setIsFav] = useState(false);
-	const [inList, setInList] = useState(false);
 	const [activeStatus, setActiveStatus] = useState("watching");
 	const [toastInfo, setToastInfo] = useState(null); // { text, prevStatus }
 	const [isNotificationOn, setIsNotificationOn] = useState(false);
@@ -96,7 +92,7 @@ export default function QuickPreviewModal({
 		// Dokunsal geri bildirim
 		try {
 			Vibration.vibrate(40);
-		} catch (e) {
+		} catch (_e) {
 			// sessizce geç
 		}
 
@@ -110,7 +106,6 @@ export default function QuickPreviewModal({
 				const status = await getContentLibraryStatus(movieId);
 				if (isMounted) {
 					setIsFav(status.isFav);
-					setInList(status.inPlanned);
 					setActiveStatus(status.currentList);
 				}
 			} catch (e) {
@@ -118,13 +113,21 @@ export default function QuickPreviewModal({
 			}
 		}
 
-		// Arka planda detayları zenginleştir
+		/*
+		 * Arka planda detayları zenginleştir.
+		 *
+		 * ⚠️ Burada eskiden bir `loadingDetails` durumu vardı ve
+		 * `setLoadingDetails(true/false)` çağrılıyordu — ama DÜZENİN HİÇBİR
+		 * YERİNDE okunmuyordu. Yani spinner gösterecek bir yol yoktu,
+		 * sadece iki gereksiz render tetikleniyordu. Durum kaldırıldı;
+		 * zenginleştirme çalışmaya devam ediyor, `setEnrichedMovie` aynı
+		 * zamanda render'ı zaten tetikliyor.
+		 */
 		async function enrichData() {
 			const targetPlatform = movie.plugin || platformName;
 			if (!targetPlatform || !movie.url) return;
 
 			try {
-				setLoadingDetails(true);
 				const details = await fetchPluginDetail(targetPlatform, movie.url);
 				if (isMounted && details) {
 					setEnrichedMovie((prev) => ({
@@ -141,8 +144,6 @@ export default function QuickPreviewModal({
 				}
 			} catch (e) {
 				console.warn("Modal detay zenginleştirme hatası:", e);
-			} finally {
-				if (isMounted) setLoadingDetails(false);
 			}
 		}
 
@@ -204,7 +205,6 @@ export default function QuickPreviewModal({
 		try {
 			const res = await setContentLibraryList(currentItem, statusKey);
 			setActiveStatus(res);
-			setInList(res === "planned");
 
 			setToastInfo({
 				text: `Kitaplığınıza eklendi ("${label}" listesi)`,
@@ -220,7 +220,6 @@ export default function QuickPreviewModal({
 		if (toastInfo?.prevStatus) {
 			await setContentLibraryList(currentItem, toastInfo.prevStatus);
 			setActiveStatus(toastInfo.prevStatus);
-			setInList(toastInfo.prevStatus === "planned");
 		}
 		setToastInfo(null);
 	};
@@ -268,7 +267,7 @@ export default function QuickPreviewModal({
 		if (currentItem.fragman_url) {
 			try {
 				await WebBrowser.openBrowserAsync(currentItem.fragman_url);
-			} catch (e) {
+			} catch (_e) {
 				setShowTrailerPreview(true);
 			}
 		} else {
@@ -364,6 +363,551 @@ export default function QuickPreviewModal({
 		? Math.min(sp(700), windowWidth - 2 * sp(24))
 		: undefined;
 
+	/**
+	 * TELEFON dalı (width < 600, ~360–430dp): dikey stack bottom-sheet.
+	 *
+	 * Sorun: eski yapıda `previewHeaderRow` row + poster 140 + gap 18 +
+	 * padding 16×2 → detay kolonu sadece ~200dp kalıyordu (390-32-140-18).
+	 * Başlık eziliyor, "Daha fazla bilgi" ve 3. chip kesiliyor, 4 hızlı
+	 * eylem ~50dp'ye sıkışıyordu.
+	 *
+	 * Çözüm (sadece `isPhone`): poster+başlık üstte kompakt header, özet
+	 * ve TÜM eylemler ScrollView'un doğrudan çocuğu olarak tam genişlikte
+	 * (~358dp @390). TV ve tablet dallarına HİÇ dokunulmaz.
+	 */
+	const isPhone = !isTV && windowWidth < 600;
+	const phonePosterW = Math.min(112, windowWidth * 0.28);
+	const phonePosterH = phonePosterW * 1.5;
+	// Dar telefonda (<380) "Değiştirmek için dokunun" başlıkla aynı satıra
+	// sığmaz — gizle, taşmayı önle. Tablet/TV davranışı aynı kalır.
+	const showStatusSubText = isPhone ? windowWidth >= 380 : !isTV;
+
+	/* ── Ortak bloklar: telefon + tablet aynı handler'ları kullanır ── */
+
+	const renderStatusSection = (phone = false) => (
+		<View
+			style={[
+				styles.statusSection,
+				{
+					marginTop: isTV ? 0 : phone ? sp(14) : sp(18),
+					paddingTop: isTV ? 0 : phone ? sp(12) : sp(14),
+				},
+			]}>
+			<View style={styles.statusSectionHeader}>
+				<Text
+					style={[
+						styles.statusSectionTitle,
+						{ fontSize: sp(12) },
+					]}>
+					DURUMU GÜNCELLE
+				</Text>
+				{showStatusSubText ? (
+					<Text style={styles.statusSectionSub}>
+						Değiştirmek için dokunun
+					</Text>
+				) : null}
+			</View>
+
+			<ScrollView
+				horizontal
+				showsHorizontalScrollIndicator={false}
+				contentContainerStyle={[
+					styles.statusChipsScroll,
+					{ gap: sp(8), ...(phone ? { paddingRight: sp(16) } : null) },
+				]}>
+				{STATUS_CHIPS.map((chip) => {
+					const isActive = activeStatus === chip.key;
+					return (
+						<TVPressable
+							key={chip.key}
+							style={[
+								styles.statusChip,
+								{
+									paddingHorizontal: sp(14),
+									paddingVertical: sp(9),
+									borderRadius: sp(20),
+									gap: sp(6),
+									...(phone ? { minHeight: sp(40), justifyContent: "center" } : null),
+								},
+								isActive && styles.statusChipActive,
+							]}
+							focusedStyle={{
+								borderWidth: 2,
+								borderColor: "#E50914",
+								backgroundColor: "rgba(229, 9, 20, 0.2)",
+								transform: [{ scale: focusScale }],
+							}}
+							onPress={() => handleStatusSelect(chip.key)}
+							activeOpacity={0.8}>
+							{isActive && (
+								<Ionicons
+									name="checkmark"
+									size={sp(15)}
+									color="#ffffff"
+								/>
+							)}
+							<Text
+								style={[
+									styles.statusChipText,
+									{ fontSize: sp(12.5) },
+									isActive && styles.statusChipTextActive,
+								]}
+								numberOfLines={phone ? 1 : undefined}>
+								{chip.label}
+							</Text>
+						</TVPressable>
+					);
+				})}
+			</ScrollView>
+		</View>
+	);
+
+	const renderActionGrid = (phone = false) => (
+		<View
+			style={[
+				styles.actionButtonsGrid,
+				{
+					gap: phone ? sp(10) : sp(12),
+					marginTop: isTV ? 0 : phone ? sp(12) : sp(16),
+				},
+			]}>
+			{/* Listeme Ekle / Liste Seçim Butonu */}
+			<TVPressable
+				style={[
+					styles.actionBtnSecondary,
+					{
+						height: isTV ? sp(46) : phone ? sp(48) : sp(50),
+						gap: sp(8),
+						borderRadius: sp(14),
+					},
+					activeStatus && styles.actionBtnInList,
+				]}
+				focusedStyle={{
+					borderWidth: 2,
+					borderColor: "#E50914",
+					transform: [{ scale: focusScale }],
+				}}
+				onPress={handleToggleList}
+				activeOpacity={0.85}>
+				<Ionicons
+					name={
+						activeStatus === "watching"
+							? "play-circle"
+							: activeStatus === "planned"
+								? "bookmark"
+								: activeStatus === "completed"
+									? "checkmark-circle"
+									: "add"
+					}
+					size={phone ? sp(18) : sp(20)}
+					color={
+						activeStatus === "watching"
+							? "#E50914"
+							: activeStatus === "planned"
+								? "#38bdf8"
+								: activeStatus === "completed"
+									? "#10B981"
+									: "#ffffff"
+					}
+				/>
+				<Text
+					style={[
+						styles.actionBtnSecondaryText,
+						{ fontSize: sp(13.5), ...(phone ? { flexShrink: 1 } : null) },
+					]}
+					numberOfLines={phone ? 1 : undefined}>
+					{activeStatus === "watching"
+						? "İzleniyor"
+						: activeStatus === "planned"
+							? "Planlandı"
+							: activeStatus === "completed"
+								? "Tamamlandı"
+								: "Listeme Ekle"}
+				</Text>
+			</TVPressable>
+
+			{/* Daha Fazla Bilgi Butonu */}
+			<TVPressable
+				style={[
+					styles.actionBtnPrimary,
+					{
+						height: isTV ? sp(46) : phone ? sp(48) : sp(50),
+						gap: sp(8),
+						borderRadius: sp(14),
+					},
+				]}
+				focusedStyle={{
+					borderWidth: 2,
+					borderColor: "#E50914",
+					transform: [{ scale: focusScale }],
+				}}
+				onPress={handleNavigateDetails}
+				activeOpacity={0.85}>
+				<Ionicons
+					name="open-outline"
+					size={phone ? sp(18) : sp(19)}
+					color="#000000"
+				/>
+				<Text
+					style={[
+						styles.actionBtnPrimaryText,
+						{ fontSize: sp(13.5), ...(phone ? { flexShrink: 1 } : null) },
+					]}
+					numberOfLines={phone ? 1 : undefined}>
+					Daha fazla bilgi
+				</Text>
+			</TVPressable>
+		</View>
+	);
+
+	const renderCtaButton = (phone = false) => (
+		<TVPressable
+			autoFocus={true}
+			style={[
+				styles.prominentCtaButton,
+				{
+					height: isTV || phone ? sp(52) : sp(54),
+					gap: sp(10),
+					borderRadius: sp(14),
+					marginTop: isTV ? 0 : sp(12),
+				},
+			]}
+			focusedStyle={{
+				borderWidth: 2,
+				borderColor: "#FFFFFF",
+				backgroundColor: "#b20710",
+				transform: [{ scale: focusScale }],
+			}}
+			onPress={handlePlay}
+			activeOpacity={0.85}>
+			<Ionicons name="play" size={sp(21)} color="#ffffff" />
+			<Text
+				style={[
+					styles.prominentCtaText,
+					{ fontSize: sp(15) },
+				]}>
+				{isSeries ? "1. Bölümü Başlat" : "Oynat"}
+			</Text>
+		</TVPressable>
+	);
+
+	const renderQuickActions = (phone = false) => {
+		const quickItems = [
+			{
+				key: "trailer",
+				icon: "videocam-outline",
+				label: "Fragman",
+				onPress: handleTrailerClick,
+			},
+			{
+				key: "download",
+				icon: "download-outline",
+				label: "İndir",
+				onPress: () =>
+					Alert.alert(
+						"İndirme",
+						`"${title}" indirme kuyruğuna ekleniyor...`,
+					),
+			},
+			{
+				key: "share",
+				icon: "share-social-outline",
+				label: "Paylaş",
+				onPress: handleShare,
+			},
+			{
+				key: "details",
+				icon: "information-circle-outline",
+				label: "Detaylar",
+				onPress: handleNavigateDetails,
+			},
+		];
+		return (
+			<View
+				style={[
+					styles.quickSubActionsRow,
+					{
+						marginTop: isTV ? 0 : phone ? sp(12) : sp(14),
+						paddingTop: isTV ? sp(10) : sp(12),
+					},
+				]}>
+				{quickItems.map((item) => (
+					<TVPressable
+						key={item.key}
+						style={[
+							styles.subActionItem,
+							{
+								gap: sp(6),
+								paddingHorizontal: phone ? sp(4) : sp(12),
+								paddingVertical: sp(6),
+								borderRadius: sp(10),
+								...(phone ? { flex: 1, alignItems: "center" } : null),
+							},
+						]}
+						focusedStyle={{
+							backgroundColor: "rgba(229, 9, 20, 0.15)",
+							transform: [{ scale: focusScale }],
+						}}
+						onPress={item.onPress}
+						activeOpacity={0.75}>
+						<Ionicons
+							name={item.icon}
+							size={phone ? sp(22) : sp(21)}
+							color="#cbd5e1"
+						/>
+						<Text
+							style={[
+								styles.subActionLabel,
+								{
+									fontSize: phone ? sp(11.5) : sp(12),
+									...(phone ? { textAlign: "center" } : null),
+								},
+							]}
+							numberOfLines={phone ? 1 : undefined}>
+							{item.label}
+						</Text>
+					</TVPressable>
+				))}
+			</View>
+		);
+	};
+
+	/* Telefon üst bloğu: kompakt header (küçük poster + başlık kolonu) +
+	 * tam genişlikte özet. Alt bloklar ScrollView'un doğrudan çocuğu olur. */
+	const renderPhoneTop = () => (
+		<>
+			<View
+				style={[
+					styles.previewHeaderRow,
+					{ gap: sp(12) },
+				]}>
+				<TVPressable
+					style={[
+						styles.posterWrapper,
+						{
+							width: phonePosterW,
+							height: phonePosterH,
+							borderRadius: sp(12),
+						},
+					]}
+					focusedStyle={{
+						borderWidth: 2,
+						borderColor: "#E50914",
+						transform: [{ scale: focusScale + 0.04 }],
+					}}
+					activeOpacity={0.9}
+					onPress={handleTrailerClick}>
+					<Image
+						source={{ uri: posterUri }}
+						style={styles.posterImage}
+						contentFit="cover"
+						transition={200}
+					/>
+					<View
+						style={[
+							styles.posterTopBadge,
+							{
+								top: sp(8),
+								left: sp(8),
+								paddingHorizontal: sp(6),
+								paddingVertical: sp(3),
+								borderRadius: sp(4),
+							},
+						]}>
+						<Text
+							style={[
+								styles.posterTopBadgeText,
+								{ fontSize: sp(9) },
+							]}>
+							TOP 10
+						</Text>
+					</View>
+					<View
+						style={[
+							styles.posterHdBadge,
+							{
+								bottom: sp(8),
+								right: sp(8),
+								paddingHorizontal: sp(5),
+								paddingVertical: sp(2),
+								borderRadius: sp(4),
+							},
+						]}>
+						<Text
+							style={[
+								styles.posterHdText,
+								{ fontSize: sp(9) },
+							]}>
+							HD
+						</Text>
+					</View>
+				</TVPressable>
+
+				<View style={[styles.detailsColumn, { paddingTop: 0 }]}>
+					<View
+						style={[
+							styles.titleRow,
+							{ marginBottom: sp(6), gap: sp(8) },
+						]}>
+						<Text
+							style={[
+								styles.movieTitle,
+								{ fontSize: sp(19) },
+							]}
+							numberOfLines={2}>
+							{title}
+						</Text>
+						<View
+							style={[
+								styles.headerIconActions,
+								{ gap: sp(8) },
+							]}>
+							<TVPressable
+								style={[
+									styles.iconCircleBtn,
+									{
+										width: sp(36),
+										height: sp(36),
+										borderRadius: sp(18),
+									},
+								]}
+								focusedStyle={{
+									borderWidth: 2,
+									borderColor: "#E50914",
+									backgroundColor: "rgba(229, 9, 20, 0.2)",
+									transform: [{ scale: focusScale }],
+								}}
+								onPress={handleToggleNotification}
+								activeOpacity={0.75}>
+								<Ionicons
+									name={
+										isNotificationOn
+											? "notifications"
+											: "notifications-outline"
+									}
+									size={sp(19)}
+									color={
+										isNotificationOn
+											? "#E50914"
+											: "#cbd5e1"
+									}
+								/>
+							</TVPressable>
+							<TVPressable
+								style={[
+									styles.iconCircleBtn,
+									{
+										width: sp(36),
+										height: sp(36),
+										borderRadius: sp(18),
+									},
+								]}
+								focusedStyle={{
+									borderWidth: 2,
+									borderColor: "#E50914",
+									backgroundColor: "rgba(229, 9, 20, 0.2)",
+									transform: [{ scale: focusScale }],
+								}}
+								onPress={handleToggleFavorite}
+								activeOpacity={0.75}>
+								<Ionicons
+									name={isFav ? "heart" : "heart-outline"}
+									size={sp(19)}
+									color={isFav ? "#E50914" : "#cbd5e1"}
+								/>
+							</TVPressable>
+						</View>
+					</View>
+
+					<View
+						style={[
+							styles.metaBadgesRow,
+							{ marginBottom: 0, gap: sp(6) },
+						]}>
+						<View
+							style={[
+								styles.typeBadge,
+								{
+									paddingHorizontal: sp(9),
+									paddingVertical: sp(3),
+									borderRadius: sp(6),
+								},
+							]}>
+							<Text
+								style={[
+									styles.typeBadgeText,
+									{ fontSize: sp(11) },
+								]}>
+								{typeBadgeText}
+							</Text>
+						</View>
+						<Text
+							style={[
+								styles.metaYearText,
+								{ fontSize: sp(12) },
+							]}>
+							{yearText}
+						</Text>
+						<Text
+							style={[styles.metaDot, { fontSize: sp(11) }]}>
+							•
+						</Text>
+						<View style={styles.ratingBox}>
+							<Ionicons
+								name="star"
+								size={sp(14)}
+								color="#F5C518"
+							/>
+							<Text
+								style={[
+									styles.ratingText,
+									{ fontSize: sp(12) },
+								]}>
+								{rating}
+							</Text>
+						</View>
+						<Text
+							style={[styles.metaDot, { fontSize: sp(11) }]}>
+							•
+						</Text>
+						<View style={styles.hdrBadge}>
+							<Text
+								style={[
+									styles.hdrText,
+									{ fontSize: sp(10) },
+								]}>
+								4K HDR
+							</Text>
+						</View>
+					</View>
+				</View>
+			</View>
+
+			<Text
+				style={[
+					styles.synopsisText,
+					{
+						fontSize: sp(13.5),
+						lineHeight: sp(20),
+						marginTop: sp(12),
+					},
+				]}
+				numberOfLines={4}>
+				{synopsis}
+			</Text>
+		</>
+	);
+
+	/* Telefon alt blokları: ScrollView'un doğrudan çocukları (tam genişlik). */
+	const renderPhoneBottom = () => (
+		<>
+			{renderStatusSection(true)}
+			{renderActionGrid(true)}
+			{renderCtaButton(true)}
+			{renderQuickActions(true)}
+		</>
+	);
+
 	return (
 		<Modal
 			visible={visible}
@@ -402,11 +946,35 @@ export default function QuickPreviewModal({
 							backgroundColor: "#111621",
 							shadowOpacity: 0.75,
 						},
+						// Telefon: daha uzun bottom-sheet, tam yuvarlak üst köşeler.
+						isPhone && {
+							maxHeight: "92%",
+							borderTopLeftRadius: 24,
+							borderTopRightRadius: 24,
+						},
 					]}
 					onPress={(e) => e.stopPropagation()}>
 					{/* 1. Üst Tutamaç (Drag Handle) — telefonda sürükleme
 					    göstergesi, TV'de anlamsız. */}
 					{!isTV ? <View style={styles.dragHandle} /> : null}
+					{/* Telefon: backdrop'a dokunmak zor — sağ üstte kapatma (X). */}
+					{isPhone ? (
+						<TVPressable
+							onPress={onClose}
+							style={styles.phoneCloseBtn}
+							focusedStyle={{
+								borderWidth: 2,
+								borderColor: "#E50914",
+								transform: [{ scale: focusScale }],
+							}}
+							activeOpacity={0.75}>
+							<Ionicons
+								name="close"
+								size={sp(18)}
+								color="#ffffff"
+							/>
+						</TVPressable>
+					) : null}
 
 					{/* 2. Toast Bildirim Banner'ı (Screen 2) */}
 					{toastInfo && (
@@ -480,7 +1048,7 @@ export default function QuickPreviewModal({
 										 * özet metni altında kalır — böylece açık
 										 * durumda da panel tek ekrana sığar.
 										 */
-										height: isTV ? sp(260) : 180,
+										height: isTV ? sp(260) : isPhone ? 200 : 180,
 										borderRadius: sp(16),
 										marginBottom: sp(18),
 									},
@@ -586,14 +1154,15 @@ export default function QuickPreviewModal({
 						) : null}
 
 						{/*
-						 * 4. İki kolonlu başlık bölümü
+						 * 4. Başlık bölümü — TV + TABLET iki kolonlu (dokunma).
 						 *
 						 * TV: SOL kolon = poster (+ özet), SAĞ kolon = başlık,
-						 * rozetler ve TÜM eylemler. Alt alta 6 blok tek sütunda
-						 * dizildiği için panele sığmıyor, kullanıcı kaydırmak
-						 * zorunda kalıyordu. Telefonda poster solda, metin ve
-						 * eylemler sağda — iskelet aynı, bileşenler aynı.
+						 * rozetler ve TÜM eylemler. Telefonda bunun yerine
+						 * dikey stack kullanılır (renderPhoneTop/Bottom) — dar
+						 * kolonda (~200dp) ezilme olmasın diye.
 						 */}
+						{isPhone ? renderPhoneTop() : null}
+						{!isPhone ? (
 						<View
 							style={[
 								styles.previewHeaderRow,
@@ -868,319 +1437,24 @@ export default function QuickPreviewModal({
 								</Text>
 							) : null}
 
-							{/* 5. DURUMU GÜNCELLE Çip Seçici (Screen 2) */}
-						<View
-							style={[
-								styles.statusSection,
-								{ marginTop: isTV ? 0 : sp(18), paddingTop: isTV ? 0 : sp(14) },
-							]}>
-							<View style={styles.statusSectionHeader}>
-								<Text
-									style={[
-										styles.statusSectionTitle,
-										{ fontSize: sp(12) },
-									]}>
-									DURUMU GÜNCELLE
-								</Text>
-								{!isTV && (
-									<Text style={styles.statusSectionSub}>
-										Değiştirmek için dokunun
-									</Text>
-								)}
-							</View>
-
-							<ScrollView
-								horizontal
-								showsHorizontalScrollIndicator={false}
-								contentContainerStyle={[
-									styles.statusChipsScroll,
-									{ gap: sp(8) },
-								]}>
-								{STATUS_CHIPS.map((chip) => {
-									const isActive = activeStatus === chip.key;
-									return (
-										<TVPressable
-											key={chip.key}
-											style={[
-												styles.statusChip,
-												{
-													paddingHorizontal: sp(14),
-													paddingVertical: sp(9),
-													borderRadius: sp(20),
-													gap: sp(6),
-												},
-												isActive && styles.statusChipActive,
-											]}
-											focusedStyle={{
-												borderWidth: 2,
-												borderColor: "#E50914",
-												backgroundColor: "rgba(229, 9, 20, 0.2)",
-												transform: [{ scale: focusScale }],
-											}}
-											onPress={() => handleStatusSelect(chip.key)}
-											activeOpacity={0.8}>
-											{isActive && (
-												<Ionicons
-													name="checkmark"
-													size={sp(15)}
-													color="#ffffff"
-												/>
-											)}
-											<Text
-												style={[
-													styles.statusChipText,
-													{ fontSize: sp(12.5) },
-													isActive && styles.statusChipTextActive,
-												]}>
-												{chip.label}
-											</Text>
-										</TVPressable>
-									);
-								})}
-							</ScrollView>
-						</View>
+						{/* 5. DURUMU GÜNCELLE Çip Seçici (Screen 2) */}
+						{renderStatusSection(false)}
 
 						{/* 6. Ana Eylem Butonları Izgarası (Screen 1 & 2) */}
-						<View
-							style={[styles.actionButtonsGrid, { gap: sp(12), marginTop: isTV ? 0 : sp(16) }]}>
-							{/* Listeme Ekle / Liste Seçim Butonu */}
-							<TVPressable
-								style={[
-									styles.actionBtnSecondary,
-									{
-										height: isTV ? sp(46) : sp(50),
-										gap: sp(8),
-										borderRadius: sp(14),
-									},
-									activeStatus && styles.actionBtnInList,
-								]}
-								focusedStyle={{
-									borderWidth: 2,
-									borderColor: "#E50914",
-									transform: [{ scale: focusScale }],
-								}}
-								onPress={handleToggleList}
-								activeOpacity={0.85}>
-								<Ionicons
-									name={
-										activeStatus === "watching"
-											? "play-circle"
-											: activeStatus === "planned"
-												? "bookmark"
-												: activeStatus === "completed"
-													? "checkmark-circle"
-													: "add"
-									}
-									size={sp(20)}
-									color={
-										activeStatus === "watching"
-											? "#E50914"
-											: activeStatus === "planned"
-												? "#38bdf8"
-												: activeStatus === "completed"
-													? "#10B981"
-													: "#ffffff"
-									}
-								/>
-								<Text
-									style={[
-										styles.actionBtnSecondaryText,
-										{ fontSize: sp(13.5) },
-									]}>
-									{activeStatus === "watching"
-										? "İzleniyor"
-										: activeStatus === "planned"
-											? "Planlandı"
-											: activeStatus === "completed"
-												? "Tamamlandı"
-												: "Listeme Ekle"}
-								</Text>
-							</TVPressable>
-
-							{/* Daha Fazla Bilgi Butonu */}
-							<TVPressable
-								style={[
-									styles.actionBtnPrimary,
-									{ height: isTV ? sp(46) : sp(50), gap: sp(8), borderRadius: sp(14) },
-								]}
-								focusedStyle={{
-									borderWidth: 2,
-									borderColor: "#E50914",
-									transform: [{ scale: focusScale }],
-								}}
-								onPress={handleNavigateDetails}
-								activeOpacity={0.85}>
-								<Ionicons
-									name="open-outline"
-									size={sp(19)}
-									color="#000000"
-								/>
-								<Text
-									style={[
-										styles.actionBtnPrimaryText,
-										{ fontSize: sp(13.5) },
-									]}>
-									Daha fazla bilgi
-								</Text>
-							</TVPressable>
-						</View>
+						{renderActionGrid(false)}
 
 						{/* 7. Büyük Kırmızı CTA (Hemen İzle) */}
-						<TVPressable
-							autoFocus={true}
-							style={[
-								styles.prominentCtaButton,
-								{
-									height: isTV ? sp(52) : sp(54),
-									gap: sp(10),
-									borderRadius: sp(14),
-									marginTop: isTV ? 0 : sp(12),
-								},
-							]}
-							focusedStyle={{
-								borderWidth: 2,
-								borderColor: "#FFFFFF",
-								backgroundColor: "#b20710",
-								transform: [{ scale: focusScale }],
-							}}
-							onPress={handlePlay}
-							activeOpacity={0.85}>
-							<Ionicons name="play" size={sp(21)} color="#ffffff" />
-							<Text
-								style={[
-									styles.prominentCtaText,
-									{ fontSize: sp(15) },
-								]}>
-								{isSeries ? "1. Bölümü Başlat" : "Oynat"}
-							</Text>
-						</TVPressable>
+						{renderCtaButton(false)}
 
 						{/* 8. Alt Hızlı Eylemler (İndir, Paylaş, Fragman, Detaylar) */}
-						<View
-							style={[
-								styles.quickSubActionsRow,
-								{
-									marginTop: isTV ? 0 : sp(14),
-									paddingTop: isTV ? sp(10) : sp(12),
-								},
-							]}>
-							<TVPressable
-								style={[
-									styles.subActionItem,
-									{
-										gap: sp(6),
-										paddingHorizontal: sp(12),
-										paddingVertical: sp(6),
-										borderRadius: sp(10),
-									},
-								]}
-								focusedStyle={{
-									backgroundColor: "rgba(229, 9, 20, 0.15)",
-									transform: [{ scale: focusScale }],
-								}}
-								onPress={handleTrailerClick}
-								activeOpacity={0.75}>
-								<Ionicons
-									name="videocam-outline"
-									size={sp(21)}
-									color="#cbd5e1"
-								/>
-								<Text
-									style={[styles.subActionLabel, { fontSize: sp(12) }]}>
-									Fragman
-								</Text>
-							</TVPressable>
-
-							<TVPressable
-								style={[
-									styles.subActionItem,
-									{
-										gap: sp(6),
-										paddingHorizontal: sp(12),
-										paddingVertical: sp(6),
-										borderRadius: sp(10),
-									},
-								]}
-								focusedStyle={{
-									backgroundColor: "rgba(229, 9, 20, 0.15)",
-									transform: [{ scale: focusScale }],
-								}}
-								onPress={() =>
-									Alert.alert(
-										"İndirme",
-										`"${title}" indirme kuyruğuna ekleniyor...`,
-									)
-								}
-								activeOpacity={0.75}>
-								<Ionicons
-									name="download-outline"
-									size={sp(21)}
-									color="#cbd5e1"
-								/>
-								<Text
-									style={[styles.subActionLabel, { fontSize: sp(12) }]}>
-									İndir
-								</Text>
-							</TVPressable>
-
-							<TVPressable
-								style={[
-									styles.subActionItem,
-									{
-										gap: sp(6),
-										paddingHorizontal: sp(12),
-										paddingVertical: sp(6),
-										borderRadius: sp(10),
-									},
-								]}
-								focusedStyle={{
-									backgroundColor: "rgba(229, 9, 20, 0.15)",
-									transform: [{ scale: focusScale }],
-								}}
-								onPress={handleShare}
-								activeOpacity={0.75}>
-								<Ionicons
-									name="share-social-outline"
-									size={sp(21)}
-									color="#cbd5e1"
-								/>
-								<Text
-									style={[styles.subActionLabel, { fontSize: sp(12) }]}>
-									Paylaş
-								</Text>
-							</TVPressable>
-
-							<TVPressable
-								style={[
-									styles.subActionItem,
-									{
-										gap: sp(6),
-										paddingHorizontal: sp(12),
-										paddingVertical: sp(6),
-										borderRadius: sp(10),
-									},
-								]}
-								focusedStyle={{
-									backgroundColor: "rgba(229, 9, 20, 0.15)",
-									transform: [{ scale: focusScale }],
-								}}
-								onPress={handleNavigateDetails}
-								activeOpacity={0.75}>
-								<Ionicons
-									name="information-circle-outline"
-									size={sp(21)}
-									color="#cbd5e1"
-								/>
-								<Text
-									style={[styles.subActionLabel, { fontSize: sp(12) }]}>
-									Detaylar
-								</Text>
-							</TVPressable>
-						</View>
+						{renderQuickActions(false)}
 							</View>
 						</View>
+					) : null}
+					{/* 4b. TELEFON alt blokları: tam genişlikte status/grid/CTA/quick */}
+					{isPhone ? renderPhoneBottom() : null}
 
-						{/* Home Bar Indicator Spacer — telefonda var, TV'de anlamsız. */}
+					{/* Home Bar Indicator Spacer — telefonda var, TV'de anlamsız. */}
 						{!isTV ? <View style={styles.homeIndicatorBar} /> : null}
 					</ScrollView>
 				</Pressable>
@@ -1193,7 +1467,6 @@ export default function QuickPreviewModal({
 				onClose={() => setIsListSelectVisible(false)}
 				onStatusChanged={(newStatus, newFav) => {
 					setActiveStatus(newStatus);
-					setInList(newStatus === "planned");
 					if (newFav !== undefined) setIsFav(newFav);
 				}}
 			/>
@@ -1228,6 +1501,21 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(255, 255, 255, 0.25)",
 		alignSelf: "center",
 		marginBottom: 10,
+	},
+	/* Telefon sağ-üst kapatma (X) — dragHandle ortada kalır, çakışmaz. */
+	phoneCloseBtn: {
+		position: "absolute",
+		top: 10,
+		right: 12,
+		width: 36,
+		height: 36,
+		borderRadius: 18,
+		backgroundColor: "rgba(255, 255, 255, 0.1)",
+		borderWidth: 1,
+		borderColor: "rgba(255, 255, 255, 0.15)",
+		justifyContent: "center",
+		alignItems: "center",
+		zIndex: 10,
 	},
 
 	/* Toast Banner (Screen 2) */
