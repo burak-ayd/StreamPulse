@@ -9,20 +9,24 @@ import {
 	Linking,
 	StyleSheet,
 	Text,
-	TouchableOpacity,
 	View,
 } from "react-native";
 
-import { formatTime } from "@/utils/formatters";
 import { isSeriesContent } from "@/utils/mediaType";
 import ContinueWatchingCard from "./ContinueWatchingCard";
 
 /**
- * ActionButtons – Mockup tasarımındaki birleşik eylem bölümü.
+ * ActionButtons – Detay ekranının eylem satırı.
  *
- * İçerir:
- * 1. "Hemen Şimdi İzle" / "Kaldığın Yerden Devam Et" / "Tekrar İzle" — Tam genişlik kırmızı CTA butonu
- * 2. 4'lü grid: Listem, Fragman, Favori, İndir
+ * Tüm butonlar (Oynat dahil) TEK satırda ve BİREBİR AYNI boyutta:
+ * Oynat · Listem · Favori · İndir · Fragman
+ *
+ * "Oynat" yalnızca rengiyle (kırmızı zemin) öne çıkar — boyutuyle değil.
+ * Eskiden ayrı bir dev CTA bandı vardı ve yanındaki kartlarla arasındaki
+ * boyut farkı ekranı ikiye bölüyordu.
+ *
+ * İzleme sürerken bu satırın yerine `ContinueWatchingCard` gelir; sezon,
+ * bölüm ve kalan süre bilgisi orada durur.
  */
 export default function ActionButtons({
 	content,
@@ -278,175 +282,143 @@ export default function ActionButtons({
 	const surfaceBorder = theme === "dark" ? "#232A36" : "#E2E8F0";
 
 	/**
-	 * Buton metinleri.
+	 * Buton metinleri — tile'a sığacak şekilde KISA tutuldu.
 	 *
-	 * Varsayılan "Oynat": TV'de CTA 300dp genişliğinde yan yana duruyor ve
-	 * "Hemen Şimdi İzle" (14 karakter) sığmıyor — kırpılıyordu. Tek
-	 * kelime hem sığar hem de ikonu (oynat üçgeni) tek başına anlatır.
-	 * Ana sayfadaki hero butonu da zaten "Oynat" diyor; iki ekran artık
-	 * aynı kelimeyi kullanıyor.
+	 * ⚠️ Bu buton artık diğer eylem kartlarıyla AYNI boyutta bir "tile".
+	 * Eskiden CTA'nın kendi genişliği/padding'i vardı ve yanındaki kartlardan
+	 * belirgin şekilde büyüktü; "Oynat" ekranı boydan boya kaplayan bir
+	 * bant, altındaki kartlar ise küçük sütunlar gibi duruyordu. Aynı
+	 * satıra alınınca uzun metinler sığmadı, aşağıda kısaltıldı.
 	 *
-	 * Durum metinleri ("Tekrar İzle", "Kaldığın Yerden Devam Et") korunur —
-	 * bunlar kullanıcıya ne olacağını anlatır, kısaltılamaz.
+	 * Bilgi kaybolmadı: "Kaldığın Yerden Devam Et" durumunda o metin hiç
+	 * üretilmiyor; o satır yerine `ContinueWatchingCard` render ediliyor ve
+	 * sezon/bölüm/kalan süre orada duruyor.
+	 *
+	 * Kısaltma ilkesi: ikon anlamı zaten taşıyor (`play` / `refresh`),
+	 * metin yalnızca ikonu tamamlıyor.
 	 */
 	let buttonTitle = "Oynat";
-	let buttonSubtitle = null;
 	let buttonIcon = "play";
 
 	if (isCompleted) {
-		buttonTitle = "Tekrar İzle";
+		buttonTitle = "Tekrar";
 		buttonIcon = "refresh";
-		buttonSubtitle = isSeries ? "1. Sezon 1. Bölümden Başlat" : "Baştan İzle";
-	} else if (isInProgress) {
-		buttonTitle = "Kaldığın Yerden Devam Et";
-		buttonIcon = "play";
-		if (isSeries && watchProgress.season && watchProgress.episode) {
-			buttonSubtitle = `${watchProgress.season}. Sezon ${watchProgress.episode}. Bölüm • ${formatTime(watchProgress.currentTime)}`;
-		} else if (watchProgress.currentTime > 0) {
-			buttonSubtitle = `${formatTime(watchProgress.currentTime)}'den devam et`;
-		}
 	}
 
 	/**
-	 * TV yerleşimi: CTA ve 4'lü eylem grid'i YAN YANA.
+	 * Eylem listesi: "Oynat" da diğerleriyle AYNI satırda, AYNI boyutta.
 	 *
-	 * Önceki denemede CTA kendi satırında tam genişlikteydi ve TV'de ekranı
-	 * boydan boya kaplayan dev bir kırmızı bant oluyordu. Grid'i yanına
-	 * alınca kartlara ~200dp düştü ve "İzleniyor/Favori/İndir/Fragman"
-	 * etiketleri kırpıldı — kumandada hedefi belli olmayan düğmeler.
-	 *
-	 * Çözüm: CTA'ya sabit bir taban verip kalanı grid'e bırakmak.
-	 * 1080p'de ölçek 1.2, sütun ≈864dp: CTA `sp(250)` ≈300dp, kalan
-	 * ≈550dp. Grid kartları `flexBasis: "22%"` + `flexGrow` ile eşit
-	 * paylaşır → kart başına ≈125dp; en uzun etiket "Tamamlandı"
-	 * (10 karakter) `sp(12.5)` ≈15dp puntoyla ≈78dp — rahat sığar.
-	 *
-	 * `flexShrink: 0` CTA'nın grid altına sıkışmasını engeller; grid
-	 * `flexWrap` ile yine de taşarsa alt satıra iner, ekran taşmaz.
+	 * Nasıl eşitleniyor:
+	 * - Tüm kartlar `styles.tile` tabanını paylaşır: aynı padding, aynı
+	 *   borderRadius, aynı ikon boyutu, aynı etiket puntosu.
+	 * - `flexBasis` + `flexGrow: 1` her kartı aynı tabana oturtur ve kalan
+	 *   payı eşit dağıtır; `flexShrink: 1` taşmada küçültür.
+	 * - `flexWrap` yedeği duruyor: TV'de ölçek 1.2 ile 5 kart sığmazsa
+	 *   alt satıra iner — yine aynı boyutta.
 	 */
-	const primaryButtonStyle = [
-		styles.primaryButton,
-		{
-			gap: sp(10),
-			paddingVertical: sp(15),
-			paddingHorizontal: sp(24),
-			borderRadius: sp(14),
-		},
-		isTV && {
-			flexGrow: 0,
-			flexShrink: 0,
-			width: sp(250),
-		},
+	const tileActions = [
+		// ⚠️ `isInProgress` ikilisi: o durumda `ContinueWatchingCard` render
+		// ediliyor ve kart zaten "Devam Et" işlevini taşıyor. Play tile'ı da
+		// eklenseydi aynı anda hem kart hem 26 karakterlik
+		// "Kaldığın Yerden Devam Et" butonu görünürdü — hem çift işlev,
+		// hem de tile'a sığmayan metin.
+		...(isInProgress
+			? []
+			: [
+					{
+						key: "play",
+						icon: buttonIcon,
+						label: buttonTitle,
+						/** Oynat birincil görünür — kırmızı zemin, ama aynı boyutta. */
+						color: "#ffffff",
+						onPress: handleWatch,
+						primary: true,
+					},
+				]),
+		...gridActions,
 	];
+
+	/** Kart tabanı: 5 kart telefonda tek satıra sığar, TV'de gerekirse sarar. */
+	const tileBasis = isTV ? "17%" : "18%";
 
 	return (
 		<View style={[styles.container, { marginBottom: sp(18), gap: sp(12) }]}>
-			<View style={[styles.actionRow, isTV && styles.actionRowTv]}>
-				{/* Kaldığın Yerden Devam Et Kartı VEYA Ana CTA Butonu */}
-				{isInProgress ? (
-					<ContinueWatchingCard
-						content={content}
-						watchProgress={watchProgress}
-						isSeries={isSeries}
-						onPress={handleWatch}
-					/>
-				) : (
+			{/* Kaldığın Yerden Devam Et kartı — yalnızca izleme sürerken */}
+			{isInProgress && (
+				<ContinueWatchingCard
+					content={content}
+					watchProgress={watchProgress}
+					isSeries={isSeries}
+					onPress={handleWatch}
+				/>
+			)}
+
+			{/* Tek satır, tek ölçek: Oynat + eylem kartları */}
+			<View style={[styles.gridRow, { gap: sp(10), flexWrap: "wrap" }]}>
+				{tileActions.map((action) => (
 					<TVPressable
-						autoFocus={true}
+						key={action.key}
+						autoFocus={Boolean(action.primary)}
 						style={({ focused }) => [
-							primaryButtonStyle,
-							isCompleted && styles.primaryButtonCompleted,
+							styles.tile,
+							{
+								backgroundColor: action.primary
+									? isCompleted
+										? "#1e293b"
+										: "#E50914"
+									: surfaceBg,
+								borderColor: action.primary
+									? isCompleted
+										? "rgba(255, 255, 255, 0.15)"
+										: "#E50914"
+									: action.active
+										? "rgba(229,9,20,0.3)"
+										: surfaceBorder,
+								gap: sp(6),
+								paddingVertical: sp(13),
+								paddingHorizontal: sp(6),
+								borderRadius: sp(13),
+								// ⚠️ Boyut eşitliği: flexBasis + flexGrow
+								flexBasis: tileBasis,
+								flexGrow: 1,
+								flexShrink: 1,
+								minWidth: sp(58),
+							},
 							focused && {
 								borderWidth: 2,
-								borderColor: "#FFFFFF",
+								borderColor: "#E50914",
+								backgroundColor: action.primary
+									? isCompleted
+										? "#0f172a"
+										: "#ff1111"
+									: "rgba(229, 9, 20, 0.18)",
 								transform: [{ scale: focusScale }],
 							},
 						]}
-						onPress={handleWatch}
+						onPress={action.onPress}
 						activeOpacity={0.85}>
-						<Ionicons name={buttonIcon} size={sp(22)} color="#ffffff" />
-						<View style={styles.primaryButtonTextWrapper}>
-							<Text
-								style={[
-									styles.primaryButtonText,
-									{ fontSize: sp(17) },
-								]}>
-								{buttonTitle}
-							</Text>
-							{buttonSubtitle ? (
-								<Text
-									style={[
-										styles.primaryButtonSubtext,
-										{ fontSize: sp(12) },
-									]}>
-									{buttonSubtitle}
-								</Text>
-							) : null}
-						</View>
-					</TVPressable>
-				)}
-
-				{/* 4-Column Action Grid — TV'de CTA'nın yanında, esnek */}
-				<View
-					style={[
-						styles.gridRow,
-						{
-							gap: sp(10),
-							flex: isTV ? 1 : undefined,
-							minWidth: 0,
-							flexWrap: isTV ? "wrap" : "nowrap",
-						},
-					]}>
-					{gridActions.map((action) => (
-						<TVPressable
-							key={action.key}
-							style={({ focused }) => [
-								styles.gridItem,
+						<Ionicons
+							name={action.icon}
+							size={sp(21)}
+							color={action.color}
+						/>
+						<Text
+							style={[
+								styles.gridLabel,
 								{
-									backgroundColor: surfaceBg,
-									borderColor: action.active
-										? "rgba(229,9,20,0.3)"
-										: surfaceBorder,
-									gap: sp(6),
-									paddingVertical: sp(13),
-									paddingHorizontal: sp(8),
-									borderRadius: sp(13),
-									// TV: kart tabanı yok, esnek — grid kalan
-									// genişliği eşit paylaşır, taşarsa alt satır.
-									flexBasis: isTV ? "22%" : undefined,
-									flexGrow: isTV ? 1 : undefined,
-									minWidth: isTV ? sp(92) : undefined,
-								},
-								focused && {
-									borderWidth: 2,
-									borderColor: "#E50914",
-									backgroundColor: "rgba(229, 9, 20, 0.18)",
-									transform: [{ scale: focusScale }],
-								},
-							]}
-							onPress={action.onPress}
-							activeOpacity={0.7}>
-							<Ionicons
-								name={action.icon}
-								size={sp(21)}
-								color={action.color}
-							/>
-							<Text
-								style={[
-									styles.gridLabel,
-									{
-										color: action.active
+									color: action.primary
+										? "#ffffff"
+										: action.active
 											? colors.primary
 											: colors.textSecondary,
-										fontSize: sp(12.5),
-									},
-								]}
-								numberOfLines={1}>
-								{action.label}
-							</Text>
-						</TVPressable>
-					))}
-				</View>
+									fontSize: sp(12.5),
+								},
+							]}
+							numberOfLines={1}>
+							{action.label}
+						</Text>
+					</TVPressable>
+				))}
 			</View>
 		</View>
 	);
@@ -454,54 +426,35 @@ export default function ActionButtons({
 
 const styles = StyleSheet.create({
 	container: {},
-	/** CTA ve eylem grid'i TV'de yan yana durur. */
-	actionRow: {},
-	actionRowTv: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 12,
-	},
-	primaryButton: {
-		backgroundColor: "#E50914",
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		shadowColor: "#E50914",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.45,
-		shadowRadius: 12,
-		elevation: 8,
-	},
-	primaryButtonCompleted: {
-		backgroundColor: "#1e293b",
-		shadowColor: "#0f172a",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.15)",
-	},
-	primaryButtonTextWrapper: {
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	primaryButtonText: {
-		color: "#ffffff",
-		fontWeight: "800",
-		letterSpacing: 0.3,
-	},
-	primaryButtonSubtext: {
-		color: "rgba(255, 255, 255, 0.85)",
-		fontWeight: "600",
-		marginTop: 2,
-	},
+
+	/**
+	 * Eylem satırı: Oynat dahil TÜM butonlar burada, eşit boyutta.
+	 *
+	 * `alignItems: "stretch"` — etiket uzunlukları farklı olsa da kartlar
+	 * aynı yükseklikte dursun.
+	 */
 	gridRow: {
 		flexDirection: "row",
+		alignItems: "stretch",
 	},
-	gridItem: {
-		flex: 1,
+
+	/**
+	 * TEK kart stili — hem "Oynat" hem eylemler bunu kullanıyor.
+	 *
+	 * Eski `primaryButton` + `gridItem` ikilisi iki ayrı ölçek üretiyordu:
+	 * CTA `paddingVertical: 15` / `paddingHorizontal: 24` / `fontSize: 17`
+	 * ile dev bir bant, kartlar `13` / `8` / `12.5` ile küçük sütunlar.
+	 * Artık ikisi de buradan ölçülüyor; boyut farkı kalmadı.
+	 */
+	tile: {
+		flexDirection: "column",
 		alignItems: "center",
 		justifyContent: "center",
 		borderWidth: 1,
 	},
+
 	gridLabel: {
-		fontWeight: "500",
+		fontWeight: "600",
+		textAlign: "center",
 	},
 });
