@@ -1,6 +1,6 @@
 import TVPressable from "@components/common/TVPressable";
 import React, { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useThemeContext } from "@context/ThemeContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
 

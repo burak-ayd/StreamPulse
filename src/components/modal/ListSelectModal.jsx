@@ -8,17 +8,13 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import React, { useEffect, useState } from "react";
 import {
-	Dimensions,
 	Modal,
 	Pressable,
 	StyleSheet,
 	Text,
-	TouchableOpacity,
 	Vibration,
 	View,
 } from "react-native";
-
-const { width } = Dimensions.get("window");
 
 const LIST_OPTIONS = [
 	{
@@ -78,7 +74,7 @@ export default function ListSelectModal({
 
 		try {
 			Vibration.vibrate(30);
-		} catch (e) {}
+		} catch (_e) {}
 
 		return () => {
 			isMounted = false;

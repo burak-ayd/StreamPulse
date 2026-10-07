@@ -11,7 +11,6 @@ import {
 	ScrollView,
 	StyleSheet,
 	Text,
-	TouchableOpacity,
 	View,
 } from "react-native";
 import { getDownloads, saveDownloadItem } from "@/utils/storage";

@@ -3,10 +3,8 @@ import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import {
 	formatContentType,
-	formatRating,
 	formatRuntime,
 	formatStatus,
-	formatVoteCount,
 	formatYear,
 	getCountryFlag,
 } from "@utils/formatters";

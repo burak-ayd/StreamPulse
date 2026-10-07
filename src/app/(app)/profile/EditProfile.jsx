@@ -3,7 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { useThemeContext } from "@/context/ThemeContext";
 import { getUserProfile, saveUserProfile } from "@/utils/storage";
-import DateTimePicker from "@expo/ui/community/datetime-picker";
+import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -21,7 +21,6 @@ import {
 	Switch,
 	Text,
 	TextInput,
-	TouchableOpacity,
 	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";

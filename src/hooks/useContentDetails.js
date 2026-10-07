@@ -1,5 +1,5 @@
 import { fetchContentDetails } from "@/services/api";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 /**
  * Custom hook to fetch content details from API
@@ -11,7 +11,13 @@ export function useContentDetails(contentId) {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 
-	const fetchContent = async () => {
+	/*
+	 * `useCallback` ile sarılıyor çünkü `useEffect` bağımlılık dizisine
+	 * ekleniyor. Sarılmadan eklenirse fonksiyon her render'da yeni
+	 * kimlik kazanır, effect her render'da çalışır ve sonsuz döngüye
+	 * girerdi. Tek gerçek bağımlılık `contentId`.
+	 */
+	const fetchContent = useCallback(async () => {
 		try {
 			setLoading(true);
 			setError(null);
@@ -28,13 +34,13 @@ export function useContentDetails(contentId) {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [contentId]);
 
 	useEffect(() => {
 		if (contentId) {
 			fetchContent();
 		}
-	}, [contentId]);
+	}, [contentId, fetchContent]);
 
 	return {
 		content,

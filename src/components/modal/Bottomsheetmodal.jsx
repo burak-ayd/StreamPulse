@@ -169,6 +169,17 @@ const BottomSheetModal = ({
 				animateClose();
 			}
 		}
+	/*
+	 * `translateY` bilinçli olarak bağımlılık dizisinde YOK.
+	 *
+	 * O bir `useRef(...).current` — React state değil, bir örnek. effect
+	 * içinde `translateY.setValue(...)` çağrılıyor (bir değer okunmuyor,
+	 * sadece yazılıyor), yani effect'in veriye bağımlılığı yok. Diziye
+	 * eklemek de doğru olmazdı: kural `useRef(...).current` okumasını
+	 * "render sırasında ref okunuyor" sayıp `react-hooks/refs` hatası
+	 * üretiyor (ölçüldü: 2 hata ekleniyordu).
+	 */
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [visible, isAuto, animateOpen, animateClose, measuredHeight]);
 
 	useEffect(() => {
