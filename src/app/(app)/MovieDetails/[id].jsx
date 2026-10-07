@@ -762,9 +762,11 @@ export default function MovieDetailsScreen() {
 								{
 									backgroundColor: surfaceBg,
 									borderColor: surfaceBorder,
-									// TV'de "Ses & Altyazı:" etiketi ekranın sol
-									// ucuna, rozetler sağ ucuna savruluyordu;
-									// ikisi tek satırda, aralarında sabit boşlukla.
+									// Etiket + rozetler tek satırda, aralarında
+									// SABİT boşluk. `space-between` olsaydı
+									// rozetler sağ uca savrulup telefon ekranını
+									// boydan boya kaplayan bir boşluk bırakıyordu
+									// (bkz. `styles.audioSubtitleRow` notu).
 									flexDirection: "row",
 									alignItems: "center",
 									gap: sp(12),
@@ -1273,14 +1275,30 @@ const styles = StyleSheet.create({
 	contentWrapper: {},
 
 	/* Ses & Altyazı Bilgi Çubuğu */
+	/**
+	 * ⚠️ `justifyContent: "space-between"` BURADA OLMAMALI.
+	 *
+	 * Bu değer, satır yorumunun çözdüğü sorunun ta kendisi: "Ses & Altyazı:"
+	 * etiketi ekranın sol ucuna, rozetler sağ ucuna savruluyor, aralarında
+	 * telefon ekranını boydan boya kaplayan bir boşluk kalıyordu. Satıra
+	 * `gap` eklemek yetmiyor — `gap` yalnızca öğeler YAN YANA dururken
+	 * işe yarar, `space-between` onları uçlara yapıştırdığı için aradaki
+	 * mesafeyi kapatmaz.
+	 *
+	 * Çözüm: `space-between` kaldırıldı. Etiket sola yaslanır, rozetler
+	 * etiketin hemen sağında sabit `gap` ile durur; sığmayan rozetler
+	 * `flexWrap` ile alt satıra iner (taşma yok).
+	 */
 	audioSubtitleRow: {
 		flexDirection: "row",
-		justifyContent: "space-between",
+		flexWrap: "wrap",
 		borderWidth: 1,
 	},
 	audioLeft: {
 		flexDirection: "row",
 		alignItems: "center",
+		/** Etiket ezilmesin, fazla rozetler alt satıra insin. */
+		flexShrink: 0,
 	},
 	audioLabel: {
 		fontWeight: "600",
@@ -1288,6 +1306,9 @@ const styles = StyleSheet.create({
 	audioChips: {
 		flexDirection: "row",
 		flexWrap: "wrap",
+		/** Tek satıra sığdığında sağa yaslı, sığmazsa kendi içinde sarar. */
+		justifyContent: "flex-end",
+		flexShrink: 1,
 	},
 	audioChip: {
 		borderWidth: 1,
