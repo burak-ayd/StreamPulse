@@ -6,6 +6,7 @@ import {
 	oynatilabilirAkislaraCevir,
 } from "@/services/liveApi";
 import { addToWatchHistory, getContinueWatching } from "@/utils/storage";
+import { resetBrightness } from "@/utils/deviceControls";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -447,6 +448,19 @@ export default function PlayerScreen() {
 		kaynakHatasiMesaji,
 	]);
 	const handleClose = useCallback(() => {
+		/*
+		 * ⚠️ Pencere parlaklığını oynatıcıdan ÇIKARKEN temizle.
+		 *
+		 * `window.attributes.screenBrightness` yalnızca Activity yok
+		 * olunca sıfırlanır; ekran kapanırken Activity yaşamaya devam
+		 * eder, bu yüzden ekran çıkışta kısık kalıyordu.
+		 *
+		 * `VideoPlayer`'ın unmount temizliği de bunu yapıyor; burada
+		 * ikinci bir güvence. Expo Router `Stack` ekranı mount durumunu
+		 * KORUYABİLDİĞİ için unmount tetiklenmeyebilir. `resetBrightness`
+		 * idempotent olduğundan iki kez çağrılmak zararsızdır.
+		 */
+		resetBrightness();
 		ScreenOrientation.lockAsync(
 			ScreenOrientation.OrientationLock.PORTRAIT_UP,
 		).catch(() => {});

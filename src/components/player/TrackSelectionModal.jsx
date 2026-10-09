@@ -46,6 +46,8 @@ export default function TrackSelectionModal({
 				return "Altyazı Seçimi";
 			case "audio":
 				return "Ses / Dublaj Seçimi";
+			case "tracks":
+				return "Video ve Ses Parçaları";
 			default:
 				return "Seçenekler";
 		}
@@ -59,6 +61,8 @@ export default function TrackSelectionModal({
 				return "chatbubble-ellipses-outline";
 			case "audio":
 				return "volume-high-outline";
+			case "tracks":
+				return "options-outline";
 			default:
 				return "options-outline";
 		}
@@ -101,6 +105,27 @@ export default function TrackSelectionModal({
 					<ScrollView
 						style={styles.contentList}
 						showsVerticalScrollIndicator={false}>
+						{/*
+						 * ⭐ "tracks" GÖRÜNÜMÜ (kullanıcı isteği, sorun 6).
+						 *
+						 * Referans uygulamada video ve ses parçaları TEK ekranda,
+						 * İKİ SÜTUN hâlinde gösterilir: sol "Video parçaları",
+						 * sağ "Ses parçaları". Ayrı ayrı modal açmak kullanıcıyı
+						 * 2-3 ekran arasında gezdiriyordu.
+						 *
+						 * Bu blok yalnızca DÜZEN sağlar; ses listesi aşağıdaki
+						 * mevcut bloğun KENDİSİ render edilir, ikinci kez
+						 * render edilmez (aksi hâlde aynı `onSelectAudioTrack`
+						 * iki kez tetiklenirdi).
+						 */}
+						{type === "tracks" && (
+							<View style={styles.tracksHeaderRow}>
+								<Text style={styles.tracksColumnLabel}>
+									Video parçaları
+								</Text>
+								<Text style={styles.tracksColumnLabel}>Ses parçaları</Text>
+							</View>
+						)}
 						{/* 1. SOURCES SELECTION */}
 						{type === "sources" && (
 							<View>
@@ -370,7 +395,7 @@ export default function TrackSelectionModal({
 						)}
 
 						{/* 3. AUDIO TRACKS SELECTION */}
-						{type === "audio" && (
+						{(type === "audio" || type === "tracks") && (
 							<View>
 								{audioTracks.length === 0 ? (
 									<View style={styles.emptyContainer}>
@@ -512,6 +537,22 @@ const styles = StyleSheet.create({
 	},
 	contentList: {
 		marginBottom: 8,
+	},
+	/*
+	 * İki sütunlu başlık (video | ses). `flex: 1` her sütuna eşit genişlik
+	 * verir; ses listesi tam genişlikte çizilir ama başlıkla hizalanmış
+	 * görünür — kullanıcı hangi listenin hangi başlığa ait olduğunu anlar.
+	 */
+	tracksHeaderRow: {
+		flexDirection: "row",
+		gap: 24,
+		paddingBottom: 8,
+	},
+	tracksColumnLabel: {
+		flex: 1,
+		color: "#FFFFFF",
+		fontSize: 17,
+		fontWeight: "700",
 	},
 	optionItem: {
 		flexDirection: "row",

@@ -66,6 +66,33 @@ const TVPressable = forwardRef(function TVPressable(
 		nextFocusDown,
 		nextFocusLeft,
 		nextFocusRight,
+		/**
+		 * `false` → dokunuş bırakılana kadar başka bir görünüm bu
+		 * düğmenin responder'ını ALAMAZ.
+		 *
+		 * ⚠️ Neden gerekli (kullanıcı: "tablette player tuşlarına
+		 * basılmıyor, basıldığında tepki veriyor ama menüler açılmıyor").
+		 *
+		 * Oynatıcıda tüm ekranı kaplayan bir `PanResponder` yüzeyi var ve
+		 * `onMoveShouldSetPanResponder` koşulsuz `true` dönüyor. React
+		 * Native'de MOVE olaylarında tüm hiyerarşi yeniden görüşür: bir
+		 * düğmeye dokununca düğme responder olur, ama parmak birkaç piksel
+		 * oynayınca üstteki `PanResponder` da hak iddia eder ve RN
+		 * düğmeye `onResponderTerminationRequest` sorar. `Pressable`
+		 * buna varsayılan `true` (izin ver) der, düğme responder'ı
+		 * KAYBEDER ve `onPress` iptal edilir.
+		 *
+		 * Dış görünüm: düğmeye basılıyor (pressed stili çalışıyor) ama
+		 * bırakınca hiçbir şey olmuyor. Çift dokunma ise video yüzeyinde
+		 * başladığı için hiçbir çocuk responder'ı olmadığından çalışıyor —
+		 * bu yüzden "sadece çift dokunma kontrolleri çalışıyor".
+		 *
+		 * ⚠️ Varsayılan `undefined` bırakıldı (React Native'ın kendi
+		 * davranışı): `ScrollView` içindeki düğmelerde `false`, listeden
+		 * kaydırmayı engellerdi. Yalnızca üstte `PanResponder` bulunan
+		 * katmanlarda (oynatıcı) açıkça `false` verilir.
+		 */
+		cancelable,
 		...props
 	},
 	ref,
@@ -157,6 +184,7 @@ const TVPressable = forwardRef(function TVPressable(
 			}}
 			onPress={handlePress}
 			onLongPress={onLongPress}
+			cancelable={cancelable}
 			style={({ pressed }) => {
 				const resolvedStyle =
 					typeof style === "function"

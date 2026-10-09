@@ -1,0 +1,7 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "name": "StreamPulseScreenControl",
+    "modules": ["expo.modules.screencontrol.ScreenControlModule"]
+  }
+}
