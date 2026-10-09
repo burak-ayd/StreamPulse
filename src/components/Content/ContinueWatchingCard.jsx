@@ -2,7 +2,7 @@ import LanguageBadge from "@/components/common/LanguageBadge";
 import TVPressable from "@/components/common/TVPressable";
 import { resolvePluginName } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
+import Image from "@/components/common/SmartImage";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 function formatTime(seconds) {

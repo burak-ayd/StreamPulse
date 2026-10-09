@@ -52,7 +52,7 @@ import {
 import { ColorsM3, ScreenGutter } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
+import Image from "@/components/common/SmartImage";
 import {
 	Stack,
 	useLocalSearchParams,

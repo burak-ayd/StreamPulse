@@ -1,6 +1,6 @@
 import TVPressable, { isTVPressSuppressed } from "@/components/common/TVPressable";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
+import Image from "@/components/common/SmartImage";
 import React, { useEffect } from "react";
 import {
 	BackHandler,
