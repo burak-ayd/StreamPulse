@@ -2,14 +2,14 @@
   "expo": {
     "name": "Stream Pulse",
     "slug": "StreamPulse",
-    "version": "1.0.10",
+    "version": "1.0.11",
     "orientation": "default",
-    "icon": "./assets/images/logo.png",
+    "icon": "./assets/icons/release/icon.png",
     "scheme": "streampulse",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "icon": "./assets/images/logo.png"
+      "icon": "./assets/icons/release/icon.png"
     },
     "android": {
       "permissions": [
@@ -19,11 +19,14 @@
         "REQUEST_INSTALL_PACKAGES",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
-        "android.permission.WAKE_LOCK"
+        "android.permission.WAKE_LOCK",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#0B0E14",
-        "foregroundImage": "./assets/images/logo.png"
+        "foregroundImage": "./assets/icons/release/icon-adaptive-foreground.png",
+        "backgroundImage": "./assets/icons/release/icon-adaptive-background.png",
+        "monochromeImage": "./assets/icons/release/icon-adaptive-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "tr.net.burakaydogan.StreamPulse",
@@ -45,17 +48,23 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/logo.png"
+      "favicon": "./assets/icons/release/favicon.png"
     },
     "plugins": [
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icons/release/notification-icon.png",
+          "color": "#FF3D5E"
+        }
+      ],
       "expo-router",
       [
         "expo-splash-screen",
         {
           "backgroundColor": "#0B0E14",
-          "image": "./assets/images/logo.png",
-          "imageWidth": 80
+          "image": "./assets/icons/release/splash-icon.png",
+          "imageWidth": 260
         }
       ],
       "expo-web-browser",
@@ -89,16 +98,16 @@
           "showVerboseWarnings": false,
           "tvosDeploymentTarget": "15.1",
           "removeFlipperOnAndroid": true,
-          "androidTVBanner": "./assets/images/logo.png",
-          "androidTVIcon": "./assets/images/logo.png",
+          "androidTVBanner": "./assets/icons/release/tv-banner.png",
+          "androidTVIcon": "./assets/icons/release/icon.png",
           "appleTVImages": {
-            "icon": "./assets/images/logo.png",
-            "iconSmall": "./assets/images/logo.png",
-            "iconSmall2x": "./assets/images/logo.png",
-            "topShelf": "./assets/images/logo.png",
-            "topShelf2x": "./assets/images/logo.png",
-            "topShelfWide": "./assets/images/logo.png",
-            "topShelfWide2x": "./assets/images/logo.png"
+            "icon": "./assets/icons/release/tv-icon.png",
+            "iconSmall": "./assets/icons/release/tv-icon-small.png",
+            "iconSmall2x": "./assets/icons/release/tv-icon-small-2x.png",
+            "topShelf": "./assets/icons/release/tv-topshelf.png",
+            "topShelf2x": "./assets/icons/release/tv-topshelf-2x.png",
+            "topShelfWide": "./assets/icons/release/tv-topshelf-wide.png",
+            "topShelfWide2x": "./assets/icons/release/tv-topshelf-wide-2x.png"
           }
         }
       ],
