@@ -1270,16 +1270,66 @@ export async function markEpisodeComplete(
 				updatedAt: new Date().toISOString(),
 			};
 
-			const currentList = await getContinueWatching();
-			const filtered = currentList.filter(
-				(i) => i.id !== nextItem.id && i.url !== nextItem.url,
-			);
-			const newList = [nextItem, ...filtered].slice(0, 50);
-			await AsyncStorage.setItem(
-				STORAGE_KEYS.CONTINUE_WATCHING,
-				JSON.stringify(newList),
-			);
-			return newList;
+			/*
+			 * ⚠️ SORUN 10 — `mutate` ATLANIYORDU.
+			 *
+			 * Bu blok `AsyncStorage.setItem` ile DOĞRUDAN yazıyordu.
+			 * Oysa aynı anahtarın (`CONTINUE_WATCHING`) tüm diğer
+			 * yazmaları `mutate` kuyruğundan geçiyor. Aradaki fark
+			 * sonucu DEĞİŞTİRİR:
+			 *
+			 *   1. YARIŞ: yukarıdaki `fetchPluginDetail` ağ çağrısı
+			 *      saniyeler sürebilir. O sırada `handleProgress` çalışıp
+			 *      `saveContinueWatching` yazar. Bu blok, o yazmadan
+			 *      ÖNCE okuduğu bayat listeyi üzerine yazar → kullanıcının
+			 *      o anki ilerlemesi ve yeni bölüm kaydı SİLİNİR. Bu,
+			 *      "yeni bölüm kaldığın yerden devam et'e otomatik gelmiyor"
+			 *      şikâyetinin kaynağıdır.
+			 *
+			 *   2. SENKRON METADATA KAYBI: `getContinueWatching` `_deleted`
+			 *      kayıtları filtreler; doğrudan `setItem` ile geri yazmak
+			 *      diskte hâlâ duran silinmiş kayıtları FİZİKSEL olarak da
+			 *      siler ve kalan kayıtların `_hlc` / `_deviceId`
+			 *      (senkron işaretleri) alanlarını düşürür.
+			 *
+			 * Çözüm: yazma `mutate` içine alınır ve mevcut kayıtların
+			 * senkron alanları korunur.
+			 */
+			return await mutate(STORAGE_KEYS.CONTINUE_WATCHING, async () => {
+				const raw = await AsyncStorage.getItem(
+					STORAGE_KEYS.CONTINUE_WATCHING,
+				);
+				const stored = raw ? JSON.parse(raw) : [];
+				const visible = Array.isArray(stored) ? stored : [];
+
+				const deviceId = await getDeviceId();
+				const hlc = getHlcNow();
+
+				// Yeni bölüm: senkron işaretleriyle birlikte yazılır.
+				const newItem = {
+					...nextItem,
+					_hlc: hlc,
+					_deviceId: deviceId,
+					_deleted: false,
+				};
+
+				const filtered = visible.filter(
+					(i) => i.id !== nextItem.id && i.url !== nextItem.url,
+				);
+				const newList = [newItem, ...filtered].slice(
+					0,
+					SIZE_CAPS.continue_watching || 50,
+				);
+				await AsyncStorage.setItem(
+					STORAGE_KEYS.CONTINUE_WATCHING,
+					JSON.stringify(newList),
+				);
+				notifyStorageChange(
+					STORAGE_KEYS.CONTINUE_WATCHING,
+					newList.filter((i) => !i._deleted),
+				);
+				return newList;
+			});
 		}
 
 		return await getContinueWatching();
