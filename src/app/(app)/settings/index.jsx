@@ -17,7 +17,7 @@ import {
 	getUserProfile,
 } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
+import Image from "@/components/common/SmartImage";
 import TVPressable from "@/components/common/TVPressable";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";

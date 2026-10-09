@@ -6,7 +6,7 @@ import {
 	useSkeletonColors,
 } from "@/components/common/Skeleton";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
+import Image from "@/components/common/SmartImage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMemo, useState } from "react";
 import {

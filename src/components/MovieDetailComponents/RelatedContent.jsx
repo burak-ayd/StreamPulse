@@ -3,7 +3,7 @@ import { useThemeContext } from "@context/ThemeContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { fetchRelatedContent as getRelatedApiContent } from "@/services/api";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
+import Image from "@/components/common/SmartImage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {

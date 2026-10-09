@@ -12,7 +12,7 @@ import { useThemeContext } from "@/context/ThemeContext";
 import TVPressable from "@components/common/TVPressable";
 import { ScreenGutter } from "@constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
+import Image from "@/components/common/SmartImage";
 import { StyleSheet, Text, View } from "react-native";
 
 // ─── Üst Çubuk ──────────────────────────────────────────────────

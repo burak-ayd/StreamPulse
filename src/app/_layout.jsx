@@ -8,8 +8,25 @@ import { Slot } from "expo-router";
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { startNetworkQualityWatch } from "@/utils/imageQuality";
 
 export default function RootLayout() {
+	/*
+	 * ⚠️ UYARLANABİLİR GÖRSEL KALİTESİ (sorun 6)
+	 *
+	 * "yavaş bağlantı hızında resimler tam yüklenmiyor" şikâyetinin
+	 * çözümü iki parçalıdır:
+	 *
+	 *   1. BAŞLANGIÇ TAHMİNİ — burada başlatılan izleyici, bağlantı
+	 *      hücreselse uygulamayı doğrudan düşük kaliteye alır.
+	 *   2. GERÇEK ÖLÇÜM — `SmartImage` her yüklemenin gerçek süresini
+	 *      raporlar; motor yavaşsa düşürür, hızlanınca yükseltir.
+	 *
+	 * İkinci parça olmadan uygulama yalnızca "hücresel = yavaş" varsayar
+	 * ve yavaş wifi'de küçük görsel göstermeye devam ederdi.
+	 */
+	useEffect(() => startNetworkQualityWatch(), []);
+
 	useEffect(() => {
 		async function lockTVOrientation() {
 			try {

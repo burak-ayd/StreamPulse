@@ -15,7 +15,7 @@ import {
 } from "@/utils/storage";
 import TVPressable from "@/components/common/TVPressable";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
+import Image from "@/components/common/SmartImage";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {

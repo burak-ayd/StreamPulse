@@ -2,7 +2,7 @@ import TVPressable from "@components/common/TVPressable";
 import { useThemeContext } from "@context/ThemeContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
+import Image from "@/components/common/SmartImage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {

@@ -39,7 +39,7 @@ import TVPressable from "@/components/common/TVPressable";
 import LanguageBadge from "@/components/common/LanguageBadge";
 import { languageOf, posterOf, ratingOf, yearOf } from "@/utils/contentMeta";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
+import Image from "@/components/common/SmartImage";
 import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 

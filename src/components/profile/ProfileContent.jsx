@@ -39,7 +39,7 @@ import {
 import TVPressable from "@components/common/TVPressable";
 import { resolvePluginName } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
+import Image from "@/components/common/SmartImage";
 import {
 	FlatList,
 	StyleSheet,
