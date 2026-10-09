@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!--
+    Boş manifest, ama DOSYANIN VAR OLMASI ZORUNLUDUR.
+
+    Android Gradle Plugin, `com.android.library` modülünde kaynak kökünde
+    manifest bekler; bulunamazsa "manifest merger failed" ile derleme
+    düşer. İzin bildirimi YAPILMAZ: modül kullanıcıdan hiçbir izin
+    istemez (parlaklık pencereye yazılır, ses `AudioManager` ile
+    ayarlanır ve bu ikisi de izinsizdir).
+  -->
+</manifest>

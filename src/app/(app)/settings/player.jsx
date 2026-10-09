@@ -1,10 +1,10 @@
-import { useTvMetrics } from "@/utils/tvMetrics";
-import { useThemeContext } from "@/context/ThemeContext";
-import { usePlayerSettings } from "@/context/PlayerSettingsContext";
-import { Ionicons } from "@react-native-vector-icons/ionicons";
 import TVPressable from "@/components/common/TVPressable";
+import { usePlayerSettings } from "@/context/PlayerSettingsContext";
+import { useThemeContext } from "@/context/ThemeContext";
+import { useTvMetrics } from "@/utils/tvMetrics";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback } from "react";
+import { useCallback } from "react";
 import {
 	Alert,
 	BackHandler,
@@ -25,10 +25,25 @@ const FONT_SIZE_OPTIONS = [
 ];
 
 const COLOR_OPTIONS = [
-	{ label: "Beyaz", value: "#FFFFFF", color: "#FFFFFF", textColor: "#000000" },
+	{
+		label: "Beyaz",
+		value: "#FFFFFF",
+		color: "#FFFFFF",
+		textColor: "#000000",
+	},
 	{ label: "Sarı", value: "#FFD600", color: "#FFD600", textColor: "#000000" },
-	{ label: "Yeşil", value: "#00E676", color: "#00E676", textColor: "#000000" },
-	{ label: "Camgöbeği", value: "#00E5FF", color: "#00E5FF", textColor: "#000000" },
+	{
+		label: "Yeşil",
+		value: "#00E676",
+		color: "#00E676",
+		textColor: "#000000",
+	},
+	{
+		label: "Camgöbeği",
+		value: "#00E5FF",
+		color: "#00E5FF",
+		textColor: "#000000",
+	},
 ];
 
 const BG_STYLE_OPTIONS = [
@@ -43,6 +58,7 @@ const SEEK_DURATION_OPTIONS = [
 	{ label: "10 sn", value: 10 },
 	{ label: "15 sn", value: 15 },
 	{ label: "30 sn", value: 30 },
+	{ label: "60 sn", value: 60 },
 ];
 
 const TIMEOUT_OPTIONS = [
@@ -57,6 +73,70 @@ const DEFAULT_LANG_OPTIONS = [
 	{ label: "İngilizce", value: "en" },
 	{ label: "Kapalı", value: "off" },
 ];
+
+const RESIZE_OPTIONS = [
+	{ label: "Sığdır", value: "contain" },
+	{ label: "Doldur", value: "cover" },
+	{ label: "Ger", value: "stretch" },
+];
+
+const SPEED_OPTIONS = [
+	{ label: "0.25×", value: 0.25 },
+	{ label: "0.5×", value: 0.5 },
+	{ label: "0.75×", value: 0.75 },
+	{ label: "Normal", value: 1 },
+	{ label: "1.25×", value: 1.25 },
+	{ label: "1.5×", value: 1.5 },
+	{ label: "1.75×", value: 1.75 },
+	{ label: "2×", value: 2 },
+];
+
+const SPEEDUP_DELAY_OPTIONS = [
+	{ label: "300 ms", value: 300 },
+	{ label: "500 ms", value: 500 },
+	{ label: "800 ms", value: 800 },
+	{ label: "1200 ms", value: 1200 },
+];
+
+/**
+ * Ayar anahtarı satırı — yeni bölümlerde tekrarı önler.
+ *
+ * ⚠️ `TVPressable` + `Switch` ikilisi kasıtlıdır: TV kumandasıyla
+ * gezinirken `Switch`'e odaklanmak zordur, bu yüzden satırın TAMAMI
+ * basılabilir ve `Switch` yalnızca görsel gösterge.
+ */
+function ToggleRow({ colors, icon, title, subtitle, value, onChange }) {
+	return (
+		<TVPressable
+			style={styles.toggleRow}
+			focusedStyle={styles.toggleRowFocused}
+			onPress={() => onChange(!value)}
+			accessibilityRole="switch"
+			accessibilityState={{ checked: Boolean(value) }}>
+			<View style={styles.toggleRowLeft}>
+				<Ionicons name={icon} size={20} color={colors.primary} />
+				<View style={styles.toggleTextContainer}>
+					<Text style={[styles.toggleTitle, { color: colors.text }]}>
+						{title}
+					</Text>
+					<Text
+						style={[
+							styles.toggleSubtitle,
+							{ color: colors.textSecondary },
+						]}>
+						{subtitle}
+					</Text>
+				</View>
+			</View>
+			<Switch
+				value={Boolean(value)}
+				onValueChange={(val) => onChange(val)}
+				trackColor={{ false: colors.border, true: colors.primary }}
+				thumbColor="#ffffff"
+			/>
+		</TVPressable>
+	);
+}
 
 export default function PlayerSettingsScreen() {
 	const { colors } = useThemeContext();
@@ -148,7 +228,11 @@ export default function PlayerSettingsScreen() {
 						onPress={handleReset}
 						style={styles.resetButton}
 						focusedStyle={styles.headerButtonFocused}>
-						<Text style={[styles.resetButtonText, { color: colors.primary }]}>
+						<Text
+							style={[
+								styles.resetButtonText,
+								{ color: colors.primary },
+							]}>
 							Sıfırla
 						</Text>
 					</TVPressable>
@@ -173,7 +257,10 @@ export default function PlayerSettingsScreen() {
 							<Text
 								style={[
 									styles.sectionHeader,
-									{ color: colors.textSecondary, paddingHorizontal: 0 },
+									{
+										color: colors.textSecondary,
+										paddingHorizontal: 0,
+									},
 								]}>
 								CANLI ALTYAZI ÖNİZLEME
 							</Text>
@@ -208,9 +295,12 @@ export default function PlayerSettingsScreen() {
 										style={[
 											styles.mockSubtitleText,
 											{
-												fontSize: settings.subtitleFontSize || 16,
+												fontSize:
+													settings.subtitleFontSize ||
+													16,
 												lineHeight: Math.round(
-													(settings.subtitleFontSize || 16) * 1.35,
+													(settings.subtitleFontSize ||
+														16) * 1.35,
 												),
 												color:
 													settings.subtitleTextColor ||
@@ -220,10 +310,13 @@ export default function PlayerSettingsScreen() {
 														? "rgba(0, 0, 0, 0.95)"
 														: "transparent",
 												textShadowRadius:
-													settings.subtitleTextShadow ? 3 : 0,
+													settings.subtitleTextShadow
+														? 3
+														: 0,
 											},
 										]}>
-										— Gerçek mutluluk sadece paylaşıldığında gerçektir.
+										— Gerçek mutluluk sadece paylaşıldığında
+										gerçektir.
 									</Text>
 								</View>
 							</View>
@@ -232,7 +325,11 @@ export default function PlayerSettingsScreen() {
 
 					{/* 1. BÖLÜM: ALTYAZI GÖRÜNÜMÜ */}
 					<View style={styles.section}>
-						<Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
+						<Text
+							style={[
+								styles.sectionHeader,
+								{ color: colors.textSecondary },
+							]}>
 							ALTYAZI GÖRÜNÜMÜ
 						</Text>
 
@@ -257,31 +354,37 @@ export default function PlayerSettingsScreen() {
 											styles.settingBlockTitle,
 											{ color: colors.text },
 										]}>
-										Yazı Boyutu ({settings.subtitleFontSize}px)
+										Yazı Boyutu ({settings.subtitleFontSize}
+										px)
 									</Text>
 								</View>
 								<View style={styles.chipsRow}>
 									{FONT_SIZE_OPTIONS.map((item) => {
 										const isSelected =
-											settings.subtitleFontSize === item.value;
+											settings.subtitleFontSize ===
+											item.value;
 										return (
 											<TVPressable
 												key={item.value}
 												style={[
 													styles.chip,
 													{
-														backgroundColor: isSelected
-															? colors.primary
-															: `${colors.border}40`,
+														backgroundColor:
+															isSelected
+																? colors.primary
+																: `${colors.border}40`,
 														borderColor: isSelected
 															? colors.primary
 															: colors.border,
 													},
 												]}
-												focusedStyle={styles.chipFocused}
+												focusedStyle={
+													styles.chipFocused
+												}
 												onPress={() =>
 													updateSettings({
-														subtitleFontSize: item.value,
+														subtitleFontSize:
+															item.value,
 													})
 												}
 												activeOpacity={0.7}>
@@ -292,9 +395,10 @@ export default function PlayerSettingsScreen() {
 															color: isSelected
 																? "#FFFFFF"
 																: colors.text,
-															fontWeight: isSelected
-																? "700"
-																: "500",
+															fontWeight:
+																isSelected
+																	? "700"
+																	: "500",
 														},
 													]}>
 													{item.label}
@@ -306,7 +410,10 @@ export default function PlayerSettingsScreen() {
 							</View>
 
 							<View
-								style={[styles.divider, { backgroundColor: colors.border }]}
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
 							/>
 
 							{/* Metin Rengi */}
@@ -328,7 +435,8 @@ export default function PlayerSettingsScreen() {
 								<View style={styles.colorRow}>
 									{COLOR_OPTIONS.map((item) => {
 										const isSelected =
-											settings.subtitleTextColor === item.value;
+											settings.subtitleTextColor ===
+											item.value;
 										return (
 											<TVPressable
 												key={item.value}
@@ -339,26 +447,36 @@ export default function PlayerSettingsScreen() {
 														borderColor: isSelected
 															? colors.primary
 															: colors.border,
-														borderWidth: isSelected ? 2 : 1,
+														borderWidth: isSelected
+															? 2
+															: 1,
 													},
 												]}
-												focusedStyle={styles.colorCardFocused}
+												focusedStyle={
+													styles.colorCardFocused
+												}
 												onPress={() =>
 													updateSettings({
-														subtitleTextColor: item.value,
+														subtitleTextColor:
+															item.value,
 													})
 												}
 												activeOpacity={0.7}>
 												<View
 													style={[
 														styles.colorCircle,
-														{ backgroundColor: item.color },
+														{
+															backgroundColor:
+																item.color,
+														},
 													]}>
 													{isSelected && (
 														<Ionicons
 															name="checkmark"
 															size={16}
-															color={item.textColor}
+															color={
+																item.textColor
+															}
 														/>
 													)}
 												</View>
@@ -369,9 +487,10 @@ export default function PlayerSettingsScreen() {
 															color: isSelected
 																? colors.primary
 																: colors.textSecondary,
-															fontWeight: isSelected
-																? "700"
-																: "500",
+															fontWeight:
+																isSelected
+																	? "700"
+																	: "500",
 														},
 													]}>
 													{item.label}
@@ -383,7 +502,10 @@ export default function PlayerSettingsScreen() {
 							</View>
 
 							<View
-								style={[styles.divider, { backgroundColor: colors.border }]}
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
 							/>
 
 							{/* Arka Plan Stili */}
@@ -405,25 +527,30 @@ export default function PlayerSettingsScreen() {
 								<View style={styles.chipsRow}>
 									{BG_STYLE_OPTIONS.map((item) => {
 										const isSelected =
-											settings.subtitleBgColor === item.value;
+											settings.subtitleBgColor ===
+											item.value;
 										return (
 											<TVPressable
 												key={item.value}
 												style={[
 													styles.chip,
 													{
-														backgroundColor: isSelected
-															? colors.primary
-															: `${colors.border}40`,
+														backgroundColor:
+															isSelected
+																? colors.primary
+																: `${colors.border}40`,
 														borderColor: isSelected
 															? colors.primary
 															: colors.border,
 													},
 												]}
-												focusedStyle={styles.chipFocused}
+												focusedStyle={
+													styles.chipFocused
+												}
 												onPress={() =>
 													updateSettings({
-														subtitleBgColor: item.value,
+														subtitleBgColor:
+															item.value,
 													})
 												}
 												activeOpacity={0.7}>
@@ -434,9 +561,10 @@ export default function PlayerSettingsScreen() {
 															color: isSelected
 																? "#FFFFFF"
 																: colors.text,
-															fontWeight: isSelected
-																? "700"
-																: "500",
+															fontWeight:
+																isSelected
+																	? "700"
+																	: "500",
 														},
 													]}>
 													{item.label}
@@ -448,7 +576,10 @@ export default function PlayerSettingsScreen() {
 							</View>
 
 							<View
-								style={[styles.divider, { backgroundColor: colors.border }]}
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
 							/>
 
 							{/* Metin Gölgesi */}
@@ -457,7 +588,8 @@ export default function PlayerSettingsScreen() {
 								focusedStyle={styles.toggleRowFocused}
 								onPress={() =>
 									updateSettings({
-										subtitleTextShadow: !settings.subtitleTextShadow,
+										subtitleTextShadow:
+											!settings.subtitleTextShadow,
 									})
 								}>
 								<View style={styles.toggleRowLeft}>
@@ -479,14 +611,17 @@ export default function PlayerSettingsScreen() {
 												styles.toggleSubtitle,
 												{ color: colors.textSecondary },
 											]}>
-											Açık renkli sahnelerde okunabilirliği artırır
+											Açık renkli sahnelerde
+											okunabilirliği artırır
 										</Text>
 									</View>
 								</View>
 								<Switch
 									value={Boolean(settings.subtitleTextShadow)}
 									onValueChange={(val) =>
-										updateSettings({ subtitleTextShadow: val })
+										updateSettings({
+											subtitleTextShadow: val,
+										})
 									}
 									trackColor={{
 										false: colors.border,
@@ -497,7 +632,10 @@ export default function PlayerSettingsScreen() {
 							</TVPressable>
 
 							<View
-								style={[styles.divider, { backgroundColor: colors.border }]}
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
 							/>
 
 							{/* Varsayılan Altyazı Dili */}
@@ -527,18 +665,22 @@ export default function PlayerSettingsScreen() {
 												style={[
 													styles.chip,
 													{
-														backgroundColor: isSelected
-															? colors.primary
-															: `${colors.border}40`,
+														backgroundColor:
+															isSelected
+																? colors.primary
+																: `${colors.border}40`,
 														borderColor: isSelected
 															? colors.primary
 															: colors.border,
 													},
 												]}
-												focusedStyle={styles.chipFocused}
+												focusedStyle={
+													styles.chipFocused
+												}
 												onPress={() =>
 													updateSettings({
-														defaultSubtitleLanguage: item.value,
+														defaultSubtitleLanguage:
+															item.value,
 													})
 												}
 												activeOpacity={0.7}>
@@ -549,9 +691,10 @@ export default function PlayerSettingsScreen() {
 															color: isSelected
 																? "#FFFFFF"
 																: colors.text,
-															fontWeight: isSelected
-																? "700"
-																: "500",
+															fontWeight:
+																isSelected
+																	? "700"
+																	: "500",
 														},
 													]}>
 													{item.label}
@@ -566,7 +709,11 @@ export default function PlayerSettingsScreen() {
 
 					{/* 2. BÖLÜM: OYNATICI DAVRANIŞLARI */}
 					<View style={styles.section}>
-						<Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
+						<Text
+							style={[
+								styles.sectionHeader,
+								{ color: colors.textSecondary },
+							]}>
 							OYNATICI AYARLARI
 						</Text>
 
@@ -597,25 +744,30 @@ export default function PlayerSettingsScreen() {
 								<View style={styles.chipsRow}>
 									{SEEK_DURATION_OPTIONS.map((item) => {
 										const isSelected =
-											settings.seekDuration === item.value;
+											settings.seekDuration ===
+											item.value;
 										return (
 											<TVPressable
 												key={item.value}
 												style={[
 													styles.chip,
 													{
-														backgroundColor: isSelected
-															? colors.primary
-															: `${colors.border}40`,
+														backgroundColor:
+															isSelected
+																? colors.primary
+																: `${colors.border}40`,
 														borderColor: isSelected
 															? colors.primary
 															: colors.border,
 													},
 												]}
-												focusedStyle={styles.chipFocused}
+												focusedStyle={
+													styles.chipFocused
+												}
 												onPress={() =>
 													updateSettings({
-														seekDuration: item.value,
+														seekDuration:
+															item.value,
 													})
 												}
 												activeOpacity={0.7}>
@@ -626,9 +778,10 @@ export default function PlayerSettingsScreen() {
 															color: isSelected
 																? "#FFFFFF"
 																: colors.text,
-															fontWeight: isSelected
-																? "700"
-																: "500",
+															fontWeight:
+																isSelected
+																	? "700"
+																	: "500",
 														},
 													]}>
 													{item.label}
@@ -640,7 +793,10 @@ export default function PlayerSettingsScreen() {
 							</View>
 
 							<View
-								style={[styles.divider, { backgroundColor: colors.border }]}
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
 							/>
 
 							{/* Varsayılan Ekran Boyutu */}
@@ -660,12 +816,10 @@ export default function PlayerSettingsScreen() {
 									</Text>
 								</View>
 								<View style={styles.chipsRow}>
-									{[
-										{ label: "Sığdır (Orjinal Oran)", value: "contain" },
-										{ label: "Doldur (Ekrana Yay)", value: "cover" },
-									].map((item) => {
+									{RESIZE_OPTIONS.map((item) => {
 										const isSelected =
-											settings.defaultResizeMode === item.value;
+											settings.defaultResizeMode ===
+											item.value;
 										return (
 											<TVPressable
 												key={item.value}
@@ -673,18 +827,22 @@ export default function PlayerSettingsScreen() {
 													styles.chip,
 													{
 														flex: 1,
-														backgroundColor: isSelected
-															? colors.primary
-															: `${colors.border}40`,
+														backgroundColor:
+															isSelected
+																? colors.primary
+																: `${colors.border}40`,
 														borderColor: isSelected
 															? colors.primary
 															: colors.border,
 													},
 												]}
-												focusedStyle={styles.chipFocused}
+												focusedStyle={
+													styles.chipFocused
+												}
 												onPress={() =>
 													updateSettings({
-														defaultResizeMode: item.value,
+														defaultResizeMode:
+															item.value,
 													})
 												}
 												activeOpacity={0.7}>
@@ -695,9 +853,10 @@ export default function PlayerSettingsScreen() {
 															color: isSelected
 																? "#FFFFFF"
 																: colors.text,
-															fontWeight: isSelected
-																? "700"
-																: "500",
+															fontWeight:
+																isSelected
+																	? "700"
+																	: "500",
 														},
 													]}>
 													{item.label}
@@ -709,7 +868,10 @@ export default function PlayerSettingsScreen() {
 							</View>
 
 							<View
-								style={[styles.divider, { backgroundColor: colors.border }]}
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
 							/>
 
 							{/* Kontrollerin Gizlenme Süresi */}
@@ -731,25 +893,30 @@ export default function PlayerSettingsScreen() {
 								<View style={styles.chipsRow}>
 									{TIMEOUT_OPTIONS.map((item) => {
 										const isSelected =
-											settings.controlsTimeout === item.value;
+											settings.controlsTimeout ===
+											item.value;
 										return (
 											<TVPressable
 												key={item.value}
 												style={[
 													styles.chip,
 													{
-														backgroundColor: isSelected
-															? colors.primary
-															: `${colors.border}40`,
+														backgroundColor:
+															isSelected
+																? colors.primary
+																: `${colors.border}40`,
 														borderColor: isSelected
 															? colors.primary
 															: colors.border,
 													},
 												]}
-												focusedStyle={styles.chipFocused}
+												focusedStyle={
+													styles.chipFocused
+												}
 												onPress={() =>
 													updateSettings({
-														controlsTimeout: item.value,
+														controlsTimeout:
+															item.value,
 													})
 												}
 												activeOpacity={0.7}>
@@ -760,9 +927,10 @@ export default function PlayerSettingsScreen() {
 															color: isSelected
 																? "#FFFFFF"
 																: colors.text,
-															fontWeight: isSelected
-																? "700"
-																: "500",
+															fontWeight:
+																isSelected
+																	? "700"
+																	: "500",
 														},
 													]}>
 													{item.label}
@@ -774,7 +942,10 @@ export default function PlayerSettingsScreen() {
 							</View>
 
 							<View
-								style={[styles.divider, { backgroundColor: colors.border }]}
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
 							/>
 
 							{/* Kaldığı Yerden Devam Et */}
@@ -805,7 +976,8 @@ export default function PlayerSettingsScreen() {
 												styles.toggleSubtitle,
 												{ color: colors.textSecondary },
 											]}>
-											Kaynak değişiminde ve tekrar açılışta süreyi korur
+											Kaynak değişiminde ve tekrar
+											açılışta süreyi korur
 										</Text>
 									</View>
 								</View>
@@ -821,6 +993,377 @@ export default function PlayerSettingsScreen() {
 									thumbColor="#ffffff"
 								/>
 							</TVPressable>
+						</View>
+					</View>
+
+					{/* 3. BÖLÜM: DOKUNMA VE HAREKET */}
+					<View style={styles.section}>
+						<Text
+							style={[
+								styles.sectionHeader,
+								{ color: colors.textSecondary },
+							]}>
+							DOKUNMA VE HAREKET
+						</Text>
+
+						<View
+							style={[
+								styles.settingsGroup,
+								{
+									backgroundColor: colors.cardBg,
+									borderColor: colors.border,
+								},
+							]}>
+							<ToggleRow
+								colors={colors}
+								icon="hand-left-outline"
+								title="Çift Dokunma ile Sarma"
+								subtitle="Sağa/sola çift dokunarak ileri/geri gider"
+								value={settings.doubleTapSeek !== false}
+								onChange={(val) =>
+									updateSettings({ doubleTapSeek: val })
+								}
+							/>
+
+							<View
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
+							/>
+
+							<ToggleRow
+								colors={colors}
+								icon="play-circle-outline"
+								title="Çift Dokunmada Duraklat"
+								subtitle="Ortadaki bölgeye çift dokunmak oynatmayı duraklatır/başlatır"
+								value={settings.doubleTapPause !== false}
+								onChange={(val) =>
+									updateSettings({ doubleTapPause: val })
+								}
+							/>
+
+							<View
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
+							/>
+
+							<ToggleRow
+								colors={colors}
+								icon="swap-horizontal-outline"
+								title="Yatay Sürükleme ile Sarma"
+								subtitle="Videoyu sağa/sola sürükleyerek konuma atlama"
+								value={settings.swipeSeek !== false}
+								onChange={(val) =>
+									updateSettings({ swipeSeek: val })
+								}
+							/>
+
+							<View
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
+							/>
+
+							<ToggleRow
+								colors={colors}
+								icon="contrast-outline"
+								title="Dikey Sürükleme"
+								subtitle="Sol yarıda ses seviyesi, sağ yarıda parlaklık"
+								value={settings.verticalSwipe !== false}
+								onChange={(val) =>
+									updateSettings({ verticalSwipe: val })
+								}
+							/>
+
+							<View
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
+							/>
+
+							<ToggleRow
+								colors={colors}
+								icon="flash-outline"
+								title="Uzun Basış ile Hızlandırma"
+								subtitle="Basılı tutunca geçici olarak 2× oynatır"
+								value={settings.longPressSpeedUp !== false}
+								onChange={(val) =>
+									updateSettings({ longPressSpeedUp: val })
+								}
+							/>
+
+							{settings.longPressSpeedUp !== false ? (
+								<>
+									<View
+										style={[
+											styles.divider,
+											{ backgroundColor: colors.border },
+										]}
+									/>
+									<View style={styles.settingBlock}>
+										<View style={styles.settingBlockHeader}>
+											<Ionicons
+												name="timer-outline"
+												size={20}
+												color={colors.primary}
+											/>
+											<Text
+												style={[
+													styles.settingBlockTitle,
+													{ color: colors.text },
+												]}>
+												Hızlandırma Tetikleme Süresi
+											</Text>
+										</View>
+										<View style={styles.chipsRow}>
+											{SPEEDUP_DELAY_OPTIONS.map(
+												(item) => {
+													const isSelected =
+														settings.longPressSpeedUpDelay ===
+														item.value;
+													return (
+														<TVPressable
+															key={item.value}
+															style={[
+																styles.chip,
+																{
+																	backgroundColor:
+																		isSelected
+																			? colors.primary
+																			: `${colors.border}40`,
+																	borderColor:
+																		isSelected
+																			? colors.primary
+																			: colors.border,
+																},
+															]}
+															focusedStyle={
+																styles.chipFocused
+															}
+															onPress={() =>
+																updateSettings({
+																	longPressSpeedUpDelay:
+																		item.value,
+																})
+															}
+															activeOpacity={0.7}>
+															<Text
+																style={[
+																	styles.chipText,
+																	{
+																		color: isSelected
+																			? "#FFFFFF"
+																			: colors.text,
+																		fontWeight:
+																			isSelected
+																				? "700"
+																				: "500",
+																	},
+																]}>
+																{item.label}
+															</Text>
+														</TVPressable>
+													);
+												},
+											)}
+										</View>
+									</View>
+								</>
+							) : null}
+
+							<View
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
+							/>
+
+							<ToggleRow
+								colors={colors}
+								icon="sunny-outline"
+								title="%200 Parlaklık"
+								subtitle="Dikey sürüklemede %100'ün üzerine çıkabilirsiniz"
+								value={Boolean(settings.extraBrightness)}
+								onChange={(val) =>
+									updateSettings({ extraBrightness: val })
+								}
+							/>
+
+							<View
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
+							/>
+
+							<ToggleRow
+								colors={colors}
+								icon="volume-high-outline"
+								title="%200 Ses"
+								subtitle="Dikey sürüklemede %100'ün üzerine çıkabilirsiniz"
+								value={Boolean(settings.extraVolume)}
+								onChange={(val) =>
+									updateSettings({ extraVolume: val })
+								}
+							/>
+						</View>
+					</View>
+
+					{/* 4. BÖLÜM: OYNATMA */}
+					<View style={styles.section}>
+						<Text
+							style={[
+								styles.sectionHeader,
+								{ color: colors.textSecondary },
+							]}>
+							OYNATMA
+						</Text>
+
+						<View
+							style={[
+								styles.settingsGroup,
+								{
+									backgroundColor: colors.cardBg,
+									borderColor: colors.border,
+								},
+							]}>
+							<View style={styles.settingBlock}>
+								<View style={styles.settingBlockHeader}>
+									<Ionicons
+										name="speedometer-outline"
+										size={20}
+										color={colors.primary}
+									/>
+									<Text
+										style={[
+											styles.settingBlockTitle,
+											{ color: colors.text },
+										]}>
+										Varsayılan Oynatma Hızı
+									</Text>
+								</View>
+								<View style={styles.chipsRow}>
+									{SPEED_OPTIONS.map((item) => {
+										const isSelected =
+											settings.playbackSpeed ===
+											item.value;
+										return (
+											<TVPressable
+												key={item.value}
+												style={[
+													styles.chip,
+													{
+														backgroundColor:
+															isSelected
+																? colors.primary
+																: `${colors.border}40`,
+														borderColor: isSelected
+															? colors.primary
+															: colors.border,
+													},
+												]}
+												focusedStyle={
+													styles.chipFocused
+												}
+												onPress={() =>
+													updateSettings({
+														playbackSpeed:
+															item.value,
+													})
+												}
+												activeOpacity={0.7}>
+												<Text
+													style={[
+														styles.chipText,
+														{
+															color: isSelected
+																? "#FFFFFF"
+																: colors.text,
+															fontWeight:
+																isSelected
+																	? "700"
+																	: "500",
+														},
+													]}>
+													{item.label}
+												</Text>
+											</TVPressable>
+										);
+									})}
+								</View>
+							</View>
+
+							<View
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
+							/>
+
+							<ToggleRow
+								colors={colors}
+								icon="checkmark-circle-outline"
+								title="Kalan Süreyi Göster"
+								subtitle="Geçen süre yerine videonun bitimine kalan süreyi gösterir"
+								value={Boolean(settings.showRemainingTime)}
+								onChange={(val) =>
+									updateSettings({ showRemainingTime: val })
+								}
+							/>
+						</View>
+					</View>
+
+					{/* 5. BÖLÜM: SİSTEM */}
+					<View style={styles.section}>
+						<Text
+							style={[
+								styles.sectionHeader,
+								{ color: colors.textSecondary },
+							]}>
+							SİSTEM ENTEGRASYONU
+						</Text>
+
+						<View
+							style={[
+								styles.settingsGroup,
+								{
+									backgroundColor: colors.cardBg,
+									borderColor: colors.border,
+								},
+							]}>
+							<ToggleRow
+								colors={colors}
+								icon="picture-in-picture-outline"
+								title="Picture-in-Picture"
+								subtitle="Uygulamadan çıkınca küçük pencerede oynatmaya devam eder"
+								value={settings.pictureInPicture !== false}
+								onChange={(val) =>
+									updateSettings({ pictureInPicture: val })
+								}
+							/>
+
+							<View
+								style={[
+									styles.divider,
+									{ backgroundColor: colors.border },
+								]}
+							/>
+
+							<ToggleRow
+								colors={colors}
+								icon="musical-notes-outline"
+								title="Arka Planda Oynat"
+								subtitle="Oynatıcıyı kapatınca ses devam eder"
+								value={settings.playInBackground !== false}
+								onChange={(val) =>
+									updateSettings({ playInBackground: val })
+								}
+							/>
 						</View>
 					</View>
 				</ScrollView>
@@ -911,7 +1454,7 @@ const styles = StyleSheet.create({
 		position: "relative",
 	},
 	mockVideoBackdrop: {
-		...StyleSheet.absoluteFillObject,
+		...StyleSheet.absoluteFill,
 		justifyContent: "center",
 		alignItems: "center",
 		backgroundColor: "rgba(10, 14, 22, 0.95)",

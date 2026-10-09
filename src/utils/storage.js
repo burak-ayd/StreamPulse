@@ -158,12 +158,45 @@ export const LIVE_TV_PLATFORM = {
 
 export const DEFAULT_PLAYER_SETTINGS = {
 	// Video oynatıcı ayarları
-	seekDuration: 10, // 5, 10, 15, 30 sn
-	defaultResizeMode: "contain", // 'contain' | 'cover'
+	seekDuration: 10, // 5, 10, 15, 30, 60 sn
+	defaultResizeMode: "contain", // 'contain' | 'cover' | 'stretch'
 	autoPlay: true,
 	controlsTimeout: 4, // 3, 4, 5, 8 sn
 	defaultOrientation: "landscape", // 'landscape' | 'sensor'
 	autoResume: true,
+
+	// ── Jest/Hareket ayarları ──────────────────────────────────
+	// Çift dokunma seek'i (Netflix/YouTube davranışı)
+	doubleTapSeek: true,
+	// Çift dokunmanın ORTA bölgesi play/pause yapsın (±%15)
+	doubleTapPause: true,
+	// Yatay sürükleme ile seek
+	swipeSeek: true,
+	// Dikey sürükleme: sol yarı parlaklık, sağ yarı ses
+	verticalSwipe: true,
+	// %100 üstü parlaklık/ses (CloudStream'deki "iki aşamalı" jest)
+	extraBrightness: false,
+	extraVolume: false,
+	// Uzun basış ile 2x hızlandırma
+	longPressSpeedUp: true,
+	longPressSpeedUpDelay: 500, // ms
+	longPressSpeedRate: 2,
+	// Pinch zoom + pan
+	pinchZoom: true,
+
+	// ── Oynatma ayarları ───────────────────────────────────────
+	// Oynatma hızı: 0.25 / 0.5 / 0.75 / 1 / 1.25 / 1.5 / 1.75 / 2
+	playbackSpeed: 1,
+	// Sonraki bölümü otomatik oynat
+	autoPlayNextEpisode: true,
+	// Kalan süreyi göster (true) / geçen süreyi (false)
+	showRemainingTime: false,
+
+	// ── Sistem entegrasyonu ────────────────────────────────────
+	// Picture-in-Picture
+	pictureInPicture: true,
+	// Arka planda çalmaya devam et
+	playInBackground: true,
 
 	// Altyazı görünüm ayarları
 	subtitleFontSize: 16, // 14, 16, 20, 24
@@ -171,6 +204,15 @@ export const DEFAULT_PLAYER_SETTINGS = {
 	subtitleBgColor: "semi-black", // 'semi-black', 'solid-black', 'transparent', 'blur'
 	subtitleTextShadow: true,
 	defaultSubtitleLanguage: "tr", // 'tr', 'en', 'off'
+};
+
+/** Player ayarlarında sunulabilecek değer aralıkları (ayarlar ekranı için). */
+export const PLAYER_SETTING_OPTIONS = {
+	seekDuration: [5, 10, 15, 30, 60],
+	controlsTimeout: [3, 4, 5, 8],
+	resizeModes: ["contain", "cover", "stretch"],
+	playbackSpeeds: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+	subtitleFontSizes: [14, 16, 20, 24],
 };
 
 const DEFAULT_PROFILE = {
@@ -877,8 +919,19 @@ export async function getContinueWatching() {
 /**
  * Kaldığın yerden devam et verisini kaydeder
  * - currentTime < 10 ise threshold altı olduğu için kaydetmez
- * - progress >= 0.90 ise tamamlandı sayıp listeden kaldırır
+ * - `completed === true` ise listeden kaldırır (tamamlama kararı
+ *   `useWatchProgress`'e aittir; burada YENİDEN karar verilmez)
  * - Aksi halde en başa ekler veya günceller (en fazla 50 kayıt)
+ *
+ * ⚠️ ESKİ DAVRANIŞ BURADA `progress >= 0.9` idi ve kaydı SİLİYORDU.
+ * Bu, oynatıcının "izlenen süre" kontrolünü DEĞERSİZ kılıyordu: içerik
+ * tamamlanmamış olsa bile %90'a gelen kayıt listeden kayboluyordu ve
+ * kullanıcı "kaldığın yerden devam et" listesinde kaybolmuş içerik görüyordu
+ * (kullanıcı şikâyeti: "bazen kaldığın yeri doğru kaydetmiyor").
+ *
+ * YENİ KURAL: bu fonksiyon SADECE KAYDETME yapar. Tamamlama kararı tek
+ * yerden (`useWatchProgress.genuinelyWatched`) gelir ve `completed` bayrağı
+ * ile bildirilir. İki katmanın kendi eşiği olması, tutarsızlığın kaynağıydı.
  */
 export async function saveContinueWatching(item) {
 	return mutate(STORAGE_KEYS.CONTINUE_WATCHING, async () => {
@@ -890,14 +943,14 @@ export async function saveContinueWatching(item) {
 				return await getContinueWatching();
 			}
 
+			// Açıkça "tamamlandı" bildirildiyse listeden kaldır.
+			if (item.completed === true) {
+				return await removeContinueWatching(item.id);
+			}
+
 			const duration = item.duration || 0;
 			const progress =
 				duration > 0 ? item.currentTime / duration : item.progress || 0;
-
-			// %90 veya daha fazlası izlendiyse tamamlandı kabul et ve listeden kaldır
-			if (progress >= 0.9) {
-				return await removeContinueWatching(item.id);
-			}
 
 			const raw = await AsyncStorage.getItem(STORAGE_KEYS.CONTINUE_WATCHING);
 			const currentList = raw ? JSON.parse(raw) : [];
