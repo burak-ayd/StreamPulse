@@ -86,6 +86,13 @@ export default function usePlayerGestures({
 	// (dosyadaki genel desen) güncel değerler refle taşınır.
 	const lastTapRef = useRef({ time: 0, x: 0 });
 	const pressStartRef = useRef({ time: 0, x: 0, y: 0 });
+	/*
+	 * Bekleyen TEK dokunuşun zamanlayıcısı (sorun 8).
+	 *
+	 * İlk dokunuşta `onSingleTap` ertelenir; ikinci dokunuş gelirse
+	 * iptal edilir, gelmezse bu zamanlayıcı tetikler.
+	 */
+	const pendingSingleTapTimerRef = useRef(null);
 	const activeActionRef = useRef(null); // 'time' | 'brightness' | 'volume' | 'zoom' | null
 	const lastTouchRef = useRef({ x: 0, y: 0 });
 	const startTimeRef = useRef(0);
@@ -207,6 +214,12 @@ export default function usePlayerGestures({
 		return () => {
 			if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
 			if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
+			// Bekleyen tek dokunuş: oynatıcı kapanırken tetiklenmemeli
+			// (kullanıcı oynatıcıdan çıkarken kontroller birden açılmasın).
+			if (pendingSingleTapTimerRef.current) {
+				clearTimeout(pendingSingleTapTimerRef.current);
+				pendingSingleTapTimerRef.current = null;
+			}
 		};
 	}, []);
 
@@ -219,12 +232,48 @@ export default function usePlayerGestures({
 		const tapTime = now();
 		const { width } = getSize();
 
+		/*
+		 * ⚠️ ÇİFT DOKUNMA TESPİTİ.
+		 *
+		 * "Damga var mı" kontrolü `last.time > 0` idi. Bu, ilk dokunuşun
+		 * zaman damgası **tam olarak 0** olduğunda (monotonik saat
+		 * başlangıcı, `performance.now()`) çift dokunmayı hiç yakalayamaz
+		 * ve kullanıcı her dokunuşta yalnızca tek dokunuş davranışı
+		 * görürdü. Varlık ayrı bir bayrakla tutulur.
+		 *
+		 * `lastTapRef.current.time` artık sadece zaman farkı için kullanılır.
+		 */
 		const isDoubleTap =
-			tapTime - lastTapRef.current.time < DOUBLE_TAP_WINDOW_MS &&
-			lastTapRef.current.time > 0;
+			lastTapRef.current.pending === true &&
+			tapTime - lastTapRef.current.time < DOUBLE_TAP_WINDOW_MS;
 
 		if (isDoubleTap) {
-			lastTapRef.current = { time: 0, x: 0 };
+			/*
+			 * ⚠️ SORUN 8 — ÇİFT DOKUNMADA HUD AÇILIP KAPANIYORDU.
+			 *
+			 * "çift dokunma ile sararken her dokunuşta player hudu açılıp
+			 * kapanıyor."
+			 *
+			 * Mekanizma: `handleTap` İLK dokunuşta damgayı basıp
+			 * `onSingleTap` çağırıyordu (kontrolleri açıp kapatır). İKİNCİ
+			 * dokunuşta `isDoubleTap` doğru yakalansa bile ilk dokunuşun
+			 * `onSingleTap`'i çoktan çalışmış, HUD bir kez açılıp kapanmış
+			 * oluyordu. Sonuç: her çift dokunuşta iki kez sarma, iki kez
+			 * kontrol açılıp kapanması.
+			 *
+			 * Çözüm: ilk dokunuşta `onSingleTap` HİÇ çalıştırılmaz; yalnızca
+			 * damga basılır. `pendingSingleTapTimer` süresi dolmadan ikinci
+			 * dokunuş gelmezse tek dokunuş YANLAŞIM tetiklenir.
+			 *
+			 * Böylece: tek dokunuş = kontroller açılır (aynı gecikme,
+			 * fark edilmez); çift dokunuş = sarma olur, kontroller
+			 * karışmaz.
+			 */
+			if (pendingSingleTapTimerRef.current) {
+				clearTimeout(pendingSingleTapTimerRef.current);
+				pendingSingleTapTimerRef.current = null;
+			}
+			lastTapRef.current = { time: 0, x: 0, pending: false };
 			s.onInteractionStart?.();
 
 			// Canlıda seek yok; ortadaki bölge play/pause yapar.
@@ -254,13 +303,33 @@ export default function usePlayerGestures({
 			return;
 		}
 
-		// İlk dokunuş: damgayı tut. İkinci dokunuş 280 ms içinde gelirse
-		// yukarıda yakalanır.
-		lastTapRef.current = { time: tapTime, x };
+		// İlk dokunuş: damgayı tut, `onSingleTap`'i HENÜZ ÇAĞIRMA.
+		// İkinci dokunuş 280 ms içinde gelirse yukarıda yakalanır ve
+		// tek dokunuş tetiklenmez. Süre dolarsa aşağıdaki zamanlayıcı
+		// onu tetikler.
+		lastTapRef.current = { time: tapTime, x, pending: true };
 
-		// Basılı kalma (<200 ms) kontrolü: uzun basış "tap" sayılmaz.
+		// Basılı kalma (>200 ms) uzun basıştır, "tap" sayılmaz.
 		if (tapTime - pressStartRef.current.time > MAX_TAP_HOLD_MS) return;
-		s.onSingleTap?.();
+
+		/*
+		 * Bekleyen tek dokunuşu zamanla. Bu, çift dokunma penceresiyle
+		 * aynı süre: ikinci dokunuş bu sürede gelirse `isDoubleTap`
+		 * yakalar ve bu zamanlayıcı iptal edilir (aşağıdaki temizleme).
+		 */
+		if (pendingSingleTapTimerRef.current) {
+			clearTimeout(pendingSingleTapTimerRef.current);
+		}
+		pendingSingleTapTimerRef.current = setTimeout(() => {
+			pendingSingleTapTimerRef.current = null;
+			// Damga hâlâ duruyorsa ve başka bir dokunuş gelmemişse bu
+			// gerçekten TEK dokunuştu. `pending` bayrağını da temizle ki
+			// sonraki dokunuş yanlışlıkla çift sayılmasın.
+			if (!lastTapRef.current.pending) return;
+			if (lastTapRef.current.time !== tapTime) return;
+			lastTapRef.current = { time: 0, x: 0, pending: false };
+			s.onSingleTap?.();
+		}, DOUBLE_TAP_WINDOW_MS);
 	}, [getSize, flashDoubleTap]);
 
 	// ── Yatay sürükleme → seek önizleme (KUADRATİK) ─────────────
