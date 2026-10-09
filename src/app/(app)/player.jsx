@@ -19,6 +19,39 @@ import {
 	Text,
 	View,
 } from "react-native";
+
+/**
+ * Sezon/bölüm numarasını içerik URL'sinden çıkarır.
+ *
+ * ⚠️ Neden gerekli: bölüm bağlantısı doğrudan (arama sonucu, favoriler,
+ * paylaşılan link) açılabiliyor. Bu durumda `params.season` /
+ * `params.episode` BOŞ gelir, `seriesInfo` de sezon/bölüm taşımaz ve
+ * izleme geçmişine `season` / `episode` alanları boş yazılır → profil
+ * ekranında "S1:B4" etiketi gösterilemez.
+ *
+ * Desteklenen yaygın desenler:
+ *   .../sezon-1/bolum-2/     .../sezon/1/bolum/2
+ *   .../season-1/episode-2
+ *
+ * @param {string} url
+ * @returns {{season?: number, episode?: number}}
+ */
+function seasonEpisodeFromUrl(url) {
+	if (typeof url !== "string" || url.length === 0) return {};
+	const s = Number(
+		url.match(/\bsezon[-\/](\d+)/i)?.[1] ??
+			url.match(/\bseason[-\/](\d+)/i)?.[1],
+	);
+	const e = Number(
+		url.match(/\bbolum[-\/](\d+)/i)?.[1] ??
+			url.match(/\bepisode[-\/](\d+)/i)?.[1],
+	);
+	return {
+		...(Number.isInteger(s) && s > 0 ? { season: s } : {}),
+		...(Number.isInteger(e) && e > 0 ? { episode: e } : {}),
+	};
+}
+
 export default function PlayerScreen() {
 	const params = useLocalSearchParams();
 	const router = useRouter();
@@ -337,14 +370,24 @@ export default function PlayerScreen() {
 				if (isCanli) return;
 				// Add to watch history (recent play)
 				if (contentId || title) {
+					/*
+					 * ⚠️ Sezon/bölüm yedeği.
+					 *
+					 * `seriesInfo` yalnızca dizi sayfasından gelindiğinde
+					 * doludur. Bölüm bağlantısı doğrudan açıldığında
+					 * (arama/favoriler/paylaşım) `params.season` ve
+					 * `params.episode` boş gelir ve profil ekranında
+					 * "S1:B4" etiketi gösterilemez. URL'den türetiyoruz.
+					 */
+					const sezonBolum = seasonEpisodeFromUrl(targetUrl);
 					if (contentType === "episode") {
 						addToWatchHistory({
 							id: contentId || targetUrl,
 							title: seriesInfo?.seriesTitle || title,
 							seriesTitle: seriesInfo?.seriesTitle || title,
 							seriesId: seriesInfo?.seriesId,
-							season: seriesInfo?.season,
-							episode: seriesInfo?.episode,
+							season: seriesInfo?.season ?? sezonBolum.season,
+							episode: seriesInfo?.episode ?? sezonBolum.episode,
 							episodeTitle: seriesInfo?.episodeTitle,
 							poster,
 							type: "episode",
