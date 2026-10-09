@@ -43,6 +43,9 @@ example
 /ios
 /android
 
+# ikon üretim hattı ara çıktıları (assets/icons/ commit'lenir, assets/generated/ edilmez)
+/assets/generated/
+
 # local-expo-build
 keystore.properties
 credentials.json

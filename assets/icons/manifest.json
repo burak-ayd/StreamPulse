@@ -1,0 +1,278 @@
+{
+  "generatedAt": "2026-10-08T22:44:50.609Z",
+  "variants": {
+    "release": {
+      "icon.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": false,
+        "bytes": 226994
+      },
+      "icon-adaptive-foreground.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": true,
+        "bytes": 139547
+      },
+      "icon-adaptive-background.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": false,
+        "bytes": 95878
+      },
+      "icon-adaptive-monochrome.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": true,
+        "bytes": 7434
+      },
+      "splash-icon.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": true,
+        "bytes": 87421
+      },
+      "notification-icon.png": {
+        "width": 96,
+        "height": 96,
+        "alpha": true,
+        "bytes": 457
+      },
+      "favicon.png": "release/favicon.png",
+      "favicon-48.png": "release/favicon-48.png",
+      "favicon-32.png": "release/favicon-32.png",
+      "favicon-16.png": "release/favicon-16.png",
+      "favicon.ico": "release/favicon.ico",
+      "tv-icon.png": {
+        "width": 1280,
+        "height": 768,
+        "alpha": false,
+        "bytes": 95611
+      },
+      "tv-icon-small.png": {
+        "width": 400,
+        "height": 240,
+        "alpha": false,
+        "bytes": 24954
+      },
+      "tv-icon-small-2x.png": {
+        "width": 800,
+        "height": 480,
+        "alpha": false,
+        "bytes": 58960
+      },
+      "tv-topshelf.png": {
+        "width": 1920,
+        "height": 720,
+        "alpha": false,
+        "bytes": 100355
+      },
+      "tv-topshelf-2x.png": {
+        "width": 3840,
+        "height": 1440,
+        "alpha": false,
+        "bytes": 224289
+      },
+      "tv-topshelf-wide.png": {
+        "width": 2320,
+        "height": 720,
+        "alpha": false,
+        "bytes": 105910
+      },
+      "tv-topshelf-wide-2x.png": {
+        "width": 4640,
+        "height": 1440,
+        "alpha": false,
+        "bytes": 236294
+      },
+      "tv-banner.png": {
+        "width": 320,
+        "height": 180,
+        "alpha": false,
+        "bytes": 17865
+      }
+    },
+    "preview": {
+      "icon.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": false,
+        "bytes": 230590
+      },
+      "icon-adaptive-foreground.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": true,
+        "bytes": 138780
+      },
+      "icon-adaptive-background.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": false,
+        "bytes": 100341
+      },
+      "icon-adaptive-monochrome.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": true,
+        "bytes": 7434
+      },
+      "splash-icon.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": true,
+        "bytes": 90633
+      },
+      "notification-icon.png": {
+        "width": 96,
+        "height": 96,
+        "alpha": true,
+        "bytes": 457
+      },
+      "favicon.png": "preview/favicon.png",
+      "favicon-48.png": "preview/favicon-48.png",
+      "favicon-32.png": "preview/favicon-32.png",
+      "favicon-16.png": "preview/favicon-16.png",
+      "favicon.ico": "preview/favicon.ico",
+      "tv-icon.png": {
+        "width": 1280,
+        "height": 768,
+        "alpha": false,
+        "bytes": 96868
+      },
+      "tv-icon-small.png": {
+        "width": 400,
+        "height": 240,
+        "alpha": false,
+        "bytes": 25775
+      },
+      "tv-icon-small-2x.png": {
+        "width": 800,
+        "height": 480,
+        "alpha": false,
+        "bytes": 60671
+      },
+      "tv-topshelf.png": {
+        "width": 1920,
+        "height": 720,
+        "alpha": false,
+        "bytes": 103413
+      },
+      "tv-topshelf-2x.png": {
+        "width": 3840,
+        "height": 1440,
+        "alpha": false,
+        "bytes": 231885
+      },
+      "tv-topshelf-wide.png": {
+        "width": 2320,
+        "height": 720,
+        "alpha": false,
+        "bytes": 109181
+      },
+      "tv-topshelf-wide-2x.png": {
+        "width": 4640,
+        "height": 1440,
+        "alpha": false,
+        "bytes": 244950
+      },
+      "tv-banner.png": {
+        "width": 320,
+        "height": 180,
+        "alpha": false,
+        "bytes": 18590
+      }
+    },
+    "dev": {
+      "icon.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": false,
+        "bytes": 202637
+      },
+      "icon-adaptive-foreground.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": true,
+        "bytes": 134499
+      },
+      "icon-adaptive-background.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": false,
+        "bytes": 77624
+      },
+      "icon-adaptive-monochrome.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": true,
+        "bytes": 7434
+      },
+      "splash-icon.png": {
+        "width": 1024,
+        "height": 1024,
+        "alpha": true,
+        "bytes": 86977
+      },
+      "notification-icon.png": {
+        "width": 96,
+        "height": 96,
+        "alpha": true,
+        "bytes": 457
+      },
+      "favicon.png": "dev/favicon.png",
+      "favicon-48.png": "dev/favicon-48.png",
+      "favicon-32.png": "dev/favicon-32.png",
+      "favicon-16.png": "dev/favicon-16.png",
+      "favicon.ico": "dev/favicon.ico",
+      "tv-icon.png": {
+        "width": 1280,
+        "height": 768,
+        "alpha": false,
+        "bytes": 77135
+      },
+      "tv-icon-small.png": {
+        "width": 400,
+        "height": 240,
+        "alpha": false,
+        "bytes": 20027
+      },
+      "tv-icon-small-2x.png": {
+        "width": 800,
+        "height": 480,
+        "alpha": false,
+        "bytes": 47701
+      },
+      "tv-topshelf.png": {
+        "width": 1920,
+        "height": 720,
+        "alpha": false,
+        "bytes": 82161
+      },
+      "tv-topshelf-2x.png": {
+        "width": 3840,
+        "height": 1440,
+        "alpha": false,
+        "bytes": 188122
+      },
+      "tv-topshelf-wide.png": {
+        "width": 2320,
+        "height": 720,
+        "alpha": false,
+        "bytes": 86541
+      },
+      "tv-topshelf-wide-2x.png": {
+        "width": 4640,
+        "height": 1440,
+        "alpha": false,
+        "bytes": 199190
+      },
+      "tv-banner.png": {
+        "width": 320,
+        "height": 180,
+        "alpha": false,
+        "bytes": 14477
+      }
+    }
+  }
+}
