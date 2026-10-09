@@ -528,8 +528,31 @@ export async function addToWatchHistory(movie) {
 				}
 
 				if (isMovieEpisode !== isItemEpisode) {
-					return true;
-				}
+				/*
+				 * ⚠️ Aynı içeriğin İKİ kaydı (çift satır hatası).
+				 *
+				 * `player.jsx` izleme geçmişine kaynaklar yüklenirken
+				 * yazar. O anda `seriesInfo` henüz gelmemiş olabiliyor;
+				 * bu yüzden ilk kayıt `season`/`episode` ALMADAN yazılır.
+				 * Bölüm bittiğinde `markEpisodeComplete` aynı bölümü
+				 * `season`/`episode` İLE yeniden yazar.
+				 *
+				 * Eski davranış burada `return true` (koru) ile iki kaydı
+				 * AYIRIYORDU: biri "bölümlü", biri "bölümsüz" sayıldığı
+				 * için hiç eşleşme yapılmıyordu. Sonuç: aynı bölüm
+				 * listede iki kez görünüyor ve React "two children with
+				 * the same key" hatası veriyordu.
+				 *
+				 * Düzeltme: tip uyuşmasa bile aynı `id`/`url` varsa
+				 * tekilleştirilir.
+				 */
+				if (movieId && item.id === movieId) return false;
+				if (finalMovie.url && item.url && finalMovie.url === item.url)
+					return false;
+				if (movieId && item.url === movieId) return false;
+				if (finalMovie.url && item.id === finalMovie.url) return false;
+				return true;
+			}
 
 				const itemId = item.id || item.url;
 				if (movieId && itemId === movieId) return false;
