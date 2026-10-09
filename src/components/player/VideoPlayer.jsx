@@ -229,7 +229,12 @@ export default function VideoPlayer({
 	});
 
 	// ── İzleme ilerlemesi ────────────────────────────────────
-	const { handleProgress: trackProgress, markComplete } = useWatchProgress({
+	const {
+		handleProgress: trackProgress,
+		markComplete,
+		setResumeTarget,
+		noteUserSeek,
+	} = useWatchProgress({
 		contentId,
 		contentType,
 		title,
@@ -241,6 +246,7 @@ export default function VideoPlayer({
 		isLive,
 		canSeek,
 		resolvedUrl,
+		resumeTarget: initialTime,
 		onProgress: onProgressUpdate,
 	});
 
@@ -283,23 +289,28 @@ export default function VideoPlayer({
 		(seconds) => {
 			if (!videoRef.current || !canSeek) return;
 			const clamped = Math.max(0, Math.min(duration, seconds));
+			// Gerçek kullanıcı seek'i (sorun 3/4 — bkz. `noteUserSeek`).
+			noteUserSeek();
 			videoRef.current.seek(clamped);
 			setCurrentTime(clamped);
 			currentTimeRef.current = clamped;
 		},
-		[canSeek, duration],
+		[canSeek, duration, noteUserSeek],
 	);
 
 	const seekBy = useCallback(
 		(deltaSeconds) => {
 			if (!videoRef.current || !canSeek) return;
 			const next = Math.max(0, Math.min(duration, currentTime + deltaSeconds));
+			// ⚠️ SORUN 3/4: bu gerçek bir kullanıcı seek'idir. İlerleme
+			// motoruna bildirilir ki arabellek çıkışıyla karıştırılmasın.
+			noteUserSeek();
 			videoRef.current.seek(next);
 			setCurrentTime(next);
 			currentTimeRef.current = next;
 			startHideTimerRef.current?.();
 		},
-		[canSeek, currentTime, duration],
+		[canSeek, currentTime, duration, noteUserSeek],
 	);
 
 	const togglePlayPause = useCallback(() => {
@@ -604,7 +615,21 @@ export default function VideoPlayer({
 			 */
 			setTimeout(() => {
 				if (pendingSeekTimeRef.current !== raw) return;
+				// Resume da gerçek bir seek'tir; ilerleme motoruna bildir.
+				noteUserSeek();
 				videoRef.current?.seek(target);
+				/*
+				 * ⚠️ SORUN 7: Kayıt motoruna resume hedefini bildir.
+				 *
+				 * Yavaş bağlantıda seek uygulanana kadar `onProgress` düşük
+				 * konumlar bildirir. Hedef bildirilmezse ilk 10 saniye
+				 * kaydedilir ve kayıtlı ilerleme (ör. 30:00) SİLİNİR —
+				 * kullanıcı "kaldığın yerden devam et video tarafından
+				 * eziliyor" diye bildiriyor.
+				 *
+				 * `trackProgress`, bu hedefe ulaşılmadan kayıt YAPMAZ.
+				 */
+				setResumeTarget(target);
 				pendingSeekTimeRef.current = 0;
 				setCurrentTime(target);
 				currentTimeRef.current = target;
@@ -693,8 +718,22 @@ export default function VideoPlayer({
 	};
 
 	const handleEnd = () => {
-		// Canlıda "bitti" anı yoktur (`onEnd` = yayın koptu).
-		if (!isLive) markComplete();
+		/*
+		 * ⚠️ Video GERÇEKTEN sonuna ulaştı → koşulsuz tamamlandı.
+		 *
+		 * Kullanıcı isteği: "sardırma yaparak bitirsem bile bu özellik
+		 * çalışmalı, önceden çalışıyordu."
+		 *
+		 * `force = true` ile "izlenen süre" eşiği atlanır: kullanıcı
+		 * sonuna kadar sarmış olsa bile içerik bitmiştir ve tamamlanmış
+		 * sayılmalıdır. Bu, Netflix / YouTube / Prime davranışıdır.
+		 *
+		 * %95'e kadar sarıp ÇIKAN kullanıcı için eşik korunur (bkz.
+		 * `markComplete` içindeki açıklama).
+		 *
+		 * Canlıda "bitti" anı yoktur (`onEnd` = yayın koptu).
+		 */
+		if (!isLive) markComplete(true);
 	};
 
 	const handleError = (error) => {
