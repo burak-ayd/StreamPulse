@@ -290,7 +290,22 @@ export function ContinueWatchingList({
 			) : (
 				<FlatList
 					data={items}
-					keyExtractor={(item, index) => String(item.id || item.url || index)}
+					keyExtractor={(item, index) =>
+						/*
+						 * ⚠️ Çift kayıt savunması.
+						 *
+						 * `item.id || item.url` tek başına yeterli değil: diskte
+						 * (senkron, eski sürümden gelen ya da iki farklı kod
+						 * yolundan yazılmış) aynı içerik için İKİ kayıt
+						 * bulunabiliyor. Bu durumda React "two children with
+						 * the same key" hatası veriyor ve liste bozuluyordu.
+						 *
+						 * Kayıt `storage.js` içinde tekilleştiriliyor; buradaki
+						 * `index` son eğer: disk zaten bozuksa bile liste
+						 * çökmez ve satırlar birbirini ezmez.
+						 */
+						`${item.id || item.url || "item"}_${index}`
+					}
 					// numColumns değişince ölçümler bayat kalır; `key` listeyi
 					// yeniden kurar (FlatList bu değişimi destekler).
 					key={view}
@@ -526,7 +541,22 @@ export function FavoriteGrid({
 			) : (
 				<FlatList
 					data={items}
-					keyExtractor={(item, index) => String(item.id || item.url || index)}
+					keyExtractor={(item, index) =>
+						/*
+						 * ⚠️ Çift kayıt savunması.
+						 *
+						 * `item.id || item.url` tek başına yeterli değil: diskte
+						 * (senkron, eski sürümden gelen ya da iki farklı kod
+						 * yolundan yazılmış) aynı içerik için İKİ kayıt
+						 * bulunabiliyor. Bu durumda React "two children with
+						 * the same key" hatası veriyor ve liste bozuluyordu.
+						 *
+						 * Kayıt `storage.js` içinde tekilleştiriliyor; buradaki
+						 * `index` son eğer: disk zaten bozuksa bile liste
+						 * çökmez ve satırlar birbirini ezmez.
+						 */
+						`${item.id || item.url || "item"}_${index}`
+					}
 					renderItem={({ item }) => (
 						<FavoriteCard
 							item={item}
@@ -561,7 +591,17 @@ export function FavoriteGrid({
 function HistoryRow({ item, onPress, onRemove }) {
 	const { m3 } = useThemeContext();
 	const duration = formatDurationShort(item.duration);
-	const meta = formatMetaLine(item);
+	// ⚠️ Sezon/bölüm bilgisi gösterilmiyordu.
+	//
+	// `HistoryRow` yalnızca `formatMetaLine` çağırıyordu; o fonksiyon
+	// sadece tür ("Dizi"/"Film") ve yıl yazar. Aynı dosyadaki
+	// ContinueWatchingList (L87) ve FavoriteGrid (L158) ise
+	// `formatSeasonEpisode`'yi ÖNCELİK olarak kullanıyor — tutarsızlık
+	// buydu.
+	//
+	// Dizi kayıtlarında "S1:B4 • 4. Bölüm", filmlerde ise eski davranış
+	// korunur ("Film", "Film 2024").
+	const meta = formatSeasonEpisode(item) || formatMetaLine(item);
 	const watched = formatWatchedAt(item.watchedAt);
 	const status = formatWatchedStatus(item);
 	const title = item.title || item.seriesTitle || "İçerik";
@@ -727,7 +767,22 @@ export function HistoryList({
 			) : (
 				<FlatList
 					data={items}
-					keyExtractor={(item, index) => String(item.id || item.url || index)}
+					keyExtractor={(item, index) =>
+						/*
+						 * ⚠️ Çift kayıt savunması.
+						 *
+						 * `item.id || item.url` tek başına yeterli değil: diskte
+						 * (senkron, eski sürümden gelen ya da iki farklı kod
+						 * yolundan yazılmış) aynı içerik için İKİ kayıt
+						 * bulunabiliyor. Bu durumda React "two children with
+						 * the same key" hatası veriyor ve liste bozuluyordu.
+						 *
+						 * Kayıt `storage.js` içinde tekilleştiriliyor; buradaki
+						 * `index` son eğer: disk zaten bozuksa bile liste
+						 * çökmez ve satırlar birbirini ezmez.
+						 */
+						`${item.id || item.url || "item"}_${index}`
+					}
 					renderItem={({ item }) => (
 						<HistoryRow
 							item={item}
