@@ -1,8 +1,10 @@
 import BottomNavigation from "@/components/BottomNavigation";
-import { useNavLayout } from "@/hooks/useNavLayout";
-import { useTvMetrics } from "@/utils/tvMetrics";
+import TVPressable from "@/components/common/TVPressable";
 import LibraryItemActionModal from "@/components/modal/LibraryItemActionModal";
 import ListSelectModal from "@/components/modal/ListSelectModal";
+import { useNavLayout } from "@/hooks/useNavLayout";
+import { fetchPluginDetail } from "@/services/api";
+import { canonicalType, isSeriesContent } from "@/utils/mediaType";
 import {
 	getContinueWatching,
 	getFavorites,
@@ -16,13 +18,11 @@ import {
 	toggleWatchlist,
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
-import { canonicalType, isSeriesContent } from "@/utils/mediaType";
-import { fetchPluginDetail } from "@/services/api";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Image } from "expo-image";
+import Image from "@/components/common/SmartImage";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
-import TVPressable from "@/components/common/TVPressable";
+import { useCallback, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
 	BackHandler,
@@ -119,7 +119,8 @@ export default function LibraryScreen() {
 	const [selectedActionItem, setSelectedActionItem] = useState(null);
 	const [isActionModalVisible, setIsActionModalVisible] = useState(false);
 	const [listSelectTargetItem, setListSelectTargetItem] = useState(null);
-	const [isListSelectModalVisible, setIsListSelectModalVisible] = useState(false);
+	const [isListSelectModalVisible, setIsListSelectModalVisible] =
+		useState(false);
 
 	// Veri Listeleri
 	const [continueWatchingList, setContinueWatchingList] = useState([]);
@@ -231,7 +232,9 @@ export default function LibraryScreen() {
 					const totalFromMap =
 						seriesTotalsMap[seriesKey] ||
 						(item.seriesTitle
-							? seriesTotalsMap[item.seriesTitle.toLowerCase().trim()]
+							? seriesTotalsMap[
+									item.seriesTitle.toLowerCase().trim()
+								]
 							: 0) ||
 						(item.title
 							? seriesTotalsMap[item.title.toLowerCase().trim()]
@@ -369,7 +372,8 @@ export default function LibraryScreen() {
 					// ayrı bir alanı yok; `normalizeMediaType` "anime" değerini
 					// "series" sınıfına indirger. Bu yüzden burada içerik
 					// metninden ayrıca aranır.
-					const metin = `${item.title || ""} ${item.category || ""}`.toLowerCase();
+					const metin =
+						`${item.title || ""} ${item.category || ""}`.toLowerCase();
 					return tip === "series" && metin.includes("anime");
 				}
 				return true;
@@ -386,13 +390,21 @@ export default function LibraryScreen() {
 		// 4. Sıralama
 		list.sort((a, b) => {
 			if (sortBy === "last_watched") {
-				const dateA = new Date(a.updatedAt || a.watchedAt || 0).getTime();
-				const dateB = new Date(b.updatedAt || b.watchedAt || 0).getTime();
+				const dateA = new Date(
+					a.updatedAt || a.watchedAt || 0,
+				).getTime();
+				const dateB = new Date(
+					b.updatedAt || b.watchedAt || 0,
+				).getTime();
 				return dateB - dateA;
 			}
 			if (sortBy === "date_added") {
-				const dateA = new Date(a.createdAt || a.updatedAt || 0).getTime();
-				const dateB = new Date(b.createdAt || b.updatedAt || 0).getTime();
+				const dateA = new Date(
+					a.createdAt || a.updatedAt || 0,
+				).getTime();
+				const dateB = new Date(
+					b.createdAt || b.updatedAt || 0,
+				).getTime();
 				return dateB - dateA;
 			}
 			if (sortBy === "name_asc") {
@@ -406,8 +418,14 @@ export default function LibraryScreen() {
 				return ratingB - ratingA;
 			}
 			if (sortBy === "remaining_time") {
-				const remA = a.duration && a.currentTime ? a.duration - a.currentTime : 99999;
-				const remB = b.duration && b.currentTime ? b.duration - b.currentTime : 99999;
+				const remA =
+					a.duration && a.currentTime
+						? a.duration - a.currentTime
+						: 99999;
+				const remB =
+					b.duration && b.currentTime
+						? b.duration - b.currentTime
+						: 99999;
 				return remA - remB;
 			}
 			return 0;
@@ -447,16 +465,16 @@ export default function LibraryScreen() {
 		setIsListSelectModalVisible(true);
 	};
 
-		// Oynatıcıyı Başlat
-		const handlePlayItem = async (item) => {
-			if (!item) return;
+	// Oynatıcıyı Başlat
+	const handlePlayItem = async (item) => {
+		if (!item) return;
 
-			// Tek kaynak: `utils/mediaType.js` (bkz. o dosyanın başlığı).
-			// Eskiden buradaki zincir `content_type`'ı ÖNCE okuyordu ve
-			// `completedEpisodesCount`/`season` gibi alanlara bakıyordu.
-			const isDizi = isSeriesContent(item);
+		// Tek kaynak: `utils/mediaType.js` (bkz. o dosyanın başlığı).
+		// Eskiden buradaki zincir `content_type`'ı ÖNCE okuyordu ve
+		// `completedEpisodesCount`/`season` gibi alanlara bakıyordu.
+		const isDizi = isSeriesContent(item);
 
-			let resolvedPlugin = item.plugin || activePlatformName;
+		let resolvedPlugin = item.plugin || activePlatformName;
 		if (!resolvedPlugin) {
 			try {
 				const activePlat = await getSelectedPlatform();
@@ -521,7 +539,10 @@ export default function LibraryScreen() {
 				// Bölüm listesini almak için plugin detayını çek
 				let detail = item;
 				if (!detail.seasons) {
-					const res = await fetchPluginDetail(resolvedPlugin, seriesUrl);
+					const res = await fetchPluginDetail(
+						resolvedPlugin,
+						seriesUrl,
+					);
 					if (res) {
 						detail = res;
 					}
@@ -730,7 +751,8 @@ export default function LibraryScreen() {
 
 	// Kart Render Bileşeni (Grid Modu)
 	const renderGridCard = ({ item }) => {
-		const isCompletedSeriesGroup = item.completedEpisodesCount !== undefined;
+		const isCompletedSeriesGroup =
+			item.completedEpisodesCount !== undefined;
 		const isDizi =
 			item.type === "series" ||
 			item.content_type === "series" ||
@@ -795,7 +817,12 @@ export default function LibraryScreen() {
 						style={styles.posterImage}
 						contentFit="cover"
 						transition={0}
-						recyclingKey={item.poster || item.poster_url || item.image || item.backdrop_url}
+						recyclingKey={
+							item.poster ||
+							item.poster_url ||
+							item.image ||
+							item.backdrop_url
+						}
 					/>
 					{/* Gradient Karartma */}
 					<View style={styles.posterGradient} />
@@ -804,9 +831,7 @@ export default function LibraryScreen() {
 					<View
 						style={[
 							styles.badgeType,
-							isDizi
-								? styles.badgeDizi
-								: styles.badgeFilm,
+							isDizi ? styles.badgeDizi : styles.badgeFilm,
 						]}>
 						<Text style={styles.badgeTypeText}>
 							{isDizi ? "DİZİ" : "FİLM"}
@@ -839,9 +864,7 @@ export default function LibraryScreen() {
 					{/* Poster Altındaki İlerleme & Süre Bilgisi */}
 					<View style={styles.posterBottomInfo}>
 						<View style={styles.progressTextRow}>
-							<Text
-								style={styles.episodeText}
-								numberOfLines={1}>
+							<Text style={styles.episodeText} numberOfLines={1}>
 								{episodeText}
 							</Text>
 							{remainingText && (
@@ -941,7 +964,9 @@ export default function LibraryScreen() {
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
-			<SafeAreaView style={[styles.safeArea, { paddingLeft: contentPaddingLeft }]} edges={["top", "left", "right"]}>
+			<SafeAreaView
+				style={[styles.safeArea, { paddingLeft: contentPaddingLeft }]}
+				edges={["top", "left", "right"]}>
 				<StatusBar barStyle="light-content" backgroundColor="#0B0E14" />
 
 				{/* 1. ÜST ARAMA VE EYLEM ÇUBUĞU */}
@@ -975,7 +1000,12 @@ export default function LibraryScreen() {
 						{searchQuery.length > 0 && (
 							<TouchableOpacity
 								onPress={() => setSearchQuery("")}
-								hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+								hitSlop={{
+									top: 6,
+									bottom: 6,
+									left: 6,
+									right: 6,
+								}}>
 								<Ionicons
 									name="close-circle"
 									size={16}
@@ -1258,7 +1288,8 @@ export default function LibraryScreen() {
 												desc: "Bitmeye en yakın olanlar",
 											},
 										].map((opt) => {
-											const isSelected = sortBy === opt.key;
+											const isSelected =
+												sortBy === opt.key;
 											return (
 												<TouchableOpacity
 													key={opt.key}
@@ -1305,7 +1336,9 @@ export default function LibraryScreen() {
 																{opt.hasStar && (
 																	<Ionicons
 																		name="star"
-																		size={13}
+																		size={
+																			13
+																		}
 																		color="#F5C518"
 																	/>
 																)}
@@ -1387,7 +1420,8 @@ export default function LibraryScreen() {
 										<TouchableOpacity
 											style={[
 												styles.progressButton,
-												progressFilter === "in_progress" &&
+												progressFilter ===
+													"in_progress" &&
 													styles.progressButtonActive,
 											]}
 											onPress={() =>
@@ -1422,7 +1456,8 @@ export default function LibraryScreen() {
 										<TouchableOpacity
 											style={[
 												styles.progressButton,
-												progressFilter === "not_started" &&
+												progressFilter ===
+													"not_started" &&
 													styles.progressButtonActive,
 											]}
 											onPress={() =>
@@ -1461,9 +1496,7 @@ export default function LibraryScreen() {
 							<View style={styles.modalFooter}>
 								<TouchableOpacity
 									style={styles.applyFilterButton}
-									onPress={() =>
-										setIsSortModalVisible(false)
-									}
+									onPress={() => setIsSortModalVisible(false)}
 									activeOpacity={0.85}>
 									<Ionicons
 										name="filter"
@@ -1487,19 +1520,24 @@ export default function LibraryScreen() {
 					activeTab={activeTab}
 					onClose={() => setIsActionModalVisible(false)}
 					onGoDetails={() => {
-						if (selectedActionItem) handleOpenDetails(selectedActionItem);
+						if (selectedActionItem)
+							handleOpenDetails(selectedActionItem);
 					}}
 					onChangeList={() => {
-						if (selectedActionItem) handleChangeList(selectedActionItem);
+						if (selectedActionItem)
+							handleChangeList(selectedActionItem);
 					}}
 					onRemove={() => {
-						if (selectedActionItem) handleRemoveItem(selectedActionItem);
+						if (selectedActionItem)
+							handleRemoveItem(selectedActionItem);
 					}}
 					onShare={async () => {
 						if (selectedActionItem) {
 							try {
 								await Share.share({
-									title: selectedActionItem.title || "StreamPulse",
+									title:
+										selectedActionItem.title ||
+										"StreamPulse",
 									message: `StreamPulse'da "${selectedActionItem.title}" izle! ${selectedActionItem.url || ""}`,
 								});
 							} catch (_e) {}
@@ -1739,7 +1777,7 @@ const styles = StyleSheet.create({
 		height: "100%",
 	},
 	posterGradient: {
-		...StyleSheet.absoluteFillObject,
+		...StyleSheet.absoluteFill,
 		backgroundColor: "rgba(0, 0, 0, 0.25)",
 	},
 	badgeType: {
