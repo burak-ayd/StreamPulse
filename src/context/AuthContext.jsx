@@ -24,6 +24,7 @@ import {
 	setOnAuthExpired,
 } from "@/services/apiClient";
 import { hasSession, clearTokens } from "@/services/token";
+import { authDiag } from "@/utils/authDiagnostics";
 import { getAuthUser, saveAuthUser, clearAuthUser } from "@/utils/storage";
 import { setSyncOwner, resetSyncState } from "@/services/sync";
 
@@ -62,6 +63,7 @@ export function AuthProvider({ children }) {
 	// Yalnızca TERMINAL bir auth hatasında tetiklenir (apiClient yalnızca
 	// 401/403'ta çağırır). Geçici hata (5xx, uçak modu) oturumu düşürmez.
 	const handleAuthExpired = useCallback(() => {
+		authDiag.record("authExpired", { kaynak: "apiClient.terminateSession" });
 		setUser(null);
 		setStatus("unauthenticated");
 		// Kimlik de artık geçersiz; çevrimdışı yedeğin kullanmasın
@@ -85,9 +87,17 @@ export function AuthProvider({ children }) {
 				setUser(cachedUser);
 				setSyncOwner(cachedUser.id);
 				setStatus("authenticated");
+				await authDiag.record("checkSession", {
+					sonuc: "cevrimdisi_yedek",
+					kimlikVar: true,
+				});
 			} else {
 				setUser(null);
 				setStatus("unauthenticated");
+				await authDiag.record("checkSession", {
+					sonuc: "kimlik_yok",
+					kimlikVar: false,
+				});
 			}
 		}
 
@@ -97,6 +107,15 @@ export function AuthProvider({ children }) {
 			try {
 				const sessionExists = await hasSession();
 				if (!sessionExists) {
+					// ⚠️ TEŞHİS KAYDI: Sunucuya HİÇ istek atılmadan burada
+					// karar veriliyor. Sunucu logunda bu dalın izi YOKTUR —
+					// belirtinin ilk ölçümünde loglar tam olarak bu yüzden
+					// sessizdi. `hasSession()` içine yazılan kayıt, SecureStore'da
+					// ne olduğunu (access/refresh varlığı) söyler.
+					await authDiag.record("checkSession", {
+						sonuc: "token_yok",
+						tokenVar: false,
+					});
 					if (isMounted) setStatus("unauthenticated");
 					return;
 				}
@@ -112,12 +131,17 @@ export function AuthProvider({ children }) {
 					setSyncOwner(meUser?.id);
 					saveAuthUser(meUser).catch(() => {});
 					setStatus("authenticated");
+					await authDiag.record("checkSession", { sonuc: "dogrulandi" });
 					return;
 				}
 
 				// 2) Token GERÇEKTEN geçersiz (401/403) → oturumu kapat
 				if (meResult.reason === "auth") {
-					await clearTokens();
+					await authDiag.record("checkSession", {
+						sonuc: "token_oldu",
+						tokenVar: true,
+					});
+					await clearTokens("checkSession: getMe reason=auth");
 					await clearAuthUser();
 					if (isMounted) {
 						setUser(null);
@@ -166,6 +190,7 @@ export function AuthProvider({ children }) {
 				setSyncOwner(result.user?.id);
 				saveAuthUser(result.user).catch(() => {});
 				setStatus("authenticated");
+				authDiag.record("signup", { basarili: true });
 				return result;
 			} catch (error) {
 				setUser(null);
@@ -185,6 +210,7 @@ export function AuthProvider({ children }) {
 			setSyncOwner(result.user?.id);
 			saveAuthUser(result.user).catch(() => {});
 			setStatus("authenticated");
+			authDiag.record("login", { basarili: true });
 			return result;
 		} catch (error) {
 			setUser(null);
@@ -198,6 +224,7 @@ export function AuthProvider({ children }) {
 		try {
 			await apiLogout();
 		} finally {
+			authDiag.record("logout", { kaynak: "kullanici_istegi" });
 			// Damga silinmezse bir sonraki girişte (aynı veya farklı hesap)
 			// istemci eski bir "son indirme" noktası bildirir ve sunucudaki veri
 			// daha eski sayılır → boş kütüphane.

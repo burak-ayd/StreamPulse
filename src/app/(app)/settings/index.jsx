@@ -544,6 +544,20 @@ export default function SettingsScreen() {
 							onPress={() => setBackupModalVisible(true)}
 						/>
 
+						{/* Oturum Teşhisi */}
+						{/*
+						 * Geçici teşhis aracı: "uygulama kendiliğinden çıkış
+						 * yapıyor" belirtisinin nedenini cihazda gösterir.
+						 * Sorun kapanınca bu satır kaldırılabilir.
+						 */}
+						<SettingRow
+							icon="bug-outline"
+							iconBg="#EF4444"
+							label="Oturum Teşhisi"
+							subtitle="Çıkış olaylarının kaydı (hata ayıklama)"
+							onPress={() => router.push("/(app)/settings/authDiag")}
+						/>
+
 						{/* Yerel Verileri Sıfırla */}
 						<SettingRow
 							icon="trash-outline"

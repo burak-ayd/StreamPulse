@@ -19,6 +19,7 @@
 
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import { authDiag } from "@/utils/authDiagnostics";
 
 const ACCESS_TOKEN_KEY = "streampulse_access_token";
 const REFRESH_TOKEN_KEY = "streampulse_refresh_token";
@@ -193,7 +194,31 @@ export async function saveTokens({ access_token, refresh_token, expires_in } = {
 	// null → kayıt silinir, `needsRefresh()` false kalır
 	writes.push(saveSessionExpiry(expiryMs));
 
-	await Promise.all(writes);
+	// ⚠️ Yazma sonucunu ÖLÇÜM (`:hasSession()` defteri).
+	// SecureStore yazması sessizce başarısız olursa (Android keystore
+	// hataları, dolu cihaz) burada hata fırlatır; `Promise.all` reddedilir
+	// ve çağıran bunu "geçici hata" sanıp yeniden dener. Ama token'ın
+	// yarısı yazılmış olabilir — o yarım durum kalıcı logout'un en olası
+	// sebebidir. Bu kayıt onu görünür kılar.
+	try {
+		await Promise.all(writes);
+		await authDiag.record("saveTokens", {
+			accessYazildi: Boolean(access_token),
+			refreshYazildi: Boolean(refresh_token),
+			expiryYazildi: Boolean(expiryMs),
+			expiresInSn: Number.isFinite(seconds) && seconds > 0 ? seconds : null,
+		});
+	} catch (hata) {
+		// Yazma hatasını teşhise yaz, sonra YUTMA: çağıran bunu zaten
+		// "geçici hata" olarak ele alıyor (yeniden denenir).
+		await authDiag.record("saveTokens", {
+			HATA: true,
+			mesaj: String(hata?.message ?? hata),
+			accessYazildi: Boolean(access_token),
+			refreshYazildi: Boolean(refresh_token),
+		});
+		throw hata;
+	}
 }
 
 /**
@@ -244,8 +269,22 @@ export async function needsRefresh(skewMs = 60_000) {
 
 /**
  * Tüm token'ları siler (çıkış).
+ *
+ * @param {string} [neden] - Neden silindiğini teşhis kaydına yazar
  */
-export async function clearTokens() {
+export async function clearTokens(neden = "bilinmiyor") {
+	// ⚠️ Silmeden ÖNCE ölç: teşhis için "varlık" bilgisi gerekiyor ve
+	// temizlikten sonra öğrenilemez.
+	const [a, r] = await Promise.all([
+		getAccessToken().catch(() => null),
+		getRefreshToken().catch(() => null),
+	]);
+	await authDiag.record("clearTokens", {
+		neden,
+		accessVardi: Boolean(a),
+		refreshVardi: Boolean(r),
+	});
+
 	_expiryCache = null;
 	_expiryLoaded = true;
 	await Promise.all([
@@ -260,12 +299,29 @@ export async function clearTokens() {
  *
  * Access token silinmiş ama refresh token geçerliyse oturum HÂLÂ vardır:
  * gereksiz yere login ekranına düşmemek için ikisi de aranır.
+ *
+ * ⚠️ TEŞHİS: Sonuç burada bile kaydedilir. "Uygulama açıldı ve oturum yok"
+ * belirtisinin en önemli ayrımı budur — sunucuya hiç istek atılmadan bu
+ * noktada karar veriliyorsa logda 401/refresh IZİ OLMAZ (belirtinin ilk
+ * ölçümünde tam olarak bu görüldü).
+ *
  * @returns {Promise<boolean>}
  */
 export async function hasSession() {
 	const [access, refresh] = await Promise.all([
-		getAccessToken(),
-		getRefreshToken(),
+		getAccessToken().catch(() => null),
+		getRefreshToken().catch(() => null),
 	]);
-	return Boolean(access || refresh);
+
+	const sonuc = Boolean(access || refresh);
+	await authDiag.record("hasSession", {
+		sonuc,
+		accessVardi: Boolean(access),
+		refreshVardi: Boolean(refresh),
+		// Uzunluklar token DEĞERİNİ ele vermez; yalnızca boş/kırpılmış
+		// ayırt etmek için kullanılır.
+		accessUzunluk: access?.length ?? 0,
+		refreshUzunluk: refresh?.length ?? 0,
+	});
+	return sonuc;
 }

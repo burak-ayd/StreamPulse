@@ -24,6 +24,7 @@ import {
 	needsRefresh,
 	saveTokens,
 } from "./token";
+import { authDiag } from "@/utils/authDiagnostics";
 
 const API_BASE_URL =
 	Constants.expoConfig?.extra?.API_URL ??
@@ -97,10 +98,12 @@ export function getAuthOutcome(response) {
 
 /**
  * Oturumu kalıcı olarak kapatır: token'ları siler ve AuthContext'e bildirir.
+ *
+ * @param {string} [neden] - Neden terminal sonuc verildi (teşhis kaydına yazılır)
  * @returns {Promise<RefreshOutcome>} her zaman `terminal`
  */
-async function terminateSession() {
-	await clearTokens();
+async function terminateSession(neden = "bilinmiyor") {
+	await clearTokens(`terminateSession: ${neden}`);
 	_onAuthExpired?.();
 	return REFRESH_OUTCOME.TERMINAL;
 }
@@ -113,7 +116,17 @@ async function performRefresh() {
 	const refreshToken = await getRefreshToken();
 	if (!refreshToken) {
 		// Yenilenecek bir şey yok. Access token 401 vermişse oturum bitmiştir.
-		return await terminateSession();
+		//
+		// ⚠️ TEŞHİS NOTU: Bu dal SUNUCYA HİÇ İSTEK ATMAZ. Yani bu yol
+		// tetiklenirse sunucu logunda refresh kaydı görünmez — belirtinin
+		// ilk ölçümünde loglar tam olarak bu yüzden sessizdi. Access token
+		// VARKEN refresh token'ın tek başına kaybolması bu dalı tetikler.
+		await authDiag.record("refresh", {
+			sonuc: "terminal",
+			neden: "refresh_token_yok",
+			sunucuya_gitildi: false,
+		});
+		return await terminateSession("refresh token yok");
 	}
 
 	let response;
@@ -128,6 +141,11 @@ async function performRefresh() {
 		// Token'lara dokunmadan dön: uygulama 3 gün kapalı kalmışsa ilk istek
 		// soğuk bağlantıyle gider ve burada kalıcı logout'a dönüşürdü.
 		console.warn("Token yenileme ağ hatası:", error?.message);
+		await authDiag.record("refresh", {
+			sonuc: "transient",
+			neden: "ag_hatasi",
+			mesaj: String(error?.message ?? error),
+		});
 		return REFRESH_OUTCOME.TRANSIENT;
 	}
 
@@ -147,21 +165,58 @@ async function performRefresh() {
 				expires_in: data.expires_in,
 			});
 			_lastTransientRefreshAt = 0;
+			await authDiag.record("refresh", {
+				sonuc: "refreshed",
+				http: response.status,
+				yeniRefreshDondur: Boolean(data.refresh_token),
+				expiresInSn: data.expires_in ?? null,
+			});
 			return REFRESH_OUTCOME.REFRESHED;
 		}
 
 		// 200 ama beklenen gövde yok — yenileme sayılmaz, oturum da atılmaz.
 		console.warn("Token yenileme yanıtı beklenmedik gövde içeriyor.");
+		await authDiag.record("refresh", {
+			sonuc: "transient",
+			neden: "gövde_yok",
+			http: response.status,
+		});
 		return REFRESH_OUTCOME.TRANSIENT;
 	}
 
 	// ⚠️ Yalnızca 401/403 "bu refresh token artık geçerli değil" demektir.
 	if (response.status === 401 || response.status === 403) {
-		return await terminateSession();
+		// Gövdeyi oku: GoTrue'nun HANGİ kodu döndüğü ayrımı sağlar.
+		//   refresh_token_not_found      → oturum gerçekten ölmüş
+		//   refresh_token_already_used   → rotasyon/yeniden kullanım
+		//   validation_failed            → bozuk token
+		// Sunucu logunda görülmeyen bir ayrım burada yakalanır.
+		let govde = null;
+		try {
+			govde = await response.clone().json();
+		} catch {
+			try {
+				govde = await response.text();
+			} catch {
+				govde = null;
+			}
+		}
+		await authDiag.record("refresh", {
+			sonuc: "terminal",
+			neden: `http_${response.status}`,
+			http: response.status,
+			detay: govde?.detail ?? govde?.code ?? govde?.message ?? null,
+		});
+		return await terminateSession(`sunucu ${response.status}`);
 	}
 
 	// 408/425/429/5xx ve beklenmedik diğer kodlar: geçici hata.
 	console.warn(`Token yenileme geçici hata: ${response.status}`);
+	await authDiag.record("refresh", {
+		sonuc: "transient",
+		neden: `http_${response.status}`,
+		http: response.status,
+	});
 	return REFRESH_OUTCOME.TRANSIENT;
 }
 
@@ -388,6 +443,7 @@ export async function getMe() {
 		let response = await authFetch("/api/auth/me");
 
 		if (response.ok) {
+			await authDiag.record("getMe", { sonuc: "ok", http: response.status });
 			return parseMeBody(await response.json());
 		}
 
@@ -401,9 +457,20 @@ export async function getMe() {
 			if (outcome === REFRESH_OUTCOME.REFRESHED) {
 				response = await authFetch("/api/auth/me", {}, { isRetry: true });
 				if (response.ok) {
+					await authDiag.record("getMe", {
+						sonuc: "ok",
+						http: response.status,
+						yol: "403_yenilendi",
+					});
 					return parseMeBody(await response.json());
 				}
 			}
+			await authDiag.record("getMe", {
+				sonuc: outcome === REFRESH_OUTCOME.TERMINAL ? "auth" : "server",
+				http: response.status,
+				yol: "403_manuel_yenileme",
+				yenileme: outcome,
+			});
 			if (outcome === REFRESH_OUTCOME.TERMINAL) {
 				return { ok: false, reason: "auth" };
 			}
@@ -414,15 +481,31 @@ export async function getMe() {
 			// 401/403 YALNIZCA yenileme terminal sonuc verdiyse "auth"tır.
 			// Aksi halde (cooldown, 5xx, ağ hatası) token ölü DEMEK DEĞİLDİR
 			// ve oturum korunur.
-			return getAuthOutcome(response) === REFRESH_OUTCOME.TERMINAL
+			const terminal =
+				getAuthOutcome(response) === REFRESH_OUTCOME.TERMINAL;
+			await authDiag.record("getMe", {
+				sonuc: terminal ? "auth" : "server",
+				http: response.status,
+				yenileme: getAuthOutcome(response) ?? "denenmedi",
+			});
+			return terminal
 				? { ok: false, reason: "auth" }
 				: { ok: false, reason: "server" };
 		}
 
 		// 5xx / 429 / 408 ve beklenmedik kodlar: oturumu düşürmeden
 		// çevrimdışı kullanıma izin ver (bilinçli muhafazakâr seçim).
+		await authDiag.record("getMe", {
+			sonuc: "server",
+			http: response.status,
+			yol: "diger_kod",
+		});
 		return { ok: false, reason: "server" };
-	} catch {
+	} catch (hata) {
+		await authDiag.record("getMe", {
+			sonuc: "network",
+			mesaj: String(hata?.message ?? hata),
+		});
 		return { ok: false, reason: "network" };
 	}
 }
