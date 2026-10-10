@@ -133,6 +133,23 @@ public class ApkUpdateModule : Module() {
     }
 
     /**
+     * Cihazın desteklediği ABI listesi, en öncelikli olan başta.
+     *
+     * NEDEN GEREKLİ: bu proje `withSplitApk.js` ile release derlemelerini
+     * ABI'ye göre böler (armeabi-v7a, arm64-v8a + universal). Release'e
+     * üç APK yüklenir ve hepsinin adı "streampulse" içerir; sıradan bir
+     * "ilk eşleşmeyi al" mantığı arm64-v8a'yı seçip 32 bit cihazda
+     * kurulumu `INSTALL_FAILED_NO_MATCHING_ABIS` ile kırar.
+     */
+    AsyncFunction("getSupportedAbis") { promise: Promise ->
+      try {
+        promise.resolve(Build.SUPPORTED_ABIS.toList())
+      } catch (e: Exception) {
+        promise.reject("ERR_ABIS", e.message, e)
+      }
+    }
+
+    /**
      * APK'yı indirir ve indirme bitince sistem yükleyicisini başlatır.
      *
      * @param downloadUrl GitHub release asset URL'si

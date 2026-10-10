@@ -142,15 +142,16 @@ export default ({ config }) => {
 			/*
 			 * APK güncelleme (modules/apk-update).
 			 *
-			 * `githubRepo` BOŞ BIRAKILABİLİR: o zaman güncelleme kapalıdır
-			 * ve uygulama hâlâ açılır. Bu bilinçli bir tasarım — repo
-			 * yayınlanmadan önce uygulamanın çalışmaya devam etmesi gerekir.
+			 * Repo: burak-ayd/StreamPulse (public). Değeri build ortamından
+			 * gelen EXPO_PUBLIC_GITHUB_REPO her zaman ETER; aşağıdaki
+			 * değer yalnızca ortam değişkeni tanımlı değilken kullanılır.
 			 *
-			 * Değer build ortamından gelir (EXPO_PUBLIC_GITHUB_REPO); elle
-			 * yazmak isteyenler buraya "owner/repo" koyabilir.
+			 * Boş da bırakılabilir: o zaman güncelleme kapalıdır ve uygulama
+			 * yine açılır. Repo yayınlanmadan önce çalışmaya devam etmeli.
 			 */
 			apkUpdate: {
-				githubRepo: process.env.EXPO_PUBLIC_GITHUB_REPO ?? "",
+				githubRepo:
+					process.env.EXPO_PUBLIC_GITHUB_REPO || "burak-ayd/StreamPulse",
 				githubToken: process.env.EXPO_PUBLIC_GITHUB_TOKEN ?? "",
 				assetHint: "streampulse",
 			},

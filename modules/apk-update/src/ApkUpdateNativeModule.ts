@@ -18,6 +18,8 @@ import type {
 
 export interface ApkUpdateNativeModule {
 	getCurrentVersion(): Promise<VersionInfo>;
+	/** `Build.SUPPORTED_ABIS` — en öncelikli mimari başta. */
+	getSupportedAbis(): Promise<string[]>;
 	checkInstallPermission(): Promise<boolean>;
 	requestInstallPermission(): void;
 	downloadAndInstall(downloadUrl: string, fileName: string): Promise<number>;
