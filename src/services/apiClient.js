@@ -24,7 +24,7 @@ import {
 	needsRefresh,
 	saveTokens,
 } from "./token";
-import { authDiag } from "@/utils/authDiagnostics";
+import { authDiag, parmakIzi } from "@/utils/authDiagnostics";
 
 const API_BASE_URL =
 	Constants.expoConfig?.extra?.API_URL ??
@@ -158,6 +158,14 @@ async function performRefresh() {
 		}
 
 		if (data?.access_token) {
+			// ⚠️ SUNUCU ROTASYONU UYGULAR: bu 200 geldiği anda `refreshToken`
+			// ÖLDÜ. Yazma başarısız olursa ve istemci eski token'la bir daha
+			// denerse `refresh_token_already_used` alır → terminal → kalıcı
+			// logout. Bu yüzden hata YUTULMAZ: çağıran hatayı görüp yeniden
+			// denemeye geçer. `saveTokens` içindeki `writeCritical` kritik
+			// (refresh) yazmayı zaten bir kez tekrar dener; ikinci deneme de
+			// düşerse buraya ulaşırız ve hatayı `refreshSession`'in catch'i
+			// `transient` sayar — token'lara dokunmadan.
 			await saveTokens({
 				access_token: data.access_token,
 				// Sunucu yeni refresh token döndürmezse mevcut olanı koru.
@@ -170,6 +178,11 @@ async function performRefresh() {
 				http: response.status,
 				yeniRefreshDondur: Boolean(data.refresh_token),
 				expiresInSn: data.expires_in ?? null,
+				// Sunucuya sunulan token'ın parmak izi: bir sonraki
+				// `hasSession` kaydıyla karşılaştırılınca "yazılan token
+				// mı sunuldu, başka bir token mı?" sorusu cevaplanır.
+				sunulanIzi: parmakIzi(refreshToken),
+				yeniIzi: parmakIzi(data.refresh_token ?? refreshToken),
 			});
 			return REFRESH_OUTCOME.REFRESHED;
 		}
@@ -201,11 +214,49 @@ async function performRefresh() {
 				govde = null;
 			}
 		}
+
+		// 🔴 SİLME ÖNCESİ DEPOYU TEKRAR OKU.
+		//
+		// Single-flight kilidi YALNIZCA aynı JS bağlamında işe yarar
+		// (`_refreshPromise`). Bizim 401 aldığımız sırada başka bir yenileme
+		// dönmüş olabilir:
+		//
+		//   * modül iki kez yüklenmişse (farklı import yolu / Fast Refresh)
+		//   * arka plan görevi ya da zamanlanmış iş kendi bağlamında yenilediyse
+		//   * uygulama yeniden başlatıldı, `_refreshPromise` sıfırlandı
+		//
+		// Bu durumda bizim sunduğumuz token ESKİ, depodaki token YENİ
+		// olur. GoTrue "already_used" der — ama oturum sağlamdır, sadece
+		// rotasyon bizden önce tüketilmiştir. Şu anki davranış bu ayrımı
+		// görmeden token'ları SİLİYOR ve kullanıcıyı düşürüyordu.
+		const guncel = await getRefreshToken().catch(() => null);
+		if (guncel && guncel !== refreshToken) {
+			await authDiag.record("refresh", {
+				sonuc: "refreshed",
+				neden: "baska_yerde_yenilenmis",
+				http: response.status,
+				detay: govde?.detail ?? govde?.code ?? govde?.message ?? null,
+				// Sunulan (eskimiş) token ile depodaki (taze) token'ın izleri.
+				// Bu ikisi FARKLI olmalıdır; değilse teşhis kaydı yanlış yere
+				// düşmüş demektir.
+				sunulanIzi: parmakIzi(refreshToken),
+				depodakiIzi: parmakIzi(guncel),
+			});
+			// Token'lar silinmez; `authFetch` isteği taze token ile tekrarlar.
+			return REFRESH_OUTCOME.REFRESHED;
+		}
+
 		await authDiag.record("refresh", {
 			sonuc: "terminal",
 			neden: `http_${response.status}`,
 			http: response.status,
 			detay: govde?.detail ?? govde?.code ?? govde?.message ?? null,
+			// Sunucunun reddettiği token'ın izi. `saveTokens`'ın yazdığı izle
+			// AYNI değilse: yazılan token sunulmamış demektir (revert).
+			// Buraya düşebilmek için yukarıdaki depoyu-tekrar-oku kontrolünden
+			// geçmiş olmak gerekir: depoda başka bir token YANLIŞSA bu kayıt
+			// hiç yazılmaz, onun yerine `baska_yerde_yenilenmis` yazılır.
+			sunulanIzi: parmakIzi(refreshToken),
 		});
 		return await terminateSession(`sunucu ${response.status}`);
 	}

@@ -1,0 +1,7 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "name": "StreamPulseApkUpdate",
+    "modules": ["expo.modules.apkupdate.ApkUpdateModule"]
+  }
+}

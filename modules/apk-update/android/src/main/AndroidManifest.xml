@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!--
+    Boş manifest, ama DOSYANIN VAR OLMASI ZORUNLUDUR (AGP kaynak kökü ister).
+
+    İzin bildirimi BURADA yapılmaz; izinler uygulama (app) manifestinde
+    tanımlıdır ve prebuild sırasında `scripts/withFileProvider.js` plugini
+    `REQUEST_INSTALL_PACKAGES` + FileProvider kaydını zaten enjekte eder.
+    Bir kütüphane manifestinin, uygulama manifestine izin EKLEMESI
+    uygulamanın istediği bir izni sessizce genişletmek anlamına gelir.
+  -->
+</manifest>

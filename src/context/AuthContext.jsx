@@ -105,7 +105,11 @@ export function AuthProvider({ children }) {
 			setStatus("loading");
 
 			try {
-				const sessionExists = await hasSession();
+				// `firtla: true` — SecureStore okunamazsa `hasSession` false dönerdi
+				// ve kullanıcı "oturum yok" sanıp giriş ekranına düşerdi. Bu
+				// dosyanın `catch` bloğu zaten oturumu düşürmeden çevrimdışı
+				// yola düşüyor; okuma hatası oraya yönlendirilmelidir.
+				const sessionExists = await hasSession({ firtla: true });
 				if (!sessionExists) {
 					// ⚠️ TEŞHİS KAYDI: Sunucuya HİÇ istek atılmadan burada
 					// karar veriliyor. Sunucu logunda bu dalın izi YOKTUR —
@@ -158,6 +162,15 @@ export function AuthProvider({ children }) {
 				// Beklenmedik hata (güvenli depo/ayrıştırma) — muhafazakâr:
 				// oturumu düşürmeden çevrimdışı yola düş.
 				console.warn("Oturum kontrolü hatası:", error?.message);
+				// 🔴 `hasSession({ firtla: true })` SecureStore okuma hatasını
+				// BURAYA düşürür. Bu kayıt, "oturum yok" ile "oturum
+				// okunamadı" ayrımını tek bakışta görünür kılar: token'lar
+				// silinmedi, sadece okunamadı. `clearTokens` kaydı OLMAYACAK.
+				await authDiag.record("checkSession", {
+					sonuc: "okuma_hatasi",
+					tokenVar: null,
+					mesaj: String(error?.message ?? error),
+				});
 				await applyCachedSession();
 			}
 		}

@@ -3,10 +3,13 @@ import { SyncProvider } from "@/context/SyncContext";
 import { LanguageDisplayProvider } from "@/context/LanguageDisplayContext";
 import { PlayerSettingsProvider } from "@/context/PlayerSettingsContext";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { AppUpdateProvider } from "@/context/AppUpdateContext";
+import UpdateBanner from "@/components/update/UpdateBanner";
+import UpdateSheet from "@/components/update/UpdateSheet";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { Slot } from "expo-router";
 import React, { useEffect } from "react";
-import { Platform } from "react-native";
+import { Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { startNetworkQualityWatch } from "@/utils/imageQuality";
 
@@ -49,17 +52,30 @@ export default function RootLayout() {
 
 	return (
 		<ThemeProvider>
-			<AuthProvider>
-				<SyncProvider>
-					<PlayerSettingsProvider>
-						<LanguageDisplayProvider>
-							<SafeAreaProvider>
-								<Slot />
-							</SafeAreaProvider>
-						</LanguageDisplayProvider>
-					</PlayerSettingsProvider>
-				</SyncProvider>
-			</AuthProvider>
+			{/*
+			 * AppUpdateProvider en dışta: hem banner hem ayarlar satırı
+			 * aynı güncelleme durumunu okusun diye tek doğruluk kaynağı
+			 * burada. Açılışta otomatik kontrolü bu provider başlatır.
+			 */}
+			<AppUpdateProvider>
+				<AuthProvider>
+					<SyncProvider>
+						<PlayerSettingsProvider>
+							<LanguageDisplayProvider>
+								<SafeAreaProvider>
+									{/* flex:1 olmadan Slot içeriği ekranı doldurmaz. */}
+									<View style={{ flex: 1 }}>
+										<Slot />
+									</View>
+									{/* absolute banner + modal: düzen akışına dokunmaz. */}
+									<UpdateBanner />
+									<UpdateSheet />
+								</SafeAreaProvider>
+							</LanguageDisplayProvider>
+						</PlayerSettingsProvider>
+					</SyncProvider>
+				</AuthProvider>
+			</AppUpdateProvider>
 		</ThemeProvider>
 	);
 }

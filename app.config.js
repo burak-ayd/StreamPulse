@@ -139,6 +139,21 @@ export default ({ config }) => {
 			variant: APP_VARIANT,
 			iconVariant: dir,
 			API_URL: "https://movieapi.burakaydogan.net.tr",
+			/*
+			 * APK güncelleme (modules/apk-update).
+			 *
+			 * `githubRepo` BOŞ BIRAKILABİLİR: o zaman güncelleme kapalıdır
+			 * ve uygulama hâlâ açılır. Bu bilinçli bir tasarım — repo
+			 * yayınlanmadan önce uygulamanın çalışmaya devam etmesi gerekir.
+			 *
+			 * Değer build ortamından gelir (EXPO_PUBLIC_GITHUB_REPO); elle
+			 * yazmak isteyenler buraya "owner/repo" koyabilir.
+			 */
+			apkUpdate: {
+				githubRepo: process.env.EXPO_PUBLIC_GITHUB_REPO ?? "",
+				githubToken: process.env.EXPO_PUBLIC_GITHUB_TOKEN ?? "",
+				assetHint: "streampulse",
+			},
 		},
 	};
 };
