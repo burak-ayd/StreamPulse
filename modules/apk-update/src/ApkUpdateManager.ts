@@ -120,31 +120,58 @@ export function formatReleaseNotes(body?: string | null): string {
 /**
  * Release içinden kurulabilir APK'yı seçer.
  *
- * Sıralama: debug olmayan "release" APK'sı → debug olmayan herhangi biri →
- * ne varsa. `-debug.apk` ve `-unsigned.apk` yayınlanmışsa onları bilerek
- * reddediyoruz; kullanıcının telefonuna kurulamazlar.
+ * ⚠️ SIRALAMA ÖNEMLİ. Bu proje `withSplitApk.js` ile release derlemesini
+ * ABI'ye göre böler; release'e birden fazla APK yüklenir:
+ *
+ *   StreamPulse-1.0.13-release-armeabi-v7a.apk
+ *   StreamPulse-1.0.13-release-arm64-v8a.apk
+ *   StreamPulse-1.0.13-release-universal.apk
+ *
+ * Üçü de aynı "ipucu"na uyar. "İlk eşleşmeyi al" mantığı hangisinin
+ * sırada olduğuna bağlı olarak arm64 seçebilir ve 32 bit cihazda
+ * kurulum `INSTALL_FAILED_NO_MATCHING_ABIS` ile patlar. Bu yüzden:
+ *
+ *   1. cihazın ABI'sine tam uyum (tercih sırası `Build.SUPPORTED_ABIS`)
+ *   2. `universal` APK — her cihazda çalışır
+ *   3. ipucu / "release" içeren APK
+ *   4. ne varsa
+ *
+ * `debug` / `unsigned` / `test` içeren APK'lar her zaman elenir: bunlar
+ * kullanıcının telefonuna kurulamaz.
  */
 export function pickApkAsset(
 	assets: GitHubReleaseAsset[] = [],
-	hint?: string
+	options: { hint?: string; abis?: string[] } | string = {}
 ): GitHubReleaseAsset | null {
+	const opts: { hint?: string; abis?: string[] } =
+		typeof options === "string" ? { hint: options } : options ?? {};
+
 	const apks = (assets ?? []).filter((asset) =>
 		asset?.name?.toLowerCase().endsWith(APK_EXTENSION)
 	);
 	if (apks.length === 0) return null;
 
-	const clean = apks.filter((asset) => !DEBUG_HINT.test(asset.name));
-	if (hint) {
-		const hinted = clean.find((asset) =>
-			asset.name.toLowerCase().includes(hint.toLowerCase())
+	const withoutDebug = apks.filter((asset) => !DEBUG_HINT.test(asset.name));
+	const pool = withoutDebug.length > 0 ? withoutDebug : apks;
+	const lower = (asset: GitHubReleaseAsset) => asset.name.toLowerCase();
+
+	for (const abi of opts.abis ?? []) {
+		// `-${abi}` ile eşleştir: sürüm numarası ya da kelime eşleşmesin.
+		const hit = pool.find((asset) => lower(asset).includes(`-${abi.toLowerCase()}`));
+		if (hit) return hit;
+	}
+
+	const universal = pool.find((asset) => /universal/.test(lower(asset)));
+	if (universal) return universal;
+
+	if (opts.hint) {
+		const hinted = pool.find((asset) =>
+			lower(asset).includes(opts.hint!.toLowerCase())
 		);
 		if (hinted) return hinted;
 	}
-	return (
-		clean.find((asset) => /release/i.test(asset.name)) ??
-		clean[0] ??
-		apks[0]
-	);
+
+	return pool.find((asset) => /release/i.test(asset.name)) ?? pool[0];
 }
 
 export class ApkUpdateManager {
@@ -157,6 +184,7 @@ export class ApkUpdateManager {
 	private readonly assetHint: string;
 	private readonly fallbackVersion: string;
 	private callbacks: UpdateManagerCallbacks = {};
+	private supportedAbis: string[] | null = null;
 
 	constructor(options: ApkUpdateManagerOptions = {}, callbacks: UpdateManagerCallbacks = {}) {
 		this.repo = options.repo ?? null;
@@ -231,6 +259,22 @@ export class ApkUpdateManager {
 	}
 
 	/**
+	 * Cihazın ABI listesi (sonuç belleğe alınır — sabit bir değer).
+	 * Split APK'lar arasından doğru olanı seçmek için gerekir.
+	 */
+	private async getSupportedAbis(): Promise<string[]> {
+		if (this.supportedAbis) return this.supportedAbis;
+		try {
+			const abis = await this.requireNative().getSupportedAbis();
+			this.supportedAbis = Array.isArray(abis) ? abis : [];
+		} catch (error) {
+			console.warn("[apk-update] ABI listesi okunamadı:", error);
+			this.supportedAbis = [];
+		}
+		return this.supportedAbis ?? [];
+	}
+
+	/**
 	 * GitHub'ı sorgular ve sürümü karşılaştırır.
 	 * Hata DURUMUNDA THROW ETMEZ — sonucu döndürür; çağıran taraf
 	 * (React) kullanıcıya ne gösterileceğine kendisi karar verir.
@@ -297,7 +341,11 @@ export class ApkUpdateManager {
 				};
 			}
 
-			const asset = pickApkAsset(release.assets, this.assetHint);
+			const abis = await this.getSupportedAbis();
+			const asset = pickApkAsset(release.assets, {
+				hint: this.assetHint,
+				abis,
+			});
 			if (!asset) {
 				const message = "Bu sürümde kurulabilir APK bulunamadı.";
 				this.setStage("error", message);

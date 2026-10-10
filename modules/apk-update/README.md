@@ -61,10 +61,24 @@ Boş bırakılırsa özellik **kapalıdır** ve uygulama normal çalışır.
 ## Release formatı
 
 - Tag: `v1.0.13` (veya `1.0.13`) — sürüm karşılaştırması bunu kullanır.
-- Asset: `*.apk`. Seçim sırası:
-  1. adında `streampulse` geçen, `debug/unsigned` içermeyen APK
-  2. adında `release` geçen, `debug/unsigned` içermeyen APK
-  3. herhangi bir (debug olmayan) APK
+- Asset: `*.apk`.
+  Bu proje release derlemesini ABI'ye göre böler (`scripts/withSplitApk.js`),
+  yani release'e **birden fazla** APK yüklenir:
+
+  ```
+  StreamPulse-1.0.13-release-armeabi-v7a.apk
+  StreamPulse-1.0.13-release-arm64-v8a.apk
+  StreamPulse-1.0.13-release-universal.apk
+  ```
+
+  Seçim sırası:
+  1. cihazın ABI'sine tam uyum (`Build.SUPPORTED_ABIS` sırası)
+  2. `universal` APK
+  3. adında `streampulse` / `release` geçen APK
+  4. herhangi bir (debug/unsigned/test içermeyen) APK
+
+  Yalnızca `universal` APK'yı yüklemek de çalışır — daha büyüktür ama her
+  cihazda kurulur.
 - Body: markdown serbest; modalde düz metne çevrilir (ilk 12 satır).
 
 ## İzinler ve yapılandırma
