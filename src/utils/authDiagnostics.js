@@ -25,8 +25,6 @@
  *   import { authDiag } from "@/utils/authDiagnostics";
  *   await authDiag.record("refresh", { sonuc: "terminal", http: 401 });
  *   const kayitlar = await authDiag.read();
- *
- * Kanal (console) YALNIZCA `__DEV__` içinde açılır; üretimde sessizdir.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -53,6 +51,39 @@ function kisalt(deger, enFazla = 200) {
 	const metin = typeof deger === "string" ? deger : JSON.stringify(deger);
 	if (!metin) return null;
 	return metin.length > enFazla ? `${metin.slice(0, enFazla)}…` : metin;
+}
+
+/**
+ * Token PARMAK İZİ — token'ın kendisi DEĞİL, geri döndürülemeyen kısa özeti.
+ *
+ * NEDEN GEREKLİ?
+ * Teşhis bulgusu: 10:16'da yenileme 200 döndü, istemci "yazdım" dedi;
+ * 2 saat sonra sunucu "bu token çoktan kullanıldı" dedi. Uyuşmazlığın
+ * kaynağını bulmak için şunu ölçmek gerekiyor:
+ *
+ *   "yazılan token ile sonradan sunucuya SUNULAN token aynı mıydı?"
+ *
+ * Uzunluk BUNU AYIRT EDEMEZ (refresh token 12 karakter, hep aynı görünür).
+ * Bu yüzden token'ın kısa bir özeti gerekir. Özet olmadan bu ayrım
+ * yapılamaz — teşhis "tespit edemedim"de takılıp kalır.
+ *
+ * GÜVENLİK
+ * FNV-1a 32-bit özet kriptografik değildir; ama refresh token'ı 12
+ * karakterlik rastgele bir alfabe dizisidir (≈4.7×10^18 olasılık), yani
+ * özetinden geriye dönmek pratikte imkânsızdır. Token YINE de hiçbir
+ * yerde yazılmaz; yalnızca bu özet ve uzunluk kaydedilir.
+ *
+ * @param {string|null} token
+ * @returns {string|null}
+ */
+export function parmakIzi(token) {
+	if (!token || typeof token !== "string") return null;
+	let h = 0x811c9dc5; // FNV-1a offset basis
+	for (let i = 0; i < token.length; i++) {
+		h ^= token.charCodeAt(i);
+		h = Math.imul(h, 0x01000193) >>> 0;
+	}
+	return h.toString(16).padStart(8, "0");
 }
 
 /**

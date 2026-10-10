@@ -19,7 +19,7 @@
 
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
-import { authDiag } from "@/utils/authDiagnostics";
+import { authDiag, parmakIzi } from "@/utils/authDiagnostics";
 
 const ACCESS_TOKEN_KEY = "streampulse_access_token";
 const REFRESH_TOKEN_KEY = "streampulse_refresh_token";
@@ -35,7 +35,24 @@ async function setItem(key, value) {
 		} catch { }
 		return;
 	}
-	await SecureStore.setItemAsync(key, value);
+	// 🔴 iOS KEYCHAIN ERİŞİLEBİLİRLİĞİ — `AFTER_FIRST_UNLOCK`
+	//
+	// expo-secure-store varsayılanı `WHEN_UNLOCKED`'dır: telefon KİLİTLİYKEN
+	// keychain okunamaz. Uygulama arka planda çalışırken (bildirim, arka plan
+	// görevi, zamanlanmış senkronizasyon) yapılan token okuma/yazma işlemleri
+	// hata verir. Bu hata "token yok" sanılır ve kullanıcı giriş ekranına
+	// düşer — oysa token'lar yerinde duruyordur.
+	//
+	// `AFTER_FIRST_UNLOCK`: cihaz ilk kez kilitli durumdan çıktıktan SONRA,
+	// kilitli olsa bile erişilebilir. Uygulamanın ihtiyacı olan güvenlik
+	// seviyesi budur (jeton zaten TLS taşınır); asıl risk, kullanıcı telefonu
+	// kilitleyince token'ı otomatik yenilemeye çalışıp HATAYA düşmesidir.
+	//
+	// NOT: Bu seçenek yalnızca iOS'u etkiler. Android Keystore ve web
+	// fallback'i aynı davranışı sürdürür.
+	await SecureStore.setItemAsync(key, value, {
+		keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+	});
 }
 
 async function getItem(key) {
@@ -170,6 +187,29 @@ export async function getRefreshToken() {
 }
 
 /**
+ * Kritik bir yazma işlemini bir kez daha dener.
+ *
+ * SecureStore hatalarının büyük kısmı GEÇİCİDİR: Android keystore meşgul,
+ * iOS keychain kilitli, cihaz belleği dolmak üzere. Böyle bir hatada yazma
+ * sessizce kaybolursa rotasyon kaybolur ve bir sonraki yenileme
+ * `refresh_token_already_used` alıp oturumu kalıcı olarak kapatır.
+ *
+ * @param {() => Promise<void>} yaz
+ * @param {string} ad - teşhis mesajı için kayıt adı
+ * @returns {Promise<void>}
+ */
+async function writeCritical(yaz, ad) {
+	try {
+		await yaz();
+	} catch (hata) {
+		console.warn(`[token] ${ad} yazılamadı, tekrar deneniyor:`, hata?.message);
+		await new Promise((coz) => setTimeout(coz, 300));
+		// İkinci hata yukarı yükselir: yine de yazılamadıysa çağıran bilmeli.
+		await yaz();
+	}
+}
+
+/**
  * Her iki token'ı birden kaydeder ve access token'ın bitiş zamanını saklar.
  *
  * @param {object} tokens
@@ -178,9 +218,15 @@ export async function getRefreshToken() {
  * @param {number} [tokens.expires_in] - Saniye. Yoksa JWT `exp`'i okunur.
  */
 export async function saveTokens({ access_token, refresh_token, expires_in } = {}) {
-	const writes = [];
-	if (access_token) writes.push(setAccessToken(access_token));
-	if (refresh_token) writes.push(setRefreshToken(refresh_token));
+	// ⚠️ Yazmadan ÖNCE eski değeri oku: "sunucu bize GERÇEKTEN yeni bir
+	// refresh token verdi mi, yoksa aynısını mı tekrar etti?" sorusu
+	// cevapsız kalırsa 10:16→12:34 uyuşmazlığı teşhis edilemiyor.
+	//
+	// `refresh_token` alanı önemli: Supabase her yenilemede yeni token
+	// DÖNMEK ZORUNDA DEĞİL. Dönmezse istemci eskisini yazar, sunucu
+	// döndürmediği hali "rotasyon oldu" sanabiliriz — oysa gerçekte olan,
+	// token'ın başka yerde tüketilmiş olmasıdır.
+	const eskiRefresh = await getRefreshToken().catch(() => null);
 
 	// Bitiş zamanı: sunucunun `expires_in` değeri önceliklidir; yoksa JWT'den okunur.
 	let expiryMs = null;
@@ -191,22 +237,51 @@ export async function saveTokens({ access_token, refresh_token, expires_in } = {
 		expiryMs = decodeJwtExpiryMs(access_token);
 	}
 
-	// null → kayıt silinir, `needsRefresh()` false kalır
-	writes.push(saveSessionExpiry(expiryMs));
-
 	// ⚠️ Yazma sonucunu ÖLÇÜM (`:hasSession()` defteri).
 	// SecureStore yazması sessizce başarısız olursa (Android keystore
-	// hataları, dolu cihaz) burada hata fırlatır; `Promise.all` reddedilir
-	// ve çağıran bunu "geçici hata" sanıp yeniden dener. Ama token'ın
-	// yarısı yazılmış olabilir — o yarım durum kalıcı logout'un en olası
-	// sebebidir. Bu kayıt onu görünür kılar.
+	// hataları, dolu cihaz) burada hata fırlatır; çağıran bunu "geçici
+	// hata" sanıp yeniden dener.
+	let refreshYazildi = false;
 	try {
-		await Promise.all(writes);
+		// 🔴 1) REFRESH TOKEN ÖNCE VE TEK BAŞINA.
+		//
+		// Sunucu refresh ROTATION uygular: `refresh()` başarılı döndüğü anda
+		// eski token ÖLÜR. Bu yüzden "access yazıldı ama refresh yazılamadı"
+		// yarım durumu bir sonraki denemede `refresh_token_already_used`
+		// üretir ve kullanıcı kalıcı olarak düşer. `Promise.all` ile paralel
+		// yazmak bu riski taşır: iki yazma birbirini beklemez, biri
+		// başarısız olurken diğeri çoktan yazılmış olabilir.
+		//
+		// Sıralama: önce rotasyonun kendisi, sonra yan veriler. Yan veri
+		// yazılamazsa rotasyun zaten güvendedir; bir sonraki yenileme yeni
+		// token'la başarılı olur.
+		if (refresh_token) {
+			await writeCritical(() => setRefreshToken(refresh_token), "refresh token");
+			refreshYazildi = true;
+		}
+
+		// 2) Kalanlar paralel — rotasyon artık güvende.
+		await Promise.all([
+			access_token ? setAccessToken(access_token) : Promise.resolve(),
+			// null → kayıt silinir, `needsRefresh()` false kalır
+			saveSessionExpiry(expiryMs),
+		]);
+
 		await authDiag.record("saveTokens", {
 			accessYazildi: Boolean(access_token),
-			refreshYazildi: Boolean(refresh_token),
+			refreshYazildi,
 			expiryYazildi: Boolean(expiryMs),
 			expiresInSn: Number.isFinite(seconds) && seconds > 0 ? seconds : null,
+			// ── Ayırt edici ölçümler ──
+			// `refreshDegisti`: sunucu YENİ token verdi mi? false ise
+			// rotasyon gerçekleşmemiş demektir ve eski token bir süre
+			// daha geçerli kalır.
+			refreshDegisti: parmakIzi(refresh_token) !== parmakIzi(eskiRefresh),
+			// Parmak izleri: yazılan ile öncekinin AYNI olup olmadığını
+			// sonradan "sunucuya hangi token sunuldu?" sorusunu cevaplamak
+			// için tutarız. Token'ın kendisi burada YOK.
+			refreshIzi: parmakIzi(refresh_token),
+			oncekiRefreshIzi: parmakIzi(eskiRefresh),
 		});
 	} catch (hata) {
 		// Yazma hatasını teşhise yaz, sonra YUTMA: çağıran bunu zaten
@@ -215,7 +290,9 @@ export async function saveTokens({ access_token, refresh_token, expires_in } = {
 			HATA: true,
 			mesaj: String(hata?.message ?? hata),
 			accessYazildi: Boolean(access_token),
-			refreshYazildi: Boolean(refresh_token),
+			// refresh_token yazıldıysa rotasyon güvende; ikinci deneme de
+			// düştüyse bu alan false olur ve teşhis "yarım durum" der.
+			refreshYazildi,
 		});
 		throw hata;
 	}
@@ -305,12 +382,37 @@ export async function clearTokens(neden = "bilinmiyor") {
  * noktada karar veriliyorsa logda 401/refresh IZİ OLMAZ (belirtinin ilk
  * ölçümünde tam olarak bu görüldü).
  *
+ * 🔴 OKUMA HATASI "TOKEN YOK" SAYILMAZ
+ *
+ * `getItem` hata verdiğinde `null` dönmesi normaldir (kayıt yok). Ama
+ * SecureStore'un KENDİSİ çöktüğünde de `null` gelir: iOS'ta telefon kilitliyken
+ * açılan uygulama, Android'de bozuk keystore. O zaman "oturum yok" denip
+ * kullanıcı giriş ekranına düşülür — token'lar yerinde durduğu halde.
+ *
+ * `firtla` seçeneği bu ayrımı çağırana bırakır: `AuthContext.checkSession`
+ * `true` verir (karar veren yer burası, `catch` bloğu zaten çevrimdışı yola
+ * düşüyor), `sync.js` `false` bırakır (orada "okunamadı" ile "yok" sonucu
+ * aynıdır ve `schedulePush`'ın `setTimeout` geri çağrısında fırlatılan hata
+ * yakalanmaz —UnhandledPromiseRejection olurdu).
+ *
+ * @param {object} [secenek]
+ * @param {boolean} [secenek.firtla=false] Okunamıyorsa hata fırlat
  * @returns {Promise<boolean>}
  */
-export async function hasSession() {
+export async function hasSession({ firtla = false } = {}) {
+	// `.catch(() => null)` okunamayan kaydı "yok" ile aynı sayıyordu.
+	let okumaHatasi = null;
+	const oku = (fn, ad) =>
+		fn().catch((hata) => {
+			// HANGİ kaydın okunamadığını da yaz: tek başına "okuma hatası"
+			// hangi token'ın bozuk olduğunu söylemez.
+			okumaHatasi = `${ad}: ${hata?.message ?? hata}`;
+			return null;
+		});
+
 	const [access, refresh] = await Promise.all([
-		getAccessToken().catch(() => null),
-		getRefreshToken().catch(() => null),
+		oku(getAccessToken, "access"),
+		oku(getRefreshToken, "refresh"),
 	]);
 
 	const sonuc = Boolean(access || refresh);
@@ -318,10 +420,21 @@ export async function hasSession() {
 		sonuc,
 		accessVardi: Boolean(access),
 		refreshVardi: Boolean(refresh),
+		// 🔴 Bu alan teşhis tablosunun satırıdır: `sonuc: false` + `okumaHatasi`
+		// birlikte görülürse sorun SecureStore'da, oturumda değildir.
+		okumaHatasi,
 		// Uzunluklar token DEĞERİNİ ele vermez; yalnızca boş/kırpılmış
 		// ayırt etmek için kullanılır.
 		accessUzunluk: access?.length ?? 0,
 		refreshUzunluk: refresh?.length ?? 0,
+		// Parmak izi: "sunucuya sunulan token, 10:16'da yazdığımız token
+		// mıydı?" sorusunu cevaplar. Değişiyorsa SecureStore araya girip
+		// değeri geri almış demektir.
+		refreshIzi: parmakIzi(refresh),
 	});
+
+	if (!sonuc && okumaHatasi && firtla) {
+		throw new Error(`SecureStore okunamadı — ${okumaHatasi}`);
+	}
 	return sonuc;
 }

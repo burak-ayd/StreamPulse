@@ -21,6 +21,9 @@
       "@hooks/*": [
         "./src/hooks/*"
       ],
+      "@modules/*": [
+        "./modules/*"
+      ],
       "@navigation/*": [
         "./src/navigation/*"
       ],

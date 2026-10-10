@@ -8,6 +8,7 @@ import {
 	useLanguageDisplay,
 } from "@/context/LanguageDisplayContext";
 import { useThemeContext } from "@/context/ThemeContext";
+import { useAppUpdate } from "@/context/AppUpdateContext";
 import { fetchPlatforms } from "@/services/api";
 import { syncNow } from "@/services/sync";
 import {
@@ -181,6 +182,17 @@ export default function SettingsScreen() {
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
 	const [activePluginsCount, setActivePluginsCount] = useState(0);
 	const [totalPluginsCount, setTotalPluginsCount] = useState(0);
+
+	// APK güncelleme: satır yalnızca kontrolü TETİKLER, gösterim ve
+	// indirme tek bir modalda (UpdateSheet) yapılır. Böylece aynı
+	// güncelleme akışının iki farklı kopyası olmuyor.
+	const {
+		release: pendingRelease,
+		currentVersion: installedVersion,
+		disabledReason: updateDisabledReason,
+		isChecking: isCheckingUpdate,
+		openSheet: openUpdateSheet,
+	} = useAppUpdate();
 
 	const { languageDisplayMode, setLanguageDisplayMode } = useLanguageDisplay();
 	const [languageModalVisible, setLanguageModalVisible] = useState(false);
@@ -513,6 +525,31 @@ export default function SettingsScreen() {
 									pathname: "profile/EditProfile",
 								})
 							}
+						/>
+
+						{/*
+						 * APK güncelleme. Satır kontrolü başlatmaz; modalı
+						 * açar. Kontrol, uygulama açılışında zaten otomatik
+						 * çalışıyor (AppUpdateProvider) — bu satır yalnızca
+						 * "şimdi bakayım" girişi ve güncelleme rozetidir.
+						 */}
+						<SettingRow
+							icon="cloud-download-outline"
+							iconBg="#0EA5E9"
+							label="Uygulama Güncellemeleri"
+							subtitle={
+								updateDisabledReason
+									? updateDisabledReason
+									: pendingRelease
+										? `v${pendingRelease.version} yayında • ${pendingRelease.sizeMB} MB`
+										: isCheckingUpdate
+											? "Güncellemeler kontrol ediliyor…"
+											: `v${installedVersion} yüklü • güncellemeleri kontrol et`
+							}
+							badgeText={pendingRelease ? "Güncelle" : undefined}
+							badgeColor={pendingRelease ? colors.primary : undefined}
+							showChevron={false}
+							onPress={openUpdateSheet}
 						/>
 					</SettingsSection>
 
