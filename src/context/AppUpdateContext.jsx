@@ -20,7 +20,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Alert, Platform } from "react-native";
+import { Alert } from "react-native";
 import { appUpdateConfig, getUpdateManager } from "@/services/appUpdate";
 
 const AppUpdateContext = createContext(null);
@@ -41,11 +41,15 @@ export function AppUpdateProvider({ children }) {
 	 * effect gövdesinde senkron setState, render → render zinciri kurar
 	 * (react-hooks/set-state-in-effect). Değer her oturum sabittir; tek
 	 * değişebilir hali `check()` sonucuyla "disabled" dönmesidir.
+	 *
+	 * ⚠️ TV'de özellik KAPALI DEĞİL. Önceden `Platform.isTV` ile
+	 * kapatılmıştı; ama banner/modal artık kumanda (D-pad) ile
+	 * çalışacak şekilde yapıldı ve TV kutu cihazlarında da sistem
+	 * yükleyicisi bulunuyor. Kapatmak istersen buraya
+	 * `Platform.isTV ? "TV'de desteklenmiyor." : ...` geri konabilir.
 	 */
 	const [disabledReason, setDisabledReason] = useState(() =>
-		Platform.isTV === true
-			? "TV sürümünde APK güncellemesi desteklenmiyor."
-			: getUpdateManager().getAvailabilityReason()
+		getUpdateManager().getAvailabilityReason()
 	);
 
 	const managerRef = useRef(null);
@@ -162,7 +166,22 @@ export function AppUpdateProvider({ children }) {
 	}, []);
 
 	const openSheet = useCallback(() => setSheetVisible(true), []);
-	const closeSheet = useCallback(() => setSheetVisible(false), []);
+	/*
+	 * Modal kapanırken banner da kapatılır.
+	 *
+	 * ⚠️ Bug: bildirime dokunup modalı açan kullanıcı, güncelleme YAPMADAN
+	 * kapatınca banner tekrar ekrana dönüyordu. Sebep: `bannerVisible` hâlâ
+	 * true'ydu ve banner, modal açıkken render edilmediği için kapanışta
+	 * "tekrar görünür" hale geliyordu.
+	 *
+	 * Modal banner'ın bilgisinin aynısını gösterdiği için geri getirmek
+	 * bilgi kaybı değil; kullanıcı "gördüm, şimdi değil" dediğinde karşı
+	 * çıkması gereken davranış bu.
+	 */
+	const closeSheet = useCallback(() => {
+		setSheetVisible(false);
+		setBannerVisible(false);
+	}, []);
 	const dismissBanner = useCallback(() => setBannerVisible(false), []);
 
 	const value = useMemo(

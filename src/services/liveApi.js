@@ -31,8 +31,8 @@
  * AsyncStorage'a dokunulmaz.
  */
 
-import Constants from "expo-constants";
 import { hlsDegilseNeden, hlsOynatilabilirMi } from "@/utils/hlsUrl";
+import Constants from "expo-constants";
 
 /**
  * Taban URL — `api.js` ve `apiClient.js` ile BİREBİR AYNI kalıp.
@@ -49,6 +49,7 @@ import { hlsDegilseNeden, hlsOynatilabilirMi } from "@/utils/hlsUrl";
  * daha pahalıdır. Simge tek kaynaktan gelmeye devam eder: `app.config.js` →
  * `extra.API_URL`.
  */
+
 const API_BASE_URL =
 	Constants.expoConfig?.extra?.API_URL ??
 	Constants.manifest?.extra?.API_URL ??
@@ -193,12 +194,23 @@ async function liveFetch(yol) {
 
 	if (response.ok) {
 		try {
-			return { ok: true, status: response.status, data: await response.json() };
+			return {
+				ok: true,
+				status: response.status,
+				data: await response.json(),
+			};
 		} catch (error) {
 			// 200 ama çözümlenemeyen gövde. `null`/boş liste dönmek "M3U bozuk"
 			// ile "sunucu bozuk cevap verdi" ayrımını yok ederdi.
-			console.warn(`[canlı-tv] Gövde çözümlenemedi — ${yol}:`, error?.message);
-			return { ok: false, status: response.status, reason: LIVE_ERROR_REASON.SERVER };
+			console.warn(
+				`[canlı-tv] Gövde çözümlenemedi — ${yol}:`,
+				error?.message,
+			);
+			return {
+				ok: false,
+				status: response.status,
+				reason: LIVE_ERROR_REASON.SERVER,
+			};
 		}
 	}
 
@@ -212,8 +224,7 @@ async function liveFetch(yol) {
 		detail = null; // JSON olmayan hata gövdesi (HTML 502 sayfası gibi)
 	}
 
-	const mesaj =
-		(typeof detail === "string" ? detail : detail?.mesaj) || null;
+	const mesaj = (typeof detail === "string" ? detail : detail?.mesaj) || null;
 
 	if (response.status === 404) {
 		console.warn(`[canlı-tv] Bulunamadı (404) — ${yol}:`, mesaj);
@@ -238,7 +249,8 @@ async function liveFetch(yol) {
 	// 503 ve diğer 5xx / 429 / 408 → geçici. `Retry-After` başlığı sunucuda
 	// `StarletteHTTPException` handler'ı üzerinden KORUNUR (`api/app.py` →
 	// `headers=getattr(exc, "headers", None)`), bu yüzden burada okunabilir.
-	const retryAfterSec = Number(response.headers?.get?.("Retry-After")) || null;
+	const retryAfterSec =
+		Number(response.headers?.get?.("Retry-After")) || null;
 	console.warn(
 		`[canlı-tv] Geçici hata (${response.status}) — ${yol}:`,
 		mesaj || "(mesaj yok)",
@@ -336,11 +348,7 @@ export async function fetchLiveCategories({ force = false } = {}) {
  * @param {boolean} [parametre.force=false]
  * @returns {Promise<object>}
  */
-export async function fetchLiveChannels({
-	category,
-	q,
-	force = false,
-} = {}) {
+export async function fetchLiveChannels({ category, q, force = false } = {}) {
 	// `category` verilmezse sunucunun varsayılanı da "tum"; önbellek anahtarı
 	// bu ikisini AYNI kovaya yazar, yoksa aynı liste iki yerde birden tutulur.
 	const kategori = category ? String(category) : CANLI_TV_KATEGORI_TUMU;

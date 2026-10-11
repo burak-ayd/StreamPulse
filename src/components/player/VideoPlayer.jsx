@@ -41,6 +41,22 @@ import usePlayerGestures from "./usePlayerGestures";
 import useSubtitles from "./useSubtitles";
 import useVideoSource from "./useVideoSource";
 import useWatchProgress from "./useWatchProgress";
+import {
+	classifyPlaybackError,
+	describePlaybackError,
+} from "../../utils/playbackError";
+
+/**
+ * Geçici ağ hatasından sonra AYNI kaynağı tekrar denemeden önce beklenecek
+ * süre (ms).
+ *
+ * ⚠️ Neden 1.6 sn? Canlı TV yayın sunucuları (CDN kenar önbelleği, mobil
+ * şebeke geçişi) sık sık birkaç saniyelik kısa kopukluk yaşar. 1.6 sn: bir
+ * TCP/TLS el sıkışması + ilk segmentin gelmesi için yeterli, ama kullanıcı
+ * "donuyor" izlenimi vermeyecek kadar kısa. Aynı kaynak YALNIZCA bir kez
+ * tekrar denenir (`retryCountRef`) — yoksa sonsuz döngü oluşur.
+ */
+const TEMEL_GEÇICI_BEKLEME_MS = 1600;
 
 /**
  * ── `VideoPlayer` ─────────────────────────────────────────────
@@ -118,7 +134,8 @@ export default function VideoPlayer({
 	const [isSpeedSheetOpen, setSpeedSheetOpen] = useState(false);
 	const [modalType, setModalType] = useState(null);
 	const [availableAudioTracks, setAvailableAudioTracks] = useState([]);
-	const [selectedAudioTrackIndex, setSelectedAudioTrackIndex] = useState(null);
+	const [selectedAudioTrackIndex, setSelectedAudioTrackIndex] =
+		useState(null);
 	const [isPipActive, setPipActive] = useState(false);
 	const [naturalSize, setNaturalSize] = useState(null);
 
@@ -128,6 +145,22 @@ export default function VideoPlayer({
 	const isLoadedRef = useRef(false);
 	const hasAppliedResumeRef = useRef(false);
 	const pendingSeekTimeRef = useRef(initialTime || 0);
+
+	// ── Hata kurtarma sayaçları ─────────────────────────────────
+	//
+	// ⚠️ Neden `ref`? Bunlar hata ANINDA okunur ve "bu kaynak zaten
+	// denendi mi" bilgisi render döngüsüne girmez. `useState` olsaydı
+	// hata anında bayat değer okunabilirdi.
+	//
+	// `seenSourceErrorsRef`: bu oturumda **hangi kaynaklar** hata verdi.
+	//   Boş set → "hiç denemedi" anlamına gelir (0 değeri de bir indekstir,
+	//   bu yüzden `0` eklenmemeli — Set kullandığımız için doğal).
+	// `retryCountRef`: kaynak başına geçici hata tekrar sayısı.
+	// `retryTimerRef`: bekleyen tekrar zamanlayıcısı (kaynak değişince/çıkışta
+	//   iptal edilir; yoksa kullanıcı B ekranına döndüğünde eski kaynak açılır).
+	const seenSourceErrorsRef = useRef(new Set());
+	const retryCountRef = useRef(new Map());
+	const retryTimerRef = useRef(null);
 	// ⚠️ `originalBrightnessRef` KALDIRILDI. Parlaklık geri yüklemesi
 	// artık native modülde (`resetBrightness`) yapılıyor; JS tarafında
 	// eski değeri tutmak hem gereksiz hem de (izin kontrolü hatası
@@ -146,7 +179,8 @@ export default function VideoPlayer({
 		const track = availableAudioTracks?.[selectedAudioTrackIndex ?? 0];
 		const raw = track || availableAudioTracks?.[0];
 		if (!raw) return {};
-		const pick = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+		const pick = (v) =>
+			typeof v === "string" && v.trim() ? v.trim() : null;
 		return {
 			language: pick(raw.language),
 			audioCodec: pick(raw.codec)?.toUpperCase(),
@@ -190,7 +224,9 @@ export default function VideoPlayer({
 	 */
 	const sourceLabel = useMemo(() => {
 		const raw =
-			currentSourceData?.result?.name || currentSourceData?.extractor || "";
+			currentSourceData?.result?.name ||
+			currentSourceData?.extractor ||
+			"";
 		if (!raw) return "";
 		if (raw.includes("|")) return raw.split("|")[0].trim();
 		return raw.trim();
@@ -301,7 +337,10 @@ export default function VideoPlayer({
 	const seekBy = useCallback(
 		(deltaSeconds) => {
 			if (!videoRef.current || !canSeek) return;
-			const next = Math.max(0, Math.min(duration, currentTime + deltaSeconds));
+			const next = Math.max(
+				0,
+				Math.min(duration, currentTime + deltaSeconds),
+			);
 			// ⚠️ SORUN 3/4: bu gerçek bir kullanıcı seek'idir. İlerleme
 			// motoruna bildirilir ki arabellek çıkışıyla karıştırılmasın.
 			noteUserSeek();
@@ -423,6 +462,31 @@ export default function VideoPlayer({
 	useEffect(() => {
 		return () => {
 			resetBrightness();
+		};
+	}, []);
+
+	/*
+	 * Hata kurtarma defterini kaynak listesi değiştiğinde sıfırla.
+	 *
+	 * ⚠️ Neden liste değişince? Aynı indeks artık FARKLI bir adresi
+	 * gösteriyor olabilir (canlı TV'de keşif döngüsü yeni bir alternatif
+	 * akış eklediğinde sıra kayabilir). Eski "bu kaynak öldü" kaydı yeni
+	 * adresi haksız yere karalamaz.
+	 */
+	useEffect(() => {
+		seenSourceErrorsRef.current = new Set();
+		retryCountRef.current = new Map();
+		if (retryTimerRef.current) {
+			clearTimeout(retryTimerRef.current);
+			retryTimerRef.current = null;
+		}
+	}, [sources]);
+
+	// Bekleyen geçici-hata tekrarını ekrandan çıkarken iptal et: aksi hâlde
+	// timer, oynatıcı yokken `setState` çağırır.
+	useEffect(() => {
+		return () => {
+			if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
 		};
 	}, []);
 
@@ -702,10 +766,27 @@ export default function VideoPlayer({
 	 * yaptığı için use-before-define THROW ETMEZ, sessizce `undefined`
 	 * okur. Bu dosyada bu tuzak daha önce yaşandı.
 	 */
-	const switchSourceTo = (index) => {
+	const switchSourceTo = (index, secenekler = {}) => {
 		// Canlıda "doğru konum" diye bir şey yok; eski konuma atlamak
 		// yayını kaçırır → 0 yazılır.
-		const keepPosition = !isLive && settings?.autoResume !== false && canSeek;
+		const keepPosition =
+			!isLive && settings?.autoResume !== false && canSeek;
+
+		// Bekleyen geçici-hata tekrarını iptal et: kullanıcı başka kaynağa
+		// geçtiyse, eski kaynağın kuyruğa alınmış tekrarı çalışmamalı.
+		if (retryTimerRef.current) {
+			clearTimeout(retryTimerRef.current);
+			retryTimerRef.current = null;
+		}
+
+		// ⚠️ `resetErrors` YALNIZCA kullanıcı eyleminde (yeniden yükle
+		// düğmesi) kullanılır: kullanıcı "dene" dediğinde o kaynak yeniden
+		// masadan çıkar. Otomatik ilerlemede geçmiş KORUNUR — yoksa
+		// ölü kaynağa tekrar tekrar dönüp sonsuz döngüye girerdik.
+		if (secenekler.resetErrors) {
+			seenSourceErrorsRef.current.delete(index);
+			retryCountRef.current.delete(index);
+		}
 
 		pendingSeekTimeRef.current = keepPosition ? currentTimeRef.current : 0;
 		resetOverride();
@@ -737,48 +818,102 @@ export default function VideoPlayer({
 	};
 
 	const handleError = (error) => {
-		console.warn("Video playback error:", error);
+		const bilgi = classifyPlaybackError(error);
+		const kaynakEtiketi =
+			sources[activeSourceIndex]?.result?.name ||
+			sources[activeSourceIndex]?.extractor ||
+			`kaynak ${activeSourceIndex + 1}`;
+
+		console.warn(
+			`[oynatma] Hata — kaynak: ${kaynakEtiketi} | tür: ${bilgi.kind} | ` +
+				`kod: ${bilgi.code ?? "?"} | ölü: ${bilgi.sourceDead} | ` +
+				`geçici: ${bilgi.transient} | ham: ${error?.error?.errorString ?? "-"}`,
+		);
 		setIsLoading(false);
 		setIsBuffering(false);
 
-		const errorCode = error?.error?.errorCode;
-		const isFormatError =
-			errorCode === "23002" ||
-			errorCode === "23003" ||
-			error?.error?.errorString?.includes("PARSING_CONTAINER") ||
-			error?.error?.errorString?.includes("PARSING_MANIFEST") ||
-			error?.error?.errorException?.includes(
-				"UnrecognizedInputFormatException",
-			) ||
-			error?.error?.errorStackTrace?.includes("HlsPlaylistParser") ||
-			error?.error?.errorStackTrace?.includes("#EXTM3U");
+		// ── 1) Aynı kaynağın KENDİSİ bu oturumda zaten öldü mü? ──
+		//
+		// Döngü koruması: kaynak 0 → 1 → 0 gibi bir sıralamada aynı ölü
+		// adres defalarca denenir ve kullanıcı sonsuz "deneniyor" görür.
+		const kaynakNo = activeSourceIndex;
+		if (seenSourceErrorsRef.current.has(kaynakNo)) {
+			// Bu kaynak zaten bir kez denendi ve tutmadı → doğrudan sıradakine.
+			const sonrakiVar = kaynakNo < sources.length - 1;
+			if (sonrakiVar) {
+				console.log(
+					`[oynatma] ${kaynakEtiketi} ikinci kez başarısız — sıradaki kaynağa geçiliyor`,
+				);
+				switchSourceTo(kaynakNo + 1);
+				return;
+			}
+			setHasError(true);
+			setErrorMessage(
+				describePlaybackError(error, {
+					sourceLabel: kaynakEtiketi,
+					hasAlternatives: false,
+				}),
+			);
+			return;
+		}
+		seenSourceErrorsRef.current.add(kaynakNo);
 
-		// Biçim hatası → ters türle bir kez dene.
-		if (isFormatError && !formatRetryRef.current) {
+		// ── 2) GEÇİCİ hata → aynı kaynağı kısa süre sonra bir kez daha dene ──
+		//
+		// Canlı TV'de yayın sunucuları sık sık birkaç saniyelik kısa kopukluk
+		// yaşar (CDN kenar önbelleği, mobil şebeke geçişi). Böyle bir hatada
+		// kaynağı terk etmek yayını gereksiz yere bitirir.
+		if (bilgi.transient) {
+			const deneme = retryCountRef.current.get(kaynakNo) || 0;
+			if (deneme < 1) {
+				retryCountRef.current.set(kaynakNo, deneme + 1);
+				console.log(
+					`[oynatma] ${kaynakEtiketi} geçici hata — ${TEMEL_GEÇICI_BEKLEME_MS} ms sonra aynı kaynak yeniden denenecek`,
+				);
+				retryTimerRef.current = setTimeout(() => {
+					switchSourceTo(kaynakNo);
+				}, TEMEL_GEÇICI_BEKLEME_MS);
+				return;
+			}
+		}
+
+		// ── 3) BİÇİM hatası → ters türle bir kez dene (eski davranış) ──
+		if (bilgi.retryableWithTypeFlip && !formatRetryRef.current) {
 			if (toggleOverrideType()) return;
 		}
 
-		// Sonraki kaynağa otomatik geç.
+		// ── 4) Kaynak öldü → sıradakine geç ──
 		const hasMoreSources = activeSourceIndex < sources.length - 1;
-		if ((isFormatError || errorCode?.startsWith("2")) && hasMoreSources) {
-			console.log(`Source ${activeSourceIndex} failed, trying next...`);
+		if (hasMoreSources) {
+			console.log(
+				`[oynatma] ${kaynakEtiketi} oynatılamadı (${bilgi.kind}) — sıradaki kaynak deneniyor`,
+			);
 			// ⚠️ Konum korunur: bu yol daha önce `pendingSeekTimeRef`'i
 			// yazmıyordu ve video baştan başlıyordu.
 			switchSourceTo(activeSourceIndex + 1);
 			return;
 		}
 
+		// ── 5) Kaynak kalmadı → anlaşılır mesaj (ham ExoPlayer metni değil) ──
 		setHasError(true);
 		setErrorMessage(
-			error?.error?.errorString ||
-				"Video oynatılamadı. Lütfen farklı bir kaynak seçin.",
+			describePlaybackError(error, {
+				sourceLabel: kaynakEtiketi,
+				hasAlternatives: false,
+			}),
 		);
 	};
 
 	const handleSelectSource = (index) => {
 		if (index === activeSourceIndex) return;
 		// Konum koruma dahil TÜM kaynak değiştirme mantığı tek yolda.
-		switchSourceTo(index);
+		//
+		// ⚠️ `resetErrors` ŞART: kullanıcı listeden kaynak seçtiyse bu bir
+		// "dene" emridir. O kaynağın eski hata kaydı silinmezse, kaynak
+		// açılmaya çalışırken hata verdiği anda oynatıcı "bu kaynak zaten
+		// öldü" deyip listedeki sonrakine atlar ve kullanıcının seçimi
+		// hiç denenmez.
+		switchSourceTo(index, { resetErrors: true });
 	};
 
 	// ── Altyazı / ses izi prop'ları ─────────────────────────
@@ -830,7 +965,10 @@ export default function VideoPlayer({
 				seekBy(-seekDuration);
 				return;
 			}
-			if (canSeek && (eventType === "right" || eventType === "fastForward")) {
+			if (
+				canSeek &&
+				(eventType === "right" || eventType === "fastForward")
+			) {
 				seekBy(seekDuration);
 				return;
 			}
@@ -870,7 +1008,10 @@ export default function VideoPlayer({
 			}
 			return false;
 		};
-		const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+		const sub = BackHandler.addEventListener(
+			"hardwareBackPress",
+			onBackPress,
+		);
 		return () => sub.remove();
 	}, [isSpeedSheetOpen, modalType, showControls, onClose]);
 
@@ -883,7 +1024,9 @@ export default function VideoPlayer({
 	);
 
 	const bufferRatio =
-		duration > 0 ? Math.min(1, Math.max(0, playableDuration / duration)) : 0;
+		duration > 0
+			? Math.min(1, Math.max(0, playableDuration / duration))
+			: 0;
 
 	const subtitleBottom = showControls ? 100 : 36;
 
@@ -916,8 +1059,7 @@ export default function VideoPlayer({
 							transform: [{ scale: zoomScale }],
 						},
 					]}
-					pointerEvents="none"
-				>
+					pointerEvents="none">
 					<Video
 						key={videoKey}
 						ref={videoRef}
@@ -952,7 +1094,9 @@ export default function VideoPlayer({
 						posterResizeMode="cover"
 						useTextureView={true}
 						playInBackground={settings?.playInBackground !== false}
-						enterPictureInPictureOnLeave={settings?.pictureInPicture !== false}
+						enterPictureInPictureOnLeave={
+							settings?.pictureInPicture !== false
+						}
 					/>
 				</View>
 			) : (
@@ -1038,8 +1182,7 @@ export default function VideoPlayer({
 							paddingRight: Math.max(insets.right, 16),
 						},
 					]}
-					pointerEvents="box-none"
-				>
+					pointerEvents="box-none">
 					{/*
 					 * ⭐ ÜST BAR (CloudStream düzeni): solda geri düğmesi,
 					 * ortada 3 satırlık bilgi bloğu — kaynak-çözünürlük,
@@ -1057,7 +1200,8 @@ export default function VideoPlayer({
 							onClose?.();
 						}}
 						onAction={
-							settings?.pictureInPicture !== false && !Platform.isTV ? (
+							settings?.pictureInPicture !== false &&
+							!Platform.isTV ? (
 								<TVPressable
 									style={styles.iconButton}
 									focusedStyle={styles.iconButtonFocused}
@@ -1065,8 +1209,7 @@ export default function VideoPlayer({
 									onPress={() => {
 										startHideTimerRef.current?.();
 										enterPip();
-									}}
-								>
+									}}>
 									{/*
 									 * ⚠️ `picture-in-picture-outline` Ionicons'ta YOKTUR ve
 									 * "soru işareti" kutusu üretir. `tablet-landscape-outline`
@@ -1075,7 +1218,9 @@ export default function VideoPlayer({
 									<Ionicons
 										name="tablet-landscape-outline"
 										size={20}
-										color={isPipActive ? "#FF3B30" : "#FFFFFF"}
+										color={
+											isPipActive ? "#FF3B30" : "#FFFFFF"
+										}
 									/>
 								</TVPressable>
 							) : null
@@ -1088,21 +1233,24 @@ export default function VideoPlayer({
 					 * zeminSİZ durur. Öncedki büyük kırmızı daire kaldırıldı.
 					 */}
 					{!isLocked && (
-						<View style={styles.centerControls} pointerEvents="box-none">
+						<View
+							style={styles.centerControls}
+							pointerEvents="box-none">
 							{canSeek ? (
 								<TVPressable
 									style={styles.roundButton}
 									focusedStyle={styles.roundButtonFocused}
 									cancelable={false}
-									onPress={() => seekBy(-seekDuration)}
-								>
+									onPress={() => seekBy(-seekDuration)}>
 									<View style={styles.roundInner}>
 										<Ionicons
 											name="play-back-circle-outline"
 											size={30}
 											color="#FFFFFF"
 										/>
-										<Text style={styles.roundLabel}>{seekDuration}</Text>
+										<Text style={styles.roundLabel}>
+											{seekDuration}
+										</Text>
 									</View>
 								</TVPressable>
 							) : (
@@ -1114,8 +1262,7 @@ export default function VideoPlayer({
 								style={styles.playButton}
 								focusedStyle={styles.playButtonFocused}
 								cancelable={false}
-								onPress={togglePlayPause}
-							>
+								onPress={togglePlayPause}>
 								<Ionicons
 									name={paused ? "play" : "pause"}
 									size={34}
@@ -1128,15 +1275,16 @@ export default function VideoPlayer({
 									style={styles.roundButton}
 									focusedStyle={styles.roundButtonFocused}
 									cancelable={false}
-									onPress={() => seekBy(seekDuration)}
-								>
+									onPress={() => seekBy(seekDuration)}>
 									<View style={styles.roundInner}>
 										<Ionicons
 											name="play-forward-circle-outline"
 											size={30}
 											color="#FFFFFF"
 										/>
-										<Text style={styles.roundLabel}>{seekDuration}</Text>
+										<Text style={styles.roundLabel}>
+											{seekDuration}
+										</Text>
 									</View>
 								</TVPressable>
 							) : (
@@ -1153,7 +1301,9 @@ export default function VideoPlayer({
 								duration={duration}
 								bufferRatio={bufferRatio}
 								isLive={isLive}
-								showRemainingTime={Boolean(settings?.showRemainingTime)}
+								showRemainingTime={Boolean(
+									settings?.showRemainingTime,
+								)}
 								onScrubMove={handleScrubMove}
 								onScrubEnd={handleScrubMove}
 							/>
@@ -1162,7 +1312,9 @@ export default function VideoPlayer({
 								actions={[
 									{
 										key: "lock",
-										icon: isLocked ? "lock-closed" : "lock-open-outline",
+										icon: isLocked
+											? "lock-closed"
+											: "lock-open-outline",
 										label: "Kilitle",
 										active: isLocked,
 										onPress: () => {
@@ -1172,7 +1324,9 @@ export default function VideoPlayer({
 									},
 									{
 										key: "resize",
-										icon: RESIZE_MODE_ICONS[resizeMode] || "expand-outline",
+										icon:
+											RESIZE_MODE_ICONS[resizeMode] ||
+											"expand-outline",
 										label: "Yeniden boyutlandır",
 										disabled: isLive,
 										onPress: () => {
@@ -1203,7 +1357,8 @@ export default function VideoPlayer({
 										key: "tracks",
 										icon: "options-outline",
 										label: "Parçalar",
-										active: selectedAudioTrackIndex !== null,
+										active:
+											selectedAudioTrackIndex !== null,
 										onPress: () => {
 											startHideTimerRef.current?.();
 											setModalType("tracks");
@@ -1212,13 +1367,18 @@ export default function VideoPlayer({
 									{
 										key: "speed",
 										icon: "speedometer-outline",
-										label: playbackRate === 1 ? "Hız" : `${playbackRate}×`,
+										label:
+											playbackRate === 1
+												? "Hız"
+												: `${playbackRate}×`,
 										active: playbackRate !== 1,
 										disabled: isLive,
 										onPress: () => {
 											setSpeedSheetOpen(true);
 											if (hideTimerRef.current)
-												clearTimeout(hideTimerRef.current);
+												clearTimeout(
+													hideTimerRef.current,
+												);
 										},
 									},
 								]}
@@ -1231,30 +1391,34 @@ export default function VideoPlayer({
 			{/* 4. KATMAN: Altyazı */}
 			{subtitles.currentSubtitleText ? (
 				<View
-					style={[styles.subtitleContainer, { bottom: subtitleBottom }]}
-					pointerEvents="none"
-				>
+					style={[
+						styles.subtitleContainer,
+						{ bottom: subtitleBottom },
+					]}
+					pointerEvents="none">
 					<View
 						style={[
 							styles.subtitlePill,
 							{
-								backgroundColor: subtitleBgColor(settings?.subtitleBgColor),
+								backgroundColor: subtitleBgColor(
+									settings?.subtitleBgColor,
+								),
 							},
-						]}
-					>
+						]}>
 						<Text
 							style={[
 								styles.subtitleText,
 								{
 									fontSize: settings?.subtitleFontSize || 16,
-									color: settings?.subtitleTextColor || "#FFFFFF",
+									color:
+										settings?.subtitleTextColor ||
+										"#FFFFFF",
 									textShadowColor:
 										settings?.subtitleTextShadow !== false
 											? "rgba(0, 0, 0, 0.95)"
 											: "transparent",
 								},
-							]}
-						>
+							]}>
 							{subtitles.currentSubtitleText}
 						</Text>
 					</View>
@@ -1276,23 +1440,32 @@ export default function VideoPlayer({
 				<View style={styles.centerLoading} pointerEvents="none">
 					<ActivityIndicator size="large" color="#FF3B30" />
 					<Text style={styles.loadingText}>
-						{isLoading ? "Kaynak yükleniyor..." : "Ara belleğe alınıyor..."}
+						{isLoading
+							? "Kaynak yükleniyor..."
+							: "Ara belleğe alınıyor..."}
 					</Text>
 				</View>
 			)}
 
 			{hasError && (
 				<View style={styles.errorContainer}>
-					<Ionicons name="alert-circle-outline" size={54} color="#FF453A" />
+					<Ionicons
+						name="alert-circle-outline"
+						size={54}
+						color="#FF453A"
+					/>
 					<Text style={styles.errorTitle}>Oynatma Hatası</Text>
 					<Text style={styles.errorDescription}>{errorMessage}</Text>
 					<View style={styles.errorButtonsRow}>
 						{sources.length > 1 && (
 							<TouchableOpacity
 								style={styles.switchSourceButton}
-								onPress={() => setModalType("sources")}
-							>
-								<Ionicons name="server-outline" size={18} color="#FFFFFF" />
+								onPress={() => setModalType("sources")}>
+								<Ionicons
+									name="server-outline"
+									size={18}
+									color="#FFFFFF"
+								/>
 								<Text style={styles.switchSourceButtonText}>
 									{`Farklı Kaynak Seç (${sources.length} Kaynak)`}
 								</Text>
@@ -1303,11 +1476,23 @@ export default function VideoPlayer({
 							onPress={() => {
 								// Aynı kaynağı yeniden yükle: `switchSourceTo`
 								// konumu da korur (daha önce sıfırlanıyordu).
-								switchSourceTo(activeSourceIndex);
-							}}
-						>
-							<Ionicons name="refresh" size={18} color="#FFFFFF" />
-							<Text style={styles.retryButtonText}>Yeniden Dene</Text>
+								//
+								// ⚠️ `resetErrors` ŞART: kullanıcı "Tekrar Dene"
+								// dediğinde o kaynağın hata kaydı silinir. Aksi
+								// hâlde aynı adres yeniden açılmaya çalışıldığında
+								// `handleError` "bu kaynak zaten öldü" deyip
+								// sıradakine atlar ve kullanıcının denemesi
+								// hiç gerçekleşmez.
+								switchSourceTo(activeSourceIndex, { resetErrors: true });
+							}}>
+							<Ionicons
+								name="refresh"
+								size={18}
+								color="#FFFFFF"
+							/>
+							<Text style={styles.retryButtonText}>
+								Yeniden Dene
+							</Text>
 						</TouchableOpacity>
 					</View>
 				</View>
@@ -1341,7 +1526,9 @@ export default function VideoPlayer({
 				onUpdateSubtitleOffset={subtitles.updateOffset}
 				audioTracks={availableAudioTracks}
 				selectedAudioTrack={selectedAudioTrackIndex}
-				onSelectAudioTrack={(index) => setSelectedAudioTrackIndex(index)}
+				onSelectAudioTrack={(index) =>
+					setSelectedAudioTrackIndex(index)
+				}
 			/>
 		</View>
 	);
