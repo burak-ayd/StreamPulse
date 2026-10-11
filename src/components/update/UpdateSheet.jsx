@@ -5,10 +5,19 @@
  * Bu bileşen "ne olacak?" kararını veren TEK yer; yönetici yalnızca
  * olayları bildirir. Kullanıcı reddederse güncelleme ertelenir, hata
  * olursa tekrar denenebilir.
+ *
+ * ── TV ──────────────────────────────────────────────────────────────────
+ * Eylem düğmeleri `TVPressable` ile odaklanabilir; güncelleme varsa
+ * birincil düğme `autoFocus` alır, böylece kumandayla doğrudan
+ * "Güncellemeyi indir" denebilir. Arka plan (`Pressable`) bilerek
+ * odaklanabilir DEĞİL: odak oraya kaçarsa kullanıcı geri dönemez.
+ * Ölçüler `useTvMetrics().sp()` ile ölçeklenir.
  */
 import { Ionicons } from "@react-native-vector-icons/ionicons";
+import TVPressable from "@/components/common/TVPressable";
 import { useAppUpdate } from "@/context/AppUpdateContext";
 import { useThemeContext } from "@/context/ThemeContext";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import React from "react";
 import {
 	ActivityIndicator,
@@ -40,6 +49,7 @@ function formatDate(value) {
 export default function UpdateSheet() {
 	const { colors } = useThemeContext();
 	const insets = useSafeAreaInsets();
+	const { isTV, sp, gutter } = useTvMetrics();
 	const {
 		sheetVisible,
 		closeSheet,
@@ -64,11 +74,24 @@ export default function UpdateSheet() {
 	/**
 	 * Modal, indirme sürerken kapatılamaz — kullanıcı arka planda
 	 * yarım kalmış bir indirme bırakmasın. Android geri tuşu da aynı
-	 * kurala tabidir (`onRequestClose`).
+	 * kurala tabidir (`onRequestClose`) ve kumandada da aynı tuştur.
 	 */
 	const handleClose = () => {
 		if (isBusy) return;
 		closeSheet();
+	};
+
+	const primaryFocusedStyle = {
+		opacity: 0.85,
+		...styles.focusRing,
+	};
+	const secondaryFocusedStyle = {
+		backgroundColor: colors.border,
+		...styles.focusRing,
+	};
+	const linkFocusedStyle = {
+		opacity: 0.7,
+		...styles.focusRing,
 	};
 
 	const renderBody = () => {
@@ -76,11 +99,18 @@ export default function UpdateSheet() {
 			return (
 				<View style={styles.centered}>
 					<ActivityIndicator color={colors.primary} size="large" />
-					<Text style={[styles.statusText, { color: colors.text }]}>
+					<Text
+						style={[
+							styles.statusText,
+							{ color: colors.text, fontSize: sp(16) },
+						]}>
 						Güncellemeler kontrol ediliyor…
 					</Text>
 					<Text
-						style={[styles.statusHint, { color: colors.textSecondary }]}>
+						style={[
+							styles.statusHint,
+							{ color: colors.textSecondary, fontSize: sp(13) },
+						]}>
 						GitHub yayınlarına bakılıyor
 					</Text>
 				</View>
@@ -91,18 +121,33 @@ export default function UpdateSheet() {
 			return (
 				<View style={styles.centered}>
 					<View
-						style={[styles.iconCircle, { backgroundColor: colors.border }]}>
+						style={[
+							styles.iconCircle,
+							{
+								backgroundColor: colors.border,
+								width: sp(62),
+								height: sp(62),
+								borderRadius: sp(31),
+							},
+						]}>
 						<Ionicons
 							name="information-circle-outline"
-							size={30}
+							size={sp(30)}
 							color={colors.textSecondary}
 						/>
 					</View>
-					<Text style={[styles.statusText, { color: colors.text }]}>
+					<Text
+						style={[
+							styles.statusText,
+							{ color: colors.text, fontSize: sp(16) },
+						]}>
 						Güncelleme kullanılamıyor
 					</Text>
 					<Text
-						style={[styles.statusHint, { color: colors.textSecondary }]}>
+						style={[
+							styles.statusHint,
+							{ color: colors.textSecondary, fontSize: sp(13) },
+						]}>
 						{disabledReason}
 					</Text>
 				</View>
@@ -115,19 +160,31 @@ export default function UpdateSheet() {
 					<View
 						style={[
 							styles.iconCircle,
-							{ backgroundColor: `${colors.primary}22` },
+							{
+								backgroundColor: `${colors.primary}22`,
+								width: sp(62),
+								height: sp(62),
+								borderRadius: sp(31),
+							},
 						]}>
 						<Ionicons
 							name={error ? "alert-circle-outline" : "checkmark-circle-outline"}
-							size={30}
+							size={sp(30)}
 							color={error ? "#EF4444" : colors.primary}
 						/>
 					</View>
-					<Text style={[styles.statusText, { color: colors.text }]}>
+					<Text
+						style={[
+							styles.statusText,
+							{ color: colors.text, fontSize: sp(16) },
+						]}>
 						{error ? "Kontrol tamamlanamadı" : "Uygulamanız güncel"}
 					</Text>
 					<Text
-						style={[styles.statusHint, { color: colors.textSecondary }]}>
+						style={[
+							styles.statusHint,
+							{ color: colors.textSecondary, fontSize: sp(13) },
+						]}>
 						{error || statusMessage || `v${currentVersion} yüklü`}
 					</Text>
 				</View>
@@ -138,25 +195,49 @@ export default function UpdateSheet() {
 			<View>
 				<View style={styles.versionRow}>
 					<View
-						style={[styles.badge, { backgroundColor: `${colors.primary}22` }]}>
-						<Text style={[styles.badgeText, { color: colors.primary }]}>
+						style={[
+							styles.badge,
+							{
+								backgroundColor: `${colors.primary}22`,
+								paddingHorizontal: isTV ? sp(10) : 10,
+								paddingVertical: isTV ? sp(4) : 4,
+								borderRadius: isTV ? sp(8) : 8,
+							},
+						]}>
+						<Text
+							style={[
+								styles.badgeText,
+								{ color: colors.primary, fontSize: sp(13) },
+							]}>
 							v{release.version}
 						</Text>
 					</View>
-					<Text style={[styles.metaText, { color: colors.textSecondary }]}>
+					<Text
+						style={[
+							styles.metaText,
+							{ color: colors.textSecondary, fontSize: sp(13) },
+						]}>
 						{release.sizeMB} MB
 						{publishedAt ? ` • ${publishedAt}` : ""}
 					</Text>
 				</View>
 
 				<ScrollView
-					style={styles.notes}
+					style={[styles.notes, isTV ? { maxHeight: sp(260) } : null]}
 					contentContainerStyle={styles.notesContent}
 					nestedScrollEnabled>
-					<Text style={[styles.notesTitle, { color: colors.text }]}>
+					<Text
+						style={[
+							styles.notesTitle,
+							{ color: colors.text, fontSize: sp(13) },
+						]}>
 						Sürüm notları
 					</Text>
-					<Text style={[styles.notesBody, { color: colors.textSecondary }]}>
+					<Text
+						style={[
+							styles.notesBody,
+							{ color: colors.textSecondary, fontSize: sp(14) },
+						]}>
 						{release.notes}
 					</Text>
 				</ScrollView>
@@ -165,7 +246,7 @@ export default function UpdateSheet() {
 					<Text
 						style={[
 							styles.statusHint,
-							{ color: colors.textSecondary, marginTop: 12 },
+							{ color: colors.textSecondary, fontSize: sp(13), marginTop: 12 },
 						]}>
 						Sistem yükleyicisi açıldı — yeni sürümü yükleyin.
 					</Text>
@@ -175,13 +256,16 @@ export default function UpdateSheet() {
 					<View style={styles.progressBlock}>
 						<View style={styles.progressHeader}>
 							<Text
-								style={[styles.progressLabel, { color: colors.text }]}>
+								style={[
+									styles.progressLabel,
+									{ color: colors.text, fontSize: sp(13) },
+								]}>
 								{isInstalling ? "Kuruluyor…" : "İndiriliyor…"}
 							</Text>
 							<Text
 								style={[
 									styles.progressLabel,
-									{ color: colors.textSecondary },
+									{ color: colors.textSecondary, fontSize: sp(13) },
 								]}>
 								{isInstalling ? "" : `%${Math.round(progress)}`}
 							</Text>
@@ -189,7 +273,7 @@ export default function UpdateSheet() {
 						<View
 							style={[
 								styles.progressTrack,
-								{ backgroundColor: colors.border },
+								{ backgroundColor: colors.border, height: isTV ? sp(8) : 8 },
 							]}>
 							<View
 								style={[
@@ -205,7 +289,10 @@ export default function UpdateSheet() {
 				) : null}
 
 				{error ? (
-					<Text style={[styles.errorText, { color: "#EF4444" }]}>{error}</Text>
+					<Text
+						style={[styles.errorText, { color: "#EF4444", fontSize: sp(13) }]}>
+						{error}
+					</Text>
 				) : null}
 			</View>
 		);
@@ -227,9 +314,16 @@ export default function UpdateSheet() {
 			statusBarTranslucent
 			onRequestClose={handleClose}>
 			<View style={styles.backdrop}>
+				{/*
+				 * Arka plan dokunmayla kapatır ama TV'de ODAK ALMAZ;
+				 * odak kaçarsa geri dönüş yolu kalır.
+				 */}
 				<Pressable
 					style={styles.backdropPress}
 					onPress={handleClose}
+					// TV'de arka plan ODAKLANMAMALI: odak oraya kaçarsa
+					// kumandada modaldan çıkış yolu kalmaz.
+					focusable={false}
 					accessibilityRole="button"
 					accessibilityLabel="Kapat"
 				/>
@@ -239,17 +333,25 @@ export default function UpdateSheet() {
 						styles.sheet,
 						{
 							backgroundColor: colors.cardBg,
-							paddingBottom: Math.max(insets.bottom, 16) + 8,
+							paddingBottom: Math.max(insets.bottom, isTV ? sp(16) : 16) + 8,
+							paddingHorizontal: isTV ? Math.max(gutter, 24) : 20,
 						},
 					]}>
 					<View style={[styles.handle, { backgroundColor: colors.border }]} />
 
 					<View style={styles.header}>
-						<Text style={[styles.headerTitle, { color: colors.text }]}>
+						<Text
+							style={[
+								styles.headerTitle,
+								{ color: colors.text, fontSize: sp(19) },
+							]}>
 							Uygulama Güncellemesi
 						</Text>
 						<Text
-							style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+							style={[
+								styles.headerSubtitle,
+								{ color: colors.textSecondary, fontSize: sp(13) },
+							]}>
 							Yüklü sürüm: v{currentVersion}
 						</Text>
 					</View>
@@ -258,67 +360,95 @@ export default function UpdateSheet() {
 
 					<View style={styles.actions}>
 						{showPrimaryAction ? (
-							<Pressable
+							<TVPressable
 								onPress={install}
 								disabled={isBusy}
-								style={({ pressed }) => [
-									styles.primaryButton,
-									{
-										backgroundColor: colors.primary,
-										opacity: pressed || isBusy ? 0.75 : 1,
-									},
-								]}
+								// TV'de odak doğrudan ana eylemde olsun.
+								autoFocus={isTV}
+								style={{
+									backgroundColor: colors.primary,
+									opacity: isBusy ? 0.75 : 1,
+									height: isTV ? sp(56) : 50,
+									borderRadius: isTV ? sp(12) : 12,
+								}}
+								focusedStyle={primaryFocusedStyle}
 								accessibilityRole="button">
-								<Text style={styles.primaryButtonText}>
+								<Text
+									style={[
+										styles.primaryButtonText,
+										{ fontSize: sp(16) },
+									]}>
 									{isBusy ? "Devam ediliyor…" : "Güncellemeyi indir"}
 								</Text>
-							</Pressable>
+							</TVPressable>
 						) : null}
 
 						{showCancel ? (
-							<Pressable
+							<TVPressable
 								onPress={cancelDownload}
+								// İndirme sürerken tek eylem bu; odak buraya
+								// gelmezse modalda odaklanabilir hiçbir şey kalmaz.
+								autoFocus={isTV}
 								style={[
 									styles.secondaryButton,
-									{ borderColor: colors.border },
+									{
+										borderColor: colors.border,
+										height: isTV ? sp(50) : 46,
+										borderRadius: isTV ? sp(12) : 12,
+									},
 								]}
+								focusedStyle={secondaryFocusedStyle}
 								accessibilityRole="button">
 								<Text
 									style={[
 										styles.secondaryButtonText,
-										{ color: colors.text },
+										{ color: colors.text, fontSize: sp(15) },
 									]}>
 									İndirmeyi iptal et
 								</Text>
-							</Pressable>
+							</TVPressable>
 						) : (
-							<Pressable
+							<TVPressable
 								onPress={handleClose}
 								disabled={isBusy}
+								// Ana düğme yoksa (kuruluyor / güncel / hata)
+								// odak tek çıkış yoluna gelsin.
+								autoFocus={isTV && !showPrimaryAction}
 								style={[
 									styles.secondaryButton,
-									{ borderColor: colors.border, opacity: isBusy ? 0.5 : 1 },
+									{
+										borderColor: colors.border,
+										opacity: isBusy ? 0.5 : 1,
+										height: isTV ? sp(50) : 46,
+										borderRadius: isTV ? sp(12) : 12,
+									},
 								]}
+								focusedStyle={secondaryFocusedStyle}
 								accessibilityRole="button">
 								<Text
 									style={[
 										styles.secondaryButtonText,
-										{ color: colors.text },
+										{ color: colors.text, fontSize: sp(15) },
 									]}>
 									{release ? "Şimdi değil" : "Kapat"}
 								</Text>
-							</Pressable>
+							</TVPressable>
 						)}
 
-						<Pressable
+						<TVPressable
 							onPress={() => check({ manual: true })}
 							disabled={isBusy}
-							style={styles.linkButton}
+							style={{ paddingVertical: isTV ? sp(10) : 8 }}
+							focusedStyle={linkFocusedStyle}
 							accessibilityRole="button">
-							<Text style={[styles.linkText, { color: colors.primary }]}>
+							<Text
+								style={[
+									styles.linkText,
+									{ color: colors.primary, fontSize: sp(14) },
+								]}>
 								Güncellemeleri tekrar kontrol et
 							</Text>
-						</Pressable>
+						</TVPressable>
 					</View>
 				</View>
 			</View>
@@ -338,8 +468,11 @@ const styles = StyleSheet.create({
 	sheet: {
 		borderTopLeftRadius: 22,
 		borderTopRightRadius: 22,
-		paddingHorizontal: 20,
 		paddingTop: 10,
+		// TV'de metin satırı 1920px boyunca uzanmasın (tvMetrics kuralı).
+		alignSelf: "center",
+		width: "100%",
+		maxWidth: 900,
 	},
 	handle: {
 		alignSelf: "center",
@@ -352,11 +485,9 @@ const styles = StyleSheet.create({
 		marginBottom: 14,
 	},
 	headerTitle: {
-		fontSize: 19,
 		fontWeight: "700",
 	},
 	headerSubtitle: {
-		fontSize: 13,
 		marginTop: 3,
 	},
 	centered: {
@@ -364,20 +495,15 @@ const styles = StyleSheet.create({
 		paddingVertical: 20,
 	},
 	iconCircle: {
-		width: 62,
-		height: 62,
-		borderRadius: 31,
 		alignItems: "center",
 		justifyContent: "center",
 		marginBottom: 14,
 	},
 	statusText: {
-		fontSize: 16,
 		fontWeight: "600",
 		textAlign: "center",
 	},
 	statusHint: {
-		fontSize: 13,
 		marginTop: 6,
 		textAlign: "center",
 		paddingHorizontal: 12,
@@ -387,17 +513,11 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		marginBottom: 12,
 	},
-	badge: {
-		paddingHorizontal: 10,
-		paddingVertical: 4,
-		borderRadius: 8,
-	},
+	badge: {},
 	badgeText: {
-		fontSize: 13,
 		fontWeight: "700",
 	},
 	metaText: {
-		fontSize: 13,
 		marginLeft: 10,
 	},
 	notes: {
@@ -407,12 +527,10 @@ const styles = StyleSheet.create({
 		paddingBottom: 4,
 	},
 	notesTitle: {
-		fontSize: 13,
 		fontWeight: "700",
 		marginBottom: 6,
 	},
 	notesBody: {
-		fontSize: 14,
 		lineHeight: 21,
 	},
 	progressBlock: {
@@ -424,11 +542,9 @@ const styles = StyleSheet.create({
 		marginBottom: 6,
 	},
 	progressLabel: {
-		fontSize: 13,
 		fontWeight: "600",
 	},
 	progressTrack: {
-		height: 8,
 		borderRadius: 4,
 		overflow: "hidden",
 	},
@@ -437,41 +553,35 @@ const styles = StyleSheet.create({
 		borderRadius: 4,
 	},
 	errorText: {
-		fontSize: 13,
 		marginTop: 12,
 	},
 	actions: {
 		marginTop: 18,
 		gap: 10,
 	},
-	primaryButton: {
-		height: 50,
-		borderRadius: 12,
-		alignItems: "center",
-		justifyContent: "center",
-	},
 	primaryButtonText: {
 		color: "#ffffff",
-		fontSize: 16,
 		fontWeight: "700",
+		textAlign: "center",
 	},
 	secondaryButton: {
-		height: 46,
-		borderRadius: 12,
 		borderWidth: 1,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	secondaryButtonText: {
-		fontSize: 15,
 		fontWeight: "600",
-	},
-	linkButton: {
-		paddingVertical: 8,
-		alignItems: "center",
 	},
 	linkText: {
-		fontSize: 14,
 		fontWeight: "600",
+		textAlign: "center",
+	},
+	// TV odak halkası. TVPressable'in varsayılanı `scale` kullanıyor;
+	// kartta ölçek değişimi kenardan taşma gibi göründüğü ve
+	// absolute konumlu banner'ı kaydırdığı için burada sabit bir
+	// çerçeve tercih edildi.
+	focusRing: {
+		borderColor: "#FFFFFF",
+		borderWidth: 2,
 	},
 });

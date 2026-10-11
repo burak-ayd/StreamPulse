@@ -10,15 +10,12 @@ import {
 import { useThemeContext } from "@/context/ThemeContext";
 import { useAppUpdate } from "@/context/AppUpdateContext";
 import { fetchPlatforms } from "@/services/api";
-import { syncNow } from "@/services/sync";
 import {
 	clearAllUserData,
 	getPluginVisibilitySettings,
 	getSelectedPlatform,
-	getUserProfile,
 } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import Image from "@/components/common/SmartImage";
 import TVPressable from "@/components/common/TVPressable";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -178,14 +175,13 @@ export default function SettingsScreen() {
 	// hepsini ortalanmış bir sütuna toplar.
 	const { contentMaxWidth } = useTvMetrics();
 
-	const [userProfile, setUserProfile] = useState(null);
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
 	const [activePluginsCount, setActivePluginsCount] = useState(0);
 	const [totalPluginsCount, setTotalPluginsCount] = useState(0);
 
-	// APK güncelleme: satır yalnızca kontrolü TETİKLER, gösterim ve
-	// indirme tek bir modalda (UpdateSheet) yapılır. Böylece aynı
-	// güncelleme akışının iki farklı kopyası olmuyor.
+	// APK güncelleme: satır kontrolü tetiklemez, modalı açar. Kontrol
+	// uygulama açılışında zaten otomatik çalışıyor (AppUpdateProvider);
+	// buradaki giriş yalnızca "şimdi bakayım" ve güncelleme rozetidir.
 	const {
 		release: pendingRelease,
 		currentVersion: installedVersion,
@@ -199,7 +195,6 @@ export default function SettingsScreen() {
 
 	// Modals for sub-settings
 	const [generalModalVisible, setGeneralModalVisible] = useState(false);
-	const [backupModalVisible, setBackupModalVisible] = useState(false);
 	const [layoutModalVisible, setLayoutModalVisible] = useState(false);
 	const [compactLayout, setCompactLayout] = useState(false);
 
@@ -209,16 +204,14 @@ export default function SettingsScreen() {
 			let isMounted = true;
 			async function loadData() {
 				try {
-					const [profile, platform, platformsData, visibility] =
+					const [platform, platformsData, visibility] =
 						await Promise.all([
-							getUserProfile(),
 							getSelectedPlatform(),
 							fetchPlatforms(),
 							getPluginVisibilitySettings(),
 						]);
 
 					if (!isMounted) return;
-					setUserProfile(profile);
 					setSelectedPlatform(platform);
 
 					const all = Array.isArray(platformsData)
@@ -249,10 +242,6 @@ export default function SettingsScreen() {
 					setLanguageModalVisible(false);
 					return true;
 				}
-				if (backupModalVisible) {
-					setBackupModalVisible(false);
-					return true;
-				}
 				if (layoutModalVisible) {
 					setLayoutModalVisible(false);
 					return true;
@@ -272,7 +261,6 @@ export default function SettingsScreen() {
 			return () => subscription.remove();
 		}, [
 			languageModalVisible,
-			backupModalVisible,
 			layoutModalVisible,
 			generalModalVisible,
 			router,
@@ -295,9 +283,6 @@ export default function SettingsScreen() {
 								"Başarılı",
 								"Tüm yerel veriler temizlendi.",
 							);
-							// Reload profile
-							const p = await getUserProfile();
-							setUserProfile(p);
 						} catch {
 							Alert.alert(
 								"Hata",
@@ -307,27 +292,6 @@ export default function SettingsScreen() {
 					},
 				},
 			],
-		);
-	};
-
-	/**
-	 * Ayarlar ve listeler ZATEN otomatik senkronize edilir: bir tercih
-	 * değiştiği anda hesaba yazılır (bkz. SyncContext). Elle yedekleme
-	 * penceresinin tek işlevi "senkronizasyonu şimdi tetiklemek" olur.
-	 */
-	const handleSyncNow = async () => {
-		setBackupModalVisible(false);
-		const res = await syncNow();
-		Alert.alert(
-			res.success ? "Senkronizasyon tamamlandı" : "Senkronizasyon başarısız",
-			res.success
-				? "Değişiklikleriniz hesabınıza kaydedildi."
-				: // ⚠️ `res.error` iç koddur ("pull_failed_503", "push_nothing_applied"
-				  // gibi). Kullanıcıya ham kod gösterilmez; sunucudan anlamlı bir
-				  // `detail` geldiyse o, yoksa genel mesaj kullanılır.
-					res.detail?.trim()
-						? String(res.detail).trim()
-						: "Sunucuya ulaşılamadı. Yerel verileriniz korundu, bağlantı sağlandığında tekrar denenecek.",
 		);
 	};
 
@@ -357,73 +321,6 @@ export default function SettingsScreen() {
 								}
 							: null,
 					]}>
-					{/* Profile Header Card */}
-					<TVPressable
-						style={[
-							styles.profileCard,
-							{
-								backgroundColor: colors.cardBg,
-								borderColor: colors.border,
-							},
-						]}
-						focusedStyle={styles.profileCardFocused}
-						onPress={() =>
-							router.push({ pathname: "profile/EditProfile" })
-						}
-						activeOpacity={0.75}>
-						<View style={styles.profileAvatarWrapper}>
-							{userProfile?.avatarUrl ? (
-								<Image
-									source={{ uri: userProfile.avatarUrl }}
-									style={styles.profileAvatar}
-									contentFit="cover"
-								/>
-							) : (
-								<View
-									style={[
-										styles.profileAvatarPlaceholder,
-										{
-											backgroundColor:
-												theme === "dark"
-													? "#1e293b"
-													: "#e2e8f0",
-										},
-									]}>
-									<Ionicons
-										name="person"
-										size={28}
-										color={colors.primary}
-									/>
-								</View>
-							)}
-							<View style={styles.onlineBadge} />
-						</View>
-
-						<View style={styles.profileInfo}>
-							<Text
-								style={[
-									styles.profileName,
-									{ color: colors.text },
-								]}>
-								{userProfile?.displayName ||
-									userProfile?.username ||
-									"Varsayılan"}
-							</Text>
-							<Text
-								style={[
-									styles.profileBio,
-									{ color: colors.textSecondary },
-								]}>
-								{userProfile?.email || "Profili Düzenle"}
-							</Text>
-						</View>
-
-						<Ionicons
-							name="chevron-forward"
-							size={20}
-							color={colors.textSecondary}
-						/>
-					</TVPressable>
 
 					{/* KATEGORİ 1: İÇERİK VE KAYNAKLAR */}
 					<SettingsSection title="İÇERİK VE KAYNAKLAR">
@@ -572,15 +469,6 @@ export default function SettingsScreen() {
 							}
 						/>
 
-						{/* Güncellemeler ve Yedekleme */}
-						<SettingRow
-							icon="cloud-upload-outline"
-							iconBg="#06B6D4"
-							label="Güncellemeler ve Yedekleme"
-							subtitle="Veritabanı yedekleme ve güncelleme denetimi"
-							onPress={() => setBackupModalVisible(true)}
-						/>
-
 						{/* Oturum Teşhisi */}
 						{/*
 						 * Geçici teşhis aracı: "uygulama kendiliğinden çıkış
@@ -606,25 +494,6 @@ export default function SettingsScreen() {
 							onPress={handleClearCache}
 						/>
 					</SettingsSection>
-
-					{/* Footer App Info - Görseldeki format: 4.8.0 • 8bdc599 • 9 Temmuz 2026 */}
-					<View style={styles.footerContainer}>
-						<Text
-							style={[
-								styles.footerVersionText,
-								{ color: colors.textSecondary },
-							]}>
-							StreamPulse • 4.8.0 • 8bdc599 • 9 Temmuz 2026
-							23:49:58
-						</Text>
-						<Text
-							style={[
-								styles.footerBuildText,
-								{ color: colors.textSecondary },
-							]}>
-							Açık Kaynak Film & Dizi İstemcisi
-						</Text>
-					</View>
 
 					<View style={{ height: 60 }} />
 				</ScrollView>
@@ -868,123 +737,6 @@ export default function SettingsScreen() {
 					</View>
 				</Modal>
 
-				{/* YEDEKLEME VE GÜNCELLEME MODAL */}
-				<Modal
-					visible={backupModalVisible}
-					animationType="slide"
-					transparent={true}
-					onRequestClose={() => setBackupModalVisible(false)}>
-					<View style={styles.modalOverlay}>
-						<View
-							style={[
-								styles.modalContent,
-								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
-								},
-							]}>
-							<View style={styles.modalHeader}>
-								<Text
-									style={[
-										styles.modalTitle,
-										{ color: colors.text },
-									]}>
-									Güncellemeler ve Yedekleme
-								</Text>
-								<TVPressable
-									focusedStyle={styles.modalCloseButtonFocused}
-									onPress={() =>
-										setBackupModalVisible(false)
-									}>
-									<Ionicons
-										name="close"
-										size={24}
-										color={colors.text}
-									/>
-								</TVPressable>
-							</View>
-
-							<TVPressable
-								style={styles.modalActionItem}
-								focusedStyle={styles.settingRowFocused}
-								onPress={handleSyncNow}>
-								<Ionicons
-									name="sync-outline"
-									size={22}
-									color={colors.primary}
-								/>
-								<View style={{ flex: 1 }}>
-									<Text
-										style={[
-											styles.modalRowTitle,
-											{ color: colors.text },
-										]}>
-										Senkronizasyonu Şimdi Çalıştır
-									</Text>
-									<Text
-										style={[
-											styles.modalRowSubtitle,
-											{ color: colors.textSecondary },
-										]}>
-										Ayarlar ve listeler zaten otomatik kaydedilir
-									</Text>
-								</View>
-							</TVPressable>
-
-							<View
-								style={[
-									styles.modalDivider,
-									{ backgroundColor: colors.border },
-								]}
-							/>
-
-							<TVPressable
-								style={styles.modalActionItem}
-								focusedStyle={styles.settingRowFocused}
-								onPress={() => {
-									Alert.alert(
-										"Güncelleme",
-										"Uygulamanız en güncel sürümdedir (v4.8.0).",
-									);
-								}}>
-								<Ionicons
-									name="sparkles-outline"
-									size={22}
-									color={colors.primary}
-								/>
-								<View style={{ flex: 1 }}>
-									<Text
-										style={[
-											styles.modalRowTitle,
-											{ color: colors.text },
-										]}>
-										Güncellemeleri Denetle
-									</Text>
-									<Text
-										style={[
-											styles.modalRowSubtitle,
-											{ color: colors.textSecondary },
-										]}>
-										Sürüm 4.8.0 • 8bdc599
-									</Text>
-								</View>
-							</TVPressable>
-
-							<TVPressable
-								style={[
-									styles.modalCloseButton,
-									{ backgroundColor: colors.primary },
-								]}
-								focusedStyle={styles.modalCloseButtonFocused}
-								onPress={() => setBackupModalVisible(false)}>
-								<Text style={styles.modalCloseButtonText}>
-									Kapat
-								</Text>
-							</TVPressable>
-						</View>
-					</View>
-				</Modal>
-
 				{/* DİL BİLGİSİ GÖSTERİMİ MODAL */}
 				<Modal
 					visible={languageModalVisible}
@@ -1151,53 +903,6 @@ const styles = StyleSheet.create({
 		paddingTop: 16,
 		paddingBottom: 20,
 	},
-	profileCard: {
-		flexDirection: "row",
-		alignItems: "center",
-		padding: 16,
-		borderRadius: 16,
-		borderWidth: 1,
-		marginBottom: 20,
-		gap: 14,
-	},
-	profileAvatarWrapper: {
-		position: "relative",
-	},
-	profileAvatar: {
-		width: 52,
-		height: 52,
-		borderRadius: 26,
-	},
-	profileAvatarPlaceholder: {
-		width: 52,
-		height: 52,
-		borderRadius: 26,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	onlineBadge: {
-		position: "absolute",
-		bottom: 1,
-		right: 1,
-		width: 13,
-		height: 13,
-		borderRadius: 7,
-		backgroundColor: "#10b981",
-		borderWidth: 2,
-		borderColor: "#12141a",
-	},
-	profileInfo: {
-		flex: 1,
-	},
-	profileName: {
-		fontSize: 18,
-		fontWeight: "700",
-		letterSpacing: -0.3,
-		marginBottom: 2,
-	},
-	profileBio: {
-		fontSize: 13,
-	},
 	sectionContainer: {
 		marginBottom: 20,
 	},
@@ -1265,23 +970,6 @@ const styles = StyleSheet.create({
 		height: 1,
 		marginLeft: 66,
 	},
-	footerContainer: {
-		alignItems: "center",
-		justifyContent: "center",
-		paddingVertical: 20,
-		gap: 4,
-	},
-	footerVersionText: {
-		fontSize: 12,
-		fontWeight: "500",
-		opacity: 0.7,
-		textAlign: "center",
-	},
-	footerBuildText: {
-		fontSize: 11,
-		opacity: 0.5,
-		textAlign: "center",
-	},
 	modalOverlay: {
 		flex: 1,
 		backgroundColor: "rgba(0, 0, 0, 0.65)",
@@ -1348,12 +1036,6 @@ const styles = StyleSheet.create({
 		height: 1,
 		marginVertical: 4,
 	},
-	modalActionItem: {
-		flexDirection: "row",
-		alignItems: "center",
-		paddingVertical: 14,
-		gap: 14,
-	},
 	modalCloseButton: {
 		height: 46,
 		borderRadius: 12,
@@ -1410,11 +1092,6 @@ const styles = StyleSheet.create({
 	settingRowFocused: {
 		backgroundColor: "rgba(229, 9, 20, 0.12)",
 		borderWidth: 1.5,
-		borderColor: "#E50914",
-		transform: [{ scale: 1.02 }],
-	},
-	profileCardFocused: {
-		borderWidth: 2,
 		borderColor: "#E50914",
 		transform: [{ scale: 1.02 }],
 	},
