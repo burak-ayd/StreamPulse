@@ -26,6 +26,7 @@ import {
 	compactSvg,
 	notificationSvg,
 	tvSvg,
+	bannerSvg,
 } from "./brand.mjs";
 
 const ROOT = process.cwd();
@@ -160,7 +161,9 @@ async function generateVariant(key) {
 
 	for (const [file, w, h, showName] of tvList()) {
 		const f = path.join(dir, file);
-		const info = await render(tvSvg(id, w, h, { showName }), f, { w, h, opaque: true });
+		// Android TV banner'ı yatay kilit (marka + wordmark) olarak ayrı üretilir
+		const svg = file === "tv-banner.png" ? bannerSvg(id, w, h) : tvSvg(id, w, h, { showName });
+		const info = await render(svg, f, { w, h, opaque: true });
 		manifest[file] = { width: info.width, height: info.height, alpha: info.alpha, bytes: info.bytes };
 	}
 
