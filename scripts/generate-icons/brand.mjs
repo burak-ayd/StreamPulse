@@ -187,6 +187,26 @@ export function monochromeSvg(id) {
 }
 
 /**
+ * Splash kilidinin güvenli daireye sığdırma ölçeği.
+ *
+ * ⚠️ NEDEN VAR — Android 12+ (API 31) native splash ikonu ÇEMBER maskeye
+ * alır: ikon alanının iç 2/3'ü (yarıçap = 1024/3 ≈ 341px) görünür, dışı
+ * KIRPILIR. Bu kilit daha önce tuvalin neredeyse tamamını kaplıyordu
+ * (wordmark 36..989, yarıçap ≈ 524px) → telefonda/tablette native splash
+ * "REAM PULS" olarak görünüyordu.
+ *
+ * TV'de aynı PNG maskesiz çizildiği için (native splash hiç açılmaz)
+ * kırpılmıyor — yani sorun yalnızca native splash katmanındaydı.
+ *
+ * Ölçek `markGroup`, wordmark, alt çizgi ve varyant etiketinin TAMAMINI
+ * merkez etrafında aynı oranda küçültür: tasarımın oranları birebir korunur,
+ * yalnızca güvenli alana oturur. Değer, tuvalde ölçülen en dış içerik
+ * yarıçapı (~524px) ile güvenli yarıçapın (341px) oranıdır; 0.63 seçildi
+ * ki kenarda birkaç px pay kalsın (yuvarlama/yinelenme payı).
+ */
+const SPLASH_SAFE_SCALE = 0.63;
+
+/**
  * Splash: şeffaf zemin üzerinde marka + wordmark.
  * expo-splash-screen plugin'i `imageWidth` ile bu kareyi ortalar; backgroundColor senin koyu rengin.
  */
@@ -200,13 +220,15 @@ export function splashSvg(id) {
 		: "";
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
   ${markGradDefs(id)}
-  <g transform="translate(${CX} ${markCy}) scale(${markScale}) translate(${-CX} ${-CY})">
-    ${markGroup(id, { glow: true })}
+  <g transform="translate(${CX} ${CY}) scale(${SPLASH_SAFE_SCALE}) translate(${-CX} ${-CY})">
+    <g transform="translate(${CX} ${markCy}) scale(${markScale}) translate(${-CX} ${-CY})">
+      ${markGroup(id, { glow: true })}
+    </g>
+    <text x="${CX}" y="730" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="112" font-weight="800"
+          letter-spacing="14" fill="#EAF0FA" text-anchor="middle">STREAM PULSE</text>
+    <rect x="${CX - 130}" y="772" width="260" height="6" rx="3" fill="${v.accent}" opacity="0.9"/>
+    ${label}
   </g>
-  <text x="${CX}" y="730" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="112" font-weight="800"
-        letter-spacing="14" fill="#EAF0FA" text-anchor="middle">STREAM PULSE</text>
-  <rect x="${CX - 130}" y="772" width="260" height="6" rx="3" fill="${v.accent}" opacity="0.9"/>
-  ${label}
 </svg>`;
 }
 

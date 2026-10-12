@@ -45,10 +45,35 @@ import { useTvMetrics } from "@/utils/tvMetrics";
 const SPLASH_BG = "#0B0E14";
 
 /**
- * Native splash'ın `imageWidth` değeriyle aynı genişlik: markanın ekrandaki
- * kapladığı alan birebir aynı olmalı.
+ * Telefon/tablet logo genişliği (dp) — `app.config.js` → `SPLASH_WIDTH`
+ * ile **AYNI** olmalı.
+ *
+ * ⚠️ NEDEN EŞİT OLMALI: native splash ikonu `imageWidth` kadar genişlikte
+ * çizilir, JS katmanı da bu değer kadar. Aynı PNG, aynı çerçeve genişliği
+ * → iki katman birebir aynı boyutta logo gösterir, geçişte "zıplama" olmaz.
+ *
+ * Bu değeri büyütmek kazanç sağlamaz: native katman da aynı PNG'yi aynı
+ * oranda büyütür, iki katman yine eşit kalır ama ikisi de gereksiz büyür.
+ * Değiştirmek gerekiyorsa KESİNLİKLE `SPLASH_WIDTH` ile birlikte değiştir.
+ *
+ * Ölçüm (release build, telefon 437dpi): native katman 414px, JS katmanı
+ * 414px → geçişte boyut farkı yok. (Bu değeri 413 yapmak iki katmanı 414px
+ * ↔ 623px'e ayırıyordu; kapı açılırken logo 1,5× büyüyüp zıplıyordu.)
  */
 const LOGO_WIDTH = 260;
+
+/**
+ * TV logo genişliği (dp).
+ *
+ * TV'de `core-splashscreen` splash penceresini **açmaz** (aşağıdaki TV_LOGO
+ * ayrımının sebebi) → JS katmanının eşleşmesi gereken bir kardeş görsel
+ * yoktur, dolayısıyla telefon değerine bağlı olmak zorunda değildir.
+ *
+ * 1080p kumandadan 3 metre bakıldığında telefon ölçüsü ortadaki küçük bir
+ * nokta gibi görünür; bu yüzden TV'de bilinçli olarak büyütülür.
+ * Ölçüm (TV 1920×1080): bu değer → wordmark 516px (ekranın %27'si).
+ */
+const TV_LOGO_WIDTH = 351;
 
 /** Çıkış animasyonunun süresi (ms). */
 const EXIT_MS = 420;
@@ -124,9 +149,9 @@ export default function SplashOverlay({ visible, onFinished }) {
 		onFinishedRef.current = onFinished;
 	}, [onFinished]);
 
-	// TV'de 1080p kumandadan 3 m bakılır; marka telefon ölçüsünde kalırsa
-	// ekranın ortasında küçük bir nokta gibi görünür.
-	const logoSize = sp(isTV ? LOGO_WIDTH * 0.85 : LOGO_WIDTH);
+	// TV'de marka kendi ölçüsünde (büyük); diğer platformlarda native
+	// splash'la birebir eşleşmesi gerektiği için LOGO_WIDTH.
+	const logoSize = sp(isTV ? TV_LOGO_WIDTH : LOGO_WIDTH);
 
 	// ── Bekleme: sonsuz "nefes" döngüsü ───────────────────────────────
 	useEffect(() => {
