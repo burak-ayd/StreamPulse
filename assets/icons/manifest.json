@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-11T21:03:48.038Z",
+  "generatedAt": "2026-10-12T19:27:02.369Z",
   "variants": {
     "release": {
       "icon.png": {
@@ -30,7 +30,7 @@
         "width": 1024,
         "height": 1024,
         "alpha": true,
-        "bytes": 87421
+        "bytes": 52951
       },
       "notification-icon.png": {
         "width": 96,
@@ -121,7 +121,7 @@
         "width": 1024,
         "height": 1024,
         "alpha": true,
-        "bytes": 90633
+        "bytes": 55003
       },
       "notification-icon.png": {
         "width": 96,
@@ -212,7 +212,7 @@
         "width": 1024,
         "height": 1024,
         "alpha": true,
-        "bytes": 86977
+        "bytes": 53169
       },
       "notification-icon.png": {
         "width": 96,
