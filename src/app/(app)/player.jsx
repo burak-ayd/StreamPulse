@@ -7,8 +7,11 @@ import {
 } from "@/services/liveApi";
 import { addToWatchHistory, getContinueWatching } from "@/utils/storage";
 import { resetBrightness } from "@/utils/deviceControls";
+import {
+	lockPlayerOrientation,
+	restoreAppOrientation,
+} from "@/utils/orientation";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import * as ScreenOrientation from "expo-screen-orientation";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import TVPressable from "@/components/common/TVPressable";
@@ -432,14 +435,11 @@ export default function PlayerScreen() {
 		kaynakHatasiMesaji,
 	]);
 	useEffect(() => {
-		// Video oynatıcı açıldığında her zaman doğrudan yatay moda kilitlen
-		ScreenOrientation.lockAsync(
-			ScreenOrientation.OrientationLock.LANDSCAPE,
-		).catch(() => {});
+		// Video oynatıcı açıldığında yatay moda kilitlenir, çıkarken
+		// uygulamanın "temel" yönüne döner (TV'de yatay — bkz. sorun 7).
+		lockPlayerOrientation().catch(() => {});
 		return () => {
-			ScreenOrientation.lockAsync(
-				ScreenOrientation.OrientationLock.PORTRAIT_UP,
-			).catch(() => {});
+			restoreAppOrientation();
 		};
 	}, []);
 	useEffect(() => {
@@ -504,9 +504,7 @@ export default function PlayerScreen() {
 		 * idempotent olduğundan iki kez çağrılmak zararsızdır.
 		 */
 		resetBrightness();
-		ScreenOrientation.lockAsync(
-			ScreenOrientation.OrientationLock.PORTRAIT_UP,
-		).catch(() => {});
+		restoreAppOrientation();
 		router.back();
 	}, [router]);
 	// Yükleme veya hata ekranındayken kumanda Geri tuşuyla çıkış

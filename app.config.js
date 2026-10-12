@@ -30,6 +30,7 @@ const iconPaths = (dir) => ({
 	adaptiveForeground: `./assets/icons/${dir}/icon-adaptive-foreground.png`,
 	adaptiveBackground: `./assets/icons/${dir}/icon-adaptive-background.png`,
 	adaptiveMonochrome: `./assets/icons/${dir}/icon-adaptive-monochrome.png`,
+	tvIcon: `./assets/icons/${dir}/icon.png`,
 	tvBanner: `./assets/icons/${dir}/tv-banner.png`,
 	tv: {
 		icon: `./assets/icons/${dir}/tv-icon.png`,
@@ -55,25 +56,34 @@ const patchPlugins = (plugins, p) =>
 
 		switch (name) {
 			case "expo-notifications":
-				return ["expo-notifications", {
-					icon: p.notification,
-					color: opts.color ?? NOTIFICATION_COLOR,
-				}];
+				return [
+					"expo-notifications",
+					{
+						icon: p.notification,
+						color: opts.color ?? NOTIFICATION_COLOR,
+					},
+				];
 
 			case "expo-splash-screen":
-				return ["expo-splash-screen", {
-					backgroundColor: opts.backgroundColor ?? SPLASH_BG,
-					image: p.splash,
-					imageWidth: opts.imageWidth ?? SPLASH_WIDTH,
-				}];
+				return [
+					"expo-splash-screen",
+					{
+						backgroundColor: opts.backgroundColor ?? SPLASH_BG,
+						image: p.splash,
+						imageWidth: opts.imageWidth ?? SPLASH_WIDTH,
+					},
+				];
 
 			case "@react-native-tvos/config-tv":
-				return ["@react-native-tvos/config-tv", {
-					...opts,
-					androidTVBanner: p.tvBanner,
-					androidTVIcon: p.icon,
-					appleTVImages: p.tv,
-				}];
+				return [
+					"@react-native-tvos/config-tv",
+					{
+						...opts,
+						androidTVBanner: p.tvBanner,
+						androidTVIcon: p.tvIcon,
+						appleTVImages: p.tv,
+					},
+				];
 
 			default:
 				return entry;
@@ -151,7 +161,8 @@ export default ({ config }) => {
 			 */
 			apkUpdate: {
 				githubRepo:
-					process.env.EXPO_PUBLIC_GITHUB_REPO || "burak-ayd/StreamPulse",
+					process.env.EXPO_PUBLIC_GITHUB_REPO ||
+					"burak-ayd/StreamPulse",
 				githubToken: process.env.EXPO_PUBLIC_GITHUB_TOKEN ?? "",
 				assetHint: "streampulse",
 			},

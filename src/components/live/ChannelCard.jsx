@@ -18,13 +18,13 @@
  *
  * ── Logo kutusu ───────────────────────────────────────────────────
  * Logolar `raw.githubusercontent.com` üzerinde ve BOYUTLARI TUTARSIZ
- * (ölçülen: 7–18 KB, "kareye yakın" ama hepsi aynı değil). Bu yüzden:
- *   • kutu `aspectRatio: 1` ile SABİT — `contentFit` olmadan kırılır,
+ * (ölçülen: 7�"18 KB, "kareye yakın" ama hepsi aynı değil). Bu yüzden:
+ *   • kutu `aspectRatio: 1` ile SAB�"T — `contentFit` olmadan kırılır,
  *   • `contentFit: "contain"` — kırpma yok, boşluk kalsın,
  *   • arka plan `surfaceContainerHigh` — yükleme/eksik logo boşluğu
  *     koyu bir leke değil, yüzey gibi görünür.
  *
- * ── `recyclingKey` ────────────────────────────────────────────────
+ * ── `recyclingKey` ───────────────────────────────────────────────
  * Sanallaştırılmış ızgarada kartlar geri dönüşüm havuzundan geçerken
  * Android'de yanlış görselin bir sonraki karta taşınmasını bu anahtar
  * engeller. `transition={0}`: logolar neredeyse hiç değişmiyor, her kart
@@ -59,7 +59,7 @@ const PAY_TV_INK = "#1a1200";
 /**
  * Bu genişliğin altındaki kartlarda punto küçülür.
  *
- * Gerekçe: TV'de kart ~76–100px genişliğe düşüyor (10 sütun). 13px punto
+ * Gerekçe: TV'de kart ~76�"100px genişliğe düşüyor (10 sütun). 13px punto
  * orada kanal adını iki satıra böler ve isim kırpılır. Eşik 110px; bu
  * değerin altına düşen tek senaryo TV ızgarası, üstü telefon/tablet.
  */
@@ -75,11 +75,11 @@ export const CHANNEL_NAME_MARGIN_TOP = 6;
 export const CHANNEL_NAME_COMPACT_HEIGHT = 13;
 export const CHANNEL_NAME_COMPACT_MARGIN_TOP = 5;
 
-function ChannelCard({ channel, onPress, width }) {
+function ChannelCard({ channel, onPress, width, onFocus, onBlur }) {
 	/*
-	 * Ölçüm tamamlanmadan (genişlik 0) kart render EDİLMEZ. `width: 0`
+	 * Ölçüm tamamlanmadan (genişlik 0) kart render ED�"LMEZ. `width: 0`
 	 * bir stil olarak sessizce uygulanırsa kart görünmez ama yer kaplar;
-	 * ilk karede "hiç kanal yok" yanılsığı üretir.
+	 * ilk karede "hiç kanal yok" yanılsaması üretir.
 	 */
 	if (!width || width <= 0) return null;
 
@@ -93,6 +93,8 @@ function ChannelCard({ channel, onPress, width }) {
 			style={[styles.card, { width }]}
 			focusedStyle={styles.cardFocused}
 			onPress={onPress}
+			onFocus={onFocus}
+			onBlur={onBlur}
 			accessibilityLabel={
 				isPayTv ? `${name}, abonelik gerektiren kanal` : name
 			}>

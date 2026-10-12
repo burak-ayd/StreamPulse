@@ -7,6 +7,10 @@ import {
 	setBrightness,
 	setSystemVolume,
 } from "@/utils/deviceControls";
+import {
+	lockPlayerOrientation,
+	restoreAppOrientation,
+} from "@/utils/orientation";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -560,16 +564,20 @@ export default function VideoPlayer({
 
 	useEffect(() => {
 		if (settings?.defaultOrientation === "sensor") {
-			ScreenOrientation.unlockAsync().catch(() => {});
+			// TV'de "serbest" mod yok: kumandalı cihazda ekranı döndürmek
+			// yerleşimi bozar (sol ray / 4 sütun ızgara yatay varsayılır).
+			if (!Platform.isTV) {
+				ScreenOrientation.unlockAsync().catch(() => {});
+			} else {
+				lockPlayerOrientation().catch(() => {});
+			}
 		} else {
-			ScreenOrientation.lockAsync(
-				ScreenOrientation.OrientationLock.LANDSCAPE,
-			).catch(() => {});
+			lockPlayerOrientation().catch(() => {});
 		}
 		return () => {
-			ScreenOrientation.lockAsync(
-				ScreenOrientation.OrientationLock.PORTRAIT_UP,
-			).catch(() => {});
+			// ⚠️ SORUN 7: TV'de `PORTRAIT_UP` ekranı DİKEYE çeviriyordu.
+			// Dönüş hedefi artık cihazın temel yönü (TV → yatay).
+			restoreAppOrientation();
 		};
 	}, [settings?.defaultOrientation]);
 
@@ -950,19 +958,66 @@ export default function VideoPlayer({
 	 * senkron setState, ardışık render tetikler.
 	 */
 
+	/*
+	 * ⚠️ SORUN 6 — kumanda ile sarma ve odak bölgeleri.
+	 *
+	 * KÖK NEDEN (ilk rapor): HUD açıkken yalnızca `rewind`/`fastForward`
+	 * (KEYCODE_MEDIA_REWIND / MEDIA_FAST_FORWARD) dinleniyordu. Çoğu Android
+	 * TV kumandasında bu tuşlar **ayrı basılır** ve pek çok kumandada
+	 * `KEYCODE_DPAD_LEFT/RIGHT` olarak gönderilir — kullanıcının bastığı
+	 * sol/sağ tuşu hiçbir şeye denk gelmediği için sarma çalışmıyor, odak
+	 * bunun yerine komşu düğmelere kayıyordu.
+	 *
+	 * ÇÖZÜM: `left`/`right` üç duruma göre farklı anlam taşır. Hangisi
+	 * geçerli olduğunu odak BÖLGESİ söyler; bölgeyi bildiren bileşenler
+	 * odak alıp bırakırken `onFocusZone` çağırır:
+	 *
+	 *   · "top" / "bottom" → o barda bir DÜĞME gezdiriliyor;
+	 *                         sol/sağ düğmeler arasında GİDER.
+	 *   · "progress"      → ilerleme çubuğu odaklı (sorun 6'nın asıl
+	 *                         isteği); sol/sağ SARAR.
+	 *   · `null`           → odak bir barda değil (ör. ortadaki
+	 *                         oynat/duraklat); sol/sağ SARAR.
+	 *
+	 * Medya tuşları (`rewind`/`fastForward`) odak nerede olursa olsun
+	 * daima sarar — kumanda hangi barda olursa olsun, CloudStream'de de
+	 * böyledir.
+	 *
+	 * HUD GİZLİYKEN: sol/sağ sarmayla birlikte kontrolleri de AÇAR.
+	 * Kullanıcı isteği: "HUD kapalı iken ileri geri sararken progressbar
+	 * gözükmeli ki hangi dakikaya sarıldığı görülebilmeli." Kontroller
+	 * ilerleme çubuğunu içerdiği için tek `setShowControls(true)` yeter.
+	 */
+	const focusZoneRef = useRef(null);
+	const setFocusZone = useCallback((zone) => {
+		focusZoneRef.current = zone;
+	}, []);
+
+	// HUD gizlenince odak bilgisi sıfırlanır: görünürlük geri geldiğinde
+	// "sol/sağ = sarma" kuralı sıfırdan geçerli olsun.
+	useEffect(() => {
+		if (!showControls) focusZoneRef.current = null;
+	}, [showControls]);
+
 	// ── Kumanda (TV) ────────────────────────────────────────
 	useTVRemote((eventType) => {
 		if (!showControls) {
+			// HUD GİZLİ: Play/Pause, Rewind/FastForward, Left/Right → seek + HUD göster
 			if (
 				eventType === "playPause" ||
 				eventType === "play" ||
 				eventType === "pause"
 			) {
 				togglePlayPause();
+				setShowControls(true);
+				startHideTimerRef.current?.();
 				return;
 			}
 			if (canSeek && (eventType === "left" || eventType === "rewind")) {
 				seekBy(-seekDuration);
+				// HUD gizliyken seek yapıldığında geçici olarak kontrolleri göster
+				setShowControls(true);
+				startHideTimerRef.current?.();
 				return;
 			}
 			if (
@@ -970,20 +1025,77 @@ export default function VideoPlayer({
 				(eventType === "right" || eventType === "fastForward")
 			) {
 				seekBy(seekDuration);
+				setShowControls(true);
+				startHideTimerRef.current?.();
 				return;
 			}
+			// Diğer tuşlar (yukarı/aşağı/ok) → sadece HUD göster
 			setShowControls(true);
 			startHideTimerRef.current?.();
 		} else {
+			// HUD GÖRÜNÜR
 			startHideTimerRef.current?.();
+
+			// Medya tuşları: odak nerede olursa olsun sarar.
+			if (eventType === "rewind") {
+				seekBy(-seekDuration);
+				return;
+			}
+			if (eventType === "fastForward") {
+				seekBy(seekDuration);
+				return;
+			}
 			if (eventType === "playPause") {
 				togglePlayPause();
-			} else if (eventType === "rewind") {
-				seekBy(-seekDuration);
-			} else if (eventType === "fastForward") {
-				seekBy(seekDuration);
+				return;
 			}
-		}
+
+			// D-Pad yatay: focusZone'ye göre karar ver
+			const zone = focusZoneRef.current;
+			const onProgressBar = zone === "progress";
+			const onButtonBar = zone === "top" || zone === "bottom";
+
+			// Progress bar odaklıyken: Sol/Sağ = seek, Yukarı/Aşağı = bar'dan çık
+			if (onProgressBar) {
+				if (canSeek && eventType === "left") {
+					seekBy(-seekDuration);
+					return;
+				}
+				if (canSeek && eventType === "right") {
+					seekBy(seekDuration);
+					return;
+				}
+				// Yukarı/Aşağı → focusZone sıfırla (odak yöneticisi bar'a taşır)
+				if (eventType === "up" || eventType === "down") {
+					setFocusZone(null);
+					return;
+				}
+				// Ok/Select → play/pause toggle
+				if (eventType === "select") {
+					togglePlayPause();
+					return;
+				}
+				// Diğer tuşlar için bar'da kal
+				return;
+			}
+
+			// Üst/Alt bar odaklıyken: Sol/Sağ = gezinme (varsayılan), Yukarı/Aşağı = bar değiştir
+			if (onButtonBar) return;
+
+			// Hiçbir bar odaklı değil (ör. ortadaki play/pause butonu): Sol/Sağ = seek
+			if (canSeek && eventType === "left") {
+				seekBy(-seekDuration);
+				return;
+			}
+			if (canSeek && eventType === "right") {
+				seekBy(seekDuration);
+				return;
+			}
+
+			// Yukarı/aşağı: HUD'u gizlemek yerine üst/alt bardaki
+			// düğmelere odak taşır (odak yöneticisi bunu kendisi yapar;
+			// burada yalnızca otomatik gizleme sayacı yenilenir).
+		};
 	}, true);
 
 	// ── Donanım geri tuşu hiyerarşisi ───────────────────────
@@ -1195,6 +1307,7 @@ export default function VideoPlayer({
 						naturalSize={naturalSize}
 						audioInfo={audioInfo}
 						seriesLine={seriesLine}
+						onFocusZone={setFocusZone}
 						onClose={() => {
 							startHideTimerRef.current?.();
 							onClose?.();
@@ -1306,9 +1419,11 @@ export default function VideoPlayer({
 								)}
 								onScrubMove={handleScrubMove}
 								onScrubEnd={handleScrubMove}
+								onFocusZone={setFocusZone}
 							/>
 
 							<PlayerActionBar
+								onFocusZone={setFocusZone}
 								actions={[
 									{
 										key: "lock",

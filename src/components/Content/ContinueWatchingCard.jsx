@@ -18,7 +18,14 @@ function formatTime(seconds) {
 	return `${mins < 10 ? "0" : ""}${mins}:${secs < 10 ? "0" : ""}${secs}`;
 }
 
-export default function ContinueWatchingCard({ item, onPress, onLongPress, onRemove }) {
+export default function ContinueWatchingCard({
+	item,
+	onPress,
+	onLongPress,
+	onRemove,
+	/** Odak geri bildirimi — satırı ekranın ortasına taşımak için (sorun 5). */
+	onFocus,
+}) {
 	if (!item) return null;
 
 	const progressPercent = Math.min(
@@ -59,7 +66,8 @@ export default function ContinueWatchingCard({ item, onPress, onLongPress, onRem
 			style={[styles.card]}
 			focusedStyle={styles.cardFocused}
 			onPress={() => onPress?.(item)}
-			onLongPress={() => onLongPress?.(item)}>
+			onLongPress={() => onLongPress?.(item)}
+			onFocus={onFocus}>
 			{({ focused }) => (
 				<View>
 					{/* Thumbnail Wrapper */}

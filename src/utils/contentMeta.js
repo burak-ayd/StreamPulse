@@ -70,11 +70,37 @@ export function languageOf(item) {
 }
 
 /**
- * Kartın liste içinde tekil anahtarı (benzersizlik için).
+ * İçeriğin eklentiden gelen KİMLİĞİ (tekilleştirme için).
+ *
+ * ⚠️ `contentKey`'den ayrı tutuldu çünkü ikisi farklı işe yarar:
+ *   · `contentIdentity` → "bu içerik daha önce listede var mıydı?"
+ *     (kategori sayfasında sayfa sayfa tekrarları ayıklanırken)
+ *   · `contentKey`     → React liste anahtarı (benzersiz olmalı)
+ *
+ * Önceden ikisi de `id || url || slug || title` idi ve iki ayrı yerde
+ * FARKLI öncelik sıralaması kullanılıyordu; aynı içerik için iki farklı
+ * kimlik üretilebiliyordu.
+ *
+ * @returns {string|null} `null` → içerikte hiç kimlik alanı yok
+ */
+export function contentIdentity(item) {
+	return item?.id || item?.url || item?.slug || item?.title || null;
+}
+
+/**
+ * Kartın liste içinde tekil anahtarı (React `key`).
+ *
+ * ⚠️ İNDEKS SON EKİ ZORUNLU. Aynı başlığa sahip iki farklı içerik
+ * olabiliyor (farklı yıl/oyuncu); anahtar yalnızca başlıktan türetilirse
+ * React "iki çocuk aynı anahtara sahip" uyarısı üretir ve hücreleri
+ * YENİDEN KULLANIR. Kullanıcının gördüğü sonuç, odaklı kartın
+ * "kendiliğinden değişmesi"dir (sorun 2).
+ *
  * @param {object} item
- * @param {number} index
+ * @param {number} index  - listedeki konumu
  * @returns {string}
  */
 export function contentKey(item, index) {
-	return String(item?.id || item?.url || item?.slug || item?.title || `item-${index}`);
+	const identity = contentIdentity(item);
+	return identity != null ? `${identity}~${index}` : `item-${index}`;
 }

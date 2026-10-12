@@ -30,7 +30,9 @@ import {
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
 import BottomNavigation from "@components/BottomNavigation";
+import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { useNavLayout } from "@/hooks/useNavLayout";
+import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -38,6 +40,7 @@ import TVPressable from "@/components/common/TVPressable";
 import {
 	BackHandler,
 	FlatList,
+	Platform,
 	RefreshControl,
 	ScrollView,
 	StatusBar,
@@ -55,7 +58,7 @@ const EMPTY_ARRAY = [];
 export default function Index() {
 	const router = useRouter();
 	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
-	const { contentPaddingLeft } = useNavLayout();
+	const { contentPaddingLeft, isSideRail } = useNavLayout();
 	const params = useLocalSearchParams();
 	const insets = useSafeAreaInsets();
 	// İskelet satır sayısı ekranın YÖNÜNE göre değişir (bkz.
@@ -550,19 +553,75 @@ export default function Index() {
 		[],
 	);
 
+	/*
+	 * SORUN 5 — dikeyde de odak ortalanır.
+	 *
+	 * `MovieCategorySection`, satırdaki bir kart odaklandığında
+	 * `onRowFocused` çağırır. Android TV odaklanan öğeyi yalnızca
+	 * EKRANA GETİRİR (en az kaydırma) — satır ekranın alt kenarına
+	 * yapışır ve kartın başlığı yarım görünür ("önce scroll yapıp
+	 * sonra içerik seçiliyor"). `viewPosition: 0.5` satırı ekranın
+	 * dikey ortasına sabitler.
+	 */
+	/*
+	 * SORUN 4 (GENEL) — geri dönüşte kaydırma konumu.
+	 *
+	 * `<Stack/>` ekranı mount durumunda tuttuğu için çoğu zaman bu
+	 * yedeğe gerek kalmaz; ancak `router.replace()` ya da bellek
+	 * baskısıyla ekran yeniden kurulursa konum sıfırlanmasın.
+	 */
+	const rememberScroll = useScrollMemory("home");
+
+	/*
+	 * SORUN 5 dikey yarısı — ortak kanca (`useFocusCentering`).
+	 *
+	 * Bu ana liste bir "satır listesi" (her satır bir kategori yatay
+	 * dizisi); dolayısıyla ızgara sütun çevirisi YOKTUR ve
+	 * `scrollRowToCenter` doğrudan hedef satırın indeksini alır.
+	 *
+	 * Aynı kanca `category.jsx`, `live.jsx`,
+	 * `MovieCategorySection.jsx` ve `ContinueWatchingSection.jsx`
+	 * içinde elle kopyalanmış dört ayrı örnekten oluşuyordu; kanca
+	 * tek doğruluk kaynağı oldu.
+	 */
+	const {
+		listRef: homeListRef,
+		scrollRowToCenter: centerRowOnScreen,
+		onScrollToIndexFailed: handleHomeScrollToIndexFailed,
+		clearRetry,
+	} = useFocusCentering();
+
+	useEffect(() => clearRetry, [clearRetry]);
+
 	// useCallback: kimliği her render'da değişirse FlatList tüm satırları
 	// yeniden render eder (TV'de kaydırma takılır).
 	const renderCategoryRow = useCallback(
-		({ item: category }) => (
+		({ item: category, index: rowIndex }) => (
 			<MovieCategorySection
 				platformName={selectedPlatform?.name}
 				category={category}
 				onMoviePress={handleMoviePress}
 				onMovieLongPress={handleMovieLongPress}
 				onSeeAll={handleSeeAllCategory}
+				// Sorun 1: sol ray bulunan düzende satır sonunda
+				// odaklanabilir "Tümünü Gör" kutusu.
+				showSeeAllTile={isSideRail}
+				// Sorun 5: odaklanan satır ekranın ortasına taşınır.
+				onRowFocused={
+					Platform.isTV
+						? () => centerRowOnScreen(rowIndex)
+						: undefined
+				}
 			/>
 		),
-		[selectedPlatform, handleMoviePress, handleMovieLongPress, handleSeeAllCategory],
+		[
+			selectedPlatform,
+			handleMoviePress,
+			handleMovieLongPress,
+			handleSeeAllCategory,
+			isSideRail,
+			centerRowOnScreen,
+		],
 	);
 
 	const handleLoadMore = useCallback(() => {
@@ -616,10 +675,17 @@ export default function Index() {
 					/>
 				) : (
 					<FlatList
+						ref={homeListRef}
 						contentInsetAdjustmentBehavior="automatic"
 						data={visibleCategories}
 						keyExtractor={categoryKeyExtractor}
 						renderItem={renderCategoryRow}
+						onScrollToIndexFailed={handleHomeScrollToIndexFailed}
+						onScroll={rememberScroll.onScroll}
+						scrollEventThrottle={rememberScroll.scrollEventThrottle}
+						onContentSizeChange={() =>
+							rememberScroll.restoreOffset(homeListRef)
+						}
 						ListFooterComponent={homeListFooter}
 						showsVerticalScrollIndicator={false}
 						contentContainerStyle={styles.scrollContent}

@@ -1,8 +1,11 @@
 import ContinueWatchingCard from "@/components/content/ContinueWatchingCard";
 import TVPressable from "@/components/common/TVPressable";
+import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
+import { useCallback, useEffect } from "react";
 import {
 	FlatList,
+	Platform,
 	StyleSheet,
 	Text,
 	View,
@@ -29,7 +32,32 @@ export default function ContinueWatchingSection({
 	onItemLongPress,
 	onRemoveItem,
 	onSeeAllPress,
+	onRowFocused,
 }) {
+	/*
+	 * SORUN 5 — kart odaklanınca satırın yatay ORTASINA taşınır.
+	 *
+	 * Android TV odaklanan öğeyi yalnızca ekrana getirir; kart satırın
+	 * kenarına yapışıp başlığı yarım görünür. Ortak kanca bu davranışı
+	 * `category.jsx` / `MovieCategorySection.jsx` ile aynı yerden verir.
+	 */
+	const {
+		listRef,
+		handleItemFocus: centerOnScreen,
+		onScrollToIndexFailed,
+		clearRetry,
+	} = useFocusCentering({ horizontal: true });
+
+	useEffect(() => clearRetry, [clearRetry]);
+
+	const handleItemFocus = useCallback(
+		(index) => {
+			centerOnScreen(index);
+			onRowFocused?.();
+		},
+		[centerOnScreen, onRowFocused],
+	);
+
 	if (!items || items.length === 0) {
 		return null;
 	}
@@ -61,6 +89,7 @@ export default function ContinueWatchingSection({
 
 			{/* Horizontal List */}
 			<FlatList
+				ref={listRef}
 				data={items}
 				keyExtractor={(item, index) =>
 					item.id || item.url || `continue-${index}`
@@ -68,18 +97,21 @@ export default function ContinueWatchingSection({
 				horizontal
 				showsHorizontalScrollIndicator={false}
 				contentContainerStyle={styles.listContent}
-				initialNumToRender={5}
-				maxToRenderPerBatch={4}
-				windowSize={3}
-				// Yatay listede odaklı kart ekranda olduğu için kırpma güvenli.
-				removeClippedSubviews={true}
+				initialNumToRender={6}
+				maxToRenderPerBatch={6}
+				windowSize={7}
+				// SORUN 2: TV'de kırpma, ekran dışındaki kartı detach
+				// edip odaklı kartın odağını düşürüyordu.
+				removeClippedSubviews={!Platform.isTV}
 				getItemLayout={getItemLayout}
-				renderItem={({ item }) => (
+				onScrollToIndexFailed={onScrollToIndexFailed}
+				renderItem={({ item, index }) => (
 					<ContinueWatchingCard
 						item={item}
 						onPress={onItemPress}
 						onLongPress={onItemLongPress}
 						onRemove={onRemoveItem}
+						onFocus={() => handleItemFocus(index)}
 					/>
 				)}
 			/>
