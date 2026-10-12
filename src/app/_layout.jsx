@@ -6,14 +6,57 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { AppUpdateProvider } from "@/context/AppUpdateContext";
 import UpdateBanner from "@/components/update/UpdateBanner";
 import UpdateSheet from "@/components/update/UpdateSheet";
+import SplashOverlay from "@/components/splash/SplashOverlay";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { Stack } from "expo-router";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { startNetworkQualityWatch } from "@/utils/imageQuality";
 
+/*
+ * ⚠️ Bu import YALNIZCA isimler için değil: modül YÜKLENİRKEN
+ * `SplashScreen.preventAutoHideAsync()` çalışır ve `fetch` saymaya sarılır.
+ * Yalnızca `useEffect` içinde beklemek yetmez — expo-router ilk ekranı
+ * çizer çizmez native splash'ı KENDİSİ gizler.
+ */
+import { hideNativeSplash, waitForStartupGate } from "@/utils/splashScreen";
+
 export default function RootLayout() {
+	const [splashVisible, setSplashVisible] = useState(true);
+
+	/*
+	 * ── Açılış kapısı ──────────────────────────────────────────────
+	 *
+	 * Splash'ı, uygulamanın açılış istekleri (oturum kontrolü, güncelleme
+	 * kontrolü, ilk içerik) bitene kadar — en az 1,2 sn, en çok 3 sn —
+	 * açık tutar, sonra ANİMASYONLU kapatır.
+	 *
+	 * ⚠️ Sıralama: native splash ÖNCE kapanır, JS animasyonu SONRA başlar.
+	 * Tersi yapılırsa animasyon native splash'ın arkasında oynar, o da
+	 * kapanınca içerik hazır olur ve geçiş bir "sıçrama" olur.
+	 */
+	useEffect(() => {
+		let cancelled = false;
+
+		async function runStartupGate() {
+			try {
+				await waitForStartupGate();
+			} catch (error) {
+				// Bekleme mantığı hata verse bile uygulama kilitlenmemeli.
+				console.warn("Açılış kapısı hatası:", error?.message);
+			} finally {
+				await hideNativeSplash();
+				if (!cancelled) setSplashVisible(false);
+			}
+		}
+
+		runStartupGate();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
 	/*
 	 * ⚠️ UYARLANABİLİR GÖRSEL KALİTESİ (sorun 6)
 	 *
@@ -100,6 +143,14 @@ export default function RootLayout() {
 									{/* absolute banner + modal: düzen akışına dokunmaz. */}
 									<UpdateBanner />
 									<UpdateSheet />
+									{/*
+									 * Son çocuk = en üstte. Native splash'ın
+									 * hemen altında bekler, kapı açılınca
+									 * animasyonla kaybolur. TV'de native
+									 * splash hiç görünmediği için bu katman
+									 * açılış ekranının kendisidir.
+									 */}
+									<SplashOverlay visible={splashVisible} />
 								</SafeAreaProvider>
 							</LanguageDisplayProvider>
 						</PlayerSettingsProvider>
