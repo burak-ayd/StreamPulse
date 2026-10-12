@@ -20,8 +20,20 @@ import TVPressable from "@/components/common/TVPressable";
  * `VideoPlayer`'ın en kalabalık katmanıydı. Ayrı bileşen, orkestrasyon
  * dosyasını okunabilir tutar ve barı tek yerden stillendirmeyi sağlar.
  */
-export default function PlayerActionBar({ actions, disabled = false }) {
+export default function PlayerActionBar({ actions, disabled = false, onFocusZone }) {
 	if (!actions?.length) return null;
+
+	/*
+	 * TV kumandası için "hangi barda odak var" bilgisi.
+	 *
+	 * ⚠️ SORUN 6 bağlamı: HUD açıkken sol/sağ tuşu hem odak hem de
+	 * sarma için kullanılır. `VideoPlayer` yalnızca "alt bardayken
+	 * odak gezdirme, aksi hâlde sarma" diyebilmek için buraya bilgi
+	 * verir. `onBlur` → `null`: odak bu bardan çıkıp ortaya döndüğünde
+	 * sarma yeniden devreye girsin.
+	 */
+	const handleFocus = () => onFocusZone?.("bottom");
+	const handleBlur = () => onFocusZone?.(null);
 
 	return (
 		<View style={styles.bar} pointerEvents="box-none">
@@ -35,6 +47,8 @@ export default function PlayerActionBar({ actions, disabled = false }) {
 						focusedStyle={styles.itemFocused}
 						disabled={disabled || action.disabled}
 						cancelable={false}
+						onFocus={handleFocus}
+						onBlur={handleBlur}
 						onPress={action.onPress}>
 						<View style={styles.itemInner}>
 							<Ionicons

@@ -7,9 +7,9 @@ import { AppUpdateProvider } from "@/context/AppUpdateContext";
 import UpdateBanner from "@/components/update/UpdateBanner";
 import UpdateSheet from "@/components/update/UpdateSheet";
 import * as ScreenOrientation from "expo-screen-orientation";
-import { Slot } from "expo-router";
+import { Stack } from "expo-router";
 import React, { useEffect } from "react";
-import { Platform, View } from "react-native";
+import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { startNetworkQualityWatch } from "@/utils/imageQuality";
 
@@ -63,10 +63,40 @@ export default function RootLayout() {
 						<PlayerSettingsProvider>
 							<LanguageDisplayProvider>
 								<SafeAreaProvider>
-									{/* flex:1 olmadan Slot içeriği ekranı doldurmaz. */}
-									<View style={{ flex: 1 }}>
-										<Slot />
-									</View>
+									{/*
+									 * ⚠️ SORUN 4 (GENEL) — `<Slot/>` → `<Stack/>`.
+									 *
+									 * `<Slot/>` yalnızca ODAKTAKİ ekranı çizer;
+									 * başka bir ekrana gidildiğinde önceki ekran
+									 * **tamamen unmount** olur. Bu yüzden geri
+									 * tuşuna basıp dönüldüğünde:
+									 *   • kaydırma konumu sıfırlanıyordu,
+									 *   • seçili filtre/sekme sıfırlanıyordu,
+									 *   • yüklenmiş veri (kategori sayfaları gibi)
+									 *     baştan isteniyordu.
+									 *
+									 * `<Stack/>` ekranları yığın hâlinde TUTAR:
+									 * önceki ekran mount durumunu ve dolayısıyla
+									 * kaydırma konumunu, filtreleri ve indirilmiş
+									 * satırları korur. Aynı zamanda Android geri
+									 * tuşu ile sistem geri gezinmesi de doğru
+									 * çalışır.
+									 *
+									 * TV'de animasyon KAPALI: 10 feet UI'de geçiş
+									 * efekti kumandaya gecikme olarak yansıyor ve
+									 * akıcılığı düşürüyor.
+									 */}
+									<Stack
+										screenOptions={{
+											headerShown: false,
+											animation: Platform.isTV
+												? "none"
+												: "slide_from_right",
+											contentStyle: {
+												backgroundColor: "#0d0e12",
+											},
+										}}
+									/>
 									{/* absolute banner + modal: düzen akışına dokunmaz. */}
 									<UpdateBanner />
 									<UpdateSheet />

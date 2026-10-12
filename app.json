@@ -29,7 +29,7 @@
         "monochromeImage": "./assets/icons/release/icon-adaptive-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "tr.net.burakaydogan.StreamPulse",
+      "package": "tr.net.burakaydogan.streampulse",
       "intentFilters": [
         {
           "action": "VIEW",

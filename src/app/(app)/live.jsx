@@ -62,6 +62,7 @@ import ChannelCard from "@/components/live/ChannelCard";
 import ChannelCardSkeleton from "@/components/live/ChannelCardSkeleton";
 import TVPressable from "@/components/common/TVPressable";
 import { useNavLayout } from "@/hooks/useNavLayout";
+import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import {
 	CANLI_TV_KATEGORI_TUMU,
@@ -204,6 +205,7 @@ export default function LiveScreen() {
 	/** Ölçülen içerik genişliği (kenar boşluğu ve ray çıkarılmış). */
 	const [icerikGenisligi, setIcerikGenisligi] = useState(0);
 
+	// ── TV Odak Ortalama (Sorun 5) ──────────────────────────────────
 	const onLayout = useCallback(
 		(e) => {
 			const w =
@@ -230,6 +232,23 @@ export default function LiveScreen() {
 			(icerikGenisligi - GRID_GAP * (sutunSayisi - 1)) / sutunSayisi
 		);
 	}, [icerikGenisligi, sutunSayisi]);
+
+	/*
+	 * SORUN 5 — odaklanan kanalın SATIRI ekranın dikey ortasına taşınır.
+	 *
+	 * Kart indeksi tek başına hedef olamaz: kartın bulunduğu satırın
+	 * yatayda da görüş alanında olması gerekir. Bu yüzden satırın İLK
+	 * kartına geçiş yapılır (`columns: sutunSayisi`).
+	 */
+	const {
+		listRef,
+		handleItemFocus: handleCardFocus,
+		onScrollToIndexFailed,
+		clearRetry,
+	} = useFocusCentering({ columns: sutunSayisi });
+
+	// Ekrandan çıkarken bekleyen "tekrar ortalama" zamanlayıcısını iptal et.
+	useEffect(() => clearRetry, [clearRetry]);
 
 	// ── Kategoriler (bir kez) ─────────────────────────────────────
 	useEffect(() => {
@@ -405,14 +424,15 @@ export default function LiveScreen() {
 	const keyExtractor = useCallback((item) => item.id, []);
 
 	const renderItem = useCallback(
-		({ item }) => (
+		({ item, index }) => (
 			<ChannelCard
 				channel={item}
 				width={kartGenisligi}
 				onPress={() => handleChannelPress(item)}
+				onFocus={() => handleCardFocus(index)}
 			/>
 		),
-		[kartGenisligi, handleChannelPress],
+		[kartGenisligi, handleChannelPress, handleCardFocus],
 	);
 
 	const baslangicKategoriAdi = useMemo(
@@ -674,6 +694,7 @@ export default function LiveScreen() {
 					renderHataDurumu()
 				) : gosterIzgara ? (
 					<FlatList
+						ref={listRef}
 						contentInsetAdjustmentBehavior="automatic"
 						/*
 						 * `numColumns` çalışma anında değişir (dönme / TV-mobil
@@ -703,6 +724,7 @@ export default function LiveScreen() {
 								: null,
 						]}
 						showsVerticalScrollIndicator={false}
+						onScrollToIndexFailed={onScrollToIndexFailed}
 						/*
 						 * `getItemLayout` YOK. Kategori ekranında (sonsuz
 						 * kaydırma) kullanılıyor çünkü 20'şer sayfa geliyor;

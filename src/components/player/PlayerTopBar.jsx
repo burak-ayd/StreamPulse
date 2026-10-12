@@ -29,6 +29,7 @@ export default function PlayerTopBar({
 	seriesLine,
 	onClose,
 	onAction,
+	onFocusZone,
 }) {
 	// 1. satır: kaynak + çözünürlük
 	const line1 = useMemo(() => {
@@ -75,6 +76,11 @@ export default function PlayerTopBar({
 				style={styles.backButton}
 				focusedStyle={styles.backButtonFocused}
 				cancelable={false}
+				// SOLUNDA: kumanda odak bu üst bardayken sol/sağ tuşu
+				// odak gezdirmek için kullanılır, sarma için değil
+				// (bkz. `VideoPlayer` → `focusZone`, sorun 6).
+				onFocus={() => onFocusZone?.("top")}
+				onBlur={() => onFocusZone?.(null)}
 				onPress={onClose}>
 				<Ionicons name="chevron-back" size={28} color="#FFFFFF" />
 			</TVPressable>

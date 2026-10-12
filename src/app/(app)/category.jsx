@@ -18,13 +18,19 @@
  * içerik dönüyor (bkz. api/routes/plugins.py:601).
  */
 
+import BottomNavigation from "@/components/BottomNavigation";
 import TVPressable from "@/components/common/TVPressable";
-import CategoryCard from "@/components/content/CategoryCard";
+import CategoryCard, {
+	gridCardStride,
+} from "@/components/content/CategoryCard";
 import CategoryCardSkeleton from "@/components/content/CategoryCardSkeleton";
 import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
 import { useThemeContext } from "@/context/ThemeContext";
+import { useNavLayout } from "@/hooks/useNavLayout";
+import { useFocusCentering } from "@/hooks/useFocusCentering";
+import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
-import { contentKey, yearOf } from "@/utils/contentMeta";
+import { contentIdentity, contentKey } from "@/utils/contentMeta";
 import { canonicalType } from "@/utils/mediaType";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -52,6 +58,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const GAP = 10;
 const GUTTER = 14;
+/** Liste içeriğinin üst boşluğu — `getItemLayout` ile Aynı değer. */
+const LIST_PAD_TOP = GAP + 2;
 /** Kategori adı çok uzunsa tek satırda kısalır. */
 const MAX_TITLE_CHARS = 22;
 
@@ -69,6 +77,9 @@ function shortenTitle(name) {
 export default function CategoryScreen() {
 	const { m3, theme } = useThemeContext();
 	const router = useRouter();
+	// Sol ray (TV / tablet yatay) varken içerik sola kayar — ana sayfa,
+	// arama ve ayarlarla aynı karar (bkz. hooks/useNavLayout.js).
+	const { contentPaddingLeft } = useNavLayout();
 	const { platform, url, name } = useLocalSearchParams();
 
 	const platformName = typeof platform === "string" ? platform : "";
@@ -119,6 +130,59 @@ export default function CategoryScreen() {
 			? (layout.width - GUTTER * 2 - GAP * (layout.columns - 1)) /
 				layout.columns
 			: 0;
+
+	/*
+	 * SORUN 2 — "Kategori sayfasında yeni sayfalar yüklendikçe ekran
+	 * atlıyor / seçili içerik değişiyor".
+	 *
+	 * `FlatList` sabit adımlı `getItemLayout` kullanır (TV'de satır
+	 * başına ölçüm yapmak kaydırmayı belirgin yavaşlatıyor). Bu yalnızca
+	 * tüm kartlar AYNI yükseklikteyse doğrudur. Kart artık yıl satırını
+	 * veri yoksa bile çizdiği için (`CategoryCard`) yükseklik sabit ve
+	 * adım `gridCardStride` ile BİREBİR ölçümle aynı.
+	 *
+	 * Önceden adım kartın kendi yılına göre hesaplanıyordu; yılı olmayan
+	 * bir kart satırı 12px kısa oluyor, ofsetler kayan `getItemLayout`
+	 * her yeni sayfada kaydırma konumunu saptırıyordu.
+	 */
+	const cardStride = useMemo(
+		() => (cardWidth > 0 ? gridCardStride(cardWidth, GAP) : 0),
+		[cardWidth],
+	);
+
+	/*
+	 * SORUN 5 — "İçeriklere odak olunmalı ve içerik ekrana
+	 * ortalanmalı". Android TV odaklandığında öğeyi yalnızca EKRANA
+	 * GETİRİR (en az kaydırma) — kart ekranın kenarına yapışır ve
+	 * başlığı yarım görünür. `scrollToIndex({viewPosition: 0.5})`
+	 * öğeyi ekranın dikey ortasına sabitler.
+	 */
+	/*
+	 * SORUN 4 (GENEL) — geri dönüşte kaydırma konumu korunur.
+	 *
+	 * Anahtar kategoriye ÖZGÜ: aynı uygulamada birden çok kategori
+	 * ekranı açılabiliyor; hepsi "category" adıyla saklanırsa son
+	 * girilen kategorinin konumu diğerine bulaşırdı.
+	 */
+	const scrollKey = `category:${platformName}|${categoryURL}`;
+	const rememberScroll = useScrollMemory(scrollKey);
+
+	/*
+	 * SORUN 5 — odaklanan kartın satırı ekranın dikey ortasına taşınır.
+	 *
+	 * Davranış artık ortak kancada (`useFocusCentering`); bu ekran yalnızca
+	 * sütun sayısını verir. Aynı mantık `live.jsx`,
+	 * `MovieCategorySection.jsx` ve `ContinueWatchingSection.jsx` içinde
+	 * ayrı ayrı kopyalanmıştı; kanca tek doğruluk kaynağı oldu.
+	 */
+	const {
+		listRef,
+		handleItemFocus: handleCardFocus,
+		onScrollToIndexFailed,
+		clearRetry,
+	} = useFocusCentering({ columns: layout.columns });
+
+	useEffect(() => clearRetry, [clearRetry]);
 
 	const handleBack = useCallback(() => {
 		if (router.canGoBack()) router.back();
@@ -220,13 +284,32 @@ export default function CategoryScreen() {
 				// Doğru kural: bir sayfa **hiç yeni içerik getirmediyse** dur.
 				// Bu, eklenti sayfayı ilerletmiyorsa da (bazı kategoriler hep
 				// aynı sayfayı döndürüyor) sonsuz döngüyü kendiliğinden keser.
-				const seen = new Set(prev.map((i) => i.url || i.id || i.title));
-				const extra = data.filter((i) => {
-					const key = i.url || i.id || i.title;
-					if (!key || seen.has(key)) return false;
+				/*
+				 * ⚠️ Tekilleştirme anahtarı `contentIdentity` ile
+				 * yapılıyor — React anahtarından (`contentKey`) ayrıdır.
+				 * Çünkü buradaki sorun "aynı içerik iki kez geldi", React
+				 * anahtarı ise "aynı içerik listede iki konumda".
+				 *
+				 * Önceden burada `url || id || title`, anahtar üretirken
+				 * `id || url || slug || title` sırası kullanılıyordu; iki
+				 * farklı öncelik, aynı içerik için iki farklı kimlik
+				 * üretebiliyordu.
+				 *
+				 * Kimlik alanı hiç olmayan içeriklerde indeks devreye
+				 * girer; liste yalnızca SONDAN büyüdüğü için indeksler
+				 * kararlıdır.
+				 */
+				const seen = new Set(
+					prev.map((i, idx) => contentIdentity(i) ?? `#${idx}`),
+				);
+				const extra = [];
+				for (let k = 0; k < data.length; k++) {
+					const item = data[k];
+					const key = contentIdentity(item) ?? `#${prev.length + k}`;
+					if (seen.has(key)) continue;
 					seen.add(key);
-					return true;
-				});
+					extra.push(item);
+				}
 
 				if (extra.length === 0) {
 					// Bu sayfa tamamen mevcut — eklenti ilerlemiyor.
@@ -356,7 +439,7 @@ export default function CategoryScreen() {
 	);
 
 	const renderItem = useCallback(
-		({ item }) => (
+		({ item, index }) => (
 			<CategoryCard
 				item={item}
 				variant="grid"
@@ -366,28 +449,46 @@ export default function CategoryScreen() {
 				// modalını açar. Kart paylaşıldığı için bu davranış burada da
 				// ücretsiz geldi — önceki ikinci kopyada hiç yoktu.
 				onLongPress={() => handleLongPress(item)}
+				// Sorun 5: odaklanan kart ekranın ortasına taşınır.
+				onFocus={() => handleCardFocus(index)}
 			/>
 		),
-		[cardWidth, handleItemPress, handleLongPress],
+		[cardWidth, handleItemPress, handleLongPress, handleCardFocus],
 	);
 
+	/**
+	 * ⚠️ SORUN 2 (devam) — anahtarlar.
+	 *
+	 * `contentKey` içerik `id`/`url`/`slug`/`title` alanlarından birini
+	 * seçer. Bazı eklentilerde aynı başlığa sahip iki farklı içerik
+	 * olabildiği için çakışma yaşanır; React aynı anahtarı iki kez
+	 * gördüğünde hücreleri YENİDEN KULLANIR ve odaklı kart "içerik
+	 * değiştiriyor" gibi görünür. İndeks son eki hem çakışmayı hem de
+	 * iki sayfanın birleştiği noktadaki belirsizliği kaldırır.
+	 *
+	 * Liste YALNIZCA sona ekleme yapar (sayfa 1, 2, 3…), dolayısıyla
+	 * indeksler kalıcıdır: eklenen yeni içerikler mevcut anahtarları
+	 * değiştirmez.
+	 */
 	const keyExtractor = useCallback(
 		(item, index) => contentKey(item, index),
 		[],
 	);
 
+	/**
+	 * Sabit adımlı ölçüm. Kart yüksekliği artık veriden bağımsız
+	 * (`gridCardStride`), dolayısıyla ofset kayması yok.
+	 */
 	const getItemLayout = useCallback(
 		(data, index) => {
-			// Kart yüksekliği = 2:3 poster + başlık (+ yıl varsa). Sabit
-			// olduğu için ölçüm hesabı atlanabilir; TV'de kaydırmayı belirgin
-			// hızlandırır.
 			const row = Math.floor(index / layout.columns);
-			const posterH = cardWidth * 1.5;
-			const itemH = posterH + (yearOf(data[index]) ? 46 : 34);
-			const stride = itemH + GAP;
-			return { length: stride, offset: GUTTER + stride * row, index };
+			return {
+				length: cardStride,
+				offset: LIST_PAD_TOP + cardStride * row,
+				index,
+			};
 		},
-		[layout.columns, cardWidth],
+		[layout.columns, cardStride],
 	);
 
 	/**
@@ -448,7 +549,13 @@ export default function CategoryScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right"]}
-				style={[styles.safeArea, { backgroundColor: m3.surfaceLowest }]}
+				style={[
+					styles.safeArea,
+					{
+						backgroundColor: m3.surfaceLowest,
+						paddingLeft: contentPaddingLeft,
+					},
+				]}
 				onLayout={onLayout}>
 				<StatusBar
 					barStyle={
@@ -586,6 +693,7 @@ export default function CategoryScreen() {
 					</View>
 				) : (
 					<FlatList
+						ref={listRef}
 						contentInsetAdjustmentBehavior="automatic"
 						key={layout.columns}
 						data={items}
@@ -600,19 +708,55 @@ export default function CategoryScreen() {
 							{ rowGap: GAP },
 						]}
 						getItemLayout={getItemLayout}
+						onScrollToIndexFailed={onScrollToIndexFailed}
+						onScroll={rememberScroll.onScroll}
+						scrollEventThrottle={rememberScroll.scrollEventThrottle}
+						onContentSizeChange={() =>
+							rememberScroll.restoreOffset(listRef)
+						}
 						onEndReached={loadMore}
-						onEndReachedThreshold={0.6}
+						// Prefetch eşiği biraz düşürüldü: 0.6 pratikte liste
+						// bittiğinden çok önce tetikleniyor ve kullanıcı
+						// kaydırırken arka planda sürekli yeni sayfa
+						// isteği uçuyordu. 0.4 aynı işi daha az istekle yapar.
+						onEndReachedThreshold={0.4}
 						ListFooterComponent={footer}
 						showsVerticalScrollIndicator={false}
-						initialNumToRender={9}
-						maxToRenderPerBatch={6}
-						windowSize={5}
-						// Sonsuz kaydırmada ekran dışı kartları kırpmak bellek için
-						// belirli fayda sağlıyor (ana sayfadaki yatay satırla aynı tercih).
-						removeClippedSubviews
+						initialNumToRender={12}
+						maxToRenderPerBatch={8}
+						/*
+						 * SORUN 2 — `windowSize` büyütüldü.
+						 *
+						 * 5 pencerelik kısa pencere, TV'de kumandayla hızlı
+						 * gezinirken ölçülmemiş satırların boş kalmasına
+						 * ("içerik değişti" hissi) yol açıyordu. 9 pencerenin
+						 * maliyeti ihmal edilebilir, kazanımı belirgin.
+						 */
+						windowSize={9}
+						/*
+						 * SORUN 2 — `removeClippedSubviews` KAPALI.
+						 *
+						 * Android'de kırpma, ekran dışına çıkan hücreyi
+						 * native tarafta DETACH eder. Odaklı kart detache
+						 * olursa kumanda odağı düşer ve Android listedeki
+						 * başka bir öğeye odaklanır — kullanıcının gördüğü
+						 * tam olarak "seçilmiş içerik kendiliğinden değişti"
+						 * davranışıdır.
+						 *
+						 * TV'de zaten kesinlikle kapatılmalıydı; ızgara
+						 * hücrelerinin bellek maliyeti makul olduğu için
+						 * telefon/ tablette de kapalı bırakıldı.
+						 */
+						removeClippedSubviews={false}
 					/>
 				)}
 			</SafeAreaView>
+
+			{/* Sol gezinme rayı — ana sayfa / arama / ayarlarla aynı
+			    düzen. Kategori ekranı da bir "bölüm" olduğu için TV'de
+			    kumandayla doğrudan bölümler arasında geçilebilir olmalı
+			    (sorun 3). */}
+			<BottomNavigation activeRoute="/(app)" />
 
 			{/* Hızlı önizleme — ana sayfadaki kartla aynı deneyim.
 			    Kart paylaşıldığı için uzun basma davranışı her iki ekranda da
@@ -666,7 +810,18 @@ const styles = StyleSheet.create({
 		letterSpacing: -0.2,
 		flexShrink: 1,
 	},
+	/*
+	 * ⚠️ SORUN 2 — "N içerik" rozeti SIKIŞMADAN genişlemesin.
+	 *
+	 * Her yeni sayfa geldiğinde sayaç 9 → 29 → 49 … diye büyüyor ve
+	 * rozet sola doğru genişleyerek başlığın sıkışıp kırpılmasına yol
+	 * açıyordu; kullanıcı bunu "ekran zıpladı" olarak algılıyordu.
+	 * Sabit bir taban genişlik verilerek yalnızca TAM SAYI değiştiğinde
+	 * (100 → 200 içerik gibi) rozet büyüyebilir.
+	 */
 	countChip: {
+		minWidth: 74,
+		alignItems: "center",
 		paddingHorizontal: 8,
 		paddingVertical: 2,
 		borderRadius: 999,
@@ -680,7 +835,7 @@ const styles = StyleSheet.create({
 
 	listContent: {
 		paddingHorizontal: GUTTER,
-		paddingTop: GAP + 2,
+		paddingTop: LIST_PAD_TOP,
 		paddingBottom: 40,
 	},
 	row: { gap: GAP },

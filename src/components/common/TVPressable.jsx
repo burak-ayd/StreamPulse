@@ -53,6 +53,19 @@ export function isTVPressSuppressed() {
 const TVPressable = forwardRef(function TVPressable(
 	{
 		style,
+		/**
+		 * Odak stili.
+		 *
+		 * ⚠️ `null` = "odak stilini TAMAMEN kapat" (varsayılan kırmızı
+		 * çerçeve uygulanmaz). `undefined` = "varsayılanı kullan".
+		 *
+		 * Neden gerekli: sol navigasyon rayı gibi bileşenlerde odak
+		 * hedefi, görsel ikonun kendisi değil onu saran **dikey banttır**
+		 * (bkz. `BottomNavigation` — sorun 3). Odak halkası bantın
+		 * tamamını kaplarsa ekranın belirli bir bandı kırmızıya boyanır;
+		 * bu yüzden bu bileşenler `focusedStyle={null}` verip halkayı
+		 * kendi çocuklarına taşır.
+		 */
 		focusedStyle,
 		pressedStyle,
 		children,
@@ -193,7 +206,14 @@ const TVPressable = forwardRef(function TVPressable(
 
 				return [
 					resolvedStyle,
-					isTV && isFocused && (focusedStyle || styles.defaultFocused),
+					isTV &&
+						isFocused &&
+						// `null` → odak stili tamamen kapalı (aşağıya bak).
+						// `undefined` → React'in defaultFocused'ı.
+						// nesne     → çağıranın stili.
+						(focusedStyle === null
+							? null
+							: focusedStyle || styles.defaultFocused),
 					pressed && (pressedStyle || styles.defaultPressed),
 				];
 			}}

@@ -64,6 +64,33 @@ export const CARD_TITLE_MARGIN_TOP = 6;
 export const CARD_YEAR_HEIGHT = 15; // lineHeight
 export const CARD_YEAR_MARGIN_TOP = 1;
 
+/**
+ * Izgara (kategori sayfası) kartının metin bloğu yüksekliği — başlık +
+ * yıl satırı. Yıl satırı veri yoksa bile yer ayırdığı için (sorun 2)
+ * bu değer HER ZAMAN kartın gerçek metin yüksekliğidir.
+ */
+export const CARD_GRID_TEXT_BLOCK =
+	CARD_TITLE_MARGIN_TOP +
+	CARD_TITLE_HEIGHT +
+	CARD_YEAR_MARGIN_TOP +
+	CARD_YEAR_HEIGHT;
+
+/**
+ * Izgara kartının bir satırdaki adım uzunluğu (px).
+ *
+ * Kategori sayfası `FlatList` için sabit adımlı `getItemLayout`
+ * hesaplamak zorunda (TV'de satır başına ölçüm yapmak kaydırmayı
+ * belirgin biçimde yavaşlatıyor). Bu değer kartın gerçekten ölçülen
+ * yüksekliğiyle birebir aynı olduğu için ofset kayması — dolayısıyla
+ * "yeni sayfa gelince ekran atlıyor" sorunu — ortadan kalkar.
+ *
+ * @param {number} width  - kart genişliği (px)
+ * @param {number} gap    - kartlar arası boşluk (px)
+ */
+export function gridCardStride(width, gap) {
+	return width / CARD_POSTER_RATIO + CARD_GRID_TEXT_BLOCK + gap;
+}
+
 function CategoryCard({
 	item,
 	/** "row" (ana sayfa) | "grid" (kategori sayfası) */
@@ -72,6 +99,16 @@ function CategoryCard({
 	width,
 	onPress,
 	onLongPress,
+	/**
+	 * Odak callbacks'i (TV odak ortalama — sorun 5).
+	 *
+	 * Çağıran liste, kart odaklandığında `scrollToIndex` çağırarak
+	 * kartı ekranın ortasına getirir. `TVPressable` zaten `onFocus`/
+	 * `onBlur` destekliyor; bu ikisi kart görünümüne DEĞİL, gezinme
+	 * katmanına ait olduğu için buradan açıkça geçiriyoruz.
+	 */
+	onFocus,
+	onBlur,
 }) {
 	const { m3 } = useThemeContext();
 
@@ -90,6 +127,8 @@ function CategoryCard({
 			focusedStyle={styles.cardFocused}
 			onPress={onPress}
 			onLongPress={onLongPress}
+			onFocus={onFocus}
+			onBlur={onBlur}
 			accessibilityLabel={[title, year].filter(Boolean).join(", ")}>
 			{({ focused }) => (
 				<View>
@@ -144,11 +183,30 @@ function CategoryCard({
 						{title}
 					</Text>
 
-					{year ? (
-						<Text style={[styles.year, { color: m3.onSurfaceVariant }]}>
-							{year}
+					{/*
+				 * ⚠️ SORUN 2 — "Izgara satırları yüklendikçe ekran atlıyor".
+				 *
+				 * Kategori sayfasındaki `FlatList` sabit adımlı
+				 * `getItemLayout` kullanıyor (TV'de ölçüm atlamak için
+				 * şart). Bu, ancak TÜM kartlar aynı yükseklikteyse doğrudur.
+				 * Yılı olmayan kartta yıl satırı hiç çizilmediği için
+				 * o satır 12px daha kısa oluyor, `getItemLayout` yanlış
+				 * ofset üretiyor ve yeni sayfa geldiğinde liste kayıyordu.
+				 *
+				 * Çözüm: yıl satırı DAIMA yer ayırır; veri yoksa boş
+				 * (saydam) bir satır basılır. Görsel değişmez, yükseklik
+				 * sabitlenir.
+				 */}
+					{isRow ? null : (
+						<Text
+							style={[
+								styles.year,
+								{ color: m3.onSurfaceVariant },
+							]}
+							numberOfLines={1}>
+							{year || " "}
 						</Text>
-					) : null}
+					)}
 				</View>
 			)}
 		</TVPressable>

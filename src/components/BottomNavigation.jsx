@@ -2,7 +2,8 @@ import TVPressable from "@/components/common/TVPressable";
 import { NAV_RAIL_WIDTH, useNavLayout } from "@/hooks/useNavLayout";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
-import { StyleSheet, View } from "react-native";
+import { useEffect } from "react";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 
 /** @deprecated Geriye uyumluluk: artık useNavLayout'ı kullanın. */
 export const TV_NAV_WIDTH = NAV_RAIL_WIDTH;
@@ -15,21 +16,95 @@ const NAV_ITEMS = [
 	{ id: "settings", icon: "settings", route: "/(app)/settings" },
 ];
 
+/**
+ * ⚠️ SORUN 3'ÜN KÖK NEDENİ: Sol rayın dikey payı.
+ *
+ * Android TV odak yöneticisi bir düğmeyi ararken "ışın" (beam) mantığı
+ * kullanır: adayın, odaklı görünümün **dik eksen** (sol/sağ için dikey)
+ * aralığıyla KESİŞMESİ gerekir. Rayın ikonları `justifyContent:
+ * "center"` ile ekranın tam ORTASINA yığılmıştı; ekranın üstünde veya
+ * altında duran bir karttan `SOL` basıldığında ışın hiçbir ray
+ * öğesiyle kesişmediği için odak hiçbir yere gitmiyordu. Kullanıcı
+ * "menüye ancak sayfanın en üstüne çıkıp sol tuşuna basınca geçebiliyorum"
+ * diye tarif ediyordu — üstteki odaklı öğe ışınla kesiştiği için.
+ *
+ * ÇÖZÜM: Her ray öğesi artık ekranın beşte birini kaplayan bir
+ * **dikey bant** oluşturuyor (görsel ikon 44×44 kalıyor, odak halkası
+ * onun üzerinde). Böylece ekranın HANGİ noktasından sol tuşu basılırsa
+ * basılsın en az bir ray bandı ışınla kesişir ve odak her zaman raya
+ * düşer.
+ *
+ * Üstte/altta bırakılan pay (`paddingVertical`) şart: rayın son öğesinin
+ * ALTINDA boşluk kalmazsa, oradan `AŞAĞA` basıldığında odak rayın içinde
+ * hapsolur ve kullanıcı içerik dönemez.
+ */
+const RAIL_EDGE_RATIO = 0.08;
+
+/**
+ * ⚠️ SORUN 4'ÜN YAN ETKİSİ — bölüm geçişi sekme gibi davranmalı.
+ *
+ * `<Slot/>` yerine `<Stack/>` kullanılınca (ekranları mount durumunda
+ * tutmak için) her bölüm düğmesine basmak yeni bir ekran YIGINDI.
+ * Ana → Arama → Ana → Arama… sonrası "geri" tuşu sanılan yerlerde
+ * ekranlar arasında dolaşıyordu.
+ *
+ * Çözüm: basılan bölüm yazdığımız gezinme İZİNDE zaten varsa ona
+ * geri sarılıyoruz. Böylece:
+ *   • ekran mount durumunda kalıyor → kaydırma konumu/filtre korunuyor,
+ *   • geri tuşu anlamlı bir geçmişe dönüyor.
+ *
+ * İz, aktif bölüm değiştikçe `syncSectionTrail` ile gerçek duruma
+ * göre kırpılır; böylece donanım geri tuşuyla yapılan gezinme de
+ * tutarlı kalır.
+ */
+let sectionTrail = [];
+
+function syncSectionTrail(sectionId) {
+	if (!sectionId) return;
+	if (sectionTrail[sectionTrail.length - 1] === sectionId) return;
+	const idx = sectionTrail.lastIndexOf(sectionId);
+	sectionTrail =
+		idx >= 0 ? sectionTrail.slice(0, idx + 1) : [...sectionTrail, sectionId];
+}
+
+function goToSection(router, route) {
+	const idx = sectionTrail.lastIndexOf(route);
+	// Izde daha önce görülmüş ve şu an üstünde değilsek → geri sar.
+	if (idx >= 0 && idx < sectionTrail.length - 1) {
+		const steps = sectionTrail.length - 1 - idx;
+		for (let i = 0; i < steps; i++) router.back();
+		return;
+	}
+	router.push(route);
+}
+
 export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 	const router = useRouter();
 	// Tek kaynak: TV + tablet yatay → sol ray; telefon ve tablet dikey → alt bar.
 	const { isSideRail } = useNavLayout();
+	const { height } = useWindowDimensions();
+
+	const activeSection = NAV_ITEMS.find((i) => i.route === activeRoute)?.id;
+
+	useEffect(() => {
+		syncSectionTrail(activeSection);
+	}, [activeSection]);
 
 	const handleAction = (item) => {
 		if (item.route && activeRoute !== item.route) {
-			router.push(item.route);
+			goToSection(router, item.route);
 		}
 	};
 
 	// Sol tarafta dikey ray: TV ve tablet (yatay)
 	if (isSideRail) {
+		const edgePad = Math.max(8, Math.round(height * RAIL_EDGE_RATIO));
 		return (
-			<View style={styles.railContainer}>
+			<View
+				style={[
+					styles.railContainer,
+					{ paddingTop: edgePad, paddingBottom: edgePad },
+				]}>
 				<View style={styles.railNavList}>
 					{NAV_ITEMS.map((item) => {
 						const isActive =
@@ -39,7 +114,8 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 								key={item.id}
 								onPress={() => handleAction(item)}
 								style={styles.railItem}
-								focusedStyle={styles.railItemFocused}>
+								focusedStyle={null}
+								accessibilityLabel={item.id}>
 								{({ focused }) => (
 									<View
 										style={[
@@ -124,26 +200,29 @@ const styles = StyleSheet.create({
 		borderRightWidth: 1,
 		borderRightColor: "rgba(255, 255, 255, 0.08)",
 		alignItems: "center",
-		justifyContent: "center",
-		paddingVertical: 16,
 		zIndex: 9999,
 		elevation: 24,
 	},
+	/*
+	 * SORUN 3: liste tüm yüksekliği kaplar, öğeler `space-evenly` ile
+	 * dağıtılır ve her öğe esner (`flex: 1`). Böylece herhangi bir
+	 * dikey konumdan basılan SOL tuşu bir ray bandıyla kesişir.
+	 */
 	railNavList: {
+		flex: 1,
+		width: "100%",
 		flexDirection: "column",
 		alignItems: "center",
-		justifyContent: "center",
-		gap: 16,
+		justifyContent: "space-evenly",
 	},
+	/* Odak hedefi = dikey bant; görsel ikon `railIconBox`. */
 	railItem: {
-		width: 44,
-		height: 44,
+		width: "100%",
+		flex: 1,
+		minHeight: 52,
+		maxHeight: 160,
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: 14,
-	},
-	railItemFocused: {
-		transform: [{ scale: 1.12 }],
 	},
 	railIconBox: {
 		width: 44,

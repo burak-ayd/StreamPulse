@@ -29,7 +29,9 @@
 
 import TVPressable from "@/components/common/TVPressable";
 import { ColorsM3 } from "@/constants/theme";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { useFocusCentering } from "@/hooks/useFocusCentering";
+import { useCallback } from "react";
+import { FlatList, Platform, StyleSheet, Text, View } from "react-native";
 
 /** Sabit koyu palet — gerekçe `ChannelCard` dosya başında. */
 const c = ColorsM3.dark;
@@ -43,22 +45,32 @@ const c = ColorsM3.dark;
 function CategoryRail({ categories, selectedId, onSelect }) {
 	const list = Array.isArray(categories) ? categories : [];
 
-	const renderItem = ({ item }) => {
-		const isSelected = item.id === selectedId;
-		const count =
-			typeof item.kanal_sayisi === "number" ? item.kanal_sayisi : null;
+	/*
+	 * SORUN 5 — odaklanan kategori hapı yatayda ORTALANIR.
+	 * `useFocusCentering({ horizontal: true })` bunu tek yerden verir.
+	 */
+	const { listRef, handleItemFocus } = useFocusCentering({
+		horizontal: true,
+	});
 
-		return (
-			<TVPressable
-				style={[
-					styles.pill,
-					isSelected ? styles.pillSelected : styles.pillIdle,
-				]}
-				focusedStyle={styles.pillFocused}
-				onPress={() => onSelect(item.id)}
-				accessibilityRole="tab"
-				accessibilityState={{ selected: isSelected }}
-				accessibilityLabel={`${item.name}${count !== null ? `, ${count} kanal` : ""}`}>
+	const renderItem = useCallback(
+		({ item, index }) => {
+			const isSelected = item.id === selectedId;
+			const count =
+				typeof item.kanal_sayisi === "number" ? item.kanal_sayisi : null;
+
+			return (
+				<TVPressable
+					style={[
+						styles.pill,
+						isSelected ? styles.pillSelected : styles.pillIdle,
+					]}
+					focusedStyle={styles.pillFocused}
+					onPress={() => onSelect(item.id)}
+					onFocus={() => handleItemFocus(index)}
+					accessibilityRole="tab"
+					accessibilityState={{ selected: isSelected }}
+					accessibilityLabel={`${item.name}${count !== null ? `, ${count} kanal` : ""}`}>
 				<Text
 					style={[
 						styles.pillText,
@@ -67,31 +79,33 @@ function CategoryRail({ categories, selectedId, onSelect }) {
 							: styles.pillTextIdle,
 					]}
 					numberOfLines={1}>
-					{item.name}
-				</Text>
+						{item.name}
+					</Text>
 
-				{count !== null ? (
-					<View
-						style={[
-							styles.countBadge,
-							isSelected
-								? styles.countBadgeSelected
-								: styles.countBadgeIdle,
-						]}>
-						<Text
+					{count !== null ? (
+						<View
 							style={[
-								styles.countText,
+								styles.countBadge,
 								isSelected
-									? styles.countTextSelected
-									: styles.countTextIdle,
+									? styles.countBadgeSelected
+									: styles.countBadgeIdle,
 							]}>
-							{count}
-						</Text>
-					</View>
-				) : null}
-			</TVPressable>
-		);
-	};
+							<Text
+								style={[
+									styles.countText,
+									isSelected
+										? styles.countTextSelected
+										: styles.countTextIdle,
+								]}>
+								{count}
+							</Text>
+						</View>
+					) : null}
+				</TVPressable>
+			);
+		},
+		[selectedId, onSelect, handleItemFocus],
+	);
 
 	/*
 	 * Liste boşken (kategoriler henüz yüklenmedi) rayı hiç render etmiyoruz.
@@ -102,11 +116,18 @@ function CategoryRail({ categories, selectedId, onSelect }) {
 
 	return (
 		<FlatList
+			ref={listRef}
 			data={list}
 			renderItem={renderItem}
 			keyExtractor={(item) => item.id}
 			horizontal
 			showsHorizontalScrollIndicator={false}
+			/*
+			 * SORUN 2 (TV): kırpma, ekran dışındaki hapı native tarafta
+			 * DETACH eder; odaklı hap detache olursa kumanda odağı düşer
+			 * ve listedeki başka bir öğeye zıplar.
+			 */
+			removeClippedSubviews={!Platform.isTV}
 			contentContainerStyle={styles.content}
 			/*
 			 * `flexGrow/flexShrink: 0` ŞART. React Native `ScrollView`
