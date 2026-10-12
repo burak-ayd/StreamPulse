@@ -267,6 +267,7 @@ export function tvSvg(id, w, h, { showName = false } = {}) {
 		: "";
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
   <defs>
+    ${markGradDefs(id)}
     <linearGradient id="${id}-tbg" x1="0" y1="0" x2="0.9" y2="1">
       <stop offset="0" stop-color="${v.bgTop}"/>
       <stop offset="1" stop-color="${v.bgBottom}"/>
@@ -282,6 +283,59 @@ export function tvSvg(id, w, h, { showName = false } = {}) {
     ${markGroup(id, { glow: true })}
   </g>
   ${name}
+</svg>`;
+}
+
+/**
+ * Android TV banner (320x180): yatay kilit — solda marka, sağda iki satır wordmark.
+ * Android TV launcher banner'ın altına uygulama adı YAZMAZ; bu yüzden isim banner'ın içinde olmalı.
+ * Dev/preview varyantlarda etiket (DEV / PREVIEW) wordmark'ın altına yazılır.
+ * Kenarlardan en az ~%8 boşluk bırakılır (launcher focus çerçevesi/overscan kırpmasına karşı).
+ */
+export function bannerSvg(id, w = 320, h = 180) {
+	const v = CURRENT;
+	const MARK_BOX = 616; // markanın 1024 sistemindeki görsel kutusu (212..828)
+	const markPx = Math.round(h * 0.58); // ~104px
+	const s = markPx / MARK_BOX;
+	const gap = Math.round(h * 0.09);
+	const fs = Math.round(h * 0.165); // wordmark punto
+	const ls = Math.round(fs * 0.12);
+	// Wordmark genişliği fontlara göre değişir; en kötü durum ~0.78em/harf kabul edilip blok ortalanır.
+	const textW = Math.round(6 * (fs * 0.72 + ls));
+	const total = markPx + gap + textW;
+	const x0 = Math.round((w - total) / 2);
+	// 1024 sistemindeki (520,512) marka merkezini kutunun ortasına oturt
+	const mcx = x0 + markPx / 2;
+	const mcy = h / 2;
+	const tx = x0 + markPx + gap;
+	const hasLabel = Boolean(v.label);
+	const line1 = Math.round(h / 2 - (hasLabel ? fs * 0.55 : fs * 0.15));
+	const line2 = line1 + Math.round(fs * 1.12);
+	const labelY = line2 + Math.round(fs * 0.95);
+	const font = 'font-family="Segoe UI, Helvetica, Arial, sans-serif" font-weight="800"';
+	const label = hasLabel
+		? `<text x="${tx}" y="${labelY}" ${font} font-size="${Math.round(fs * 0.62)}" letter-spacing="${Math.round(fs * 0.16)}" fill="${v.accent}">${esc(v.label)}</text>`
+		: `<rect x="${tx}" y="${line2 + Math.round(fs * 0.4)}" width="${Math.round(fs * 2.2)}" height="${Math.max(2, Math.round(h * 0.014))}" rx="1" fill="${v.accent}" opacity="0.9"/>`;
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <defs>
+    ${markGradDefs(id)}
+    <linearGradient id="${id}-bnbg" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="${v.bgTop}"/>
+      <stop offset="1" stop-color="${v.bgBottom}"/>
+    </linearGradient>
+    <radialGradient id="${id}-bnh" cx="0.3" cy="0.5" r="0.75">
+      <stop offset="0" stop-color="${v.accent}" stop-opacity="0.13"/>
+      <stop offset="1" stop-color="${v.accent}" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="0" y="0" width="${w}" height="${h}" fill="url(#${id}-bnbg)"/>
+  <rect x="0" y="0" width="${w}" height="${h}" fill="url(#${id}-bnh)"/>
+  <g transform="translate(${mcx} ${mcy}) scale(${s}) translate(-520 -512)">
+    ${markGroup(id, { glow: true })}
+  </g>
+  <text x="${tx}" y="${line1}" ${font} font-size="${fs}" letter-spacing="${ls}" fill="#EAF0FA">STREAM</text>
+  <text x="${tx}" y="${line2}" ${font} font-size="${fs}" letter-spacing="${ls}" fill="#EAF0FA">PULSE</text>
+  ${label}
 </svg>`;
 }
 

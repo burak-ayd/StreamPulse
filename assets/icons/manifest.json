@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-08T22:44:50.609Z",
+  "generatedAt": "2026-10-11T21:03:48.038Z",
   "variants": {
     "release": {
       "icon.png": {
@@ -47,49 +47,49 @@
         "width": 1280,
         "height": 768,
         "alpha": false,
-        "bytes": 95611
+        "bytes": 177010
       },
       "tv-icon-small.png": {
         "width": 400,
         "height": 240,
         "alpha": false,
-        "bytes": 24954
+        "bytes": 40856
       },
       "tv-icon-small-2x.png": {
         "width": 800,
         "height": 480,
         "alpha": false,
-        "bytes": 58960
+        "bytes": 99832
       },
       "tv-topshelf.png": {
         "width": 1920,
         "height": 720,
         "alpha": false,
-        "bytes": 100355
+        "bytes": 187843
       },
       "tv-topshelf-2x.png": {
         "width": 3840,
         "height": 1440,
         "alpha": false,
-        "bytes": 224289
+        "bytes": 422515
       },
       "tv-topshelf-wide.png": {
         "width": 2320,
         "height": 720,
         "alpha": false,
-        "bytes": 105910
+        "bytes": 195551
       },
       "tv-topshelf-wide-2x.png": {
         "width": 4640,
         "height": 1440,
         "alpha": false,
-        "bytes": 236294
+        "bytes": 439766
       },
       "tv-banner.png": {
         "width": 320,
         "height": 180,
         "alpha": false,
-        "bytes": 17865
+        "bytes": 31820
       }
     },
     "preview": {
@@ -138,49 +138,49 @@
         "width": 1280,
         "height": 768,
         "alpha": false,
-        "bytes": 96868
+        "bytes": 177618
       },
       "tv-icon-small.png": {
         "width": 400,
         "height": 240,
         "alpha": false,
-        "bytes": 25775
+        "bytes": 41808
       },
       "tv-icon-small-2x.png": {
         "width": 800,
         "height": 480,
         "alpha": false,
-        "bytes": 60671
+        "bytes": 101315
       },
       "tv-topshelf.png": {
         "width": 1920,
         "height": 720,
         "alpha": false,
-        "bytes": 103413
+        "bytes": 191029
       },
       "tv-topshelf-2x.png": {
         "width": 3840,
         "height": 1440,
         "alpha": false,
-        "bytes": 231885
+        "bytes": 432268
       },
       "tv-topshelf-wide.png": {
         "width": 2320,
         "height": 720,
         "alpha": false,
-        "bytes": 109181
+        "bytes": 199714
       },
       "tv-topshelf-wide-2x.png": {
         "width": 4640,
         "height": 1440,
         "alpha": false,
-        "bytes": 244950
+        "bytes": 450645
       },
       "tv-banner.png": {
         "width": 320,
         "height": 180,
         "alpha": false,
-        "bytes": 18590
+        "bytes": 33733
       }
     },
     "dev": {
@@ -229,49 +229,49 @@
         "width": 1280,
         "height": 768,
         "alpha": false,
-        "bytes": 77135
+        "bytes": 156775
       },
       "tv-icon-small.png": {
         "width": 400,
         "height": 240,
         "alpha": false,
-        "bytes": 20027
+        "bytes": 36445
       },
       "tv-icon-small-2x.png": {
         "width": 800,
         "height": 480,
         "alpha": false,
-        "bytes": 47701
+        "bytes": 88680
       },
       "tv-topshelf.png": {
         "width": 1920,
         "height": 720,
         "alpha": false,
-        "bytes": 82161
+        "bytes": 167123
       },
       "tv-topshelf-2x.png": {
         "width": 3840,
         "height": 1440,
         "alpha": false,
-        "bytes": 188122
+        "bytes": 380857
       },
       "tv-topshelf-wide.png": {
         "width": 2320,
         "height": 720,
         "alpha": false,
-        "bytes": 86541
+        "bytes": 174083
       },
       "tv-topshelf-wide-2x.png": {
         "width": 4640,
         "height": 1440,
         "alpha": false,
-        "bytes": 199190
+        "bytes": 396424
       },
       "tv-banner.png": {
         "width": 320,
         "height": 180,
         "alpha": false,
-        "bytes": 14477
+        "bytes": 29270
       }
     }
   }
