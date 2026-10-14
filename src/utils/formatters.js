@@ -165,6 +165,40 @@ export function getCountryFlag(country) {
 }
 
 /**
+ * ISO 639-1 DİL kodundan bayrak emojisi.
+ *
+ * `getCountryFlag` ÜLKE adı/kodu bekler; eklenti API'sinden gelen ise bir
+ * DİL kodu ("en", "ja", "tr"). Çoğu dil kodunun ilk iki harfi zaten ülke
+ * koduyla aynı ("tr"->TR, "de"->DE, "fr"->FR) ama hepsi için öyle değil:
+ * İngilizce `en` (İngiltere GB), Almanca `de` (Almanya DE), Korece `ko`
+ * (Güney Kore KR), Arapça `ar` — bu yüzden ayrı bir eşleme gerekiyor.
+ *
+ * @param {string} lang - Dil kodu ("tr", "en", "ja") ya da ülke kodu
+ * @returns {string} Bayrak emojisi; kod çözülemiyorsa dünya
+ */
+const LANG_TO_COUNTRY = {
+	en: "GB",
+	ja: "JP",
+	ko: "KR",
+	zh: "CN",
+	hi: "IN",
+	ar: "SA",
+};
+
+export function getFlagFromIso(lang) {
+	if (!lang || typeof lang !== "string" || lang.length < 2) return "🌐";
+
+	const country = (LANG_TO_COUNTRY[lang.toLowerCase()] || lang)
+		.toUpperCase()
+		.slice(0, 2);
+
+	// Bölgesel gösterge harfleri 'A' (U+1F1E6) tabanlıdır; ofset 127397.
+	return String.fromCodePoint(
+		...country.split("").map((char) => char.charCodeAt(0) + 127397),
+	);
+}
+
+/**
  * Format language information for display in compact badges (e.g. movie cards)
  * @param {string|string[]|object} rawLang - Raw language value from API
  * @returns {string|null} Formatted compact language string or null

@@ -13,6 +13,7 @@ import {
 	getSelectedPlatform,
 	saveSelectedPlatform,
 } from "@/utils/storage";
+import { getFlagFromIso } from "@/utils/formatters";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
@@ -59,23 +60,6 @@ function devredeMi(platform) {
 		return !platform.kullanilabilir;
 	}
 	return Boolean(platform.devrede);
-}
-
-/**
- * Logo yoksa satırın solundaki kutuya yazılacak kısaltma.
- *
- * Referans tasarımda her sağlayıcı için ayrı bir "avatar" vardı; API'de logo
- * alanı boş olan kaynaklar için ilk iki harf (örn. "DP") kullanılır — bayrak
- * emojisi koymak kaldırıldı, her zaman Türkiye olduğu yanlış bilgi veriyordu.
- */
-function basHarfler(name) {
-	const parcalar = String(name || "")
-		.trim()
-		.split(/\s+/)
-		.filter(Boolean);
-	if (parcalar.length === 0) return "?";
-	if (parcalar.length === 1) return parcalar[0].slice(0, 2).toUpperCase();
-	return (parcalar[0][0] + parcalar[1][0]).toUpperCase();
 }
 
 /**
@@ -172,6 +156,27 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 	const [loading, setLoading] = useState(true);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [activeFilter, setActiveFilter] = useState("all"); // 'all' | 'movie' | 'series' | 'anime'
+
+	/**
+	 * Yüklenemeyen logolar — `key → true`.
+	 *
+	 * ⚠️ Neden gerekiyor: bayrağa düşme yalnızca `favicon` ALANI boşsa
+	 * tetikleniyordu. Ama eklenti `favicon` alanını dolu gönderip URL'i
+	 * 404/ölü verirse `SmartImage` hata verir ve BOŞ kutu çizer — ne
+	 * ikon ne bayrak görünür (FilmModu, Sinewix'te bu). Artık görsel
+	 * gerçekten yüklenemediğinde de bayrağa düşülüyor.
+	 *
+	 * `Set` yerine düz nesne: `Set`'i state'te mutasyona uğratmak yerine
+	 * yeni nesne kurmak, React'in "aynı referans" karşılaştırmasını
+	 * yanlışlıkla tetiklemiyor.
+	 */
+	const [kirikLogo, setKirikLogo] = useState({});
+
+	const logoYuklenemedi = useCallback((key) => {
+		setKirikLogo((oncekiler) =>
+			oncekiler[key] ? oncekiler : { ...oncekiler, [key]: true },
+		);
+	}, []);
 
 	// Yoklama zamanlayıcısı ve uygulama ön plan dinleyicisi için referans.
 	const yoklamaRef = useRef(null);
@@ -457,7 +462,7 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 			label: platform.name,
 			kapali,
 			favicon: platform.favicon,
-			basHarf: basHarfler(platform.name),
+			bayrak: getFlagFromIso(platform.language),
 			onPress: () => handlePlatformSelect(platform),
 			selected:
 				!kapali &&
@@ -549,9 +554,11 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 
 	/** Tek satırın tamamı — hem üst hem alt bölüm aynı çizimi kullanır. */
 	const satir = (item) => {
+		/** İkon kutusunun kenar uzunluğu — bayrak da buna göre ölçeklenir. */
+		const kutuKenar = sutun === 2 ? 30 : 28;
 		const kutu = {
-			width: sz(sutun === 2 ? 30 : 28),
-			height: sz(sutun === 2 ? 30 : 28),
+			width: sz(kutuKenar),
+			height: sz(kutuKenar),
 			borderRadius: sz(9),
 		};
 
@@ -571,7 +578,7 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 				focusedStyle={item.kapali ? null : odakStili}
 				onPress={item.onPress}
 				activeOpacity={0.7}>
-				{item.favicon ? (
+				{item.favicon && !kirikLogo[item.key] ? (
 					<Image
 						source={{ uri: item.favicon }}
 						style={[
@@ -583,6 +590,9 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 						transition={0}
 						recyclingKey={item.favicon}
 						cachePolicy="memory-disk"
+						/* Görsel gelmezse bayrağa düş — aksi hâlde 404
+						   veren bir favicon satırı bomboş kalıyor. */
+						onError={() => logoYuklenemedi(item.key)}
 					/>
 				) : (
 					<View
@@ -597,11 +607,21 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 						{item.icon ?? (
 							<Text
 								style={[
-									styles.basHarf,
-									{ fontSize: sz(11) },
-									item.kapali && styles.basHarfKapali,
+									styles.bayrak,
+									/*
+									 * Bayrak, kutuyu doldursun diye punto
+									 * kenarın %80'i; `lineHeight` ise tam
+									 * kenar. İkisi olmadan emoji, fontun
+									 * ascent/descent boşluğuna oturup kutunun
+									 * ortasında küçük ve aşağı kayık duruyor.
+									 */
+									{
+										fontSize: sz(Math.round(kutuKenar * 0.8)),
+										lineHeight: sz(kutuKenar),
+									},
+									item.kapali && styles.bayrakKapali,
 								]}>
-								{item.basHarf}
+								{item.bayrak}
 							</Text>
 						)}
 					</View>
@@ -987,12 +1007,15 @@ const styles = StyleSheet.create({
 	logoKapali: {
 		opacity: 0.4,
 	},
-	basHarf: {
-		color: "#C3CAD6",
-		fontWeight: "800",
-	},
-	basHarfKapali: {
-		color: "#5B6472",
+	/*
+	 * Bayrak emojisi.
+	 *
+	 * Emoji zaten renkli olduğu için `color` vermek işe yaramaz; soluk
+	 * görünüm `opacity` ile alınıyor (bkz. `bayrakKapali`).
+	 */
+	bayrak: {},
+	bayrakKapali: {
+		opacity: 0.4,
 	},
 
 	/* ── Satır sağı ── */

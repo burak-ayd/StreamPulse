@@ -32,10 +32,11 @@
  * kalan animasyonları da bu API'yi kullanıyor ve splash'ta ayrı bir JS
  * runtime'ı (worklet) başlatmak gereksiz risk.
  */
-import Constants from "expo-constants";
+import { applicationId } from "expo-application";
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Image, StyleSheet } from "react-native";
 import { useTvMetrics } from "@/utils/tvMetrics";
+import { resolveSplashVariantDir } from "./variant";
 
 /**
  * Native splash ile BİREBİR aynı zemin — `app.json` →
@@ -84,28 +85,66 @@ const BREATH_MS = 900;
 /**
  * Varyanta göre splash markası.
  *
- * ⚠️ `app.config.js` ikonları `APP_VARIANT` (development/preview/release)
- * göre değiştiriyor. JS katmanı da aynı seçimi yapmalı, yoksa dev/preview
- * yapısında ekranda "yanlış marka" belirir.
+ * ⚠️⚠️ SEÇİM **PAKET ADINDAN** YAPILIR, MANIFEST'TEN DEĞİL.
+ *
+ * `app.config.js`, ikonları `APP_VARIANT` ortam değişkenine göre seçiyor
+ * ve varyantı hem APK'ya (paket adı + native splash görseli) hem de
+ * `extra.iconVariant` alanına yazıyor. Buradaki tuzak: bu iki yazma
+ * **farklı süreçlerde** oluşuyor.
+ *
+ *   • Native splash → APK'nın içine, DERLEME anında gömülü.
+ *   • JS katmanı    → dev-client çalışma anında Metro'nun servis ettiği
+ *                     manifest'ten okur.
+ *
+ * `APP_VARIANT` verilmeden `npx expo start` çalıştırıldığında
+ * `app.config.js` sessizce `"release"` varsayar ve Metro'nun servis
+ * ettiği manifest `iconVariant: "release"` olur — APK ise dev
+ * paketidir. Sonuç: açılışta önce DEV, hemen ardından RELEASE markası
+ * belirir. (Ölçüldü: dev APK + APP_VARIANT'siz Metro → manifest
+ * `name: "Stream Pulse"`, `package: "...streampulse"`,
+ * `iconVariant: "release"`.)
+ *
+ * `expo-application`'ın `applicationId` değeri ise cihazdaki kurulu
+ * APK'dan gelir; dev-client manifest'i onu değiştiremez. Paket adı da
+ * `APP_VARIANT` ile aynı anda belirlendiği için native splash ile bu
+ * katman **tanım gereği** aynı varyantı gösterir.
+ *
+ * Kararın kendisi `variant.js` → `resolveSplashVariantDir()` içinde yaşar;
+ * `scripts/verify-splash-variants.mjs` da aynı fonksiyonu çalıştırıp her
+ * varyant için "JS katmanı = native görsel" değişmezini doğrular. Mantığı
+ * burada kopyalamak, testin sessizce geçersizleşmesi demekti.
  *
  * `require` çağrıları STATİK yazıldı: Metro `require(dinamikYol)`'u
  * çalıştıramaz, yol değişkenle kurulursa build kırılır.
  */
 const SPLASH_SOURCES = {
-	development: require("../../../assets/icons/dev/splash-icon.png"),
 	dev: require("../../../assets/icons/dev/splash-icon.png"),
 	preview: require("../../../assets/icons/preview/splash-icon.png"),
-	production: require("../../../assets/icons/release/splash-icon.png"),
 	release: require("../../../assets/icons/release/splash-icon.png"),
 };
 
-/** @returns {number} */
+/**
+ * @returns {number} Varyanta ait splash PNG'si.
+ */
 function resolveSplashSource() {
-	const variant =
-		Constants.expoConfig?.extra?.iconVariant ??
-		Constants.manifest?.extra?.iconVariant ??
-		"release";
-	return SPLASH_SOURCES[variant] ?? SPLASH_SOURCES.release;
+	const id = applicationId ?? "";
+
+	/*
+	 * Bu fonksiyonun varsayılanı `release` ve o sessizdir — hatanın kendisi
+	 * de sessiz bir yanlış varyanttan geliyordu. `applicationId` okunamazsa
+	 * (native modül linklenmemiş olabilir) dev/preview derlemesi sessizce
+	 * yanlış markayı göstermeye devam ederdi; en azından geliştirici
+	 * konsolunda görünür olsun.
+	 */
+	if (!id && __DEV__) {
+		console.warn(
+			"[splash] applicationId okunamadı — varyant tespit edilemedi, " +
+				"release splash kullanılıyor. expo-application native modülü " +
+				"linklenmemiş olabilir (prebuild sonrası yeniden derleme gerek).",
+		);
+	}
+
+	return SPLASH_SOURCES[resolveSplashVariantDir(id)];
 }
 
 // Modül yüklenirken bir kez çözülür: render sırasında `require` çalıştırmak
