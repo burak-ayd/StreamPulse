@@ -13,26 +13,25 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const SWIPE_CLOSE_THRESHOLD = 80;
 const SWIPE_VELOCITY_THRESHOLD = 0.4;
 
 /**
- * TV'de alt sayfa değil, ortalanmış bir PANEL.
+ * TV panelinin geometrisi.
  *
  * Bottom sheet telefon içindir: parmakla alttan yukarı sürüklenir, ekranın
- * altına yapışır. TV'de sürükleme yoktur ve 1920px genişliğinde bir
- * yapışkan sayfa, içindeki 38dp kartlarla birlikte boş bir bant gibi
- * görünüyordu. TV'de bu yüzden:
+ * altına yapışır. TV'de sürükleme yoktur ve dar bir panel, içindeki kartlarla
+ * birlikte "ortada asılı kalmış bir kutu" gibi görünüyordu.
  *
- *   • panel ortalanır ve `maxWidth` ile daralır,
- *   • dört köşesi yuvarlatılır, sürükleme tutamağı gösterilmez,
- *   • `snapToHeight` oranı ekran YÜKSEKLİĞİ yerine en-boy oranıyla
- *     sınırlanır (0.78 × 1080 = 843px, panelin içi boş kalıyordu).
+ * ⚠️ Artık TV paneli de telefonda GİBİ: sol, sağ ve alt kenara yapışık,
+ * yalnızca ÜST köşeleri yuvarlatılmış. Daha önce ortada duran ve dört köşesi
+ * yuvarlak panelde odaklanan kart ölçeklenince panelin sol/alt kenarını
+ * geçip arkadaki siyah zeminde ASILI kalıyordu. Kenara yapışık panelde
+ * kartın taşınabileceği tek yer ekranın kendisi — orada taşma görünmez.
  */
-const TV_PANEL_WIDTH_RATIO = 0.46;
-const TV_PANEL_MAX_WIDTH = 900;
+const TV_PANEL_HEIGHT_RATIO = 0.9;
 
 /**
  * BottomSheetModal
@@ -65,25 +64,35 @@ const BottomSheetModal = ({
 	const isAuto = fitContent || snapToHeight === "auto";
 	const isTV = Platform.isTV;
 
-	/** TV'de panel ortada durur; genişliği ekranın oranıyla sınırlanır. */
-	const tvPanelWidth = Math.min(
-		SCREEN_WIDTH * TV_PANEL_WIDTH_RATIO,
-		TV_PANEL_MAX_WIDTH,
-	);
+	/**
+	 * Alt taşma — panelin alt kenarı bu kadar EKSİĞE çekilir.
+	 *
+	 * ⚠️ Sorun: edge-to-edge Android'de `Dimensions.get("window")` sistem
+	 * çubuklarını da içerir, ama Modal'ın kendi kutusu navigasyon çubuğunun
+	 * ÜSTÜNDE bitiyor. Panel `bottom: 0` ile o kutunun tabanına oturduğu
+	 * için altta ince bir şerit kalıyor ve Modal saydam olduğundan arkadaki
+	 * anasayfa o şeritten görünüyordu.
+	 *
+	 * Çözüm: yükseklik de AYNI KADAR artırılır. `bottom: -T` +
+	 * `height: H + T` → üst kenar yerinde kalır (`(bottom + T) - (H + T)`),
+	 * yalnız alt kenar `T` kadar aşağı iner. Kutu beklenenden kısaysa
+	 * fazlalık ekran dışında kalır, görünmez; bir şey bozulmaz.
+	 */
+	const altTasma = insets.bottom;
 
 	/**
-	 * TV panel YÜKSEKLİĞİ — ekranın %88'i, en-boy tavanıyla.
+	 * TV panel YÜKSEKLİĞİ — ekranın %90'ı.
 	 *
-	 * `snapToHeight` (0.78) ekranın %78'idir ve 1080p'de 843px'tir;
-	 * en-boy katsayısıyla (2.35) daraltılınca ≈600px'e düşüyor ve liste
-	 * yalnızca 1.5 kart gösteriyordu. Burada tavanı doğrudan ekranın
-	 * yüksekliğinden türetiyoruz: TV'de dikey kaydırma zaten var, asıl
-	 * derd dar panelin BİTMEKTE zorlamasıydı.
+	 * `snapToHeight` (0.78) ekranın %78'idir ve 1080p'de 843px'tir; önceden
+	 * bir en-boy katsayısıyla daha da daraltılınca ≈600px'e düşüyor ve liste
+	 * yalnızca 1.5 kart gösteriyordu. Tavan doğrudan ekranın yüksekliğinden
+	 * türetiliyor: TV'de dikey kaydırma zaten var, asıl derd panelin
+	 * BİTMEKTE zorlamasıydı.
+	 *
+	 * Genişlik türetilmiyor — `styles.sheet` zaten `left: 0 / right: 0`
+	 * ile ekranın tamamına yapışık.
 	 */
-	const tvPanelHeight = Math.min(
-		SCREEN_HEIGHT * 0.88,
-		tvPanelWidth * (SCREEN_HEIGHT / SCREEN_WIDTH) * 2.6,
-	);
+	const tvPanelHeight = SCREEN_HEIGHT * TV_PANEL_HEIGHT_RATIO;
 
 	const fixedHeight =
 		typeof snapToHeight === "number"
@@ -130,7 +139,8 @@ const BottomSheetModal = ({
 
 	const animateClose = useCallback(
 		(onFinish) => {
-			const closeTarget = sheetHeightRef.current || SCREEN_HEIGHT;
+			const closeTarget =
+				(sheetHeightRef.current || SCREEN_HEIGHT) + altTasma;
 			Animated.parallel([
 				Animated.spring(translateY, {
 					toValue: closeTarget,
@@ -148,7 +158,7 @@ const BottomSheetModal = ({
 				if (finished) onFinish?.();
 			});
 		},
-		[translateY, backdropOpacity],
+		[translateY, backdropOpacity, altTasma],
 	);
 
 	// ─── visible değişince aç/kapat ──────────────────────────────────────────
@@ -169,17 +179,17 @@ const BottomSheetModal = ({
 				animateClose();
 			}
 		}
-	/*
-	 * `translateY` bilinçli olarak bağımlılık dizisinde YOK.
-	 *
-	 * O bir `useRef(...).current` — React state değil, bir örnek. effect
-	 * içinde `translateY.setValue(...)` çağrılıyor (bir değer okunmuyor,
-	 * sadece yazılıyor), yani effect'in veriye bağımlılığı yok. Diziye
-	 * eklemek de doğru olmazdı: kural `useRef(...).current` okumasını
-	 * "render sırasında ref okunuyor" sayıp `react-hooks/refs` hatası
-	 * üretiyor (ölçüldü: 2 hata ekleniyordu).
-	 */
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		/*
+		 * `translateY` bilinçli olarak bağımlılık dizisinde YOK.
+		 *
+		 * O bir `useRef(...).current` — React state değil, bir örnek. effect
+		 * içinde `translateY.setValue(...)` çağrılıyor (bir değer okunmuyor,
+		 * sadece yazılıyor), yani effect'in veriye bağımlılığı yok. Diziye
+		 * eklemek de doğru olmazdı: kural `useRef(...).current` okumasını
+		 * "render sırasında ref okunuyor" sayıp `react-hooks/refs` hatası
+		 * üretiyor (ölçüldü: 2 hata ekleniyordu).
+		 */
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [visible, isAuto, animateOpen, animateClose, measuredHeight]);
 
 	useEffect(() => {
@@ -238,7 +248,8 @@ const BottomSheetModal = ({
 
 				if (shouldClose) {
 					isClosingByGesture.current = true;
-					const closeTarget = sheetHeightRef.current || SCREEN_HEIGHT;
+					const closeTarget =
+						(sheetHeightRef.current || SCREEN_HEIGHT) + altTasma;
 					Animated.parallel([
 						Animated.spring(translateY, {
 							toValue: closeTarget,
@@ -304,45 +315,53 @@ const BottomSheetModal = ({
 			</Animated.View>
 
 			{/* Sheet */}
-			<View
-				style={[StyleSheet.absoluteFill, isTV && styles.tvCenter]}
-				pointerEvents="box-none">
-			<Animated.View
-				onLayout={handleLayout}
-				style={[
-					styles.sheet,
-					isTV && styles.sheetTv,
-					isTV ? { width: tvPanelWidth, height: sheetHeight } : null,
-					isAuto
-						? { maxHeight: SCREEN_HEIGHT * 0.85 }
-						: { height: sheetHeight },
-					{ transform: [{ translateY }] },
-				]}
-				{...panResponder.panHandlers}>
-				{/* Drag handle — telefonda var, TV'de anlamsız */}
-				{handle && !isTV ? (
-					<View style={styles.handleContainer}>
-						<View style={styles.handle} />
-					</View>
-				) : null}
-
-				{/* Başlık */}
-				{title ? (
-					<View style={styles.titleRow}>
-						<Text style={styles.titleText}>{title}</Text>
-					</View>
-				) : null}
-
-				{/* İçerik */}
-				<View
+			<View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+				<Animated.View
+					onLayout={handleLayout}
 					style={[
-						styles.content,
-						isAuto && styles.autoContent,
-						{ paddingBottom: Math.max(insets.bottom, 20) },
-					]}>
-					{children}
-				</View>
-			</Animated.View>
+						styles.sheet,
+						isTV && styles.sheetTv,
+						{
+							bottom: -altTasma,
+							...(isAuto
+								? {
+										maxHeight: SCREEN_HEIGHT * 0.85,
+										paddingBottom: altTasma,
+									}
+								: { height: sheetHeight + altTasma }),
+						},
+						{ transform: [{ translateY }] },
+					]}
+					{...panResponder.panHandlers}>
+					{/* Drag handle — telefonda var, TV'de anlamsız */}
+					{handle && !isTV ? (
+						<View style={styles.handleContainer}>
+							<View style={styles.handle} />
+						</View>
+					) : null}
+
+					{/* Başlık */}
+					{title ? (
+						<View style={styles.titleRow}>
+							<Text style={styles.titleText}>{title}</Text>
+						</View>
+					) : null}
+
+					{/* İçerik — alt boşluk kasıtlı olarak dar.
+					    Panel artık `altTasma` kadar ekranın altına taşıyor
+					    (bkz. `altTasma`), buraya da tam inset kadar pay
+					    verilirse son kart navigasyon çubuğunun arkasına
+					    gömülür. Çubuk yokken 10dp: son kart ekranın
+kabına yapışmasın diye yeterli, "kalın ölü şerit" de bırakmıyor. */}
+					<View
+						style={[
+							styles.content,
+							isAuto && styles.autoContent,
+							{ paddingBottom: Math.max(insets.bottom, 10) },
+						]}>
+						{children}
+					</View>
+				</Animated.View>
 			</View>
 		</Modal>
 	);
@@ -367,22 +386,32 @@ const styles = StyleSheet.create({
 		shadowRadius: 16,
 		elevation: 24,
 	},
-	/** TV: ekranın ortasında duran, dört köşesi yuvarlatılmış panel. */
+	/**
+	 * TV: telefonla AYNI yerleşim — sol, sağ ve alt kenara yapışık, yalnız
+	 * üst köşeler yuvarlak.
+	 *
+	 * `styles.sheet` zaten `bottom/left/right: 0` ve üst köşeleri yuvarlatık
+	 * getiriyor; burada yalnız alt köşeler düzleştirilip dört kenar yerine
+	 * TEK üst çizgi bırakılıyor. Kenar çizgisi kaldırılırsa panelin
+	 * ekranın sağ ve sol kenarına değdiği yer çizgiyle belli olur ve panel
+	 * yine "yerleştirilmiş kutu" gibi durur.
+	 *
+	 * ⚠️ `position: "relative"` ve dört köşe `borderRadius` BİLEREK kaldırıldı:
+	 * göreli konumlandırma `bottom: 0`'ı iptal edip paneli ortaya atıyordu.
+	 */
 	sheetTv: {
-		position: "relative",
-		borderRadius: 20,
-		borderWidth: 1,
+		borderBottomLeftRadius: 0,
+		borderBottomRightRadius: 0,
+		borderTopWidth: 1,
+		borderLeftWidth: 1,
+		borderRightWidth: 1,
+		borderBottomWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.14)",
-		shadowOffset: { width: 0, height: 12 },
-		shadowOpacity: 0.55,
-		elevation: 28,
-	},
-	/** TV: paneli ekranın ortasında tutan sarmalayıcı. */
-	tvCenter: {
-		justifyContent: "center",
-		alignItems: "center",
-		paddingHorizontal: 40,
-		paddingVertical: 24,
+		borderBottomColor: "#000000",
+		shadowOffset: { width: 0, height: -6 },
+		shadowOpacity: 0.45,
+		shadowRadius: 20,
+		elevation: 26,
 	},
 	handleContainer: {
 		alignItems: "center",
