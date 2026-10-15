@@ -22,8 +22,9 @@ import {
 	logout as apiLogout,
 	getMe as apiGetMe,
 	setOnAuthExpired,
+	AuthError,
 } from "@/services/apiClient";
-import { hasSession, clearTokens } from "@/services/token";
+import { hasSession, clearTokens, saveTokens } from "@/services/token";
 import { authDiag } from "@/utils/authDiagnostics";
 import { getAuthUser, saveAuthUser, clearAuthUser } from "@/utils/storage";
 import { setSyncOwner, resetSyncState } from "@/services/sync";
@@ -53,6 +54,7 @@ const AuthContext = createContext({
 	login: async () => {},
 	logout: async () => {},
 	refreshUser: async () => {},
+	adoptSession: async () => {},
 });
 
 export function AuthProvider({ children }) {
@@ -232,6 +234,66 @@ export function AuthProvider({ children }) {
 		}
 	}, []);
 
+	// ─── TV oturumunu devral ────────────────────────────
+	//
+	// TV cihaz akışı (RFC 8628, plan §4.1) token'ları TV ekranında açar ama
+	// ZENGİNLEŞTİRİLMİŞ kimliği getirmez: sunucu `/api/auth/device/token`
+	// yanıtında GoTrue oturumunu olduğu gibi döner (bkz.
+	// `MovieAppNew/Core/Libs/DeviceAuth.py`). Devralma bu yüzden iki adımdır:
+	//
+	//   1. token'ları yaz → oturum bundan sonra VARDIR,
+	//   2. `/me` ile profil görünümünü çek (kullanıcı adı, avatar, dil…).
+	//
+	// ⚠️ 2. adım GEÇİCİ hata verirse token'lar SİLİNMEZ (doktrin: 5xx/ağ →
+	// yerel durum korunur) ama oturum "açık" da ilan EDİLMEZ: TV ekranı
+	// hatayı gösterip yeniden dener. Token'lar depoda kaldığı için uygulama
+	// yeniden başlatıldığında `checkSession` oturumu geri getirir — bu yol
+	// olmasaydı geçici bir 5xx, az önce kurulmuş sağlam oturumu çöpe atardı.
+	const adoptSession = useCallback(
+		async ({ access_token, refresh_token, expires_in }) => {
+			setStatus("loading");
+			await saveTokens({ access_token, refresh_token, expires_in });
+
+			const meResult = await apiGetMe();
+
+			if (meResult.ok) {
+				setUser(meResult.user);
+				setSyncOwner(meResult.user?.id);
+				saveAuthUser(meResult.user).catch(() => {});
+				setStatus("authenticated");
+				authDiag.record("adoptSession", { basarili: true });
+				return meResult.user;
+			}
+
+			if (meResult.reason === "auth") {
+				// Token GERÇEKTEN ölü: `apiClient` zaten temizledi ve
+				// `_onAuthExpired` durumu düşürdü; burada yalnızca tutarlılık
+				// için tekrar sıfırlanır ve ekrana gösterilebilir hata döner.
+				authDiag.record("adoptSession", {
+					basarili: false,
+					neden: "token_oldu",
+				});
+				setUser(null);
+				setStatus("unauthenticated");
+				throw new AuthError(
+					"TV oturumu doğrulanamadı. Lütfen TV'de yeni bir kod oluşturun.",
+					401,
+				);
+			}
+
+			authDiag.record("adoptSession", {
+				basarili: false,
+				neden: meResult.reason ?? "bilinmiyor",
+			});
+			setUser(null);
+			setStatus("unauthenticated");
+			throw new Error(
+				"TV bağlandı ancak hesap bilgisi alınamadı. Bağlantınızı kontrol edip tekrar deneyin.",
+			);
+		},
+		[],
+	);
+
 	// ─── Çıkış yap ──────────────────────────────────────
 	const logout = useCallback(async () => {
 		try {
@@ -272,8 +334,9 @@ export function AuthProvider({ children }) {
 			login,
 			logout,
 			refreshUser,
+			adoptSession,
 		}),
-		[user, status, signup, login, logout, refreshUser],
+		[user, status, signup, login, logout, refreshUser, adoptSession],
 	);
 
 	return (
@@ -297,6 +360,7 @@ export function useAuth() {
 			login: async () => {},
 			logout: async () => {},
 			refreshUser: async () => {},
+			adoptSession: async () => {},
 		};
 	}
 	return context;
