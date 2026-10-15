@@ -12,6 +12,7 @@ import TVPressable from "@/components/common/TVPressable";
 import { useAuth } from "@/context/AuthContext";
 import { useSync } from "@/context/SyncContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
+import { openLogin } from "@/utils/authRoutes";
 import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
@@ -287,7 +288,7 @@ export default function SyncSettingsScreen() {
 							<TVPressable
 								style={styles.loginBtn}
 								focusedStyle={styles.btnFocused}
-								onPress={() => router.push("/(auth)/login")}>
+								onPress={() => openLogin(router)}>
 								<Text style={styles.loginBtnText}>Giriş</Text>
 							</TVPressable>
 						</View>

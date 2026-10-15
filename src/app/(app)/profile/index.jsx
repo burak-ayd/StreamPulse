@@ -44,6 +44,7 @@ import {
 	toggleFavorite,
 } from "@/utils/storage";
 import { useTvMetrics } from "@/utils/tvMetrics";
+import { openLogin } from "@/utils/authRoutes";
 import {
 	filterFavorites,
 	isSeries,
@@ -429,7 +430,7 @@ export default function ProfileScreen() {
 
 					<AccountAction
 						isLoggedIn={isLoggedIn}
-						onLogin={() => router.push("/(auth)/login")}
+						onLogin={() => openLogin(router)}
 						onLogout={confirmLogout}
 					/>
 

@@ -10,6 +10,7 @@ import {
 import { useThemeContext } from "@/context/ThemeContext";
 import { useAppUpdate } from "@/context/AppUpdateContext";
 import { fetchPlatforms } from "@/services/api";
+import { openLogin } from "@/utils/authRoutes";
 import {
 	clearAllUserData,
 	getPluginVisibilitySettings,
@@ -173,7 +174,7 @@ export default function SettingsScreen() {
 	// TV: ayar satırları 1920px boyunca uzanıyordu; ikon solda, değer
 	// tamamen sağda kalıyor ve aradaki boşluk okunmuyordu. `contentMaxWidth`
 	// hepsini ortalanmış bir sütuna toplar.
-	const { contentMaxWidth } = useTvMetrics();
+	const { contentMaxWidth, isTV } = useTvMetrics();
 
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
 	const [activePluginsCount, setActivePluginsCount] = useState(0);
@@ -465,9 +466,27 @@ export default function SettingsScreen() {
 							onPress={() =>
 								isLoggedIn
 									? router.push("/(app)/settings/sync")
-									: router.push("/(auth)/login")
+									: openLogin(router)
 							}
 						/>
+
+						{/* TV'de Oturum Aç — kodu ONAYLAYAN taraf telefon olmalıdır.
+						    Bu yüzden satır TV'de gizlenir: TV kendi kodunu onaylayamaz
+						    (bkz. plan §4.1-4.2). TV'de giriş gerektiğinde yukarıdaki
+						    satır doğrudan kod + QR ekranını açar. */}
+						{!isTV ? (
+							<SettingRow
+								icon="tv-outline"
+								iconBg="#0EA5E9"
+								label="TV'de Oturum Aç"
+								subtitle="Kod ya da QR okutarak TV'nizi bağlayın"
+								onPress={() =>
+									isLoggedIn
+										? router.push("/(app)/settings/tv-connect")
+										: openLogin(router)
+								}
+							/>
+						) : null}
 
 						{/* Oturum Teşhisi */}
 						{/*
