@@ -6,7 +6,8 @@
  *
  *   node scripts/verify-splash-variants.mjs
  *
- * Her varyant için `app.config.js`'i fiilen çalıştırır ve şu zinciri sınar:
+ * Her `APP_VARIANT` girdisi için `app.config.js`'i fiilen çalıştırır ve şu
+ * zinciri sınar:
  *
  *   APP_VARIANT ──► android.package ──► resolveSplashVariantDir()
  *                 ──► JS katmanının seçtiği görsel
@@ -20,8 +21,15 @@
  * içinden gelir; `SplashOverlay.jsx` de aynı fonksiyonu kullanır. Yani
  * burada kopyalanan bir kural yok, sapma olursa test gerçekten kırılır.
  *
- * Çıkış kodu 1 ise en az bir varyant native ile JS katmanı arasında
- * ayrışıyor demektir.
+ * Kapsam neden sadece üç varyant değil: `app.config.js` içindeki
+ * `VARIANT_DIR` `dev` ve `production` takma adlarını da kabul ediyordu, ama
+ * paket adı yalnızca "development"/"preview" değerlerine bakıyordu. Bu yüzden
+ * `APP_VARIANT=dev` → native "dev" görseli + "…streampulse" paket adı üretiyor,
+ * JS katmanı da paket adından "release" çözüyordu: aynı hatanın ikinci kapısı.
+ * Aşağıdaki tablo bu yüzden takma adları ve harf büyüklüğünü de kapsar.
+ *
+ * Çıkış kodu 1 ise en az bir girdi native ile JS katmanı arasında ayrışıyor
+ * demektir.
  */
 
 import { readFile } from "node:fs/promises";
@@ -40,7 +48,22 @@ import { resolveSplashVariantDir } from "../src/components/splash/variant.js";
 const baseConfig = createRequire(import.meta.url)("../app.json");
 
 const ROOT = process.cwd();
-const VARIANTS = ["development", "preview", "release"];
+
+/**
+ * `APP_VARIANT` girdileri ve bu girdinin düşmesi gereken klasör.
+ * `env: null` → değişken tanımsız.
+ */
+const CASES = [
+	{ env: null, dir: "release", label: "(tanimsiz)" },
+	{ env: "development", dir: "dev", label: "development" },
+	{ env: "dev", dir: "dev", label: "dev (takma ad)" },
+	{ env: "preview", dir: "preview", label: "preview" },
+	{ env: "release", dir: "release", label: "release" },
+	{ env: "production", dir: "release", label: "production (takma ad)" },
+	{ env: "  Development  ", dir: "dev", label: "bosluklu + buyuk harf" },
+	{ env: "PREVIEW", dir: "preview", label: "buyuk harf" },
+	{ env: "bilinmeyen", dir: "release", label: "bilinmeyen deger" },
+];
 
 /** JS katmanının (SplashOverlay) require ettiği dosya biçimi. */
 const jsAsset = (dir) => `./assets/icons/${dir}/splash-icon.png`;
@@ -53,8 +76,10 @@ function fail(message) {
 	failures.push(message);
 }
 
-for (const variant of VARIANTS) {
-	process.env.APP_VARIANT = variant;
+for (const testCase of CASES) {
+	if (testCase.env === null) delete process.env.APP_VARIANT;
+	else process.env.APP_VARIANT = testCase.env;
+
 	const config = appConfig({ config: baseConfig.expo ?? baseConfig });
 
 	// Native katmanın gömüleceği görsel: expo-splash-screen plugin girdisi.
@@ -65,12 +90,28 @@ for (const variant of VARIANTS) {
 	const packageId = config.android?.package;
 
 	if (!nativeAsset) {
-		fail(`${variant}: expo-splash-screen plugin girdisi bulunamadı`);
+		fail(`${testCase.label}: expo-splash-screen plugin girdisi bulunamadı`);
 		continue;
 	}
 	if (!packageId) {
-		fail(`${variant}: android.package tanımlı değil`);
+		fail(`${testCase.label}: android.package tanımlı değil`);
 		continue;
+	}
+
+	/*
+	 * Native asset'in klasörü, `app.config.js`'in beklenen varyantı seçip
+	 * seçmediğini gösterir. Bu kontrol olmadan, hem native hem JS katmanı
+	 * yanlış varyanta birlikte düşse test yine geçerdi.
+	 */
+	const nativeDir = nativeAsset.replace("./assets/icons/", "").replace(
+		"/splash-icon.png",
+		"",
+	);
+	if (nativeDir !== testCase.dir) {
+		fail(
+			`${testCase.label}: native splash "${nativeDir}" klasöründen geliyor, ` +
+				`"${testCase.dir}" bekleniyordu`,
+		);
 	}
 
 	// JS katmanının paket adından seçtiği görsel.
@@ -79,7 +120,7 @@ for (const variant of VARIANTS) {
 
 	const match = chosenAsset === nativeAsset;
 	rows.push({
-		variant,
+		label: testCase.label,
 		packageId,
 		dir,
 		nativeAsset,
@@ -89,7 +130,7 @@ for (const variant of VARIANTS) {
 
 	if (!match) {
 		fail(
-			`${variant}: JS katmanı "${chosenAsset}" seçti, native splash ise ` +
+			`${testCase.label}: JS katmanı "${chosenAsset}" seçti, native splash ise ` +
 				`"${nativeAsset}" — paket adı "${packageId}"`,
 		);
 	}
@@ -98,25 +139,33 @@ for (const variant of VARIANTS) {
 	try {
 		await readFile(path.join(ROOT, chosenAsset));
 	} catch {
-		fail(`${variant}: splash görseli diskte yok → ${chosenAsset}`);
+		fail(`${testCase.label}: splash görseli diskte yok → ${chosenAsset}`);
 	}
 }
 
-// Varyantlar birbirinden ayrı olmalı; hepsi aynı dosyaya bakıyorsa
-// "her varyant kendi splash'ini kullanır" kuralı sahte geçer.
-const dirs = new Set(rows.map((r) => r.dir));
-if (rows.length === VARIANTS.length && dirs.size !== VARIANTS.length) {
+/*
+ * Üç gerçek varyant birbirinden ayrı olmalı; hepsi aynı dosyaya bakıyorsa
+ * "her varyant kendi splash'ini kullanır" kuralı sahte geçer.
+ */
+const canonical = new Set(
+	CASES.filter((c) => ["development", "preview", "release"].includes(c.env)).map(
+		(c) => c.dir,
+	),
+);
+if (canonical.size !== 3) {
 	fail(
-		`varyantlar ayrışmıyor, tümü "${[...dirs].join(", ")}" klasörüne bakıyor`,
+		`development/preview/release ayrı klasörlere düşmüyor: ` +
+			`${[...canonical].join(", ")}`,
 	);
 }
 
 const pad = (v, n) => String(v).padEnd(n);
+const fails = rows.filter((r) => !r.match).length;
 console.log("Splash varyant doğrulaması");
 console.log("-".repeat(78));
 for (const r of rows) {
 	console.log(
-		`  ${r.match ? "OK  " : "FAIL"}  ${pad(r.variant, 12)} ` +
+		`  ${r.match ? "OK  " : "FAIL"}  ${pad(r.label, 28)} ` +
 			`${pad(r.packageId, 44)} → ${r.dir}`,
 	);
 	if (!r.match) {
@@ -131,4 +180,7 @@ if (failures.length) {
 	process.exit(1);
 }
 
-console.log(`${rows.length} varyantın tamamı JS katmanı ile native splash aynı görseli kullanıyor.`);
+console.log(
+	`${rows.length} girdinin tamamı JS katmanı ile native splash aynı görseli kullanıyor ` +
+		`(${fails} uyuşmazlık).`,
+);

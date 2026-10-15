@@ -91,24 +91,46 @@ const patchPlugins = (plugins, p) =>
 	});
 
 export default ({ config }) => {
-	const APP_VARIANT = process.env.APP_VARIANT || "release";
+	/*
+	 * Normalize edilir: `VARIANT_DIR` anahtarları küçük harf olduğu için
+	 * "Development" gibi bir değer sessizce release'a düşerdi.
+	 */
+	const APP_VARIANT = (process.env.APP_VARIANT || "release")
+		.trim()
+		.toLowerCase();
 	const dir = VARIANT_DIR[APP_VARIANT] ?? VARIANT_DIR.release;
 	const p = iconPaths(dir);
 
-	const IS_DEV = APP_VARIANT === "development";
-	const IS_PREVIEW = APP_VARIANT === "preview";
-
-	const getAppId = () => {
-		if (IS_DEV) return "tr.net.burakaydogan.streampulse.dev";
-		if (IS_PREVIEW) return "tr.net.burakaydogan.streampulse.preview";
-		return "tr.net.burakaydogan.streampulse";
+	/*
+	 * TEK KARAR NOKTASI (⚠️ kritik).
+	 *
+	 * Hem native asset'lerin klasörü (`p`, yani `dir`) hem paket adı **aynı
+	 * `dir` değerinden** türetilir. İkisi ayrı ayrı hesaplanırsa, `VARIANT_DIR`
+	 * içinde karşılığı olan ama buradaki koşul listesine takılmayan bir değer
+	 * şu ölümcül karışımı üretir:
+	 *
+	 *   APP_VARIANT=dev → native splash = "dev", paket adı = "…streampulse"
+	 *
+	 * Açılışta JS katmanı paket adından varyantı çözer (bkz.
+	 * src/components/splash/variant.js) ve "release" görselini çizer; native
+	 * katman ise "dev" görselini. Sonuç: önce dev, sonra release splash —
+	 * yani bu işin başlangıcındaki hata. `dir`'ı tek kaynak yapmak bunu
+	 * yapısal olarak imkânsız kılar.
+	 */
+	const APP_ID = {
+		dev: "tr.net.burakaydogan.streampulse.dev",
+		preview: "tr.net.burakaydogan.streampulse.preview",
+		release: "tr.net.burakaydogan.streampulse",
 	};
 
-	const getAppName = () => {
-		if (IS_DEV) return "Stream Pulse (Dev)";
-		if (IS_PREVIEW) return "Stream Pulse (Preview)";
-		return "Stream Pulse";
+	const APP_NAME = {
+		dev: "Stream Pulse (Dev)",
+		preview: "Stream Pulse (Preview)",
+		release: "Stream Pulse",
 	};
+
+	const getAppId = () => APP_ID[dir];
+	const getAppName = () => APP_NAME[dir];
 
 	return {
 		...config,
