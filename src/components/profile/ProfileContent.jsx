@@ -38,18 +38,10 @@ import {
 } from "@/utils/profileFormat";
 import TVPressable from "@components/common/TVPressable";
 import { resolvePluginName } from "@/utils/storage";
+import { useMeasuredColumns } from "@/hooks/useMeasuredColumns";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
-import {
-	FlatList,
-	StyleSheet,
-	Text,
-	useWindowDimensions,
-	View,
-} from "react-native";
-
-/** Favoriler ızgarasının sütun sayısı. */
-const FAV_COLUMNS = 3;
+import { FlatList, StyleSheet, Text, View } from "react-native";
 
 /** Oynat düğmesi + karartma katmanı (liste ve ızgara ortak). */
 function PlayOverlay({ color, iconColor }) {
@@ -151,7 +143,7 @@ function ContinueRow({ item, onPress, onRemove }) {
 	);
 }
 
-function ContinueTile({ item, onPress, onRemove }) {
+function ContinueTile({ item, onPress, onRemove, maxWidth }) {
 	const { m3 } = useThemeContext();
 	const percent = progressPercent(item);
 	const timeLeft = formatTimeLeft(item);
@@ -165,6 +157,10 @@ function ContinueTile({ item, onPress, onRemove }) {
 				{
 					backgroundColor: m3.surfaceContainer,
 					borderColor: `${m3.surfaceContainerHigh}80`,
+					// ⚠️ `flex: 1` TEK BAŞINA YETMİYOR: kayıt sayısı sütunun
+					// katı değilse son satırdaki tek kart tüm satıra yayılıyordu
+					// (TV'de tek kayıtla dev bir 16:9 kart kaplıyordu).
+					maxWidth,
 				},
 			]}>
 			<TVPressable
@@ -225,9 +221,14 @@ function ContinueTile({ item, onPress, onRemove }) {
 /**
  * Devam edenler sekmesi.
  *
+ * `fallbackWidth`: iki sütunlu profil yerleşiminde sağ panonun beklenen
+ * genişliği — ölçüm ilk karede gelmeden önce ızgara yanlış sütunla
+ * kurulmasın diye (bkz. hooks/useMeasuredColumns.js).
+ *
  * @param {{items: Array, view: "list"|"grid", onToggleView: () => void,
  *          onPressItem: (item: object) => void,
- *          onRemove: (item: object) => void}} props
+ *          onRemove: (item: object) => void,
+ *          fallbackWidth?: number}} props
  */
 export function ContinueWatchingList({
 	items,
@@ -235,8 +236,21 @@ export function ContinueWatchingList({
 	onToggleView,
 	onPressItem,
 	onRemove,
+	fallbackWidth,
 }) {
 	const { m3 } = useThemeContext();
+
+	// Sütun sayısı sabit 2 DEĞİL: kabın ölçüsünden türetilir. Sağ pano
+	// daraldığında (iki sütunlu yerleşim) sabit 2 sütun kartları yeniden
+	// devleştiriyordu; geniş ekranda ise 2 sütun israf.
+	const { onLayout, columns, itemWidth } = useMeasuredColumns({
+		minItemWidth: 155,
+		gap: 12,
+		max: 4,
+		min: 2,
+		padding: ScreenGutter,
+		fallbackWidth,
+	});
 
 	const segments = [
 		{ key: "list", icon: "list", label: "Liste görünümü" },
@@ -244,7 +258,7 @@ export function ContinueWatchingList({
 	];
 
 	return (
-		<View>
+		<View onLayout={onLayout}>
 			<View style={[styles.toolRow, { paddingHorizontal: ScreenGutter }]}>
 				<View
 					style={[
@@ -307,12 +321,14 @@ export function ContinueWatchingList({
 						`${item.id || item.url || "item"}_${index}`
 					}
 					// numColumns değişince ölçümler bayat kalır; `key` listeyi
-					// yeniden kurar (FlatList bu değişimi destekler).
-					key={view}
+					// yeniden kurar (FlatList bu değişimi destekler). Sütun
+					// sayısı ölçümden geldiği için `key` onu da içerir.
+					key={`${view}-${columns}`}
 					renderItem={({ item }) =>
 						view === "grid" ? (
 							<ContinueTile
 								item={item}
+								maxWidth={itemWidth}
 								onPress={() => onPressItem(item)}
 								onRemove={() => onRemove(item)}
 							/>
@@ -324,7 +340,7 @@ export function ContinueWatchingList({
 							/>
 						)
 					}
-					numColumns={view === "grid" ? 2 : 1}
+					numColumns={view === "grid" ? columns : 1}
 					columnWrapperStyle={view === "grid" ? styles.colGap : undefined}
 					contentContainerStyle={{
 						paddingHorizontal: ScreenGutter,
@@ -436,11 +452,15 @@ function FavoriteCard({ item, onPress, onRemove, cardWidth }) {
 /**
  * Favoriler sekmesi.
  *
+ * `fallbackWidth`: iki sütunlu profil yerleşiminde sağ panonun beklenen
+ * genişliği (bkz. hooks/useMeasuredColumns.js).
+ *
  * @param {{items: Array, counts: {all: number, movie: number, series: number},
  *          filter: string, onFilter: (f: string) => void,
  *          sortLabel: string, onToggleSort: () => void,
  *          onPressItem: (item: object) => void,
- *          onRemove: (item: object) => void}} props
+ *          onRemove: (item: object) => void,
+ *          fallbackWidth?: number}} props
  */
 export function FavoriteGrid({
 	items,
@@ -451,6 +471,7 @@ export function FavoriteGrid({
 	onToggleSort,
 	onPressItem,
 	onRemove,
+	fallbackWidth,
 }) {
 	const { m3 } = useThemeContext();
 
@@ -460,15 +481,24 @@ export function FavoriteGrid({
 		{ key: "series", label: "Diziler", count: counts.series },
 	];
 
-	// 3 sütunda tek kartın sabit genişliği. `useWindowDimensions` kullanılıyor
-	// ki tablet/tv'de esnemez; `Dimensions.get` ekran döndüğünde güncellenmez.
-	const { width: winWidth } = useWindowDimensions();
-	const FAV_GAP = 12;
-	const cardWidth =
-		(winWidth - ScreenGutter * 2 - FAV_GAP * 2) / FAV_COLUMNS;
+	// Sütun sayısı ve kart genişliği kabın ÖLÇÜLEN genişliğinden türetilir.
+	//
+	// ⚠️ Eski hesap `useWindowDimensions().width` kullanıyordu: pencere
+	// genişliği paylaşılan tek değerdir ve iki sütunlu profilde kartlar
+	// panodan taşar. Ayrıca sütun sayısı sabit 3'tü; telefon 2 sütunda
+	// (~205dp poster) kartlar ekranı domine ederken yatay/tablet genişliği
+	// israf ediyordu. Ölçümle 3→4-5 sütuna doğal geçiş olur.
+	const { onLayout, columns, itemWidth } = useMeasuredColumns({
+		minItemWidth: 110,
+		gap: 12,
+		max: 8,
+		min: 3,
+		padding: ScreenGutter,
+		fallbackWidth,
+	});
 
 	return (
-		<View>
+		<View onLayout={onLayout}>
 			<View style={[styles.toolRow, { paddingHorizontal: ScreenGutter }]}>
 				<View style={styles.chipRow}>
 					{chips.map((chip) => {
@@ -560,16 +590,16 @@ export function FavoriteGrid({
 					renderItem={({ item }) => (
 						<FavoriteCard
 							item={item}
-							cardWidth={cardWidth}
+							cardWidth={itemWidth}
 							onPress={() => onPressItem(item)}
 							onRemove={() => onRemove(item)}
 						/>
 					)}
-					// 3 sütun: 2 sütunda her poster ~205dp genişliğinde
-					// kaldığı için kartlar ekranı domine ediyordu. Eski profil
-					// ekranı da 3 sütundu; referans HTML'deki 2 sütun dar
-					// ekran (390dp) için tasarlanmıştı.
-					numColumns={FAV_COLUMNS}
+					// Sütun sayısı ölçümden gelir (bkz. yukarıdaki not):
+					// telefon dikeyde 3, geniş panoda 4-8. Sütun değişince
+					// FlatList yeniden kurulur.
+					key={`fav-${columns}`}
+					numColumns={columns}
 					columnWrapperStyle={styles.colGap}
 					contentContainerStyle={{
 						paddingHorizontal: ScreenGutter,

@@ -8,6 +8,7 @@ import HomeSkeleton from "@/components/home/HomeSkeleton";
 import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
 import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
 import ListSelectModal from "@/components/modal/ListSelectModal";
+import { useAuth } from "@/context/AuthContext";
 import {
 	clearPluginCache,
 	fetchPlatformCategories,
@@ -57,6 +58,9 @@ const EMPTY_ARRAY = [];
 
 export default function Index() {
 	const router = useRouter();
+	// Giriş yapılmışsa hesap resmi avatar önceliğine sahiptir
+	// (bkz. `fetchUserData` ve `profile/index.jsx` `avatarUri` kuralı).
+	const { user } = useAuth();
 	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
 	const { contentPaddingLeft, isSideRail } = useNavLayout();
 	const params = useLocalSearchParams();
@@ -118,15 +122,31 @@ export default function Index() {
 					getDownloads(),
 					getContinueWatching(),
 				]);
-			if (profile?.avatarUrl) {
-				setUserAvatarUrl(profile.avatarUrl);
-			}
+			// Avatar önceliği (profil ekranıyla aynı kural — bkz.
+			// `profile/index.jsx` `avatarUri`):
+			//   1) Giriş yapılmışsa HESAP resmi (`user.avatar_url`)
+			//   2) Giriş yoksa YEREL profil resmi — yalnızca profil
+			//      varsayılan "Misafir" değerlerinde değilse.
+			// ⚠️ Eski davranış yalnızca `profile.avatarUrl` okuyordu ve
+			// `setUserAvatarUrl` koşula bağlıydı: giriş yapılınca hesap
+			// resmi HİÇ görünmüyor, avatar kaldırılınca eski resim ekranda
+			// kalıyordu. Artık her yüklemede tazelenir.
+			const isDefaultProfile =
+				!profile ||
+				profile.username === "misafir" ||
+				profile.displayName === "Misafir Kullanıcı";
+			const authAvatar = user?.avatar_url || "";
+			const localAvatar =
+				!isDefaultProfile && profile?.avatarUrl
+					? profile.avatarUrl
+					: "";
+			setUserAvatarUrl(authAvatar || localAvatar || "");
 			setDownloadedItems(downloads || []);
 			setContinueWatching(continueList || []);
 		} catch (error) {
 			console.error("Kullanıcı verisi yüklenirken hata:", error);
 		}
-	}, []);
+	}, [user]);
 
 	useFocusEffect(
 		useCallback(() => {
@@ -668,7 +688,7 @@ export default function Index() {
 				{loadingPlatform ? (
 					<HomeSkeleton
 						platform={selectedPlatform}
-						userAvatarUrl={userAvatarUrl}
+						userAvatarUrl={user?.avatar_url || userAvatarUrl}
 						onPlatformPress={() => setIsPlatformModalVisible(true)}
 						onSearchPress={handleHeaderSearch}
 						onProfilePress={() => router.push("/(app)/profile")}
@@ -720,7 +740,7 @@ export default function Index() {
 						 * değişiyordu — ekran iki kez yer değiştiriyordu.
 						 */
 						skeleton={loadingContent}
-							userAvatarUrl={userAvatarUrl}
+							userAvatarUrl={user?.avatar_url || userAvatarUrl}
 							onPlayPress={() => handleMoviePress(featuredMovie)}
 							onInfoPress={() => handleMoviePress(featuredMovie)}
 							onLongPress={() => handleMovieLongPress(featuredMovie)}

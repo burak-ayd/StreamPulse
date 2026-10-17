@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
 	arrowButtonFocused: {
 		backgroundColor: "rgba(255, 59, 48, 0.35)",
 		borderRadius: 12,
-		transform: [{ scale: 1.15 }],
+		transform: [{ scale: Platform.isTV ? 1.02 : 1.15 }],
 	},
 	horizontalList: {
 		paddingHorizontal: ROW_LIST_PAD_H,

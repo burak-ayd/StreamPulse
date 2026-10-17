@@ -6,8 +6,10 @@ import {
 	getContentWatchProgress,
 	getSelectedPlatform,
 	getSeriesEpisodesProgress,
+	markEpisodesWatched,
 	saveSeriesTotalEpisodes,
 	toggleFavorite,
+	unmarkEpisodesWatched,
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
 import { useTvMetrics } from "@/utils/tvMetrics";
@@ -22,7 +24,7 @@ import {
 	useRouter,
 } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Alert,
 	BackHandler,
@@ -589,22 +591,34 @@ export default function MovieDetailsScreen() {
 		passedMovie?.initialSeason ? String(passedMovie.initialSeason) : null,
 	);
 
-	useEffect(() => {
-		const onBackPress = () => {
-			if (isListSelectModalVisible) {
-				setIsListSelectModalVisible(false);
-				return true;
-			}
-			router.back();
-			return true;
-		};
+	// Bölüm seçim modu / işlem menüsü durumunu geri tuşunda kapatabilmek
+	// için SeasonsSection referansı (bkz. aşağıdaki BackHandler).
+	const seasonsRef = useRef(null);
 
-		const subscription = BackHandler.addEventListener(
-			"hardwareBackPress",
-			onBackPress,
-		);
-		return () => subscription.remove();
-	}, [isListSelectModalVisible, router]);
+	useFocusEffect(
+		useCallback(() => {
+			const onBackPress = () => {
+				// Önce bölüm seçim modu / bağlam menüsü açık mı? Açıksa geri
+				// tuşu ekrandan çıkmaz, yalnızca seçimi/menüyü kapatır.
+				if (seasonsRef.current?.cancelSelection?.()) {
+					return true;
+				}
+				if (isListSelectModalVisible) {
+					setIsListSelectModalVisible(false);
+					return true;
+				}
+				if (router.canGoBack()) router.back();
+				else router.replace("/(app)");
+				return true;
+			};
+
+			const subscription = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => subscription.remove();
+		}, [isListSelectModalVisible, router]),
+	);
 
 	const movieItem = useMemo(() => {
 		if (!content) return null;
@@ -633,6 +647,148 @@ export default function MovieDetailsScreen() {
 				.catch(() => {});
 		}
 	}, [content?.id, content?.url]);
+
+	/**
+	 * İşaretlenen bölümlerden SONRA gelen ilk bölümü bulur.
+	 *
+	 * Devam kaydı işaretlenen bölümde duruyorsa sonraki bölüme taşınır
+	 * (bkz. `markEpisodesWatched` → `options.nextEpisode`). Sezon
+	 * nesnesi/ dizisi/episodes üç biçimini de düzleştirir; sezonlar ve
+	 * bölümler numaraya göre sıralanır.
+	 */
+	const findNextEpisodeAfterMarks = useCallback(
+		(marks) => {
+			if (!content) return null;
+
+			const flat = [];
+			const pushEpisodes = (list, seasonKey) => {
+				if (!Array.isArray(list)) return;
+				list.forEach((ep, index) => {
+					const epNumber =
+						ep.episode || ep.episode_number || index + 1;
+					const sNum = Number(
+						ep.season || ep.season_number || seasonKey,
+					);
+					flat.push({
+						season: Number.isFinite(sNum)
+							? sNum
+							: seasonKey,
+						episode: Number(epNumber) || epNumber,
+						title: ep.title || null,
+						url: ep.url || null,
+						id: ep.id || null,
+						poster: ep.poster || null,
+					});
+				});
+			};
+
+			if (
+				content.seasons &&
+				typeof content.seasons === "object" &&
+				!Array.isArray(content.seasons)
+			) {
+				Object.entries(content.seasons).forEach(([sKey, list]) =>
+					pushEpisodes(list, sKey),
+				);
+			} else if (Array.isArray(content.seasons)) {
+				content.seasons.forEach((seasonObj, sIdx) => {
+					if (!seasonObj || typeof seasonObj !== "object") return;
+					const sKey =
+						seasonObj.season ||
+						seasonObj.season_number ||
+						sIdx + 1;
+					pushEpisodes(
+						Array.isArray(seasonObj.episodes)
+							? seasonObj.episodes
+							: seasonObj.items,
+						sKey,
+					);
+				});
+			}
+			if (flat.length === 0) {
+				pushEpisodes(content.episodes, 1);
+			}
+			if (flat.length === 0) return null;
+
+			flat.sort((a, b) => {
+				const sa = Number(a.season) || 0;
+				const sb = Number(b.season) || 0;
+				if (sa !== sb) return sa - sb;
+				return (Number(a.episode) || 0) - (Number(b.episode) || 0);
+			});
+
+			const markedSet = new Set(
+				(marks || []).map(
+					(m) => `s${Number(m.season)}_e${Number(m.episode)}`,
+				),
+			);
+			let lastMarkedIndex = -1;
+			flat.forEach((item, index) => {
+				if (markedSet.has(`s${item.season}_e${item.episode}`)) {
+					lastMarkedIndex = index;
+				}
+			});
+			for (let i = lastMarkedIndex + 1; i < flat.length; i++) {
+				const candidate = flat[i];
+				if (
+					!markedSet.has(
+						`s${candidate.season}_e${candidate.episode}`,
+					)
+				) {
+					return candidate;
+				}
+			}
+			return null;
+		},
+		[content],
+	);
+
+	/**
+	 * Bölüm(ler)i "İzlendi"/"İzlenmedi" işaretler (SeasonsSection menüsü).
+	 *
+	 * ⚠️ Veri yazımı storage'dadır (`markEpisodesWatched` /
+	 * `unmarkEpisodesWatched`) ve hesaba senkronlanır; burada yalnızca
+	 * içerik meta verisi ile "sıradaki bölüm" hesaplanır.
+	 *
+	 * @param {Array} marks  Seçilen bölümler ({season, episode, title, url, id, poster})
+	 * @param {boolean} watched  true: işaretle, false: işareti kaldır
+	 * @returns {Promise<number>} İşaretlenen/işareti kaldırılan bölüm sayısı
+	 */
+	const handleSetWatchedEpisodes = useCallback(
+		async (marks, watched) => {
+			if (!content || !marks?.length) return 0;
+
+			const meta = {
+				id: content.id || content.url,
+				url: content.url || movieUrl,
+				title: content.title,
+				poster_url: content.poster_url || content.backdrop_url,
+				plugin: content.plugin || pluginName,
+				seriesTitle: content.title,
+			};
+
+			let count = 0;
+			if (watched) {
+				const nextEpisode = findNextEpisodeAfterMarks(marks);
+				count = await markEpisodesWatched(meta, marks, {
+					nextEpisode,
+				});
+			} else {
+				await unmarkEpisodesWatched(meta, marks);
+				count = marks.length;
+			}
+
+			// Ekrandaki "TAMAMLANDI" rozetleri hemen güncellensin.
+			// ⚠️ `loadWatchProgress` bir cleanup fonksiyonu DÖNDÜRÜR;
+			// `?.()` ile çağırmak döndürülen cleanup'ı ANINDA çalıştırır ve
+			// iç effect'in `isMounted=false` olmasına yol açar → setState'ler
+			// atlanır, rozetler o ekranda hiç yenilenmez. Düz çağrı yeterli;
+			// cleanup'ın kendisi `useFocusEffect`{ L419-442 } döndürülür.
+			loadWatchProgress();
+			return count;
+		},
+		[content, movieUrl, pluginName, loadWatchProgress, findNextEpisodeAfterMarks],
+	);
 
 	const handleToggleFavorite = async () => {
 		if (!movieItem) return;
@@ -1016,6 +1172,8 @@ export default function MovieDetailsScreen() {
 									content={content}
 									episodesProgress={episodesProgress}
 									totalEpisodes={totalEpisodesCount}
+									ref={seasonsRef}
+									onSetWatched={handleSetWatchedEpisodes}
 								/>
 							)}
 
@@ -1204,6 +1362,8 @@ export default function MovieDetailsScreen() {
 								}
 								content={content}
 								episodesProgress={episodesProgress}
+								ref={seasonsRef}
+								onSetWatched={handleSetWatchedEpisodes}
 							/>
 						</View>
 					)}

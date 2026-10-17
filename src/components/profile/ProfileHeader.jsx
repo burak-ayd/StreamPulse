@@ -121,9 +121,17 @@ export function ProfileTopBar({
  *   • giriş yapılmış VE sync hatası yok  → YEŞİL
  *   • aksi (giriş yok / sync hatası var) → KIRMIZI
  *
+ * ── `wide` (yatay + geniş ekran: TV, tablet yatay, telefon yatay) ──
+ *
+ * Tek sütunda kimlik satırı kenardan kenara yayılıyordu: isim solda,
+ * "Düzenle" düğmesi 800dp ötede sağ uçta kalıyordu. Geniş yerleşimde
+ * başlık, sol sütunun içinde ORTALANMIŞ bir kimlik kartına döner
+ * (avatar üstte, isim/handle altında, düğme altta) — iki sütunlu
+ * düzenin "profil kartı" görünümü. DİKEY telefon yerleşimi değişmez.
+ *
  * @param {{displayName: string, handle: string, roleLabel?: string,
  *          avatarUri?: string|null, onEdit: () => void,
- *          syncHealthy?: boolean}} props
+ *          syncHealthy?: boolean, wide?: boolean}} props
  */
 export function ProfileHeader({
 	displayName,
@@ -132,53 +140,133 @@ export function ProfileHeader({
 	avatarUri,
 	onEdit,
 	syncHealthy = false,
+	wide = false,
 }) {
 	const { m3 } = useThemeContext();
 	const initial = (displayName || "K").trim().charAt(0).toUpperCase();
 	const ringColor = syncHealthy ? m3.success : m3.primaryContainer;
+	const avatarSize = wide ? 76 : 64;
+
+	const avatar = avatarUri ? (
+		<Image
+			source={{ uri: avatarUri }}
+			style={[
+				styles.avatar,
+				{
+					width: avatarSize,
+					height: avatarSize,
+					borderRadius: avatarSize / 2,
+					borderColor: ringColor,
+				},
+			]}
+			contentFit="cover"
+			transition={150}
+		/>
+	) : (
+		<View
+			style={[
+				styles.avatar,
+				styles.avatarFallback,
+				{
+					width: avatarSize,
+					height: avatarSize,
+					borderRadius: avatarSize / 2,
+					backgroundColor: m3.surfaceContainerHighest,
+					borderColor: ringColor,
+				},
+			]}>
+			<Text
+				style={[
+					styles.avatarInitial,
+					wide && styles.avatarInitialWide,
+					{ color: m3.onSurface },
+				]}>
+				{initial}
+			</Text>
+		</View>
+	);
+
+	/* Durum noktası — referans tasarımda avatarın sağ altında yeşil bir
+	   "çevrimiçi" noktası var. Burada aynı yerde ama anlamı senkronizasyon
+	   sağlığını bildiriyor. */
+	const statusDot = (
+		<View
+			style={[
+				styles.statusDot,
+				wide && styles.statusDotWide,
+				{
+					backgroundColor: syncHealthy
+						? m3.success
+						: m3.primaryContainer,
+					borderColor: m3.surfaceLowest,
+				},
+			]}
+		/>
+	);
+
+	const editButton = (
+		<TVPressable
+			onPress={onEdit}
+			focusedStyle={styles.focusedPill}
+			style={({ focused }) => [
+				styles.editBtn,
+				wide && styles.editBtnWide,
+				{
+					backgroundColor: m3.surfaceContainerHigh,
+					borderColor: `${m3.surfaceContainerHigh}99`,
+				},
+				focused && { borderColor: m3.onSurface },
+			]}>
+			<Ionicons name="create-outline" size={15} color={m3.onSurface} />
+			<Text style={[styles.editBtnText, { color: m3.onSurface }]}>
+				Düzenle
+			</Text>
+		</TVPressable>
+	);
+
+	if (wide) {
+		return (
+			<View
+				style={[
+					styles.header,
+					styles.headerWide,
+					{ paddingHorizontal: ScreenGutter },
+				]}>
+				<View style={styles.identityCard}>
+					<View>
+						{avatar}
+						{statusDot}
+					</View>
+
+					<Text
+						style={[styles.name, styles.nameWide, { color: m3.onSurface }]}
+						numberOfLines={1}>
+						{displayName}
+					</Text>
+					<Text
+						style={[
+							styles.handle,
+							styles.handleWide,
+							{ color: m3.onSurfaceVariant },
+						]}
+						numberOfLines={1}>
+						{handle}
+						{roleLabel ? ` • ${roleLabel}` : ""}
+					</Text>
+
+					{editButton}
+				</View>
+			</View>
+		);
+	}
 
 	return (
 		<View style={[styles.header, { paddingHorizontal: ScreenGutter }]}>
 			<View style={styles.headerRow}>
 				<View style={styles.identity}>
 					<View>
-						{avatarUri ? (
-							<Image
-								source={{ uri: avatarUri }}
-								style={[styles.avatar, { borderColor: ringColor }]}
-								contentFit="cover"
-								transition={150}
-							/>
-						) : (
-							<View
-								style={[
-									styles.avatar,
-									styles.avatarFallback,
-									{
-										backgroundColor: m3.surfaceContainerHighest,
-										borderColor: ringColor,
-									},
-								]}>
-								<Text style={[styles.avatarInitial, { color: m3.onSurface }]}>
-									{initial}
-								</Text>
-							</View>
-						)}
-
-						{/* Durum noktası — referans tasarımda avatarın sağ altında
-						    yeşil bir "çevrimiçi" noktası var. Burada aynı yerde
-						    ama anlamı senkronizasyon sağlığını bildiriyor. */}
-						<View
-							style={[
-								styles.statusDot,
-								{
-									backgroundColor: syncHealthy
-										? m3.success
-										: m3.primaryContainer,
-									borderColor: m3.surfaceLowest,
-								},
-							]}
-						/>
+						{avatar}
+						{statusDot}
 					</View>
 
 					<View style={styles.identityText}>
@@ -199,26 +287,7 @@ export function ProfileHeader({
 					</View>
 				</View>
 
-				<TVPressable
-					onPress={onEdit}
-					focusedStyle={styles.focusedPill}
-					style={({ focused }) => [
-						styles.editBtn,
-						{
-							backgroundColor: m3.surfaceContainerHigh,
-							borderColor: `${m3.surfaceContainerHigh}99`,
-						},
-						focused && { borderColor: m3.onSurface },
-					]}>
-					<Ionicons
-						name="create-outline"
-						size={15}
-						color={m3.onSurface}
-					/>
-					<Text style={[styles.editBtnText, { color: m3.onSurface }]}>
-						Düzenle
-					</Text>
-				</TVPressable>
+				{editButton}
 			</View>
 		</View>
 	);
@@ -233,13 +302,19 @@ export function ProfileHeader({
  * giriş yapılmışken ikincil eylem olduğu için çizgili (outline) görünür.
  * Çıkış, veri kaybı yaratabileceği için ayrıca onay ister (üst katmanda).
  *
- * @param {{isLoggedIn: boolean, onLogin: () => void, onLogout: () => void}} props
+ * @param {{isLoggedIn: boolean, onLogin: () => void, onLogout: () => void,
+ *          wide?: boolean}} props
  */
-export function AccountAction({ isLoggedIn, onLogin, onLogout }) {
+export function AccountAction({ isLoggedIn, onLogin, onLogout, wide = false }) {
 	const { m3 } = useThemeContext();
 
 	return (
-		<View style={[styles.accountWrap, { paddingHorizontal: ScreenGutter }]}>
+		<View
+			style={[
+				styles.accountWrap,
+				wide && styles.accountWrapWide,
+				{ paddingHorizontal: ScreenGutter },
+			]}>
 			<TVPressable
 				onPress={isLoggedIn ? onLogout : onLogin}
 				focusedStyle={styles.focusedPill}
@@ -303,13 +378,19 @@ export function AccountAction({ isLoggedIn, onLogin, onLogout }) {
  * Karta dokunmak o sekmeye geçer.
  *
  * @param {{stats: Array<{key: string, value: number, label: string}>,
- *          activeKey: string, onSelect: (key: string) => void}} props
+ *          activeKey: string, onSelect: (key: string) => void,
+ *          wide?: boolean}} props
  */
-export function ProfileStats({ stats, activeKey, onSelect }) {
+export function ProfileStats({ stats, activeKey, onSelect, wide = false }) {
 	const { m3 } = useThemeContext();
 
 	return (
-		<View style={[styles.statsWrap, { paddingHorizontal: ScreenGutter }]}>
+		<View
+			style={[
+				styles.statsWrap,
+				wide && styles.statsWrapWide,
+				{ paddingHorizontal: ScreenGutter },
+			]}>
 			<View
 				style={[
 					styles.statsRow,
@@ -372,13 +453,19 @@ export function ProfileStats({ stats, activeKey, onSelect }) {
  * Çubuğun tamamı ince bir ayraç çizgisiyle biter (referans `border-b`).
  *
  * @param {{tabs: Array<{key: string, label: string, dot?: boolean}>,
- *          activeKey: string, onSelect: (key: string) => void}} props
+ *          activeKey: string, onSelect: (key: string) => void,
+ *          wide?: boolean}} props
  */
-export function ProfileTabBar({ tabs, activeKey, onSelect }) {
+export function ProfileTabBar({ tabs, activeKey, onSelect, wide = false }) {
 	const { m3 } = useThemeContext();
 
 	return (
-		<View style={[styles.tabsWrap, { paddingHorizontal: ScreenGutter }]}>
+		<View
+			style={[
+				styles.tabsWrap,
+				wide && styles.tabsWrapWide,
+				{ paddingHorizontal: ScreenGutter },
+			]}>
 			<View
 				style={[
 					styles.tabsRow,
@@ -393,7 +480,7 @@ export function ProfileTabBar({ tabs, activeKey, onSelect }) {
 							onPress={() => onSelect(tab.key)}
 							focusedStyle={styles.focusedTab}
 							style={[
-								styles.tab,
+								wide ? styles.tabWide : styles.tab,
 								{
 									borderBottomColor: isActive
 										? m3.primaryContainer
@@ -571,10 +658,48 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 	},
 
+	// Başlık — geniş yerleşim (sol sütunda ortalanmış kimlik kartı;
+	// tek sütunda isim ile "Düzenle" ekranın iki ucuna savruluyordu)
+	headerWide: {
+		paddingTop: 8,
+		paddingBottom: 4,
+	},
+	identityCard: {
+		alignItems: "center",
+	},
+	avatarInitialWide: {
+		fontSize: 30,
+	},
+	statusDotWide: {
+		right: 2,
+		bottom: 2,
+		width: 18,
+		height: 18,
+		borderRadius: 9,
+		borderWidth: 3,
+	},
+	nameWide: {
+		fontSize: 19,
+		lineHeight: 24,
+		marginTop: 12,
+		textAlign: "center",
+	},
+	handleWide: {
+		textAlign: "center",
+	},
+	editBtnWide: {
+		marginTop: 12,
+		paddingHorizontal: 16,
+		paddingVertical: 9,
+	},
+
 	// Hesap eylemi
 	accountWrap: {
 		paddingTop: 12,
 		paddingBottom: 4,
+	},
+	accountWrapWide: {
+		paddingTop: 8,
 	},
 	accountBtn: {
 		flexDirection: "row",
@@ -602,6 +727,10 @@ const styles = StyleSheet.create({
 	statsWrap: {
 		paddingTop: 12,
 		paddingBottom: 8,
+	},
+	statsWrapWide: {
+		paddingTop: 8,
+		paddingBottom: 4,
 	},
 	statsRow: {
 		flexDirection: "row",
@@ -633,12 +762,25 @@ const styles = StyleSheet.create({
 		paddingTop: 12,
 		paddingBottom: 8,
 	},
+	tabsWrapWide: {
+		paddingTop: 2,
+		paddingBottom: 8,
+	},
 	tabsRow: {
 		flexDirection: "row",
 		borderBottomWidth: 1,
 	},
 	tab: {
 		flex: 1,
+		borderBottomWidth: 2,
+	},
+	// Geniş yerleşim: sekmeler eşit dağıtılmaz — içerikleri kadar yer
+	// kaplar. Tek sütunda 3 sekme 288dp'ye yayılıyordu (TV'de ~575px).
+	tabWide: {
+		flexGrow: 0,
+		flexShrink: 0,
+		flexBasis: "auto",
+		paddingHorizontal: 14,
 		borderBottomWidth: 2,
 	},
 	tabInner: {

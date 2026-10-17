@@ -2,10 +2,18 @@ import TVPressable from "@components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+	forwardRef,
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useMemo,
+	useState,
+} from "react";
 import {
 	ActivityIndicator,
 	Alert,
+	BackHandler,
 	Modal,
 	Pressable,
 	ScrollView,
@@ -15,6 +23,7 @@ import {
 } from "react-native";
 import { getDownloads, saveDownloadItem } from "@/utils/storage";
 import { formatTime } from "@/utils/formatters";
+import ActionMenuModal from "@/components/modal/ActionMenuModal";
 
 /**
  * Format episode duration to Turkish string (e.g., "2 saat 21 dakika" or "45 dakika")
@@ -68,26 +77,39 @@ function getEpisodeDurationTurkish(ep, epProgress, fallbackMinutes) {
 	return null;
 }
 
-export default function SeasonsSection({
-	seasons,
-	episodes,
-	onEpisodePress,
-	loading = false,
-	initialSeason,
-	selectedSeason: controlledSelectedSeason,
-	onSeasonChange,
-	seriesTitle = "",
-	posterUrl = null,
-	content = null,
-	episodesProgress = {},
-	totalEpisodes = 0,
-}) {
+const SeasonsSection = forwardRef(function SeasonsSection(
+	{
+		seasons,
+		episodes,
+		onEpisodePress,
+		loading = false,
+		initialSeason,
+		selectedSeason: controlledSelectedSeason,
+		onSeasonChange,
+		seriesTitle = "",
+		posterUrl = null,
+		content = null,
+		episodesProgress = {},
+		totalEpisodes = 0,
+		onSetWatched,
+	},
+	ref,
+) {
 	const { colors, theme } = useThemeContext();
 	const router = useRouter();
 
 	const [isSeasonModalOpen, setIsSeasonModalOpen] = useState(false);
 	const [sortOrder, setSortOrder] = useState("asc"); // 'asc' (1->N) | 'desc' (N->1)
 	const [downloadQueueMap, setDownloadQueueMap] = useState({});
+
+	// ─── "İzlendi işaretle" durumu ─────────────────────────────────────────
+	// Veri yazımı çağıran ekranda yapılır (`onSetWatched`); bu bileşen
+	// yalnızca seçim/bağlam menüsü arayüzünü yönetir.
+	const [isSelectionMode, setIsSelectionMode] = useState(false);
+	const [selectedEpisodes, setSelectedEpisodes] = useState({});
+	const [menuState, setMenuState] = useState(null); // {type:'season'} | {type:'episode', ep, index}
+	const [isApplyingMarks, setIsApplyingMarks] = useState(false);
+	const [feedbackMessage, setFeedbackMessage] = useState("");
 
 	// Sezon ve bölüm verilerini normalize et
 	const normalizedSeasons = useMemo(() => {
@@ -369,6 +391,276 @@ export default function SeasonsSection({
 		}
 	};
 
+	// ─── "İzlendi işaretle" yardımcıları ───────────────────────────────────
+	// Sezon ⋮ menüsü, bölüm bağlam menüsü ve çoklu seçim modunun ortak
+	// mantığı. Ağır iş (storage yazımı) çağıran ekrandadır:
+	// `onSetWatched(marks, watched)` → işaretlenen bölüm sayısını döner.
+
+	const progressForEpisode = useCallback(
+		(ep, index) => {
+			const epNumber = ep.episode || ep.episode_number || index + 1;
+			const epKey = `s${selectedSeason}_e${epNumber}`;
+			return (
+				episodesProgress?.[ep.url] ||
+				episodesProgress?.[epKey] ||
+				(ep.id && episodesProgress?.[ep.id])
+			);
+		},
+		[episodesProgress, selectedSeason],
+	);
+
+	const isEpisodeCompleted = useCallback(
+		(ep, index) => progressForEpisode(ep, index)?.status === "completed",
+		[progressForEpisode],
+	);
+
+	// Seçim anahtarı: önce url (tekil), yoksa `s{sezon}_e{bölüm}`.
+	const episodeSelectionKey = useCallback(
+		(ep, index) => {
+			const epNumber = ep.episode || ep.episode_number || index + 1;
+			return ep.url || `s${selectedSeason}_e${epNumber}`;
+		},
+		[selectedSeason],
+	);
+
+	// Seçim anahtarlarını `onSetWatched` işaret listesine çevirir.
+	const buildMarksForKeyList = useCallback(
+		(keys) => {
+			const keySet = new Set(keys);
+			const marks = [];
+			sortedEpisodes.forEach((ep, index) => {
+				const key = episodeSelectionKey(ep, index);
+				if (!keySet.has(key)) return;
+				const epNumber = ep.episode || ep.episode_number || index + 1;
+				marks.push({
+					season: Number(selectedSeason) || selectedSeason,
+					episode: Number(epNumber) || epNumber,
+					title: ep.title ? ep.title.trim() : null,
+					url: ep.url || null,
+					id: ep.id || null,
+					poster: ep.poster || posterUrl || null,
+				});
+			});
+			return marks;
+		},
+		[sortedEpisodes, episodeSelectionKey, selectedSeason, posterUrl],
+	);
+
+	const showFeedback = useCallback((message) => {
+		setFeedbackMessage(message);
+	}, []);
+
+	useEffect(() => {
+		if (!feedbackMessage) return;
+		const timer = setTimeout(() => setFeedbackMessage(""), 2600);
+		return () => clearTimeout(timer);
+	}, [feedbackMessage]);
+
+	const applyMarks = useCallback(
+		async (marks, watched) => {
+			if (!marks || marks.length === 0 || isApplyingMarks) return;
+			if (typeof onSetWatched !== "function") return;
+			setIsApplyingMarks(true);
+			try {
+				const count = await onSetWatched(marks, watched);
+				const applied = Number(count) || marks.length;
+				showFeedback(
+					watched
+						? `${applied} bölüm "izlendi" işaretlendi`
+						: `${applied} bölümün işareti kaldırıldı`,
+				);
+				setIsSelectionMode(false);
+				setSelectedEpisodes({});
+			} catch (error) {
+				console.error("İzlendi işaretleme hatası:", error);
+				showFeedback("İşlem başarısız oldu");
+			} finally {
+				setIsApplyingMarks(false);
+			}
+		},
+		[isApplyingMarks, onSetWatched, showFeedback],
+	);
+
+	const toggleEpisodeSelection = useCallback((key) => {
+		setSelectedEpisodes((prev) => {
+			const next = { ...prev };
+			if (next[key]) delete next[key];
+			else next[key] = true;
+			return next;
+		});
+	}, []);
+
+	const selectedKeys = useMemo(
+		() => Object.keys(selectedEpisodes),
+		[selectedEpisodes],
+	);
+	const selectedCount = selectedKeys.length;
+	const allSelected =
+		sortedEpisodes.length > 0 && selectedCount === sortedEpisodes.length;
+
+	const toggleSelectAll = useCallback(() => {
+		if (allSelected) {
+			setSelectedEpisodes({});
+			return;
+		}
+		const next = {};
+		sortedEpisodes.forEach((ep, index) => {
+			next[episodeSelectionKey(ep, index)] = true;
+		});
+		setSelectedEpisodes(next);
+	}, [allSelected, sortedEpisodes, episodeSelectionKey]);
+
+	const enterSelectionMode = useCallback((preselectKey) => {
+		setMenuState(null);
+		setIsSelectionMode(true);
+		setSelectedEpisodes(preselectKey ? { [preselectKey]: true } : {});
+	}, []);
+
+	const cancelSelection = useCallback(() => {
+		if (isSeasonModalOpen) {
+			setIsSeasonModalOpen(false);
+			return true;
+		}
+		if (menuState) {
+			setMenuState(null);
+			return true;
+		}
+		if (isSelectionMode) {
+			setIsSelectionMode(false);
+			setSelectedEpisodes({});
+			return true;
+		}
+		return false;
+	}, [isSeasonModalOpen, menuState, isSelectionMode]);
+
+	// Üst ekran (MovieDetails) geri tuşunda önce bunu çağırır: seçim/menü
+	// açıkken geri tuşu ekrandan çıkmaz, yalnızca seçimi kapatır.
+	useImperativeHandle(ref, () => ({ cancelSelection }), [cancelSelection]);
+
+	// Seçim modu açıkken donanım geri tuşu güvencesi (bileşen tek başına
+	// kullanılırsa da çalışır; üst ekranın dinleyicisi önce davranır).
+	useEffect(() => {
+		if (!isSelectionMode) return;
+		const onBackPress = () => cancelSelection();
+		const sub = BackHandler.addEventListener(
+			"hardwareBackPress",
+			onBackPress,
+		);
+		return () => sub.remove();
+	}, [isSelectionMode, cancelSelection]);
+
+	const seasonMarksAll = useCallback(
+		() =>
+			buildMarksForKeyList(
+				sortedEpisodes.map((ep, index) =>
+					episodeSelectionKey(ep, index),
+				),
+			),
+		[buildMarksForKeyList, sortedEpisodes, episodeSelectionKey],
+	);
+
+	const seasonAllCompleted =
+		sortedEpisodes.length > 0 &&
+		sortedEpisodes.every((ep, index) => isEpisodeCompleted(ep, index));
+
+	const menuTitle = useMemo(() => {
+		if (!menuState) return "";
+		if (menuState.type === "season") return `${selectedSeason}. Sezon`;
+		const { ep, index } = menuState;
+		const epNumber = ep.episode || ep.episode_number || index + 1;
+		const rawTitle = ep.title ? ep.title.trim() : "";
+		return rawTitle
+			? `${epNumber}. ${rawTitle}`
+			: `${selectedSeason}. ${epNumber}. Bölüm`;
+	}, [menuState, selectedSeason]);
+
+	const menuSubtitle = useMemo(() => {
+		if (!menuState) return "";
+		const title = seriesTitle || content?.title || "Dizi";
+		if (menuState.type === "season") {
+			return `${title} • ${sortedEpisodes.length} Bölüm`;
+		}
+		return title;
+	}, [menuState, seriesTitle, content, sortedEpisodes.length]);
+
+	const menuActions = useMemo(() => {
+		if (!menuState) return [];
+
+		if (menuState.type === "season") {
+			return [
+				seasonAllCompleted
+					? {
+							key: "season-unmark",
+							label: "Sezonu İzlenmedi Yap",
+							description: `${selectedSeason}. sezondaki tüm bölüm işaretlerini kaldır`,
+							icon: "close-circle-outline",
+							iconColor: "#f43f5e",
+							iconBg: "rgba(244, 63, 94, 0.15)",
+							onPress: () => applyMarks(seasonMarksAll(), false),
+						}
+					: {
+							key: "season-mark",
+							label: "Sezonu İzlendi İşaretle",
+							description: `${sortedEpisodes.length} bölümün tamamını işaretle`,
+							icon: "checkmark-done-outline",
+							iconColor: "#10b981",
+							iconBg: "rgba(16, 185, 129, 0.15)",
+							onPress: () => applyMarks(seasonMarksAll(), true),
+						},
+				{
+					key: "select-episodes",
+					label: "Bölüm Seç…",
+					description: "Birden fazla bölümü elle seç ve işaretle",
+					icon: "list-outline",
+					onPress: () => enterSelectionMode(),
+				},
+			];
+		}
+
+		const { ep, index } = menuState;
+		const done = isEpisodeCompleted(ep, index);
+		const singleMark = buildMarksForKeyList([
+			episodeSelectionKey(ep, index),
+		]);
+		return [
+			done
+				? {
+						key: "ep-unmark",
+						label: "İzlenmedi Olarak İşaretle",
+						icon: "close-circle-outline",
+						iconColor: "#f43f5e",
+						iconBg: "rgba(244, 63, 94, 0.15)",
+						onPress: () => applyMarks(singleMark, false),
+					}
+				: {
+						key: "ep-mark",
+						label: "İzlendi Olarak İşaretle",
+						icon: "checkmark-circle-outline",
+						iconColor: "#10b981",
+						iconBg: "rgba(16, 185, 129, 0.15)",
+						onPress: () => applyMarks(singleMark, true),
+					},
+			{
+				key: "select-episodes",
+				label: "Bölüm Seç…",
+				description: "Çoklu seçim moduna geç",
+				icon: "list-outline",
+				onPress: () => enterSelectionMode(episodeSelectionKey(ep, index)),
+			},
+		];
+	}, [
+		menuState,
+		seasonAllCompleted,
+		selectedSeason,
+		sortedEpisodes.length,
+		seasonMarksAll,
+		applyMarks,
+		enterSelectionMode,
+		isEpisodeCompleted,
+		buildMarksForKeyList,
+		episodeSelectionKey,
+	]);
+
 	if (loading && (!normalizedSeasons || seasonKeys.length === 0)) {
 		return (
 			<View style={styles.container}>
@@ -399,7 +691,129 @@ export default function SeasonsSection({
 
 	return (
 		<View style={styles.container}>
-			{/* Kontrol Çubuğu (Sezon Dropdown, Bölüm Sıralama, Sezon İndir) */}
+			{isSelectionMode ? (
+				/* Seçim Modu Çubuğu — bölümleri elle seçip toplu işaretleme */
+				<View style={styles.selectionBar}>
+					<TVPressable
+						style={({ focused }) => [
+							styles.selectionChip,
+							{
+								backgroundColor:
+									theme === "dark" ? "#161B24" : "#ffffff",
+								borderColor:
+									theme === "dark" ? "#232A36" : "#E2E8F0",
+							},
+							focused && styles.controlsButtonFocused,
+						]}
+						onPress={toggleSelectAll}
+						activeOpacity={0.75}>
+						<Ionicons
+							name={allSelected ? "checkbox" : "square-outline"}
+							size={15}
+							color={colors.text}
+						/>
+						<Text
+							style={[
+								styles.selectionChipText,
+								{ color: colors.text },
+							]}>
+							{allSelected ? "Seçimi Kaldır" : "Tümünü Seç"}
+						</Text>
+					</TVPressable>
+
+					<Text
+						style={[
+							styles.selectionCountText,
+							{ color: colors.textSecondary },
+						]}>
+						{selectedCount} bölüm
+					</Text>
+
+					<TVPressable
+						style={({ focused }) => [
+							styles.selectionChip,
+							styles.selectionChipPrimary,
+							selectedCount === 0 && { opacity: 0.5 },
+							focused && styles.controlsButtonFocused,
+						]}
+						onPress={() => {
+							if (selectedCount === 0 || isApplyingMarks)
+								return;
+							applyMarks(
+								buildMarksForKeyList(selectedKeys),
+								true,
+							);
+						}}
+						activeOpacity={0.75}>
+						{isApplyingMarks ? (
+							<ActivityIndicator size="small" color="#ffffff" />
+						) : (
+							<Ionicons
+								name="checkmark-done"
+								size={15}
+								color="#ffffff"
+							/>
+						)}
+						<Text style={styles.selectionChipPrimaryText}>
+							İzlendi İşaretle
+						</Text>
+					</TVPressable>
+
+					<TVPressable
+						style={({ focused }) => [
+							styles.selectionChip,
+							styles.selectionChipDanger,
+							selectedCount === 0 && { opacity: 0.5 },
+							focused && styles.controlsButtonFocused,
+						]}
+						onPress={() => {
+							if (selectedCount === 0 || isApplyingMarks)
+								return;
+							applyMarks(
+								buildMarksForKeyList(selectedKeys),
+								false,
+							);
+						}}
+						activeOpacity={0.75}>
+						<Ionicons
+							name="close-circle-outline"
+							size={15}
+							color="#f43f5e"
+						/>
+						<Text
+							style={[
+								styles.selectionChipText,
+								{ color: "#f43f5e" },
+							]}>
+							İzlenmedi Yap
+						</Text>
+					</TVPressable>
+
+					<TVPressable
+						style={({ focused }) => [
+							styles.selectionChip,
+							{
+								borderColor:
+									theme === "dark" ? "#232A36" : "#E2E8F0",
+							},
+							focused && styles.controlsButtonFocused,
+						]}
+						onPress={() => {
+							setIsSelectionMode(false);
+							setSelectedEpisodes({});
+						}}
+						activeOpacity={0.75}>
+						<Text
+							style={[
+								styles.selectionChipText,
+								{ color: colors.text },
+							]}>
+							Vazgeç
+						</Text>
+					</TVPressable>
+				</View>
+			) : (
+			/* Kontrol Çubuğu (Sezon Dropdown, Bölüm Sıralama, Sezon İndir) */
 			<View style={styles.controlsBar}>
 				{/* 1. Sezon Seçim Dropdown Butonu */}
 				<TVPressable
@@ -473,7 +887,30 @@ export default function SeasonsSection({
 						{sortedEpisodes.length} Bölüm
 					</Text>
 				</TVPressable>
+
+				{/* 4. Daha Fazla (⋮) — sezon menüsü: izlendi işaretle / bölüm seç */}
+				<TVPressable
+					style={({ focused }) => [
+						styles.moreButton,
+						{
+							backgroundColor:
+								theme === "dark" ? "#161B24" : "#ffffff",
+							borderColor:
+								theme === "dark" ? "#232A36" : "#E2E8F0",
+						},
+						focused && styles.controlsButtonFocused,
+					]}
+					onPress={() => setMenuState({ type: "season" })}
+					activeOpacity={0.75}
+					hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+					<Ionicons
+						name="ellipsis-vertical"
+						size={16}
+						color={colors.text}
+					/>
+				</TVPressable>
 			</View>
+			)}
 
 			{/* Bölüm Listesi */}
 			<View style={styles.episodesList}>
@@ -512,6 +949,8 @@ export default function SeasonsSection({
 
 					const isCompleted = epProgress?.status === "completed";
 					const isInProgress = epProgress?.status === "in_progress";
+					const selectionKey = episodeSelectionKey(ep, index);
+					const isSelected = Boolean(selectedEpisodes[selectionKey]);
 
 					const isDark = theme === "dark";
 					const epDurationFormatted = getEpisodeDurationTurkish(
@@ -541,38 +980,71 @@ export default function SeasonsSection({
 									borderWidth: isInProgress ? 1.5 : 1,
 								},
 								isInProgress && styles.episodeCardActive,
+								isSelected && styles.episodeCardSelected,
 								focused && styles.episodeCardFocused,
 							]}
-							onPress={() => handleEpisodeClick(ep, index)}
+							onPress={() => {
+								if (isSelectionMode) {
+									toggleEpisodeSelection(selectionKey);
+									return;
+								}
+								handleEpisodeClick(ep, index);
+							}}
+							onLongPress={() => {
+								if (isSelectionMode) return;
+								setMenuState({ type: "episode", ep, index });
+							}}
 							activeOpacity={0.75}>
-							{/* Sol: Play / Tik İkonu (w-7 h-7 rounded-full) */}
-							<View
-								style={[
-									styles.playIconContainer,
-									{
-										backgroundColor: isInProgress
-											? "#E50914"
-											: isDark
-												? "#1e293b"
-												: "#f1f5f9",
-									},
-									isInProgress && styles.playIconActiveGlow,
-								]}>
-								<Ionicons
-									name={
-										isCompleted
-											? "checkmark-circle"
-											: "play"
-									}
-									size={isCompleted ? 17 : 13}
-									color={
-										isInProgress
-											? "#ffffff"
-											: "#E50914"
-									}
-									style={!isCompleted ? styles.playIconOffset : null}
-								/>
-							</View>
+							{/* Sol: Seçim kutusu ya da Play / Tik İkonu */}
+							{isSelectionMode ? (
+								<View
+									style={[
+										styles.selectionCheckbox,
+										isSelected &&
+											styles.selectionCheckboxChecked,
+									]}>
+									{isSelected && (
+										<Ionicons
+											name="checkmark"
+											size={15}
+											color="#ffffff"
+										/>
+									)}
+								</View>
+							) : (
+								<View
+									style={[
+										styles.playIconContainer,
+										{
+											backgroundColor: isInProgress
+												? "#E50914"
+												: isDark
+													? "#1e293b"
+													: "#f1f5f9",
+										},
+										isInProgress &&
+											styles.playIconActiveGlow,
+									]}>
+									<Ionicons
+										name={
+											isCompleted
+												? "checkmark-circle"
+												: "play"
+										}
+										size={isCompleted ? 17 : 13}
+										color={
+											isInProgress
+												? "#ffffff"
+												: "#E50914"
+										}
+										style={
+											!isCompleted
+												? styles.playIconOffset
+												: null
+										}
+									/>
+								</View>
+							)}
 
 							{/* Orta: Bölüm Başlığı & Devam Durumu */}
 							<View style={styles.episodeTitleContainer}>
@@ -818,9 +1290,35 @@ export default function SeasonsSection({
 					</Pressable>
 				</Pressable>
 			</Modal>
+
+			{/* Bölüm/Sezon işlem menüsü (TV + dokunmatik ortak) */}
+			<ActionMenuModal
+				visible={Boolean(menuState)}
+				onClose={() => setMenuState(null)}
+				title={menuTitle}
+				subtitle={menuSubtitle}
+				actions={menuActions}
+			/>
+
+			{/* Geçici geri bildirim balonu ("3 bölüm işaretlendi") */}
+			{Boolean(feedbackMessage) && (
+				<View style={styles.feedbackToast} pointerEvents="none">
+					<Ionicons
+						name="checkmark-circle"
+						size={15}
+						color="#10b981"
+					/>
+					<Text style={styles.feedbackToastText}>
+						{feedbackMessage}
+					</Text>
+				</View>
+			)}
 		</View>
 	);
-}
+});
+
+// Geri tuşu işbirliği için referans (bkz. MovieDetails `seasonsRef`).
+export default SeasonsSection;
 
 const styles = StyleSheet.create({
 	container: {
@@ -1045,6 +1543,91 @@ backgroundColor: "rgba(229, 9, 20, 0.18)",
 	loadingText: {
 		fontSize: 14,
 		fontWeight: "500",
+	},
+	/* ── İzlendi işaretleme: seçim modu, ⋮ menüsü, geri bildirim ── */
+	selectionBar: {
+		flexDirection: "row",
+		alignItems: "center",
+		flexWrap: "wrap",
+		gap: 8,
+		marginBottom: 12,
+	},
+	selectionChip: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+		paddingVertical: 8,
+		paddingHorizontal: 12,
+		borderRadius: 10,
+		borderWidth: 1,
+	},
+	selectionChipText: {
+		fontSize: 12,
+		fontWeight: "700",
+	},
+	selectionChipPrimary: {
+		backgroundColor: "#10b981",
+		borderColor: "#10b981",
+	},
+	selectionChipPrimaryText: {
+		fontSize: 12,
+		fontWeight: "800",
+		color: "#ffffff",
+	},
+	selectionChipDanger: {
+		backgroundColor: "rgba(244, 63, 94, 0.1)",
+		borderColor: "rgba(244, 63, 94, 0.4)",
+	},
+	selectionCountText: {
+		fontSize: 12,
+		fontWeight: "600",
+		paddingHorizontal: 2,
+	},
+	selectionCheckbox: {
+		width: 28,
+		height: 28,
+		borderRadius: 14,
+		borderWidth: 1.5,
+		borderColor: "rgba(148, 163, 184, 0.6)",
+		alignItems: "center",
+		justifyContent: "center",
+		flexShrink: 0,
+	},
+	selectionCheckboxChecked: {
+		backgroundColor: "#10b981",
+		borderColor: "#10b981",
+	},
+	episodeCardSelected: {
+		borderWidth: 1.5,
+		borderColor: "rgba(16, 185, 129, 0.8)",
+	},
+	moreButton: {
+		width: 36,
+		height: 36,
+		borderRadius: 10,
+		borderWidth: 1,
+		alignItems: "center",
+		justifyContent: "center",
+		marginLeft: 8,
+	},
+	feedbackToast: {
+		position: "absolute",
+		bottom: 8,
+		alignSelf: "center",
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+		backgroundColor: "rgba(15, 23, 42, 0.95)",
+		borderWidth: 1,
+		borderColor: "rgba(16, 185, 129, 0.4)",
+		paddingVertical: 8,
+		paddingHorizontal: 14,
+		borderRadius: 999,
+	},
+	feedbackToastText: {
+		color: "#f1f5f9",
+		fontSize: 12,
+		fontWeight: "600",
 	},
 	controlsButtonFocused: {
 		borderWidth: 2,

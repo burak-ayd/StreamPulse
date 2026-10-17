@@ -51,7 +51,7 @@ import {
 	sortItems,
 } from "@/utils/profileFormat";
 import { useReactiveData } from "@/utils/storageListener";
-import { Alert, BackHandler, Platform, StatusBar, StyleSheet, View } from "react-native";
+import { Alert, BackHandler, Platform, ScrollView, StatusBar, StyleSheet, View } from "react-native";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -74,7 +74,7 @@ const SORT_LABELS = {
 export default function ProfileScreen() {
 	const { m3, theme } = useThemeContext();
 	// TV ölçüleri — bkz. utils/tvMetrics.js
-	const { contentMaxWidth } = useTvMetrics();
+	const { isWide, isLandscape, width: winWidth } = useTvMetrics();
 	const { isLoggedIn, user, logout } = useAuth();
 	const { status: syncStatus } = useSync();
 	const router = useRouter();
@@ -166,9 +166,11 @@ export default function ProfileScreen() {
 		"user_continue_watching",
 	]);
 
-	// Android donanım geri tuşu
+	// Android donanım geri tuşu — kök yığında varsayılana bırakılır;
+	// koşulsuz back() burada sıkışıp kalıyordu.
 	const handleBack = useCallback(() => {
-		router.back();
+		if (router.canGoBack()) router.back();
+		else router.replace("/(app)");
 	}, [router]);
 
 	useFocusEffect(
@@ -375,26 +377,78 @@ export default function ProfileScreen() {
 		);
 	}, [logout]);
 
+	// ── Yerleşim ─────────────────────────────────────────────
+
+	/**
+	 * İKİ SÜTUNLU yerleşim koşulu.
+	 *
+	 * DİKEY telefonda düzen aynen korunur (geri bildirim: dikey iyi).
+	 * YATAY + geniş ekranda (TV, tablet yatay, telefon yatay) kimlik ve
+	 * hesap işlemleri solda sabit bir sütunda toplanır; sekmeler ve içerik
+	 * sağdadır: tek sütunlu telefon düzeni 960dp'ye yayıldığında başlık
+	 * iki uca savruluyor, satırlar ~860dp uzuyordu.
+	 */
+	const twoPane = isWide && isLandscape;
+
+	/** Sol sütun: ekranın ~1/3'ü, 280–340dp arasına kırpılır. */
+	const sideWidth = Math.round(
+		Math.min(Math.max(winWidth * 0.33, 280), 340),
+	);
+
+	/**
+	 * Sağ panonun beklenen genişliği — ızgara ölçümü gelmeden önceki ilk
+	 * kare için (bkz. hooks/useMeasuredColumns.js). Dikeyde 0 verilir;
+	 * kanca o durumda ekran genişliğini kullanır.
+	 */
+	const paneFallbackWidth = twoPane
+		? Math.max(0, winWidth - sideWidth - 16)
+		: 0;
+
+	/**
+	 * Kimlik + hesap + istatistik bloğu.
+	 *
+	 * Dikeyde gövdenin doğrudan çocuklarıdır (eski yerleşim aynen);
+	 * yatay/geniş yerleşimde sol sütunun ScrollView'ına girer.
+	 */
+	const sideContent = (
+		<>
+			<ProfileHeader
+				displayName={displayName}
+				handle={`@${handle}`}
+				roleLabel="Sinefil"
+				avatarUri={avatarUri}
+				syncHealthy={syncHealthy}
+				onEdit={() => router.push("/profile/EditProfile")}
+				wide={twoPane}
+			/>
+
+			<AccountAction
+				isLoggedIn={isLoggedIn}
+				onLogin={() => openLogin(router)}
+				onLogout={confirmLogout}
+				wide={twoPane}
+			/>
+
+			<ProfileStats
+				stats={stats}
+				activeKey={activeTab}
+				onSelect={(key) => setActiveTab(key)}
+				wide={twoPane}
+			/>
+		</>
+	);
+
 	// ── Render ───────────────────────────────────────────────
 
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
+			{/* TV geri bildirimi: gövde TAM genişlik. Eski contentMaxWidth
+			    ortalaması yanlarda boşluk bırakıyordu; kenar boşlukları
+			    panellerin kendi iç dolgularından (ScreenGutter) gelir. */}
 			<SafeAreaView
 				edges={["top", "left", "right"]}
-				style={[
-					styles.safeArea,
-					{ backgroundColor: m3.surfaceLowest },
-					// TV: profil govdesi ekranı kenardan kenara dolduruyordu;
-					// ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
-					contentMaxWidth
-						? {
-								width: "100%",
-								maxWidth: contentMaxWidth,
-								alignSelf: "center",
-							}
-						: null,
-				]}>
+				style={[styles.safeArea, { backgroundColor: m3.surfaceLowest }]}>
 				<StatusBar
 					barStyle={theme === "dark" ? "light-content" : "dark-content"}
 					backgroundColor={m3.surfaceLowest}
@@ -415,74 +469,83 @@ export default function ProfileScreen() {
 					onSettings={() => router.push("/(app)/settings/sync")}
 				/>
 
-				{/* Tüm sekme gövdeleri kendi FlatList'ini taşır; bu yüzden
-				    dışarıda bir ScrollView YOK — iç içe scroll view Android'de
-				    hem performans düşürür hem de kısayol jestini bozar. */}
-				<View style={styles.body}>
-					<ProfileHeader
-						displayName={displayName}
-						handle={`@${handle}`}
-						roleLabel="Sinefil"
-						avatarUri={avatarUri}
-						syncHealthy={syncHealthy}
-						onEdit={() => router.push("/profile/EditProfile")}
-					/>
+				{/* Tüm sekme gövdeleri kendi FlatList'ini taşır; dışarıda bir
+				    ScrollView YOK — iç içe scroll view Android'de hem
+				    performans düşürür hem de kısayol jestini bozar. Yan
+				    sütunun ScrollView'ı ile gövde FlatList'i KARDEŞTİR
+				    (iç içe değil); o da yalnızca yatay/geniş yerleşimde
+				    devreye girer. */}
+				<View style={[styles.body, twoPane && styles.bodyWide]}>
+					{twoPane ? (
+						<ScrollView
+							style={[
+								styles.side,
+								{
+									width: sideWidth,
+									borderRightColor: `${m3.surfaceContainerHigh}55`,
+								},
+							]}
+							showsVerticalScrollIndicator={false}>
+							{sideContent}
+						</ScrollView>
+					) : (
+						sideContent
+					)}
 
-					<AccountAction
-						isLoggedIn={isLoggedIn}
-						onLogin={() => openLogin(router)}
-						onLogout={confirmLogout}
-					/>
+					<View style={styles.main}>
+						<ProfileTabBar
+							tabs={TAB_ORDER}
+							activeKey={activeTab}
+							onSelect={(key) => setActiveTab(key)}
+							wide={twoPane}
+						/>
 
-					<ProfileStats
-						stats={stats}
-						activeKey={activeTab}
-						onSelect={(key) => setActiveTab(key)}
-					/>
-
-					<ProfileTabBar
-						tabs={TAB_ORDER}
-						activeKey={activeTab}
-						onSelect={(key) => setActiveTab(key)}
-					/>
-
-					<View style={styles.content}>
-						{activeTab === "continue" ? (
-							<ContinueWatchingList
-								items={continueWatching}
-								view={continueView}
-								onToggleView={() =>
-									setContinueView((v) => (v === "list" ? "grid" : "list"))
-								}
-								onPressItem={playContinue}
-								onRemove={removeContinue}
-							/>
-						) : activeTab === "favorites" ? (
-							<FavoriteGrid
-								items={favItems}
-								counts={favCounts}
-								filter={favFilter}
-								onFilter={setFavFilter}
-								sortLabel={SORT_LABELS[favSort]}
-								onToggleSort={() =>
-									setFavSort((s) => (s === "added" ? "title" : "added"))
-								}
-								onPressItem={openDetails}
-								onRemove={removeFavorite}
-							/>
-						) : (
-							<HistoryList
-								items={historyItems}
-								weekCount={weekCount}
-								sortLabel={SORT_LABELS[historySort]}
-								onToggleSort={() =>
-									setHistorySort((s) => (s === "added" ? "title" : "added"))
-								}
-								onClear={confirmClearHistory}
-								onPressItem={openDetails}
-								onRemove={removeHistory}
-							/>
-						)}
+						<View style={styles.content}>
+							{activeTab === "continue" ? (
+								<ContinueWatchingList
+									items={continueWatching}
+									view={continueView}
+									onToggleView={() =>
+										setContinueView((v) =>
+											v === "list" ? "grid" : "list",
+										)
+									}
+									onPressItem={playContinue}
+									onRemove={removeContinue}
+									fallbackWidth={paneFallbackWidth}
+								/>
+							) : activeTab === "favorites" ? (
+								<FavoriteGrid
+									items={favItems}
+									counts={favCounts}
+									filter={favFilter}
+									onFilter={setFavFilter}
+									sortLabel={SORT_LABELS[favSort]}
+									onToggleSort={() =>
+										setFavSort((s) =>
+											s === "added" ? "title" : "added",
+										)
+									}
+									onPressItem={openDetails}
+									onRemove={removeFavorite}
+									fallbackWidth={paneFallbackWidth}
+								/>
+							) : (
+								<HistoryList
+									items={historyItems}
+									weekCount={weekCount}
+									sortLabel={SORT_LABELS[historySort]}
+									onToggleSort={() =>
+										setHistorySort((s) =>
+											s === "added" ? "title" : "added",
+										)
+									}
+									onClear={confirmClearHistory}
+									onPressItem={openDetails}
+									onRemove={removeHistory}
+								/>
+							)}
+						</View>
 					</View>
 				</View>
 			</SafeAreaView>
@@ -496,6 +559,24 @@ const styles = StyleSheet.create({
 	},
 	body: {
 		flex: 1,
+	},
+	// Yatay/geniş yerleşim: sol sütun (kimlik + hesap + istatistik) ve
+	// sağda sekmeler + içerik.
+	bodyWide: {
+		flexDirection: "row",
+		gap: 16,
+	},
+	side: {
+		// ⚠️ ScrollView varsayılanı `flexGrow: 1`: satırda serbest alanı
+		// yan sütunla paylaşıp sütunu 316dp'den ~580dp'ye şişiriyordu
+		// (TV'de doğrulandı). Genişlik sabit kalır; büyüyen taraf panodur.
+		flexGrow: 0,
+		flexShrink: 0,
+		borderRightWidth: 1,
+	},
+	main: {
+		flex: 1,
+		minWidth: 0,
 	},
 	content: {
 		flex: 1,

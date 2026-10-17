@@ -24,6 +24,15 @@ export const STORAGE_KEYS = {
 	CATEGORY_VISIBILITY: "streampulse_category_visibility",
 	WATCHLIST: "user_watchlist",
 	SERIES_TOTAL_EPISODES: "streampulse_series_total_episodes",
+	// Kitaplıktan kaldırılan (gizlenen) içerikler.
+	//
+	// ⚠️ SADECE cihaz-yereldir ve İÇERİK VERİSİ DEĞİLDİR: "kaldırma" bir
+	// görünürlük tercihidir. İzleme geçmişi, tamamlanan bölümler ve ilerleme
+	// bu işlemden ETKİLENMEZ (kullanıcı: "kitaplıktan kaldırılınca tamamlandı
+	// bilgisi sıfırlanıyor, veriler silinmemeli"). Gizleme yalnızca
+	// "Tamamlandı" sekmesinin görünümünü filtreler; kullanıcı içeriği
+	// herhangi bir listeye eklediğinde kayıt otomatik kaldırılır.
+	LIBRARY_HIDDEN: "user_library_hidden",
 
 	// ── Senkronizasyum durumu ──────────────────────────────────
 	// ⚠️ Bunlar KULLANICI VERİSİ DEĞİLDİR; cihaz geneli durumdur. Yine de
@@ -85,6 +94,7 @@ export async function clearAllUserData() {
 		STORAGE_KEYS.CATEGORY_VISIBILITY,
 		STORAGE_KEYS.WATCHLIST,
 		STORAGE_KEYS.SERIES_TOTAL_EPISODES,
+		STORAGE_KEYS.LIBRARY_HIDDEN,
 		// Senkronizasyon durumu da temizlenmeli. Damga kalırsa sunucudaki veri
 		// "daha eski" sayılır ve bir sonraki girişte hiçbir şey çekilmez.
 		STORAGE_KEYS.LAST_SYNCED_AT,
@@ -671,6 +681,146 @@ export async function clearWatchHistory() {
 			return [];
 		}
 	});
+}
+
+/**
+ * Bölüm kaydı için kararlı anahtar üretir: "s{sezon}_e{bölüm}".
+ *
+ * ⚠️ NEDEN GEREKLİ: "Tamamlanan" sekmesindeki sayaç, izleme geçmişindeki
+ * bölüm kayıtlarını bu anahtarla TEKİLLEŞTİRİR. Eski/kirli kayıtlarda
+ * `season`/`episode` alanları eksik olabildiği için anahtar yalnızca
+ * alanlara güvenemez; önce alanlar, sonra id/url içindeki `_s1_e2` kalıbı
+ * denenir. (Kullanıcı: "Tamamlanan dizi bölümleri yanlış hesaplanıyor".)
+ */
+export function getEpisodeKey(item) {
+	if (!item) return "";
+	const s = Number(item.season);
+	const e = Number(item.episode);
+	if (Number.isFinite(s) && Number.isFinite(e) && s > 0 && e > 0) {
+		return `s${s}_e${e}`;
+	}
+	const source = String(item.url || item.id || "");
+	const fromId = source.match(/_s(\d+)_e(\d+)/i);
+	if (fromId) return `s${Number(fromId[1])}_e${Number(fromId[2])}`;
+	return source;
+}
+
+/**
+ * Kitaplıktan kaldırılan (gizlenen) içerikleri getirir.
+ *
+ * Cihaz-yerel görünürlük listesidir; senkronize EDİLMEZ ve içerik verisi
+ * içermez — yalnızca "bu içerik kitaplık sekmelerinde gösterilmesin" der.
+ */
+export async function getHiddenLibraryItems() {
+	try {
+		const data = await AsyncStorage.getItem(STORAGE_KEYS.LIBRARY_HIDDEN);
+		if (!data) return [];
+		const list = JSON.parse(data);
+		return Array.isArray(list) ? list : [];
+	} catch (error) {
+		console.error("Gizlenen kitaplık kayıtları okunurken hata:", error);
+		return [];
+	}
+}
+
+/**
+ * Gizleme kaydı ile içeriğin eşleşip eşleşmediğini belirler.
+ * id/url kümesi kesişir ya da normalize başlıklar eşitse eşleşir.
+ */
+function hiddenMatches(hiddenRecord, item) {
+	if (!hiddenRecord || !item) return false;
+
+	const recordIds = [hiddenRecord.id, hiddenRecord.url]
+		.filter(Boolean)
+		.map(String);
+	const itemIds = [item.id, item.url, item.seriesId, item.seriesUrl]
+		.filter(Boolean)
+		.map(String);
+	if (recordIds.some((x) => itemIds.includes(x))) return true;
+
+	const recordTitle = (hiddenRecord.title || "")
+		.toString()
+		.toLowerCase()
+		.trim();
+	if (!recordTitle) return false;
+	const itemTitles = [item.title, item.seriesTitle]
+		.filter(Boolean)
+		.map((t) => t.toString().toLowerCase().trim());
+	return itemTitles.includes(recordTitle);
+}
+
+/**
+ * İçeriği kitaplık görünümünden gizler ("kitaplıktan kaldır").
+ *
+ * ⚠️ İzleme geçmişi/tamamlanma verisine DOKUNMAZ; yalnızca görünürlüğü
+ * değiştirir. Aynı içerik yeniden bir listeye eklendiğinde
+ * `unhideLibraryItem` kaydı kaldırır.
+ */
+export async function hideLibraryItem(item) {
+	return mutate(STORAGE_KEYS.LIBRARY_HIDDEN, async () => {
+		try {
+			if (!item) return await getHiddenLibraryItems();
+
+			const list = await getHiddenLibraryItems();
+			const itemId = String(item.seriesId || item.id || item.url || "");
+			const itemUrl = String(item.seriesUrl || item.url || item.id || "");
+			const title = (item.seriesTitle || item.title || "")
+				.toString()
+				.toLowerCase()
+				.trim();
+
+			const record = {
+				id: itemId || itemUrl,
+				url: itemUrl || undefined,
+				title: title || undefined,
+				type: item.type || (item.season ? "episode" : undefined),
+				hiddenAt: new Date().toISOString(),
+			};
+
+			const filtered = list.filter((h) => !hiddenMatches(h, item));
+			const updated = [record, ...filtered].slice(0, 500);
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.LIBRARY_HIDDEN,
+				JSON.stringify(updated),
+			);
+			notifyStorageChange(STORAGE_KEYS.LIBRARY_HIDDEN, updated);
+			return updated;
+		} catch (error) {
+			console.error("Kitaplıktan gizleme hatası:", error);
+			return [];
+		}
+	});
+}
+
+/**
+ * Gizleme kaydını kaldırır (içerik yeniden bir listeye eklendiğinde).
+ */
+export async function unhideLibraryItem(item) {
+	return mutate(STORAGE_KEYS.LIBRARY_HIDDEN, async () => {
+		try {
+			if (!item) return await getHiddenLibraryItems();
+			const list = await getHiddenLibraryItems();
+			const filtered = list.filter((h) => !hiddenMatches(h, item));
+			if (filtered.length === list.length) return list;
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.LIBRARY_HIDDEN,
+				JSON.stringify(filtered),
+			);
+			notifyStorageChange(STORAGE_KEYS.LIBRARY_HIDDEN, filtered);
+			return filtered;
+		} catch (error) {
+			console.error("Gizleme kaydı kaldırılırken hata:", error);
+			return [];
+		}
+	});
+}
+
+/**
+ * Verilen gizleme listesine göre içeriğin gizli olup olmadığını döner.
+ */
+export function isLibraryHidden(hiddenList, item) {
+	if (!Array.isArray(hiddenList) || !item) return false;
+	return hiddenList.some((h) => hiddenMatches(h, item));
 }
 
 /**
@@ -1390,6 +1540,297 @@ export async function markContentCompleted(item) {
 }
 
 /**
+ * "Kaldığın yerden devam et" kaydını eşik kontrolünü ATLAYARAK yazar.
+ *
+ * `saveContinueWatching` 10 saniye eşiği yüzünden 0. saniyeyi kaydetmez;
+ * `markEpisodeComplete` de aynı nedenle doğrudan `mutate` kullanır
+ * (bkz. SORUN 10 yorumu). Bu yardımcı aynı kalıbı yeniden kullanılabilir
+ * hale getirir.
+ */
+async function seedContinueWatching(item) {
+	return mutate(STORAGE_KEYS.CONTINUE_WATCHING, async () => {
+		const raw = await AsyncStorage.getItem(STORAGE_KEYS.CONTINUE_WATCHING);
+		const stored = raw ? JSON.parse(raw) : [];
+		const visible = Array.isArray(stored) ? stored : [];
+
+		const deviceId = await getDeviceId();
+		const hlc = getHlcNow();
+
+		const newItem = {
+			...filterPayload(item),
+			id: item.id,
+			currentTime: item.currentTime || 0,
+			progress: item.progress || 0,
+			updatedAt: new Date().toISOString(),
+			_hlc: hlc,
+			_deviceId: deviceId,
+			_deleted: false,
+		};
+
+		const filtered = visible.filter(
+			(i) => i.id !== newItem.id && i.url !== newItem.id,
+		);
+		const newList = [newItem, ...filtered].slice(
+			0,
+			SIZE_CAPS.continue_watching || 50,
+		);
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.CONTINUE_WATCHING,
+			JSON.stringify(newList),
+		);
+		notifyStorageChange(
+			STORAGE_KEYS.CONTINUE_WATCHING,
+			newList.filter((i) => !i._deleted),
+		);
+		return newList;
+	});
+}
+
+/**
+ * Bölüm(ler)i manuel olarak "İzlendi" işaretler (sezon/kısmi seçim).
+ *
+ * - Her bölüm için izleme geçmişine `isCompleted` kaydı yazar (hesaba
+ *   senkronlanır, cihazlar arası taşınır),
+ * - Bu bölümler "Kaldığın yerden devam et" listesinden çıkarılır,
+ * - `options.nextEpisode` verilirse ve dizinin devam kaydı işaretlenen
+ *   bölümlerden birindeyse, devam kaydı sonraki bölüme taşınır
+ *   (`markEpisodeComplete` ile aynı davranış).
+ *
+ * ⚠️ Kitaplık gizleme kaydına DOKUNMAZ: gizleme kullanıcının açık liste
+ * tercihidir (bkz. `hideLibraryItem`); yalnızca bir listeye yeniden
+ * ekleme (`setContentLibraryList`) kaldırır.
+ *
+ * @param {Object} content - Dizi detay objesi (id/url/title/poster/plugin)
+ * @param {Array<{season:number|string, episode:number|string, title?:string, url?:string, id?:string, poster?:string}>} marks
+ * @param {{nextEpisode?: Object}} [options]
+ * @returns {Promise<number>} İşaretlenen bölüm sayısı
+ */
+export async function markEpisodesWatched(content, marks = [], options = {}) {
+	const list = (marks || []).filter((m) => m && m.episode != null);
+	if (!list.length) return 0;
+
+	const seriesId = content?.id || content?.url || content?.seriesId;
+	const seriesTitle = content?.title || content?.seriesTitle || "Dizi";
+	const plugin = content?.plugin;
+	const poster = content?.poster_url || content?.poster || content?.image;
+
+	// Devam kaydı düzeltmesi için işaretlemeden ÖNCEki durum gerekir
+	// (işaretlenen bölüm aşağıda devam listesinden çıkarılacağı için).
+	const continueBefore = await getContinueWatching();
+
+	let applied = 0;
+	for (const m of list) {
+		const sNum = Number(m.season) || m.season || 1;
+		const epNum = Number(m.episode) || m.episode;
+		const epKey = `s${sNum}_e${epNum}`;
+
+		const entry = {
+			id:
+				m.id && m.id !== seriesId
+					? m.id
+					: m.url || `${seriesId || seriesTitle}_${epKey}`,
+			title: seriesTitle,
+			seriesTitle,
+			seriesId,
+			plugin,
+			season: sNum,
+			episode: epNum,
+			episodeTitle: m.title || `Bölüm ${epNum}`,
+			poster: m.poster || poster,
+			url: m.url,
+			type: "episode",
+			isCompleted: true,
+			progress: 1.0,
+			watchedAt: new Date().toISOString(),
+		};
+		await addToWatchHistory(entry);
+
+		// Bu bölüm "devam et"te duruyorsa çıkar (id ve url birlikte denenir).
+		if (m.url || m.id) {
+			await removeContinueWatching({ id: m.id || m.url, url: m.url });
+		}
+		applied += 1;
+	}
+
+	// Devam kaydı işaretlenen bölümlerden birindeyse sonraki bölüme taşı.
+	try {
+		const titleLower = (seriesTitle || "").toLowerCase().trim();
+		const current = continueBefore.find((i) => {
+			if (seriesId && (i.seriesId === seriesId || i.id === seriesId))
+				return true;
+			const t = (i.seriesTitle || i.title || "").toLowerCase().trim();
+			return Boolean(titleLower && t === titleLower);
+		});
+		const currentIsMarked =
+			current &&
+			list.some(
+				(m) =>
+					Number(m.season) === Number(current.season) &&
+					Number(m.episode) === Number(current.episode),
+			);
+
+		// Dizi listeye "İzleniyor" olarak eklendiğinde (bölüm oynatılmadan)
+		// devam kaydı episodesuz yazılır. Kullanıcı bölümleri izlendi
+		// işaretlediğinde bu kayıt ilerlemez ve devam kartı "1. dakika"
+		// göstermeye devam eder. Kayıt episodesuzsa da sonraki bölüme
+		// taşınmalı — aksi halde işaretlemeye rağmen devam işaretçisi
+		// eski yerde kalır.
+		const currentIsEpisodeLess =
+			Boolean(current) &&
+			current.season == null &&
+			current.episode == null &&
+			!currentIsMarked;
+
+		if (current && (currentIsMarked || currentIsEpisodeLess)) {
+			const currentTarget = current.id || current.url;
+			const next = options?.nextEpisode;
+			// Tohum planı yoksa episodesuz kayıt KORUNUR — devam
+			// işaretçisi kaybolmasın. İşaretli bölüm kaydı işaretleme
+			// sonrası anlamsızdır, tohum planı olmasa da çıkarılır.
+			const shouldRemove =
+				currentTarget && (currentIsMarked || Boolean(next));
+			if (shouldRemove) {
+				await removeContinueWatching(currentTarget);
+			}
+			if (next && (next.url || next.id)) {
+				await seedContinueWatching({
+					type: "episode",
+					id: next.id || next.url,
+					title: seriesTitle,
+					poster: next.poster || poster,
+					plugin,
+					seriesId,
+					seriesTitle,
+					season: next.season,
+					episode: next.episode,
+					episodeTitle: next.title || `Bölüm ${next.episode}`,
+					url: next.url,
+					currentTime: 0,
+					progress: 0,
+				});
+			}
+		}
+	} catch (error) {
+		console.warn("Devam kaydı güncellenirken hata:", error);
+	}
+
+	return applied;
+}
+
+/**
+ * Bölüm(ler)in "İzlendi" işaretini kaldırır.
+ *
+ * Yalnızca işaret kümesindeki bölümleri tombstone'lar (senkron uyumlu):
+ * eşleşme sırası; sezon+bölüm numarası, url, id. Ayrıca dizi seviyesindeki
+ * "tamamlandı" beyanı da düşürülür — aksi halde kitaplık "N/N" göstermeye
+ * devam ederdi (§ gruplama `seriesLevelCompleted`).
+ *
+ * ⚠️ Seriye ait DİĞER bölümlerin işaretleri korunur (kullanıcı yalnızca
+ * seçtiği bölümleri kaldırır).
+ *
+ * @returns {Promise<Array>} Tombstone sonrası aktif izleme geçmişi
+ */
+export async function unmarkEpisodesWatched(content, marks = []) {
+	const list = (marks || []).filter((m) => m && m.episode != null);
+	if (!list.length) return await getWatchHistory();
+
+	return mutate(STORAGE_KEYS.WATCH_HISTORY, async () => {
+		try {
+			const raw = await AsyncStorage.getItem(STORAGE_KEYS.WATCH_HISTORY);
+			const history = raw ? JSON.parse(raw) : [];
+			if (!Array.isArray(history) || history.length === 0) return [];
+
+			const seriesId = content?.id || content?.url || content?.seriesId;
+			const titleLower = (content?.title || content?.seriesTitle || "")
+				.toLowerCase()
+				.trim();
+
+			// İşaret kümesi: `s_e` anahtarı + url + id
+			const wantedKeys = new Set();
+			list.forEach((m) => {
+				const s = Number(m.season);
+				const e = Number(m.episode);
+				if (Number.isFinite(s) && Number.isFinite(e)) {
+					wantedKeys.add(`s${s}_e${e}`);
+				}
+				if (m.url) wantedKeys.add(`url:${m.url}`);
+				if (m.id) wantedKeys.add(`id:${m.id}`);
+			});
+
+			const deviceId = await getDeviceId();
+			const hlc = getHlcNow();
+			let changed = 0;
+
+			const updated = history.map((item) => {
+				if (!item || item._deleted) return item;
+
+				const matchesSeries =
+					(seriesId &&
+						(item.seriesId === seriesId || item.id === seriesId)) ||
+					(titleLower &&
+						(item.seriesTitle || "").toLowerCase().trim() ===
+							titleLower) ||
+					(titleLower &&
+						(item.title || "").toLowerCase().trim() === titleLower);
+				if (!matchesSeries) return item;
+
+				const isEpisode =
+					item.type === "episode" ||
+					Boolean(item.season && item.episode);
+
+				if (!isEpisode) {
+					// Dizi seviyesi "tamamlandı" beyanı bölüm işareti
+					// kaldırılınca geçersizdir; film kayıtlarına dokunulmaz.
+					if (item.type === "series") {
+						changed += 1;
+						return {
+							...item,
+							_hlc: hlc,
+							_deviceId: deviceId,
+							_deleted: true,
+						};
+					}
+					return item;
+				}
+
+				const s = Number(item.season);
+				const e = Number(item.episode);
+				const hits =
+					(Number.isFinite(s) &&
+						Number.isFinite(e) &&
+						wantedKeys.has(`s${s}_e${e}`)) ||
+					(item.url && wantedKeys.has(`url:${item.url}`)) ||
+					(item.id && wantedKeys.has(`id:${item.id}`));
+				if (!hits) return item;
+
+				changed += 1;
+				return {
+					...item,
+					_hlc: hlc,
+					_deviceId: deviceId,
+					_deleted: true,
+				};
+			});
+
+			if (changed > 0) {
+				await AsyncStorage.setItem(
+					STORAGE_KEYS.WATCH_HISTORY,
+					JSON.stringify(updated),
+				);
+				notifyStorageChange(
+					STORAGE_KEYS.WATCH_HISTORY,
+					updated.filter((i) => !i._deleted),
+				);
+			}
+			return updated.filter((i) => !i._deleted);
+		} catch (error) {
+			console.error("Bölüm 'izlendi' işareti kaldırılırken hata:", error);
+			return [];
+		}
+	});
+}
+
+/**
  * Bir filmin veya dizinin genel izleme durumunu (kaldığı yer, süre veya tamamlandı bilgisi) döndürür
  * @param {Object} content - Film veya Dizi detay objesi
  * @returns {Promise<{status: 'not_started'|'in_progress'|'completed', ...}>}
@@ -1970,12 +2411,13 @@ export async function getContentLibraryStatus(itemId) {
 				currentList: null,
 			};
 		}
-		const [watchingList, plannedList, historyList, favList] =
+		const [watchingList, plannedList, historyList, favList, hiddenList] =
 			await Promise.all([
 				getContinueWatching(),
 				getWatchlist(),
 				getWatchHistory(),
 				getFavorites(),
+				getHiddenLibraryItems(),
 			]);
 
 		const inWatching = watchingList.some(
@@ -1984,11 +2426,19 @@ export async function getContentLibraryStatus(itemId) {
 		const inPlanned = plannedList.some(
 			(i) => i.id === itemId || i.url === itemId,
 		);
-		const inCompleted = historyList.some(
-			(i) =>
-				(i.id === itemId || i.url === itemId) &&
-				(i.isCompleted || (i.progress && i.progress >= 0.9)),
-		);
+		// Kaldırılan (gizlenen) içerik "Tamamlandı" sayılmaz — izlenme
+		// verisi korunur ama kitaplık görünümünde yoktur.
+		const isHidden = hiddenList.some((h) => {
+			const ids = [h.id, h.url].filter(Boolean).map(String);
+			return ids.includes(String(itemId));
+		});
+		const inCompleted =
+			!isHidden &&
+			historyList.some(
+				(i) =>
+					(i.id === itemId || i.url === itemId) &&
+					(i.isCompleted || (i.progress && i.progress >= 0.9)),
+			);
 		const isFav = favList.some(
 			(i) => i.id === itemId || i.url === itemId,
 		);
@@ -1998,7 +2448,7 @@ export async function getContentLibraryStatus(itemId) {
 		else if (inPlanned) currentList = "planned";
 		else if (inCompleted) currentList = "completed";
 
-		return { inWatching, inPlanned, inCompleted, isFav, currentList };
+		return { inWatching, inPlanned, inCompleted, isFav, isHidden, currentList };
 	} catch (error) {
 		console.error("getContentLibraryStatus hata:", error);
 		return {
@@ -2021,7 +2471,15 @@ export async function setContentLibraryList(movie, targetList) {
 		const itemId = movie.id || movie.url;
 		if (!itemId) return null;
 
-		// 1. Önce mevcut izleme listelerinden temizle
+		// 1. Önce mevcut izleme listelerinden temizle.
+		//
+		// ⚠️ İZLEME GEÇMİŞİ BURADAN TEMİZLENMEZ (eski davranış
+		// `removeFromWatchHistory(itemId)` çağırıyordu). Kullanıcı geri
+		// bildirimi: "kitaplıktan kaldırılınca tamamlandı bilgisi
+		// sıfırlanıyor. Veriler sıfırlanmadan silinmemeli." İzlenme bilgisi
+		// (tamamlanan bölümler, ilerleme) kitaplık üyeliğinden bağımsızdır
+		// ve hesaba senkronlanır; kaldırma yalnızca GÖRÜNÜRLÜĞÜ değiştirir
+		// (bkz. `hideLibraryItem`).
 		await Promise.all([
 			removeContinueWatching(itemId),
 			(async () => {
@@ -2032,10 +2490,22 @@ export async function setContentLibraryList(movie, targetList) {
 					JSON.stringify(filtered),
 				);
 			})(),
-			removeFromWatchHistory(itemId),
 		]);
 
-		// 2. Hedef listeye ekle
+		// 2. Görünürlük kaydı: listeye ekleme gizlemeyi kaldırır,
+		//    kaldırma yalnızca gizler — veri SİLİNMEZ.
+		const isAddTarget =
+			targetList === "watching" ||
+			targetList === "planned" ||
+			targetList === "completed";
+		if (isAddTarget) {
+			await unhideLibraryItem(movie);
+		} else {
+			await hideLibraryItem(movie);
+			return null; // kaldırıldı
+		}
+
+		// 3. Hedef listeye ekle
 		if (targetList === "watching") {
 			await saveContinueWatching({
 				...movie,
@@ -2117,6 +2587,13 @@ export default {
 	toggleWatchlist,
 	removeFromWatchlist,
 	isInWatchlist,
+	getHiddenLibraryItems,
+	hideLibraryItem,
+	unhideLibraryItem,
+	isLibraryHidden,
+	getEpisodeKey,
+	markEpisodesWatched,
+	unmarkEpisodesWatched,
 	getContentLibraryStatus,
 	setContentLibraryList,
 	markContentCompleted,

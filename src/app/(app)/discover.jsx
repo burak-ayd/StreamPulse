@@ -1,12 +1,13 @@
 import BottomNavigation from "@components/BottomNavigation";
 import { useNavLayout } from "@/hooks/useNavLayout";
+import { useMeasuredColumns } from "@/hooks/useMeasuredColumns";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import TVPressable from "@/components/common/TVPressable";
 import { CATEGORIES } from "@constants/data";
 import { useThemeContext } from "@context/ThemeContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useRouter } from "expo-router";
-import { useEffect } from "react";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
+import { useCallback } from "react";
 import {
 	BackHandler,
 	FlatList,
@@ -24,16 +25,40 @@ export default function DiscoverScreen() {
 	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
 	const { contentPaddingLeft } = useNavLayout();
 	// TV: keşfet ızgarası ekranı kenardan kenara dolduruyordu.
-	const { isTV, contentMaxWidth } = useTvMetrics();
+	const { contentMaxWidth } = useTvMetrics();
 
-	useEffect(() => {
-		const onBackPress = () => {
-			router.push("/(app)");
-			return true;
-		};
-		const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
-		return () => sub.remove();
-	}, [router]);
+	/**
+	 * Kategori kartları: sabit "48%" genişlik + `numColumns` kombinasyonu
+	 * TV'de taşıyordu (4 sütun × %48 = %192; ekranda 2 dev kare görünüyordu).
+	 * Sütun sayısı ve kart genişliği ARTIK kabın ölçüsünden türetilir:
+	 * telefon 2, TV/geniş ekran 4+ sütun; kartlar tam oturur.
+	 * (Kapta 16dp yatay iç boşluk var — `padding: 16`.)
+	 */
+	const { onLayout, columns, itemWidth } = useMeasuredColumns({
+		minItemWidth: 170,
+		gap: 12,
+		max: 6,
+		min: 2,
+		padding: 16,
+	});
+
+	// ODAK'a bağlı: Stack altında kalan ekranların kaydı blur'da silinir.
+	// Eskiden bu ekran, odakta değilken bile her geri basışını yutuyor ve
+	// ana sayfayı üst üste yığıyordu — uygulamadan çıkış imkânsızlaşıyordu.
+	useFocusEffect(
+		useCallback(() => {
+			const onBackPress = () => {
+				if (router.canGoBack()) router.back();
+				else router.replace("/(app)");
+				return true;
+			};
+			const sub = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => sub.remove();
+		}, [router]),
+	);
 
 	return (
 		<>
@@ -83,7 +108,7 @@ export default function DiscoverScreen() {
 						: null,
 				]}>
 				{/* Categories Section */}
-				<View style={styles.sectionContainer}>
+				<View style={styles.sectionContainer} onLayout={onLayout}>
 					<Text
 						style={[
 							styles.sectionTitle,
@@ -94,7 +119,10 @@ export default function DiscoverScreen() {
 					<FlatList
 						data={CATEGORIES}
 						keyExtractor={(item) => item.id}
-						numColumns={isTV ? 4 : 2}
+						// Sütun sayısı ölçümden gelir; değişince liste
+						// yeniden kurulur (numColumns sonradan değiştirilemez).
+						key={`cat-${columns}`}
+						numColumns={columns}
 						scrollEnabled={false}
 						columnWrapperStyle={styles.categoryRow}
 							renderItem={({ item, index }) => (
@@ -102,7 +130,10 @@ export default function DiscoverScreen() {
 									autoFocus={index === 0}
 									style={[
 										styles.categoryCard,
-										{ backgroundColor: colors.cardBg },
+										{
+											backgroundColor: colors.cardBg,
+											width: itemWidth,
+										},
 									]}
 									focusedStyle={styles.categoryCardFocused}
 									onPress={() => {
@@ -196,11 +227,14 @@ const styles = StyleSheet.create({
 		marginBottom: 16,
 	},
 	categoryRow: {
-		justifyContent: "space-between",
+		// Kartlar ölçülen genişliği tam doldurduğu için hizalamaya gerek
+		// yok; boşluk `useMeasuredColumns` ile aynı (12dp) olmalı.
+		gap: 12,
 		marginBottom: 12,
 	},
 	categoryCard: {
-		width: "48%",
+		// ⚠️ Genişlik buradan DEĞİL, ölçümden gelir (satır içi stil).
+		// Eski "%48" + numColumns kombinasyonu TV'de satırı taşırıyordu.
 		aspectRatio: 1,
 		borderRadius: 12,
 		justifyContent: "center",

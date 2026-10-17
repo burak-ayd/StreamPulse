@@ -55,6 +55,7 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import {
 	Stack,
+	useFocusEffect,
 	useLocalSearchParams,
 	useRouter,
 } from "expo-router";
@@ -297,14 +298,17 @@ useEffect(() => {
 		else router.replace("/(app)/live");
 	}, [router]);
 
-	useEffect(() => {
-		if (Platform.OS !== "android") return;
-		const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-			handleBack();
-			return true;
-		});
-		return () => sub.remove();
-	}, [handleBack]);
+	// ODAK'a bağlı kayıt: ekran odakta değilken geri tuşunu yutmaz.
+	useFocusEffect(
+		useCallback(() => {
+			if (Platform.OS !== "android") return;
+			const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+				handleBack();
+				return true;
+			});
+			return () => sub.remove();
+		}, [handleBack]),
+	);
 
 	/*
 	 * "Tekrar Dene": hatayı düşürüyoruz, `yukleniyor` TÜRETİLMİŞ olduğu için

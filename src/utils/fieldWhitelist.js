@@ -61,7 +61,12 @@ export const SYNCABLE_ITEM_TYPES = [
 export const SIZE_CAPS = {
 	favorites: 500,
 	watchlist: 100,
-	watch_history: 50,
+	// ⚠️ 50 → 500: izleme geçmişi bölüm tamamlama kayıtlarını da tutar
+	// ("Tamamlandı" sayacının kaynağı). 50 sınırıyla 50'den fazla bölüm
+	// izlenen dizilerde eski bölüm kayıtları sessizce düşüyor ve sayaç
+	// olduğundan AZ görünüyordu (kullanıcı: "Tamamlanan dizi bölümleri
+	// yanlış hesaplanıyor"). 500, uzun dizileri baştan sona kapsar.
+	watch_history: 500,
 	continue_watching: 50,
 	search_history: 20,
 	downloads: 200,

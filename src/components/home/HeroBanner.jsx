@@ -10,6 +10,7 @@ import Image from "@/components/common/SmartImage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMemo, useState } from "react";
 import {
+	Platform,
 	StyleSheet,
 	Text,
 	View,
@@ -756,7 +757,8 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(255, 59, 48, 0.35)",
 		borderColor: "#FF3B30",
 		borderWidth: 1.5,
-		transform: [{ scale: 1.15 }],
+		// TV'de odak büyütme minimal: hero kalemleri taşmayı önle.
+		transform: [{ scale: Platform.isTV ? 1.02 : 1.15 }],
 	},
 	platformPill: {
 		flexDirection: "row",
@@ -774,7 +776,7 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(255, 59, 48, 0.4)",
 		borderColor: "#FF3B30",
 		borderWidth: 1.5,
-		transform: [{ scale: 1.08 }],
+		transform: [{ scale: Platform.isTV ? 1.02 : 1.08 }],
 	},
 	platformText: {
 		color: "#ffffff",
@@ -790,7 +792,7 @@ const styles = StyleSheet.create({
 	},
 	profileButtonFocused: {
 		borderColor: "#FF3B30",
-		transform: [{ scale: 1.15 }],
+		transform: [{ scale: Platform.isTV ? 1.02 : 1.15 }],
 	},
 	avatarImage: {
 		width: "100%",
@@ -815,7 +817,7 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(255, 59, 48, 0.25)",
 		borderColor: "#FF3B30",
 		borderWidth: 1.5,
-		transform: [{ scale: 1.12 }],
+		transform: [{ scale: Platform.isTV ? 1.02 : 1.12 }],
 	},
 	actionLabel: {
 		color: "#E5E7EB",
@@ -833,7 +835,7 @@ const styles = StyleSheet.create({
 	playButtonFocused: {
 		backgroundColor: "#FF3B30",
 		borderColor: "#FFFFFF",
-		transform: [{ scale: 1.12 }],
+		transform: [{ scale: Platform.isTV ? 1.02 : 1.12 }],
 	},
 	playButtonText: {
 		color: "#000000",

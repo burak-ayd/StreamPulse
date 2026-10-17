@@ -148,7 +148,8 @@ export default function PlayerSettingsScreen() {
 	useFocusEffect(
 		useCallback(() => {
 			const onBackPress = () => {
-				router.back();
+				if (router.canGoBack()) router.back();
+				else router.replace("/(app)/settings");
 				return true;
 			};
 			const subscription = BackHandler.addEventListener(

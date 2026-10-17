@@ -14,8 +14,13 @@ import {
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+	Stack,
+	useFocusEffect,
+	useLocalSearchParams,
+	useRouter,
+} from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	BackHandler,
@@ -171,23 +176,6 @@ export default function SearchScreen() {
 	);
 
 	useEffect(() => {
-		const onBackPress = () => {
-			if (results.length > 0 || searchQuery.length > 0 || hasSearched) {
-				clearSearch();
-				return true;
-			}
-			router.replace("/(app)");
-			return true;
-		};
-
-		const subscription = BackHandler.addEventListener(
-			"hardwareBackPress",
-			onBackPress,
-		);
-		return () => subscription.remove();
-	}, [results.length, searchQuery, hasSearched, router]);
-
-	useEffect(() => {
 		if (params?.plugin) {
 			// eslint-disable-next-line react-hooks/set-state-in-effect
 			setActivePlugin(params.plugin);
@@ -317,6 +305,29 @@ export default function SearchScreen() {
 		setLastSearchedQuery("");
 		resetSearchMemoryCache();
 	};
+
+	// ODAK'a bağlı kayıt: ekran odakta değilken geri tuşunu yutmaz;
+	// sorgu/sonuç varken ilk basış aramayı temizler, sonraki geri gider.
+	// (Tanım sırası: `clearSearch` bildirildikten SONRA gelir.)
+	useFocusEffect(
+		useCallback(() => {
+			const onBackPress = () => {
+				if (results.length > 0 || searchQuery.length > 0 || hasSearched) {
+					clearSearch();
+					return true;
+				}
+				if (router.canGoBack()) router.back();
+				else router.replace("/(app)");
+				return true;
+			};
+
+			const subscription = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => subscription.remove();
+		}, [results.length, searchQuery, hasSearched, router]),
+	);
 
 	// Sonuçları plugin (kaynak) bazında gruplandır
 	const groupedResults = useMemo(() => {

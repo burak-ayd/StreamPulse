@@ -23,7 +23,7 @@ import { pollDeviceToken, requestDeviceCode } from "@/services/deviceAuth";
 import { getDeviceInfo } from "@/utils/deviceId";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
@@ -91,13 +91,16 @@ export default function TvLoginScreen() {
 		else router.replace("/(app)");
 	}, [router]);
 
-	useEffect(() => {
-		const alt = BackHandler.addEventListener("hardwareBackPress", () => {
-			kapat();
-			return true;
-		});
-		return () => alt.remove();
-	}, [kapat]);
+	// ODAK'a bağlı kayıt: ekran odakta değilken geri tuşunu yutmaz.
+	useFocusEffect(
+		useCallback(() => {
+			const alt = BackHandler.addEventListener("hardwareBackPress", () => {
+				kapat();
+				return true;
+			});
+			return () => alt.remove();
+		}, [kapat]),
+	);
 
 	useEffect(() => {
 		sokuldu.current = false;

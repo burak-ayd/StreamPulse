@@ -30,12 +30,30 @@
  *
  * `scale` sabit bir sihirli sayı DEĞİL, ekranın kısa kenarından türetilir:
  * 1080p TV (540dp) → 1.2, 720p TV (360dp) → 1.05 (alt sınır).
+ *
+ * ── Geniş ekran (ör. telefon YATAY) ──────────────────────────────
+ *
+ * TV'de kazanılan "ortalanmış içerik sütunu" kuralı artık YALNIZCA TV'ye
+ * özel değil: aynı sorun telefon yatayda da var (dikeyde 390dp olan
+ * yerleşim, yatayda 900dp'ye yayılınca satırlar iki uca savrulur). Bu
+ * yüzden `contentMaxWidth`/`textMaxWidth` `isWide` (≥ WIDE_MIN_WIDTH)
+ * durumunda telefon/tablette de devreye girer; DİKEY telefonda değerler
+ * `undefined` kalır ve mevcut yerleşim harfiyen korunur.
  */
 
 import { Platform, useWindowDimensions } from "react-native";
 
 /** Kısa kenar referansı: 450dp → 1.2 ham ölçek (1080p TV). */
 const SHORT_SIDE_REFERENCE = 450;
+
+/**
+ * Geniş ekran eşiği — `useNavLayout.TABLET_MIN_SIDE` ile aynı sayı:
+ * yatay telefon, tablet ve TV bu eşiğin üstünde kalır.
+ */
+export const WIDE_MIN_WIDTH = 600;
+
+/** Büyük ekran eşiği: tablet yatay ve TV (kartların büyüdüğü aralık). */
+export const LARGE_MIN_WIDTH = 900;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -58,6 +76,9 @@ export function computeTvScale(width, height) {
  *   scale: number,
  *   width: number,
  *   height: number,
+ *   isLandscape: boolean,
+ *   isWide: boolean,
+ *   isLarge: boolean,
  *   sp: (n: number) => number,
  *   gutter: number,
  *   contentMaxWidth: number | undefined,
@@ -69,6 +90,9 @@ export function useTvMetrics() {
 	const { width, height } = useWindowDimensions();
 	const isTV = Platform.isTV;
 	const scale = computeTvScale(width, height);
+	const isLandscape = width > height;
+	const isWide = width >= WIDE_MIN_WIDTH;
+	const isLarge = width >= LARGE_MIN_WIDTH;
 
 	/** Ölçeklenmiş tam sayı (punto, ikon, yükseklik, genişlik…). */
 	const sp = (n) => (typeof n === "number" ? Math.round(n * scale) : n);
@@ -82,10 +106,17 @@ export function useTvMetrics() {
 	 * ⚠️ Burada `sp()` KULLANILMAZ; sınır ekranın kendi oranıdır. Ölçekle
 	 * çarpılmış bir tavan ekranı aşıp kısıtlamayı işlevsiz bırakıyordu.
 	 * Yüzde oranı her çözünürlükte aynı görsel payı verir.
+	 *
+	 * TV: ekranın %90'ı (ray + nefes payı düşülür).
+	 * Geniş ekran (telefon yatay / tablet): %92, en çok 1200dp — 4K
+	 * tablette içerik "ortada kaybolmuş" görünmesin diye tavan var.
+	 * Telefon dikey: `undefined` → kısıt yok, yerleşim aynı kalır.
 	 */
 	const contentMaxWidth = isTV
 		? Math.min(width - 2 * gutter, width * 0.9)
-		: undefined;
+		: isWide
+			? Math.min(Math.round(width * 0.92), 1200)
+			: undefined;
 
 	/**
 	 * Metin bloğunun azami genişliği — ekranın %62'si.
@@ -93,7 +124,7 @@ export function useTvMetrics() {
 	 * Bir paragrafın satır uzunluğu ~60-70 karakterde rahat okunur.
 	 * 1080p'de ≈595dp, sp(16)=19dp puntoda rahat okunur.
 	 */
-	const textMaxWidth = isTV
+	const textMaxWidth = isWide
 		? Math.min(contentMaxWidth ?? width, width * 0.62)
 		: undefined;
 
@@ -105,6 +136,9 @@ export function useTvMetrics() {
 		scale,
 		width,
 		height,
+		isLandscape,
+		isWide,
+		isLarge,
 		sp,
 		gutter,
 		contentMaxWidth,
