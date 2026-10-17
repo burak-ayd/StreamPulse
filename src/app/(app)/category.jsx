@@ -33,7 +33,12 @@ import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
 import { contentIdentity, contentKey } from "@/utils/contentMeta";
 import { canonicalType } from "@/utils/mediaType";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import {
+	Stack,
+	useFocusEffect,
+	useLocalSearchParams,
+	useRouter,
+} from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
@@ -189,15 +194,18 @@ export default function CategoryScreen() {
 		else router.replace("/(app)");
 	}, [router]);
 
-	// Android donanım geri tuşu
-	useEffect(() => {
-		if (Platform.OS !== "android") return;
-		const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-			handleBack();
-			return true;
-		});
-		return () => sub.remove();
-	}, [handleBack]);
+	// Android donanım geri tuşu — ODAĞA bağlıdır: Stack altında duran
+	// ekranların kaydı blur'da silinir; geri tuşu asla yutulmaz.
+	useFocusEffect(
+		useCallback(() => {
+			if (Platform.OS !== "android") return;
+			const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+				handleBack();
+				return true;
+			});
+			return () => sub.remove();
+		}, [handleBack]),
+	);
 
 	// ── 1) AĞ: state'e dokunmaz, sadece veri getirir ────────────────
 	//

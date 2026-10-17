@@ -7,13 +7,16 @@ import { fetchPluginDetail } from "@/services/api";
 import { canonicalType, isSeriesContent } from "@/utils/mediaType";
 import {
 	getContinueWatching,
+	getEpisodeKey,
 	getFavorites,
+	getHiddenLibraryItems,
 	getSelectedPlatform,
 	getSeriesTotalEpisodesMap,
 	getWatchHistory,
 	getWatchlist,
+	hideLibraryItem,
+	isLibraryHidden,
 	removeContinueWatching,
-	removeFromWatchHistory,
 	toggleFavorite,
 	toggleWatchlist,
 } from "@/utils/storage";
@@ -48,7 +51,7 @@ const PADDING_HORIZONTAL = 16;
  *
  * Sabit bir `Dimensions.get("window")` değeri TV'de 1920px'i veriyordu ve
  * 2 sütunla birlikte kart başına ~940px çıkıyordu. Artık sütun sayısı
- * TV'de 4 olduğu için (`isTV`), ölçümü ekranın kendisinden alıyoruz.
+ * kutunun genişliğinden türetildiği için (aşağıda), ölçüm kutudan alınır.
  */
 function cardWidthFor(screenWidth, numColumns) {
 	return (
@@ -56,6 +59,16 @@ function cardWidthFor(screenWidth, numColumns) {
 		numColumns
 	);
 }
+
+/**
+ * Bir kartın okunabilir en küçük genişliği (sütun hesabı için).
+ * Alt sınır 2 sütun (dar telefon), üst sınır 6 sütun (geniş ekran).
+ *
+ * 190 → 150 (TV geri bildirimi): 864dp kutuda 4 sütun × ~197dp kartlar
+ * hâlâ büyük duruyordu; 150 ile 5 sütun × ~155dp çıkar. Telefon dikeyde
+ * sonuç değişmez (hâlâ 2 sütun).
+ */
+const MIN_CARD_WIDTH = 150;
 
 // Göreceli zaman biçimlendirici (Türkçe)
 function formatRelativeTime(dateString) {
@@ -83,26 +96,47 @@ export default function LibraryScreen() {
 	/**
 	 * TV ölçüleri.
 	 *
-	 * 1. `contentMaxWidth`: kitaplık ızgarası TV'de 1920px'e yayılıyordu;
-	 *    iki kart, ekranın iki ucunu dolduruyor, ortası bomboştu.
-	 * 2. `columns`: kart sayısı SABİT 2'ydi (`numColumns={2}`). 1080p'de
-	 *    bu 900px'lik kartlar demek; oysa ana sayfa ve kategori sayfası
-	 *    TV'de 4 sütun kullanıyor. TV'de 4'e çıkarmak hem kart boyutunu
-	 *    makul tutuyor hem de ızgarayı ana sayfayla aynı ritme getiriyor.
+	 * `contentMaxWidth`: kitaplık ızgarası TV'de 1920px'e yayılıyordu;
+	 * iki kart, ekranın iki ucunu dolduruyor, ortası bomboştu (sütun
+	 * sayısı ve kart genişliği aşağıda bu kutudan türetilir).
 	 */
-	const { isTV, sp, contentMaxWidth, width: screenWidth } = useTvMetrics();
-	const columns = isTV ? 4 : 2;
+	const { sp, contentMaxWidth, width: screenWidth } = useTvMetrics();
+
 	/**
-	 * Kart genişliği, ızgaranın oturacağı KUTudan hesaplanır —
-	 * `contentMaxWidth ?? screenWidth`.
+	 * Kitaplık kutusu: daraltılmış içerik sütunu varsa o, yoksa ekran.
+	 */
+	const boxWidth = contentMaxWidth ?? screenWidth;
+
+	/**
+	 * Sütun sayısı SABİT DEĞİL (eskiden `isTV ? 4 : 2`).
+	 *
+	 * ⚠️ Sabit sayı ara ekranlarda yanlış çıkıyordu: yatay telefonda
+	 * (≈800dp) 2 sütun → ~345dp'lik dev kartlar, 10" tablet yatayda ise
+	 * 4 sütun küçük kalıyordu. Kart sayısı kutunun genişliğinden türetilir
+	 * (`hooks/useMeasuredColumns.js` ile aynı formül) — kutunun genişliği
+	 * burada zaten bilindiği için `onLayout` ölçümüne gerek yok.
+	 */
+	const columns = Math.min(
+		Math.max(
+			Math.floor(
+				(boxWidth - PADDING_HORIZONTAL * 2 + CARD_GAP) /
+					(MIN_CARD_WIDTH + CARD_GAP),
+			),
+			2,
+		),
+		6,
+	);
+
+	/**
+	 * Kart genişliği, ızgaranın oturacağı KUTudan hesaplanır.
 	 *
 	 * ⚠️ Burada `FlatList`'in `onLayout` ölçümü KULLANILMAZ: FlatList'in
 	 * kendisi her zaman tam ekran genişliğindedir (içerik kabı
 	 * `contentContainerStyle` ile daraltılıyor), dolayısıyla ölçüm ekranı
-	 * verir ve 4 kart daraltılmış kaba SIĞMAZ, taşıp ekranın sağından
+	 * verir ve kartlar daraltılmış kaba SIĞMAZ, taşıp ekranın sağından
 	 * kırpılırdı.
 	 */
-	const cardWidth = cardWidthFor(contentMaxWidth ?? screenWidth, columns);
+	const cardWidth = cardWidthFor(boxWidth, columns);
 
 	// Durum Sekmeleri (Beklemede ve Bırakıldı kaldırıldı)
 	const [activeTab, setActiveTab] = useState("watching"); // 'watching' | 'completed' | 'planned' | 'favorites'
@@ -128,10 +162,13 @@ export default function LibraryScreen() {
 	const [favoritesList, setFavoritesList] = useState([]);
 	const [watchHistoryList, setWatchHistoryList] = useState([]);
 	const [seriesTotalsMap, setSeriesTotalsMap] = useState({});
+	// Kitaplıktan kaldırılan (gizlenen) içerikler — yalnızca görünürlük
+	// filtresi; izlenme verisi silinmez (bkz. storage.hideLibraryItem).
+	const [hiddenItems, setHiddenItems] = useState([]);
 	const [activePlatformName, setActivePlatformName] = useState(null);
 	const [playingItemId, setPlayingItemId] = useState(null);
 
-	// Android TV Kumanda Geri Tuşu: Açık modal varsa kapat, yoksa ana sayfaya dön
+	// Android TV Kumanda Geri Tuşu: Açık modal varsa kapat; önceki ekran varsa ona dön, yoksa ana sayfa
 	useFocusEffect(
 		useCallback(() => {
 			const onBackPress = () => {
@@ -147,7 +184,8 @@ export default function LibraryScreen() {
 					setIsListSelectModalVisible(false);
 					return true;
 				}
-				router.push("/(app)");
+				if (router.canGoBack()) router.back();
+				else router.replace("/(app)");
 				return true;
 			};
 			const sub = BackHandler.addEventListener(
@@ -166,14 +204,16 @@ export default function LibraryScreen() {
 	// Verileri AsyncStorage'dan yükle
 	const loadLibraryData = useCallback(async () => {
 		try {
-			const [cw, wl, fav, hist, totals, platform] = await Promise.all([
-				getContinueWatching(),
-				getWatchlist(),
-				getFavorites(),
-				getWatchHistory(),
-				getSeriesTotalEpisodesMap(),
-				getSelectedPlatform(),
-			]);
+			const [cw, wl, fav, hist, totals, platform, hidden] =
+				await Promise.all([
+					getContinueWatching(),
+					getWatchlist(),
+					getFavorites(),
+					getWatchHistory(),
+					getSeriesTotalEpisodesMap(),
+					getSelectedPlatform(),
+					getHiddenLibraryItems(),
+				]);
 			setContinueWatchingList(Array.isArray(cw) ? cw : []);
 			setWatchlist(Array.isArray(wl) ? wl : []);
 			setFavoritesList(Array.isArray(fav) ? fav : []);
@@ -181,6 +221,7 @@ export default function LibraryScreen() {
 			setSeriesTotalsMap(
 				totals && typeof totals === "object" ? totals : {},
 			);
+			setHiddenItems(Array.isArray(hidden) ? hidden : []);
 			setActivePlatformName(platform?.name || null);
 		} catch (error) {
 			console.error("Kitaplık yükleme hatası:", error);
@@ -200,6 +241,7 @@ export default function LibraryScreen() {
 		"user_watchlist",
 		"user_watch_history",
 		"user_continue_watching",
+		"user_library_hidden",
 	]);
 
 	// Tamamlanan içerikleri grupla (Diziler için bölümleri toplayıp x/y bölüm olarak sun)
@@ -267,6 +309,9 @@ export default function LibraryScreen() {
 						updatedAt: item.updatedAt || item.watchedAt,
 						watchedAt: item.watchedAt,
 						completedEpisodesMap: new Map(),
+						// Liste seçiminden gelen seri seviyesi "tamamlandı"
+						// beyanı — bölüm sayaçları bunu yansıtmalı.
+						seriesLevelCompleted: false,
 						totalEpisodes:
 							item.totalEpisodes ||
 							item.totalEpisodesCount ||
@@ -283,11 +328,16 @@ export default function LibraryScreen() {
 				}
 
 				if (isEpisode) {
-					const epKey =
-						item.season && item.episode
-							? `s${item.season}_e${item.episode}`
-							: item.url || item.id;
+					// ⚠️ Sayaç anahtarı TEKİLLEŞTİRİR: eski/kirli kayıtlarda
+					// season/episode alanları eksik olabildiği için anahtar
+					// id/url içindeki `_s1_e2` kalıbından da türetilir
+					// (kullanıcı: "Tamamlanan dizi bölümleri yanlış
+					// hesaplanıyor").
+					const epKey = getEpisodeKey(item);
 					group.completedEpisodesMap.set(epKey, item);
+				} else {
+					// type:"series" kaydı — tüm dizi "tamamlandı" beyanı.
+					group.seriesLevelCompleted = true;
 				}
 
 				const itemDate = new Date(
@@ -306,24 +356,102 @@ export default function LibraryScreen() {
 			}
 		}
 
-		return result.map((item) => {
-			if (item.completedEpisodesMap) {
-				const completedCount = item.completedEpisodesMap.size;
-				const totalCount = item.totalEpisodes || 0;
-				const progress =
-					totalCount > 0 ? completedCount / totalCount : 1.0;
-				return {
-					...item,
-					completedEpisodesCount: completedCount,
-					totalEpisodesCount: totalCount,
-					progress,
-					isCompleted:
-						totalCount > 0 ? completedCount >= totalCount : true,
-				};
+		// ── Başlık bazlı birleştirme ────────────────────────────
+		// Seri beyanı satırı (type:"series", liste akışından) ile
+		// bölüm işaret satırları (işaretleme akışlarından) farklı
+		// seriesId alanları taşıyabilir (id vs url vs hiçbiri). Anahtar
+		// biçimleri ayrışınca aynı seri için İKİ kart gösterilir;
+		// ad eşleşen seri grupları tek kartta birleştirilir.
+		const mergedByKey = new Map();
+		const merged = [];
+		for (const group of result) {
+			if (!group?.completedEpisodesMap) {
+				merged.push(group);
+				continue;
 			}
-			return item;
-		});
-	}, [watchHistoryList, seriesTotalsMap, activePlatformName]);
+			const titleKey = (group.seriesTitle || group.title || "")
+				.toLowerCase()
+				.trim();
+			if (!titleKey) {
+				merged.push(group);
+				continue;
+			}
+			const existing = mergedByKey.get(titleKey);
+			if (!existing) {
+				mergedByKey.set(titleKey, group);
+				merged.push(group);
+				continue;
+			}
+
+			// Aynı seri — birleştir.
+			for (const [k, v] of group.completedEpisodesMap) {
+				if (!existing.completedEpisodesMap.has(k)) {
+					existing.completedEpisodesMap.set(k, v);
+				}
+			}
+			existing.seriesLevelCompleted =
+				existing.seriesLevelCompleted || group.seriesLevelCompleted;
+			existing.totalEpisodes = Math.max(
+				existing.totalEpisodes || 0,
+				group.totalEpisodes || 0,
+			);
+			const gDate = new Date(
+				group.watchedAt || group.updatedAt || 0,
+			).getTime();
+			const eDate = new Date(
+				existing.watchedAt || existing.updatedAt || 0,
+			).getTime();
+			if (gDate > eDate) {
+				// Daha yeni kaydın kimliği kalsın: kebab "Detay'a Git" ve
+				// detay ekranı güncel içerik kimliğiyle eşleşir.
+				existing.id = group.id || existing.id;
+				existing.seriesId = group.seriesId || existing.seriesId;
+				existing.seriesUrl = group.seriesUrl || existing.seriesUrl;
+				existing.url = group.url || existing.url;
+				existing.plugin = group.plugin || existing.plugin;
+				existing.poster = group.poster || existing.poster;
+				existing.poster_url = group.poster_url || existing.poster_url;
+				existing.rating = group.rating || existing.rating;
+				existing.watchedAt = group.watchedAt;
+				existing.updatedAt = group.updatedAt || group.watchedAt;
+			}
+		}
+
+		return (
+			merged
+				// Kaldırılan (gizlenen) içerikler kitaplıkta gösterilmez —
+				// izlenme verileri KORUNUR (bkz. storage.hideLibraryItem).
+				.filter((item) => !isLibraryHidden(hiddenItems, item))
+				.map((item) => {
+					if (item.completedEpisodesMap) {
+						let completedCount = item.completedEpisodesMap.size;
+						const totalCount = item.totalEpisodes || 0;
+						// Seri seviyesi "tamamlandı" beyanı tüm bölümleri
+						// kapsar; "0/N Bölüm" görünmemesi için sayaç en az
+						// toplam kadar gösterilir.
+						if (item.seriesLevelCompleted && totalCount > 0) {
+							completedCount = Math.max(
+								completedCount,
+								totalCount,
+							);
+						}
+						const progress =
+							totalCount > 0 ? completedCount / totalCount : 1.0;
+						return {
+							...item,
+							completedEpisodesCount: completedCount,
+							totalEpisodesCount: totalCount,
+							progress,
+							isCompleted:
+								totalCount > 0
+									? completedCount >= totalCount
+									: true,
+						};
+					}
+					return item;
+				})
+		);
+	}, [watchHistoryList, seriesTotalsMap, activePlatformName, hiddenItems]);
 
 	// Aktif sekmeye göre ham liste seçimi
 	const rawTabItems = useMemo(() => {
@@ -441,6 +569,12 @@ export default function LibraryScreen() {
 	};
 
 	// Kitaplıktan Kaldır (Tamamlananlar dahil tüm sekmeler için çalışır)
+	//
+	// ⚠️ "Tamamlandı" sekmesinde kaldırma artık izleme geçmişini SİLMEZ
+	// (eski davranış `removeFromWatchHistory` çağırıyordu ve tüm dizi
+	// bölümlerinin işaretlerini tombstone'luyordu). Kaldırma yalnızca
+	// görünürlük kaydı yazar; izlenme verisi hesaba bağlı kalır
+	// (kullanıcı: "Veriler sıfırlanmadan silinmemeli").
 	const handleRemoveItem = async (item) => {
 		if (!item) return;
 		try {
@@ -449,7 +583,7 @@ export default function LibraryScreen() {
 			} else if (activeTab === "planned") {
 				await toggleWatchlist(item);
 			} else if (activeTab === "completed") {
-				await removeFromWatchHistory(item);
+				await hideLibraryItem(item);
 			} else if (activeTab === "favorites") {
 				await toggleFavorite(item);
 			}
@@ -1733,7 +1867,12 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	columnWrapper: {
-		justifyContent: "space-between",
+		// ⚠️ `space-between` DEĞİL: tam dolmayan son satırda kartları iki
+		// uca yayıyordu ("yeterli veri yoksa arada boşluk oluşuyor").
+		// Kart genişlikleri satırı tam doldurduğu için (cardWidthFor) `gap`
+		// ile tam satırlar birebir aynı kalır, eksik satırlar sola paketlenir.
+		justifyContent: "flex-start",
+		gap: CARD_GAP,
 		marginBottom: CARD_GAP,
 	},
 	card: {

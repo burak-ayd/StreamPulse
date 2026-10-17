@@ -72,7 +72,7 @@ import {
 } from "@/services/liveApi";
 import { ColorsM3, ScreenGutter } from "@/constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
@@ -374,14 +374,17 @@ export default function LiveScreen() {
 		else router.replace("/(app)");
 	}, [router]);
 
-	useEffect(() => {
-		if (Platform.OS !== "android") return;
-		const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-			handleBack();
-			return true;
-		});
-		return () => sub.remove();
-	}, [handleBack]);
+	// ODAK'a bağlı kayıt: ekran odakta değilken geri tuşunu yutmaz.
+	useFocusEffect(
+		useCallback(() => {
+			if (Platform.OS !== "android") return;
+			const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+				handleBack();
+				return true;
+			});
+			return () => sub.remove();
+		}, [handleBack]),
+	);
 
 	const handleRetry = useCallback(() => {
 		/*

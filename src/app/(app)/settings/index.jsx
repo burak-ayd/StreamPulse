@@ -251,7 +251,8 @@ export default function SettingsScreen() {
 					setGeneralModalVisible(false);
 					return true;
 				}
-				router.replace("/(app)");
+				if (router.canGoBack()) router.back();
+				else router.replace("/(app)");
 				return true;
 			};
 

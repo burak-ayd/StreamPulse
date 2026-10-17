@@ -230,10 +230,13 @@ const TVPressable = forwardRef(function TVPressable(
 export default TVPressable;
 
 const styles = StyleSheet.create({
+	// ⚠️ Odak gösterge ONLY halka: ölçek büyütme TV'de kaldırıldı.
+	// (Kullanıcı talebi: odaklanan kart/çip taşarak komşularla üst üste
+	// biner — varsayılan odakta artık hiç büyütme yok; arayan bileşen
+	// kendi `focusedStyle` verirse kendi ölçeği uygulanır.)
 	defaultFocused: {
 		borderColor: "#E50914",
 		borderWidth: 2,
-		transform: [{ scale: 1.05 }],
 	},
 	defaultPressed: {
 		opacity: 0.85,

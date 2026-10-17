@@ -4,8 +4,8 @@ import { useTvMetrics } from "@/utils/tvMetrics";
 import TVPressable from "@/components/common/TVPressable";
 import { getDownloads } from "@/utils/storage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
 	BackHandler,
 	ScrollView,
@@ -31,14 +31,20 @@ export default function DownloadsScreen() {
 		});
 	}, []);
 
-	useEffect(() => {
-		const onBackPress = () => {
-			router.back();
-			return true;
-		};
-		const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
-		return () => sub.remove();
-	}, [router]);
+	useFocusEffect(
+		useCallback(() => {
+			const onBackPress = () => {
+				if (router.canGoBack()) router.back();
+				else router.replace("/(app)");
+				return true;
+			};
+			const sub = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => sub.remove();
+		}, [router]),
+	);
 
 	return (
 		<>

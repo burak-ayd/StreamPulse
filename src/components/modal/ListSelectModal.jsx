@@ -162,7 +162,14 @@ export default function ListSelectModal({
 							return (
 								<TVPressable
 									key={opt.key}
-									autoFocus={isSelected}
+									/* TV: modal açıldığında DPAD odağı bir yere binmeli.
+									 * Liste seçiliyse o satır, hiçbiri seçili değilse ilk satır
+									 * (İzleniyor) hasTVPreferredFocus alır — aksi halde odak
+									 * hiçbir görünüme binmez ve menü kumandayla ölü olur. */
+									autoFocus={
+										isSelected ||
+										(!currentList && opt.key === LIST_OPTIONS[0].key)
+									}
 									style={({ focused }) => [
 										styles.optionCard,
 										isSelected && styles.optionCardSelected,

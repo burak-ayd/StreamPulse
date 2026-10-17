@@ -7,8 +7,8 @@ import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import * as ImagePicker from "expo-image-picker";
-import { Stack, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
@@ -33,20 +33,21 @@ export default function EditProfile() {
 	const router = useRouter();
 	const [isLoading, setIsLoading] = useState(false);
 
-	useEffect(() => {
-		const onBackPress = () => {
-			if (router.canGoBack()) {
-				router.back();
-			}
-			return true;
-		};
+	useFocusEffect(
+		useCallback(() => {
+			const onBackPress = () => {
+				if (router.canGoBack()) router.back();
+				else router.replace("/(app)/profile");
+				return true;
+			};
 
-		const subscription = BackHandler.addEventListener(
-			"hardwareBackPress",
-			onBackPress,
-		);
-		return () => subscription.remove();
-	}, [router]);
+			const subscription = BackHandler.addEventListener(
+				"hardwareBackPress",
+				onBackPress,
+			);
+			return () => subscription.remove();
+		}, [router]),
+	);
 
 	// User data states
 	const [email, setEmail] = useState("");
