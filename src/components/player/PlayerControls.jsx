@@ -58,11 +58,13 @@ export default function PlayerControls({
 }) {
 	const trackWidthRef = useRef(1);
 	const scrubRatioRef = useRef(null);
+	const scrubStartRatioRef = useRef(0);
+	// Sürükleme sırasında çubuğu/süreyi YEREL oran gösterir; gerçek seek
+	// yalnızca parmak kalkınca yapılır (bkz. aşağıdaki not).
+	const [scrubRatio, setScrubRatio] = useState(null);
 	const [isProgressFocused, setIsProgressFocused] = useState(false);
 
-	const ratioFromX = useCallback((x) => {
-		return Math.max(0, Math.min(1, x / (trackWidthRef.current || 1)));
-	}, []);
+	const clampRatio = useCallback((r) => Math.max(0, Math.min(1, r)), []);
 
 	/*
 	 * `PanResponder` `[]` ile memo'landığı için güncel değerler refle
@@ -75,6 +77,21 @@ export default function PlayerControls({
 		callbacksRef.current = { onScrubStart, onScrubMove, onScrubEnd };
 	}, [onScrubStart, onScrubMove, onScrubEnd]);
 
+	/*
+	 * ⚠️ İSTENMEYEN ATLAMALARIN ÜÇ KÖK NEDENİ (kullanıcı şikâyeti):
+	 *
+	 *  1. `locationX` dokunulan ÇOCUĞA göre ölçülür. Baş parmağa
+	 *     (14 px) basılınca x ≈ 7 geliyor ve oran ~0 olup video
+	 *     BAŞA atlıyordu. Artık başlangıç oranı `locationX`'ten (çocuklar
+	 *     `pointerEvents="none"` olduğu için hedef hep `trackWrap`), sonraki
+	 *     hareketler `gesture.dx` ile BAŞLANGIÇTAN ölçülür.
+	 *  2. `onPanResponderTerminate` `onScrubEnd(null)` çağırıyordu ve
+	 *     `VideoPlayer` `null * duration = 0`'a SEEK ediyordu. Artık `null`
+	 *     "iptal" demektir, seek yapılmaz.
+	 *  3. Her harekette seek yapılıyordu; player eski konumu bildirince
+	 *     çubuk geri zıplıyordu. Artık sürüklerken yalnızca önizleme
+	 *     gösterilir, seek bırakınca TEK SEFER yapılır.
+	 */
 	const panResponder = useMemo(
 		() =>
 			// Ref'ler yalnızca geri çağırma fonksiyonlarının İÇİNDE okunur
@@ -83,38 +100,55 @@ export default function PlayerControls({
 			PanResponder.create({
 				onStartShouldSetPanResponder: () => !isLive,
 				onMoveShouldSetPanResponder: () => !isLive,
+				// Çubuk bir kez kazanılınca başka katman (jest yüzeyi,
+				// Pressable) elinden alamasın; alırsa sürükleme iptal olur.
+				onPanResponderTerminationRequest: () => false,
 				onPanResponderGrant: (evt) => {
 					if (isLive) return;
-					const r = ratioFromX(evt.nativeEvent.locationX);
+					const r = clampRatio(
+						evt.nativeEvent.locationX / (trackWidthRef.current || 1),
+					);
+					scrubStartRatioRef.current = r;
 					scrubRatioRef.current = r;
+					setScrubRatio(r);
 					callbacksRef.current.onScrubStart?.(r);
 				},
-				onPanResponderMove: (evt) => {
+				onPanResponderMove: (_evt, gesture) => {
 					if (isLive) return;
-					const r = ratioFromX(evt.nativeEvent.locationX);
+					const r = clampRatio(
+						scrubStartRatioRef.current +
+							gesture.dx / (trackWidthRef.current || 1),
+					);
 					scrubRatioRef.current = r;
+					setScrubRatio(r);
 					callbacksRef.current.onScrubMove?.(r);
 				},
 				onPanResponderRelease: () => {
-					if (isLive) return;
 					const r = scrubRatioRef.current;
 					scrubRatioRef.current = null;
+					setScrubRatio(null);
 					if (r !== null) callbacksRef.current.onScrubEnd?.(r);
 				},
 				onPanResponderTerminate: () => {
 					scrubRatioRef.current = null;
+					setScrubRatio(null);
+					// `null` = iptal (seek YOK).
 					callbacksRef.current.onScrubEnd?.(null);
 				},
 			}),
-		[isLive, ratioFromX],
+		[isLive, clampRatio],
 	);
 
-	const playedRatio =
+	const livePlayedRatio =
 		duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0;
+
+	// Sürüklerken çubuk ve süre PARMAĞI izler (gerçek konumu değil).
+	const isScrubbing = scrubRatio !== null;
+	const playedRatio = isScrubbing ? scrubRatio : livePlayedRatio;
 
 	// CloudStream'de ortada süre YOK; solda geçen, sağda toplam (veya
 	// kalan) süre gösterilir.
-	const displayTime = currentTime;
+	const displayTime = isScrubbing ? scrubRatio * duration : currentTime;
 
 	/**
 	 * Çubuk odaklandı → `VideoPlayer` "sol/sağ = sarmadır" moduna geçer.
@@ -144,7 +178,7 @@ export default function PlayerControls({
 				trackWidthRef.current = e.nativeEvent.layout.width || 1;
 			}}
 			{...(!isLive && !Platform.isTV ? panResponder.panHandlers : {})}>
-			<View style={styles.track}>
+			<View style={styles.track} pointerEvents="none">
 				<View
 					style={[styles.buffer, { width: `${bufferRatio * 100}%` }]}
 				/>
@@ -153,10 +187,11 @@ export default function PlayerControls({
 				/>
 			</View>
 			<View
+				pointerEvents="none"
 				style={[
 					styles.thumb,
 					{ left: `${playedRatio * 100}%` },
-					isProgressFocused && styles.thumbFocused,
+					(isProgressFocused || isScrubbing) && styles.thumbFocused,
 				]}
 			/>
 		</View>
@@ -178,7 +213,7 @@ export default function PlayerControls({
 				{!isLive ? (
 					<Text style={styles.timeRight}>
 						{showRemainingTime
-							? `-${fmt(Math.max(0, duration - currentTime))}`
+							? `-${fmt(Math.max(0, duration - displayTime))}`
 							: fmt(duration)}
 					</Text>
 				) : (

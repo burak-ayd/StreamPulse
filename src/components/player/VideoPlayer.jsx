@@ -33,6 +33,7 @@ import {
 	MIN_PLAYBACK_RATE,
 	RESIZE_MODE_ICONS,
 	RESIZE_MODES,
+	SEEK_SETTLE_MS,
 } from "./constants";
 import { DoubleTapFeedback, SpeedUpIndicator } from "./GestureFeedback";
 import PlayerActionBar from "./PlayerActionBar";
@@ -101,6 +102,8 @@ export default function VideoPlayer({
 	plugin = null,
 	isLive = false,
 	initialSourceIndex = 0,
+	// Sonraki bölüme geç: `(nextEpisode) => void` (bkz. `player.jsx`).
+	onNextEpisode = null,
 }) {
 	const insets = useSafeAreaInsets();
 	const videoRef = useRef(null);
@@ -212,6 +215,21 @@ export default function VideoPlayer({
 	}, [seriesInfo]);
 
 	// ── Aktif kaynak ──────────────────────────────────────────
+	/*
+	 * ── Sonraki bölüm ──
+	 *
+	 * `seriesInfo.nextEpisode` `player.jsx`'te hesaplanır (parametreden ya da
+	 * dizi detayından). Yoksa düğme hiç görünmez. `nextTriggeredRef` çift
+	 * tetiklemeyi önler (bitiş olayı + düğme aynı anda).
+	 */
+	const nextEpisode = !isLive ? seriesInfo?.nextEpisode || null : null;
+	const nextTriggeredRef = useRef(false);
+	const goNextEpisode = useCallback(() => {
+		if (!nextEpisode || !onNextEpisode || nextTriggeredRef.current) return;
+		nextTriggeredRef.current = true;
+		onNextEpisode(nextEpisode);
+	}, [nextEpisode, onNextEpisode]);
+
 	const currentSourceData = useMemo(
 		() => sources[activeSourceIndex] || null,
 		[sources, activeSourceIndex],
@@ -261,11 +279,35 @@ export default function VideoPlayer({
 	});
 
 	// ── Altyazılar ───────────────────────────────────────────
+	/*
+	 * Aktif ses parçası. `selectedAudioTrackIndex` parçanın KENDİ `index`
+	 * alanıdır (bkz. `TrackSelectionModal` → `trackId`), dizi konumu değil.
+	 * Seçim yoksa sistemin seçtiği (`selected`) parça. Altyazının otomatik
+	 * seçimi (Türkçe ses → Forced) bunu kullanır.
+	 */
+	const activeAudioTrack = useMemo(() => {
+		if (!availableAudioTracks?.length) return null;
+		if (selectedAudioTrackIndex !== null) {
+			return (
+				availableAudioTracks.find(
+					(t) => t.index === selectedAudioTrackIndex,
+				) ||
+				availableAudioTracks[selectedAudioTrackIndex] ||
+				null
+			);
+		}
+		return (
+			availableAudioTracks.find((t) => t.selected) ||
+			availableAudioTracks[0]
+		);
+	}, [availableAudioTracks, selectedAudioTrackIndex]);
+
 	const subtitles = useSubtitles({
 		currentSourceData,
 		settings,
 		currentTime,
 		onResetOffset: () => startHideTimerRef.current?.(),
+		audioTrack: activeAudioTrack,
 	});
 
 	// ── İzleme ilerlemesi ────────────────────────────────────
@@ -325,35 +367,66 @@ export default function VideoPlayer({
 	}, [showControls, paused, isLocked, startHideTimer]);
 
 	// ── Seek yardımcıları ────────────────────────────────────
-	const seekTo = useCallback(
+	/*
+	 * ⚠️ SEEK TABANI VE "ESKİ İLERLEME" KORUMASI (kullanıcı: "istemediğim
+	 * atlamalar", TV + mobil).
+	 *
+	 * Seek verildikten sonra player bir süre ESKİ konumu bildirmeye devam
+	 * eder (`progressUpdateInterval` 500 ms + seek gecikmesi). Eski kod:
+	 *   · bu bayat konumu `currentTime`'a yazıyor → çubuk geri zıplıyordu,
+	 *   · bir sonraki sarmayı BAYAT `currentTime` üzerinden hesaplıyordu →
+	 *     art arda sarmalarda (kumanda tuşu basılı tutma, çift dokunma) +10
+	 *     yerine +0/+10 gibi tutarsız atlamalar oluyordu.
+	 *
+	 * Artık: (1) her seek `seekSettleRef`'e HEDEFİ yazar, sonraki sarma
+	 * bu hedeften hesaplanır; (2) `handleProgress`, hedefe yaklaşana ya da
+	 * `SEEK_SETTLE_MS` dolana kadar bayat olayları yok sayar.
+	 */
+	const seekSettleRef = useRef({ target: null, until: 0 });
+
+	const getSeekBase = useCallback(() => {
+		const settle = seekSettleRef.current;
+		if (settle.target !== null && Date.now() < settle.until) {
+			return settle.target;
+		}
+		return currentTimeRef.current;
+	}, []);
+
+	const applySeek = useCallback(
 		(seconds) => {
-			if (!videoRef.current || !canSeek) return;
 			const clamped = Math.max(0, Math.min(duration, seconds));
 			// Gerçek kullanıcı seek'i (sorun 3/4 — bkz. `noteUserSeek`).
 			noteUserSeek();
-			videoRef.current.seek(clamped);
+			seekSettleRef.current = {
+				target: clamped,
+				until: Date.now() + SEEK_SETTLE_MS,
+			};
+			videoRef.current?.seek(clamped);
 			setCurrentTime(clamped);
 			currentTimeRef.current = clamped;
+			return clamped;
 		},
-		[canSeek, duration, noteUserSeek],
+		[duration, noteUserSeek],
 	);
 
+	const seekTo = useCallback(
+		(seconds) => {
+			if (!videoRef.current || !canSeek) return;
+			applySeek(seconds);
+		},
+		[canSeek, applySeek],
+	);
+
+	/** Göreli sarma. GERÇEKTE uygulanan farkı (kırpma sonrası) döndürür. */
 	const seekBy = useCallback(
 		(deltaSeconds) => {
-			if (!videoRef.current || !canSeek) return;
-			const next = Math.max(
-				0,
-				Math.min(duration, currentTime + deltaSeconds),
-			);
-			// ⚠️ SORUN 3/4: bu gerçek bir kullanıcı seek'idir. İlerleme
-			// motoruna bildirilir ki arabellek çıkışıyla karıştırılmasın.
-			noteUserSeek();
-			videoRef.current.seek(next);
-			setCurrentTime(next);
-			currentTimeRef.current = next;
+			if (!videoRef.current || !canSeek) return 0;
+			const base = getSeekBase();
+			const next = applySeek(base + deltaSeconds);
 			startHideTimerRef.current?.();
+			return next - base;
 		},
-		[canSeek, currentTime, duration, noteUserSeek],
+		[canSeek, applySeek, getSeekBase],
 	);
 
 	const togglePlayPause = useCallback(() => {
@@ -610,6 +683,7 @@ export default function VideoPlayer({
 		isLoadedRef.current = false;
 		hasAppliedResumeRef.current = false;
 		pendingSeekTimeRef.current = 0;
+		nextTriggeredRef.current = false;
 	}, [targetUrl, seriesInfo?.episode, seriesInfo?.season]);
 
 	useEffect(() => {
@@ -737,6 +811,18 @@ export default function VideoPlayer({
 	 */
 	const handleProgress = (data) => {
 		const curTime = data.currentTime || 0;
+
+		// Seek sonrası BAYAT konum olaylarını yok say (bkz. `seekSettleRef`).
+		const settle = seekSettleRef.current;
+		if (settle.target !== null) {
+			const reached = Math.abs(curTime - settle.target) < 2.5;
+			if (!reached && Date.now() < settle.until) {
+				setPlayableDuration(data.playableDuration || 0);
+				return;
+			}
+			seekSettleRef.current = { target: null, until: 0 };
+		}
+
 		setCurrentTime(curTime);
 		currentTimeRef.current = curTime;
 		setPlayableDuration(data.playableDuration || 0);
@@ -823,6 +909,8 @@ export default function VideoPlayer({
 		 * Canlıda "bitti" anı yoktur (`onEnd` = yayın koptu).
 		 */
 		if (!isLive) markComplete(true);
+		// Sonraki bölüm varsa otomatik geç (ayar: `autoPlayNext`, varsayılan açık).
+		if (settings?.autoPlayNext !== false) goNextEpisode();
 	};
 
 	const handleError = (error) => {
@@ -1128,9 +1216,22 @@ export default function VideoPlayer({
 	}, [isSpeedSheetOpen, modalType, showControls, onClose]);
 
 	// ── Çubuk sürükleme ─────────────────────────────────────
-	const handleScrubMove = useCallback(
+	/*
+	 * Sürükleme: çubuk önizlemeyi kendisi gösterir (`PlayerControls`);
+	 * seek YALNIZCA bırakınca, TEK SEFER yapılır. `ratio === null` iptal
+	 * demektir (responder çalındı) → seek YOK (eskiden 0'a atlıyordu).
+	 */
+	const handleScrubStart = useCallback(() => {
+		// Sürükleme sürerken kontroller gizlenmesin.
+		if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+	}, []);
+
+	const handleScrubEnd = useCallback(
 		(ratio) => {
-			seekTo(ratio * duration);
+			if (typeof ratio === "number" && Number.isFinite(ratio) && duration > 0) {
+				seekTo(ratio * duration);
+			}
+			startHideTimerRef.current?.();
 		},
 		[seekTo, duration],
 	);
@@ -1417,8 +1518,8 @@ export default function VideoPlayer({
 								showRemainingTime={Boolean(
 									settings?.showRemainingTime,
 								)}
-								onScrubMove={handleScrubMove}
-								onScrubEnd={handleScrubMove}
+								onScrubStart={handleScrubStart}
+								onScrubEnd={handleScrubEnd}
 								onFocusZone={setFocusZone}
 							/>
 
@@ -1496,6 +1597,18 @@ export default function VideoPlayer({
 												);
 										},
 									},
+									// Sonraki bölüm (yalnızca dizi + sonraki bölüm biliniyorsa)
+									nextEpisode && onNextEpisode
+										? {
+											key: "next",
+											icon: "play-skip-forward-outline",
+											label: "Sonraki bölüm",
+											onPress: () => {
+												startHideTimerRef.current?.();
+												goNextEpisode();
+											},
+										}
+										: null,
 								]}
 							/>
 						</View>
@@ -1641,9 +1754,11 @@ export default function VideoPlayer({
 				onUpdateSubtitleOffset={subtitles.updateOffset}
 				audioTracks={availableAudioTracks}
 				selectedAudioTrack={selectedAudioTrackIndex}
-				onSelectAudioTrack={(index) =>
-					setSelectedAudioTrackIndex(index)
-				}
+				onSelectAudioTrack={(index) => {
+					setSelectedAudioTrackIndex(index);
+					// Ses değişti → altyazı otomatik seçimi (Türkçe ses → Forced) yeniden değerlendirilsin.
+					subtitles.resetUserChoice();
+				}}
 			/>
 		</View>
 	);

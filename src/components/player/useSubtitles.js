@@ -14,6 +14,34 @@ import { TextTrackType } from "react-native-video";
 export const DEFAULT_SUBTITLE_UA =
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 
+/**
+ * Türkçe ses/altyazı mı? `language` ("tr", "tur", "turkish") veya başlık
+ * ("Türkçe", "Turkish") üzerinden anlaşılır.
+ */
+const TURKISH_RE = /^(tr|tur|turkish)([-_].*)?$|t[uü]rk/i;
+export function isTurkishTrack(track) {
+	if (!track) return false;
+	const lang = String(track.language || "").trim();
+	if (lang && TURKISH_RE.test(lang)) return true;
+	return TURKISH_RE.test(String(track.title || ""));
+}
+
+/**
+ * Forced (zorunlu / yabancı dil) altyazı mı?
+ *
+ * ⚠️ `react-native-video` text track'lerinde `forced` alanı YOK; tespit
+ * adlandırmaya dayanır: "Forced", "Zorunlu", "Yabancı", "Foreign" ya da
+ * kaynak `forced: true` veriyorsa. Kaynağın farklı adlandırması varsa
+ * `FORCED_RE`'ye eklenmeli.
+ */
+const FORCED_RE = /forced|zorunlu|yabanc[ıi]|foreign/i;
+export function isForcedSubtitle(sub) {
+	if (!sub) return false;
+	if (sub.forced === true || sub.isForced === true) return true;
+	if (FORCED_RE.test(`${sub.title || ""} ${sub.name || ""}`)) return true;
+	return /forced/i.test(String(sub.uri || ""));
+}
+
 /** WebVTT / SRT zaman ayrıştırıcı (hh:mm:ss.mmm veya mm:ss.mmm) */
 function parseTimestamp(timeStr) {
 	if (!timeStr) return 0;
@@ -102,6 +130,8 @@ export default function useSubtitles({
 	settings,
 	currentTime,
 	onResetOffset,
+	// Aktif ses parçası (`{ language, title }`) — Türkçe sesde Forced mantığı için.
+	audioTrack = null,
 }) {
 	const [userSubtitleChoice, setUserSubtitleChoice] = useState(undefined);
 	const [streamTextTracks, setStreamTextTracks] = useState([]);
@@ -112,7 +142,7 @@ export default function useSubtitles({
 		const rawSubs = currentSourceData?.result?.subtitles || [];
 		return rawSubs.map((sub, idx) => ({
 			title: sub.name,
-			language: sub.name?.toLowerCase()?.includes("turk")
+			language: /t[uü]rk/i.test(sub.name || "")
 				? "tr"
 				: sub.name?.toLowerCase()?.includes("eng")
 					? "en"
@@ -137,25 +167,52 @@ export default function useSubtitles({
 		return combined;
 	}, [externalSubtitles, streamTextTracks]);
 
-	// Varsayılan altyazı dili otomatik seçimi (veya kullanıcı tercihi).
+	// Varsayılan altyazı otomatik seçimi (veya kullanıcı tercihi).
 	const selectedSubtitle = useMemo(() => {
 		if (userSubtitleChoice !== undefined) return userSubtitleChoice;
+
+		/*
+		 * ⭐ TÜRKÇE SES → yalnızca FORCED altyazı; yoksa altyazı KAPALI.
+		 *
+		 * Türkçe sesi izleyen kişiye tam Türkçe altyazı göstermek yerine
+		 * yalnızca yabancı dil konuşmalarının çevirisi (forced) gösterilir.
+		 * Forced yoksa `null` döner → altyazı kapalı. Bu TÜRETİLİR (effect
+		 * yok): ses parçası `onLoad`dan sonra geldiğinde seçim kendiliğinden
+		 * güncellenir. Kullanıcı elle seçtiyse üstteki satır onu korur.
+		 *
+		 * Not: Forced bir İngilizce parça Türkçe sesle seçilmez
+		 * (yalnızca Türkçe veya dili belirsiz olanlar).
+		 */
+		if (isTurkishTrack(audioTrack)) {
+			const forced = allSubtitles.filter(isForcedSubtitle);
+			return (
+				forced.find(isTurkishTrack) ||
+				forced.find((sub) => !sub.language || sub.language === "und") ||
+				null
+			);
+		}
+
 		const defLang = settings?.defaultSubtitleLanguage;
 		if (!defLang || defLang === "off") return null;
 
-		return (
-			allSubtitles.find(
-				(sub) =>
-					sub.language?.toLowerCase() === defLang.toLowerCase() ||
-					(defLang === "tr" &&
-						(sub.title?.toLowerCase().includes("türk") ||
-							sub.title?.toLowerCase().includes("turk"))) ||
-					(defLang === "en" &&
-						(sub.title?.toLowerCase().includes("ing") ||
-							sub.title?.toLowerCase().includes("eng"))),
-			) || null
+		const matches = allSubtitles.filter(
+			(sub) =>
+				sub.language?.toLowerCase() === defLang.toLowerCase() ||
+				(defLang === "tr" &&
+					(sub.title?.toLowerCase().includes("türk") ||
+						sub.title?.toLowerCase().includes("turk"))) ||
+				(defLang === "en" &&
+					(sub.title?.toLowerCase().includes("ing") ||
+						sub.title?.toLowerCase().includes("eng"))),
 		);
-	}, [userSubtitleChoice, settings?.defaultSubtitleLanguage, allSubtitles]);
+		// Tam altyazı varsa onu, yalnızca forced varsa onu seç.
+		return matches.find((sub) => !isForcedSubtitle(sub)) || matches[0] || null;
+	}, [
+		userSubtitleChoice,
+		settings?.defaultSubtitleLanguage,
+		allSubtitles,
+		audioTrack,
+	]);
 
 	// Altyazı istekleri için header'lar: video ile AYNI olmalı.
 	const subtitleHeaders = useMemo(() => {
@@ -237,6 +294,12 @@ export default function useSubtitles({
 		}
 	};
 
+	/** Elle seçimi sil → otomatik seçim (ses diline göre) yeniden devreye girer. */
+	const resetUserChoice = () => {
+		setUserSubtitleChoice(undefined);
+		setSubtitleOffset(0);
+	};
+
 	const resetForNewSource = () => {
 		setStreamTextTracks([]);
 		setParsedCues([]);
@@ -250,6 +313,7 @@ export default function useSubtitles({
 		currentSubtitleText,
 		subtitleOffset,
 		selectSubtitle,
+		resetUserChoice,
 		updateOffset,
 		setStreamTextTracks,
 		resetForNewSource,
