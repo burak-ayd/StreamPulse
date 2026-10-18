@@ -147,15 +147,17 @@ export default ({ config }) => {
 		 * kalmadan OTA ile gider. Native/gradle/plugin değişikliği →
 		 * sürüm ARTMAK ZORUNDA (APK derlemesi her şeye bağlı bulundu).
 		 *
-		 * Sunucu: AstorTest2'de kullanılan custom Expo Updates protokol
-		 * sunucusu (ota.burakaydogan.tk/manifest). İstekler
-		 * `expo-app-id` (StreamPulse'a özgü kayıt) ve `expo-channel-name`
-		 * başlığıyla gider; kanal APP_VARIANT'tan türetilir.
+		 * Sunucu: XPrem (expo-open-ota) —
+		 * https://ota.burakaydogan.net.tr/manifest. İstekler `expo-app-id`
+		 * (StreamPulse'a özgü kayıt) ve `expo-channel-name` başlığıyla
+		 * gider; kanal RELEASE_CHANNEL env'inden, tanımsızsa "release"
+		 * fallback'inden gelir.
 		 *
-		 * checkAutomatically ON_ERROR_RECOVERY: açılışta bekleme YOK;
-		 * kontrol manuel olarak JS tarafında (src/hooks/useOtaUpdate.js)
-		 * açılış + foreground'da yapılır. fallbackToCacheTimeout=0 →
-		 * embedded bundle anında başlar, güncelleme arka planda iner.
+		 * checkAutomatically ON_ERROR_RECOVERY: açılışta native bekleme
+		 * YOK; kontrol manuel olarak JS tarafında
+		 * (src/hooks/useOtaUpdate.js) YALNIZCA uygulama açılışında bir kez
+		 * yapılır. fallbackToCacheTimeout=0 → embedded bundle anında
+		 * başlar, güncelleme arka planda iner.
 		 *
 		 * Kod imzası: sunucu manifest'i private key ile imzalar; APK'ya
 		 * gömülü `certs/certificate.pem` (public) doğrular. İmza tutmazsa
