@@ -98,9 +98,10 @@ export default function RootLayout() {
 	 * ── OTA güncellemeleri (expo-updates · custom server) ───────────
 	 *
 	 * APK yeniden derlemeye gerek bırakmayan JS sürüm akışı: açılışta ve
-	 * ön plana dönüşte sessiz kontrol + indirme. Varsayılan KULLANICIYA
-	 * hiç görünmez; güncelleme bir sonraki açılışta otomatik uygulanır.
-	 * Bildirim tercihi Ayarlar → "Güncelleme Bildirimi" satırında.
+	 * ön plana dönüşte sessiz kontrol + indirme. Güncelleme arka plana
+	 * geçişte (güvenli ekranda ise) sessizce uygulanır; ötelenemezse
+	 * sonraki tam açılışta otomatik devreye girer. Bildirim tercihi
+	 * Ayarlar → "Güncelleme Bildirimi" satırında.
 	 */
 	useOtaUpdate();
 

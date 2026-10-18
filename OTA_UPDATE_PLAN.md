@@ -99,12 +99,18 @@ sunucu tarafı tamamdır.
 
 ## 4. Kullanıcı davranışı (varsayılan)
 
-- Kontrol ve indirme tamamen sessizdir; yeni bundle uygulamayı
-  YENİDEN AÇTIĞINDA otomatik devreye girer (modern uygulamalardaki gibi).
+- Kontrol ve indirme tamamen sessizdir. İndirme bittikten sonra kullanıcı
+  uygulamayı ARKA PLANA aldığında (ve oturum-önemli bir ekranda değilse:
+  oynatıcı / indirme / form / ayar / detay / canlı / kitaplık / TV
+  eşleştirme) JS **sessizce yeniden yüklenir** — uygulamaya bir sonraki
+  dönüşte yeni sürüm zaten aktiftir, hiçbir "kapat-aç" gerekmez.
+- Oturum-önemli ekranda ötelenir: o ekrandan çıkıp tekrar arka plana
+  geçince uygulanır; hiç tetiklenmezse bir sonraki tam açılışta
+  expo-updates yine otomatik devreye alır (çifte güvence).
 - Ayarlar → "Güncelleme Bildirimi" açılırsa her indirilen sürümde
   "Şimdi yenile / Kapat" sorusu çıkar. "Kapat" derse o manifest id
-  bu oturumda tekrar sorulmaz; indirme zaten tamamlanmış olduğundan
-  sonraki açılışta sessizce uygulanır.
+  bu oturumda tekrar sorulmaz; arka plan geçişinde/sonraki açılışta
+  sessizce uygulanır.
 - Kötü bir güncellemeye karşı koruma: sunucu rollback emri
   verirse istemci indirme YAPMAZ ve bir sonraki açılışta embedded'e döner.
 
@@ -121,8 +127,10 @@ aapt2 dump xmltree <apk-yolu> --file AndroidManifest.xml | findstr "expo.modules
 ```
 
 3. Sunucuya JS değişikliği yayınla (`eoas publish`, version'a dokmadan).
-4. Uygulama açılır; kontrol/indirme sessiz → yeniden aç → yeni sürüm
-   (`Updates.isEmbeddedLaunch === false`).
+4. Uygulama açıkken güncelleme sessizce iner; uygulamayı arka plana al
+   15 sn bekle → geri dön → yeni sürüm aktif olmalı
+   (`Updates.isEmbeddedLaunch === false`). Güvensiz ekrandıysa
+   (oynatıcı/indirme) önce o ekrandan çık, tekrar arka plana geç.
 5. Ayarlar → "Güncelleme Bildirimi" açıkken Alert ve "Şimdi yenile"yi test et.
 6. XPrem dashboard'dan rollback → istemci sonraki açılışta embedded'e döner.
 
