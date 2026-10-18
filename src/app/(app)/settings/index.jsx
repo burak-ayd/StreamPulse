@@ -351,7 +351,7 @@ export default function SettingsScreen() {
 							: null,
 					]}>
 					{/* KATEGORİ 1: İÇERİK VE KAYNAKLAR */}
-					<SettingsSection title="İÇERİK VE 21342 KAYNAKLAR">
+					<SettingsSection title="İÇERİK VE KAYNAKLAR">
 						{/* Eklentiler */}
 						<SettingRow
 							icon="extension-puzzle-outline"
