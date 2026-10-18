@@ -1,9 +1,9 @@
-# OTA Güncelleme Sistemi (expo-updates · custom server)
+# OTA Güncelleme Sistemi (expo-updates · XPrem sunucusu)
 
 AstorTest2'de kurulan ve StreamPulse'a uyarlanan sistem:
-**expo-updates (SDK 57) + özel sunucu (ota.burakaydogan.tk) + RSA kod imzası.**
-JS (ve gömülü asset) değişiklikleri APK yeniden derlemeden; native,
-gradle veya plugin değişiklikleri APK derlemesiyle gider.
+**expo-updates (SDK 57) + XPrem (eski adı expo-open-ota) self-hosted sunucu
++ RSA kod imzası.** JS (ve gömülü asset) değişiklikleri APK yeniden derlemeden;
+native, gradle veya plugin değişiklikleri APK derlemesiyle gider.
 
 ---
 
@@ -18,38 +18,43 @@ gradle veya plugin değişiklikleri APK derlemesiyle gider.
 
 Kritik parametreler (`app.config.js`):
 
-- `runtimeVersion: { policy: "appVersion" }` → runtime = `app.json` `version`
-- `url: https://ota.burakaydogan.tk/manifest`
+- `runtimeVersion: "1"` — elle yönetilen string. **Native/gradle/plugin
+  değişiklikte "2" (vb.) artırmak SENİN görevin;** JS-only sürümlerde sabit kalır.
+- `url: https://ota.burakaydogan.net.tr/manifest` — XPrem base URL + `/manifest`
 - `requestHeaders`:
-  - `expo-app-id: 46297b13-b95e-43b4-90da-cebab8f8741a` (StreamPulse'a özgü
-    sunucu kaydı),
-  - `expo-channel-name`: APP_VARIANT'tan (release / preview / dev)
-- `codeSigningCertificate: ./certs/certificate.pem` — public
-  sertifikadır; makine-lokal tutulur, git'te YOK (`.gitignore` `*.pem`).
-  Private key yalnızca sunucu tarafındadır.
+  - `expo-app-id: 46297b13-b95e-43b4-90da-cebab8f8741a` (XPrem dashboard'daki
+    StreamPulse App ID),
+  - `expo-channel-name`: `RELEASE_CHANNEL` env'i, tanımsızsa fallback
+    `"production"`. Bu değer BUILD SIRASINDA APK'ya gömülür.
+- `codeSigningCertificate: ./certs/certificate.pem` — bu sertifika XPrem
+  dashboard'ından (App Info → Download certificate) indirilmiş
+  **StreamPulse'a özel** sertifikadır (CN=StreamPulse); git'te yok
+  (`.gitignore` `*.pem`), private key XPrem sunucusundadır.
 - `codeSigningMetadata: { keyid: "main", alg: "rsa-v1_5-sha256" }`
 - `checkAutomatically: "ON_ERROR_RECOVERY"` + `fallbackToCacheTimeout: 0`
   → açılışta bekleme yok; kontrol tamamen JS tarafında yapılır
   (`src/hooks/useOtaUpdate.js`).
-- Test'te imza doğrulamasını kapatmak için: `DISABLE_CODE_SIGNING=1` ile
-  derle.
+- İmzasız test: `DISABLE_CODE_SIGNING=1` ile derle.
+
+⚠️ `android/` klasörü CNG'dir ve `git` ile takip EDİLMEZ. Şu an
+`android/app/src/main/AndroidManifest.xml` içinde 9 adet
+`expo.modules.updates.*` meta-data SATIRI VAR (satır 28–36). GitHub web'de
+bu klasör görünmez; doğru yerler: yereldeki dosya ve derlenmiş APK.
 
 ## 2. runtimeVersion kuralları (sürüm disiplini)
 
-runtimeVersion `appVersion` politikasıyla `app.json` `version`'dan gelir.
+runtimeVersion elle yönetilir ("1").
 
 | Değişiklik | Yapılacak | Yayın yolu |
 |---|---|---|
-| JS / gömülü asset only | `version` DEĞİŞTİRİLMEZ | OTA (sunucudaki manifest runtime'ı aynı version) |
-| Native dep / gradle / plugin / SDK / `app.config.js` updates bloğu | `version` artırılır → APK derleme | APK |
+| JS / gömülü asset only | runtimeVersion DOKUNULMAZ ("1") | OTA (XPrem'de güncellemeyi runtime "1" hedefine yayınla) |
+| Native dep / gradle / plugin / SDK / updates bloğu | runtimeVersion ARTIRILIR ("2" gibi) → APK derleme | APK; sunucuda "2" runtime'ına güncelleme yayınlama |
 
-⚠️ JS-only OTA yayınlarken `app.json` `version`'a dokunma. Dokunursan
-yayınlanan manifest'in runtime'ı hiçbir yüklü APK ile eşleşmez ve
-güncelleme kimsenin cihazına düşmez.
-
-Her APK derlemesi `scripts/bump-version.js` ile patch sürümünü artırdığı
-için her yeni APK'ya otomatik olarak yeni bir runtimeVersion düşer;
-eşleşme hataya kapalıdır.
+⚠️ Sürüm numarası ayrı bir olgudur: her APK derlemesi
+`scripts/bump-version.js` ile `app.json` `version`'ını (patch) artırır;
+bu version runtimeVersion'ı DEĞİŞTİRMEZ. runtimeVersion'ı artırmak için
+`app.config.js`'teki değeri elle güncelle — native değişikliği APK'ya
+geçirmeden önce yapılır.
 
 ## 3. Derleme & yayın
 
@@ -60,62 +65,78 @@ bun run build:release      # = APP_VARIANT=release node scripts/build.js apk
 bun run build:release:tv   # TV varyantı
 ```
 
-JS-only OTA — AstorTest2'deki yayın akışıyla aynıdır (aynı sunucu,
-aynı protokol):
+JS-only OTA — XPrem'in standart CLI'si (eoas):
 
-1. `app.json` `version`'ı OLDUĞU GİBİ bırak.
-2. Bundle'ı üret ve sunucunun beklediği formatta/yerde yayınla
-   (AstorTest2'de kullandığın adımların birebir aynısı çalışır; sunucu
-   tarafında StreamPulse için `expo-app-id: 46297b13-…` kaydının ve
-   `version`'a eş runtime tanımının açılmış olması gerekir).
-3. Sunucu manifest'i private key ile imzalar; APK'ya gömülü
-   `certs/certificate.pem` doğrular.
+```sh
+# sunucudaki streamPulse app'i için API token'ı (bir kez al):
+export EOO_TOKEN=eoo_your_api_key
+export RELEASE_CHANNEL=production          # APK'ya gömülü channel ile aynı olmalı
+npx eoas publish --branch production       # app.json version'a DOKUNMA
+```
 
-Sunucunun bilmesi gerekenler (Expo Updates protokolü, birebir olarak
-AstorTest2'deki uygulama aynı):
+XPrem tarafı checklist (kesin aşamalar):
 
-- `GET /manifest` → platform + runtimeVersion eşleşen güncelleme
-  manifest'ini döndürmek (istek başlıkları: `expo-runtime-version`,
-  `expo-platform`, `expo-protocol-version`, `expo-channel-name`,
-  `expo-app-id`),
-- asset dosyalarını (bundle + görseller) sunmak,
-- imzalı manifestlerde `codeSigningInfo` alanını taşımak.
+1. Dashboard → App Info: `expo-app-id` = 46297b13-… (StreamPulse kaydı).
+2. Certificate: indirilen `certs/certificate.pem` projede kullanılıyor
+   (CN=StreamPulse). Sunucudaki imza anahtarıyla EŞLEŞİYOR.
+3. Channels: "production" kanalı oluşturuldu ve ilgili branch'e bağlı
+   (progressive rollout bu ekrandan yönetilir).
+4. Update publish: `eoas publish` ile aynı branch'e güncelleme yükle.
+
+Hızlı doğrulama (sunucu çalışıyor ve channel eşleşiyor mu?):
+
+```sh
+curl -sD - "https://ota.burakaydogan.net.tr/manifest" \
+  -H "expo-app-id: 46297b13-b95e-43b4-90da-cebab8f8741a" \
+  -H "expo-channel-name: production" \
+  -H "expo-runtime-version: 1" \
+  -H "expo-platform: android" \
+  -H "expo-protocol-version: 1"
+```
+
+`expo-manifest-filters: branch="production"` başlığı görünürsa
+sunucu tarafı tamamdır.
 
 ## 4. Kullanıcı davranışı (varsayılan)
 
 - Kontrol ve indirme tamamen sessizdir; yeni bundle uygulamayı
-  YENİDEN AÇTIĞINDA otomatik devreye girer (fark edilemez).
+  YENİDEN AÇTIĞINDA otomatik devreye girer (modern uygulamalardaki gibi).
 - Ayarlar → "Güncelleme Bildirimi" açılırsa her indirilen sürümde
   "Şimdi yenile / Kapat" sorusu çıkar. "Kapat" derse o manifest id
-  bu oturum boyunca tekrar sorulmaz; indirme zaten tamamlanmış olduğundan
-  sonraki açılışta sessiz uygulanır.
+  bu oturumda tekrar sorulmaz; indirme zaten tamamlanmış olduğundan
+  sonraki açılışta sessizce uygulanır.
 - Kötü bir güncellemeye karşı koruma: sunucu rollback emri
-  (`rollback` / `isRollBackToEmbedded`) verirse istemci indirme YAPMAZ
-  ve bir sonraki açılışta embedded sürüme döner.
+  verirse istemci indirme YAPMAZ ve bir sonraki açılışta embedded'e döner.
 
 ## 5. Test senaryosu
 
-1. `bun run build:release` → APK'yı cihaza kur (örn. 1.0.31).
-2. Sunucuya JS değişikliği yayınla (version sabit, runtime aynı).
-3. Uygulama açılır: foreground'da/kontrol döngüsünde sessiz indirme;
-   uygulamayı yeniden aç → yeni JS sürümü çalıştır
-   (doğrulama: `Updates.isEmbeddedLaunch === false`).
-4. Ayarlar → "Güncelleme Bildirimi"ni aç; sunucuya yeni bir OTA yayınla;
-   indirme bitince Alert göründüğünü, "Şimdi yenile" ve "Kapat"
-   yollarının ikisinin de çalıştığını doğrula.
-5. Sunucuda rollback'e düşür → istemci sonraki açılışta embedded'e döner.
+1. `bun run build:release` → APK'yı cihaza kur.
+2. Yerelde doğrulama — manifest zaten text olarak
+   `android/app/src/main/AndroidManifest.xml`'de var (satır 28–36);
+   APK içinde ise BINARY'dir, düz unzip + metin araması TUTMAZ:
+
+```sh
+# Android SDK build-tools'tan:
+aapt2 dump xmltree <apk-yolu> --file AndroidManifest.xml | findstr "expo.modules.updates"
+```
+
+3. Sunucuya JS değişikliği yayınla (`eoas publish`, version'a dokmadan).
+4. Uygulama açılır; kontrol/indirme sessiz → yeniden aç → yeni sürüm
+   (`Updates.isEmbeddedLaunch === false`).
+5. Ayarlar → "Güncelleme Bildirimi" açıkken Alert ve "Şimdi yenile"yi test et.
+6. XPrem dashboard'dan rollback → istemci sonraki açılışta embedded'e döner.
 
 ## 6. Bilinen sınırlar
 
-- `__DEV__` ve Expo Go'da akış çalışmaz; API'ler hata atar,
-  istemci tarafında sessizce yakalanır.
+- `__DEV__` ve Expo Go'da akış çalışmaz; API'ler hata atar, sessizce
+  yakalanır.
 - `expo-updates` native modül eklediği için BİR KEZ yeni APK derlemesi
-  şarttır (modülü gömmek için). Bundan sonraki JS sürümleri bu
-  derlemeden bağımsız gider.
-- `certificate.pem` sunucunun imza anahtarıyla EŞLEŞMEZSE imzalı
-  manifest'ler REDDEDİLİR; yeni bir anahtar çifti kullanılacaksa
-  APK yeniden derlenmelidir.
-- İlk OTA-yeten APK, önceki (1.0.30) sürümlü cihazların APK'sının
-  YERİNİ ALMAZ: eski APK'larda expo-updates modülü olmadığından onlara
-  OTA ulaşamaz; eski kurulumlarda yalnızca APK-güncelleme akışı
-  (GitHub Releases) işler.
+  şarttır. Bundan sonraki JS sürümleri derlemeden bağımsızdır.
+- Eski 1.0.30 kurulumlarında expo-updates modülü yoktur; onlara OTA
+  ulaşamaz — eski kurulumlarda yalnızca APK-güncelleme akışı (GitHub
+  Releases) işler.
+- Certificate.pem sunucunun imza anahtarıyla EŞLEŞMEZSE imzalı
+  manifest'ler REDDEDİLİR; yeni anahtar çifti kullanılacaksa APK yeniden
+  derlenmelidir.
+- İmzasız güncelleme kabulünü test etmek için APK'yı
+  `DISABLE_CODE_SIGNING=1` ile derle; yalnızca geliştirme amaçlıdır.
