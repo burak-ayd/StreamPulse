@@ -12,7 +12,7 @@ native, gradle veya plugin değişiklikleri APK derlemesiyle gider.
 | Parça | Konum | Görevi |
 |---|---|---|
 | Native config | `app.config.js` → `updates` + `runtimeVersion` | URL, request header'ları, kod imzası, runtimeVersion — prebuild sırasında APK'ya gömülür |
-| Kontrol akışı | `src/hooks/useOtaUpdate.js` | Açılış + foreground'da sessiz check → indir → uygula |
+| Kontrol akışı | `src/hooks/useOtaUpdate.js` | YALNIZ uygulama açılışında bir kez sessiz check → indir; açılış penceresinde biterse aynı açılışta uygular, yoksa sonraki açılışta native devreye girer |
 | Tercih saklama | `src/services/otaUpdate.js` | Bildirim tercihi (AsyncStorage, anahtar `app_ota_notify`) |
 | UI | Ayarlar → "Güncelleme Bildirimi" satırı | Sessiz (varsayılan) ↔ her sürümde onay sorusu |
 
@@ -24,8 +24,9 @@ Kritik parametreler (`app.config.js`):
 - `requestHeaders`:
   - `expo-app-id: 46297b13-b95e-43b4-90da-cebab8f8741a` (XPrem dashboard'daki
     StreamPulse App ID),
-  - `expo-channel-name`: `RELEASE_CHANNEL` env'i, tanımsızsa fallback
-    `"production"`. Bu değer BUILD SIRASINDA APK'ya gömülür.
+  - `expo-channel-name`: `RELEASE_CHANNEL` env'i, tanımsızsa koddaki
+    fallback `"release"` APK'ya gömülür (XPrem'de bu kanalın bir branch'e
+    bağlı olması şart).
 - `codeSigningCertificate: ./certs/certificate.pem` — bu sertifika XPrem
   dashboard'ından (App Info → Download certificate) indirilmiş
   **StreamPulse'a özel** sertifikadır (CN=StreamPulse); git'te yok
@@ -99,18 +100,23 @@ sunucu tarafı tamamdır.
 
 ## 4. Kullanıcı davranışı (varsayılan)
 
-- Kontrol ve indirme tamamen sessizdir. İndirme bittikten sonra kullanıcı
-  uygulamayı ARKA PLANA aldığında (ve oturum-önemli bir ekranda değilse:
-  oynatıcı / indirme / form / ayar / detay / canlı / kitaplık / TV
-  eşleştirme) JS **sessizce yeniden yüklenir** — uygulamaya bir sonraki
-  dönüşte yeni sürüm zaten aktiftir, hiçbir "kapat-aç" gerekmez.
-- Oturum-önemli ekranda ötelenir: o ekrandan çıkıp tekrar arka plana
-  geçince uygulanır; hiç tetiklenmezse bir sonraki tam açılışta
-  expo-updates yine otomatik devreye alır (çifte güvence).
-- Ayarlar → "Güncelleme Bildirimi" açılırsa her indirilen sürümde
-  "Şimdi yenile / Kapat" sorusu çıkar. "Kapat" derse o manifest id
-  bu oturumda tekrar sorulmaz; arka plan geçişinde/sonraki açılışta
-  sessizce uygulanır.
+- Kontrol YALNIZCA uygulama AÇILIŞINDA bir kez yapılır; uygulama açıkken
+  başka kontrol ve reload YOK. (Eski "ön plana dönüşte kontrol" ve "arka
+  plana geçince sessiz reload" modelleri kaldırıldı: ikincisi RootLayout'u
+  navigasyona abone edip her ekran geçişini kastırıyordu; Hook artık
+  hiçbir abonelik kurmaz.)
+- Güncelleme sessizce iner. İndirme AÇILIŞ PENCERESİ içinde (splash
+  kapısının azami süresi, `MAX_SPLASH_MS` ≈3 sn) tamamlanırsa `reloadAsync`
+  ile AYNI açılışta uygulanır — reload splash'ın altında olup biter,
+  kullanıcı yalnızca normal bir açılış görür; "kapat-aç" GEREKMEZ. Pencere
+  kaçarsa güncelleme bekletilir ve uygulamanın BİR SONRAKİ açılışında
+  expo-updates tarafından native olarak devreye alınır. Her iki durumda da
+  uygulama AÇIKKEN hiçbir kesinti yaşanmaz.
+- Aynı sürüm için üst üste reload'u engelleyen id guard'ı vardır
+  (AsyncStorage `app_ota_startup_applied`).
+- Ayarlar → "Güncelleme Bildirimi" AÇIKSA otomatik-açılışta-uygulama
+  yerine indirme sonrası "Şimdi yenile / Kapat" sorulur; "Şimdi yenile"
+  kullanıcı onayıyla anında uygular, "Kapat" bir sonraki açılışa bırakır.
 - Kötü bir güncellemeye karşı koruma: sunucu rollback emri
   verirse istemci indirme YAPMAZ ve bir sonraki açılışta embedded'e döner.
 
@@ -127,10 +133,11 @@ aapt2 dump xmltree <apk-yolu> --file AndroidManifest.xml | findstr "expo.modules
 ```
 
 3. Sunucuya JS değişikliği yayınla (`eoas publish`, version'a dokmadan).
-4. Uygulama açıkken güncelleme sessizce iner; uygulamayı arka plana al
-   15 sn bekle → geri dön → yeni sürüm aktif olmalı
-   (`Updates.isEmbeddedLaunch === false`). Güvensiz ekrandıysa
-   (oynatıcı/indirme) önce o ekrandan çık, tekrar arka plana geç.
+4. Uygulamayı aç: güncelleme sessizce iner ve yerel sunucuda kısa sürdüğü
+   için AYNI açılışta uygulanır (uygulama bir kez daha "açılmış" gibi olur,
+   splash altında). Uzun sürerse uygulamayı tamamen kapat → yeniden aç:
+   yeni sürüm aktif (`Updates.isEmbeddedLaunch === false`). Uygulama
+   AÇIKKEN hiçbir kesinti/reload yaşanmamalı.
 5. Ayarlar → "Güncelleme Bildirimi" açıkken Alert ve "Şimdi yenile"yi test et.
 6. XPrem dashboard'dan rollback → istemci sonraki açılışta embedded'e döner.
 
