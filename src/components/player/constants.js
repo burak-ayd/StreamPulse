@@ -95,3 +95,21 @@ export const RESIZE_MODE_ICONS = {
 	cover: "contract-outline",
 	stretch: "resize-outline",
 };
+
+/**
+ * Çoklu dokunuşla sarma penceresi (ms) — YouTube tarzı zincir.
+ *
+ * İlk çift dokunuştan sonra, son sarma dokunuşundan itibaren bu süre
+ * içinde gelen HER dokunuş (aynı yarıda) tekrar sarar ve toplam süre
+ * birikir (10 → 20 → 30 sn). Bu süre dolunca zincir biter.
+ * Pencere boyunca tek-dokunuş (kontrolleri aç/kapa) tetiklenmez.
+ */
+export const MULTI_TAP_SEEK_WINDOW_MS = 700;
+
+/**
+ * Kullanıcı seek'inden sonra ESKİ konumu taşıyan `onProgress` olaylarının
+ * yok sayıldığı süre (ms). Seek tamamlanana kadar player eski konumu
+ * bildirmeye devam eder; yok sayılmazsa çubuk geri zıplar ve sonraki
+ * sarma bayat konumdan hesaplanır.
+ */
+export const SEEK_SETTLE_MS = 1500;

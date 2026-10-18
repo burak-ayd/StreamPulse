@@ -12,7 +12,7 @@ import {
 	restoreAppOrientation,
 } from "@/utils/orientation";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import TVPressable from "@/components/common/TVPressable";
 import {
@@ -58,6 +58,7 @@ function seasonEpisodeFromUrl(url) {
 export default function PlayerScreen() {
 	const params = useLocalSearchParams();
 	const router = useRouter();
+	const pathname = usePathname();
 	const targetUrl = params.url;
 	const title = params.title || "Video";
 	const subtitle = params.subtitle || "";
@@ -490,6 +491,47 @@ export default function PlayerScreen() {
 		kaynaklariGetir,
 		kaynakHatasiMesaji,
 	]);
+	/**
+	 * Sonraki bölüme geç.
+	 *
+	 * ⚠️ `replace` (push değil): geri tuşu önceki bölüme değil, oynatıcıdan
+	 * ÇIKIŞA götürsün; ayrıca yeni bir ekran örneği oluştuğu için
+	 * `VideoPlayer` ve tüm kayıt/kaynak durumu SIFIRDAN başlar (eski
+	 * bölümün konumu/kaynağı sızmaz). `currentTime`/`seriesInfo`/
+	 * `nextEpisode` BİLEREK geçirilmez: resume kayıttan okunur, bir
+	 * sonraki bölüm yine dizi detayından hesaplanır.
+	 */
+	const handleNextEpisode = useCallback(
+		(next) => {
+			if (!next?.url) return;
+			const seriesTitle = seriesInfo?.seriesTitle || title;
+			const nextParams = {
+				url: next.url,
+				id: next.id || next.url,
+				type: "episode",
+				title: seriesTitle,
+				seriesTitle,
+				seriesId: seriesInfo?.seriesId,
+				seriesUrl: seriesInfo?.seriesUrl,
+				plugin: params.plugin || seriesInfo?.plugin,
+				season: next.season,
+				episode: next.episode,
+				episodeTitle: next.title,
+				totalEpisodes: seriesInfo?.totalEpisodes,
+				poster: next.poster || poster,
+			};
+			// `undefined` değerleri URL'ye "undefined" olarak yazılmasın.
+			const cleaned = Object.fromEntries(
+				Object.entries(nextParams).filter(
+					([, v]) => v !== undefined && v !== null && v !== "",
+				),
+			);
+			resetBrightness();
+			router.replace({ pathname, params: cleaned });
+		},
+		[router, pathname, seriesInfo, title, poster, params.plugin],
+	);
+
 	const handleClose = useCallback(() => {
 		/*
 		 * ⚠️ Pencere parlaklığını oynatıcıdan ÇIKARKEN temizle.
@@ -593,6 +635,7 @@ export default function PlayerScreen() {
 					 */
 					isLive={isCanli}
 					initialSourceIndex={liveBaslangicIndeks}
+					onNextEpisode={handleNextEpisode}
 				/>
 			)}
 		</View>

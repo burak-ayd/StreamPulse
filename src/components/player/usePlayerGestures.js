@@ -16,6 +16,7 @@ import {
 	MIN_SWIPE_RATIO,
 	MIN_VERTICAL_SWIPE_RATIO,
 	MIN_ZOOM,
+	MULTI_TAP_SEEK_WINDOW_MS,
 	SEEK_CURVE,
 	SWIPE_MULTIPLIER,
 	ZOOM_SNAP,
@@ -93,6 +94,12 @@ export default function usePlayerGestures({
 	 * iptal edilir, gelmezse bu zamanlayıcı tetikler.
 	 */
 	const pendingSingleTapTimerRef = useRef(null);
+	/*
+	 * Çoklu dokunuşla sarma zinciri (YouTube tarzı).
+	 * `total`: zincir boyunca GERÇEKTEN uygulanan toplam sarma (sn, işaretli).
+	 */
+	const seekChainRef = useRef({ active: false, side: null, total: 0, timer: null });
+	const doubleTapTimerRef = useRef(null);
 	const activeActionRef = useRef(null); // 'time' | 'brightness' | 'volume' | 'zoom' | null
 	const lastTouchRef = useRef({ x: 0, y: 0 });
 	const startTimeRef = useRef(0);
@@ -171,7 +178,13 @@ export default function usePlayerGestures({
 	/** Kullanıcıya kısa süreli geri bildirim gösterir (çift dokunma ikonu). */
 	const flashDoubleTap = useCallback((type, delta) => {
 		setDoubleTapInfo({ type, delta });
-		setTimeout(() => setDoubleTapInfo(null), GESTURE_FEEDBACK_MS);
+		// Önceki zamanlayıcı iptal edilmezse hızlı ardışık dokunuşlarda
+		// yeni gösterge eski sayacın süresi dolunca erken kapanırdı.
+		if (doubleTapTimerRef.current) clearTimeout(doubleTapTimerRef.current);
+		doubleTapTimerRef.current = setTimeout(() => {
+			doubleTapTimerRef.current = null;
+			setDoubleTapInfo(null);
+		}, GESTURE_FEEDBACK_MS);
 	}, []);
 
 	const showHud = useCallback(
@@ -214,6 +227,8 @@ export default function usePlayerGestures({
 		return () => {
 			if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
 			if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
+			if (doubleTapTimerRef.current) clearTimeout(doubleTapTimerRef.current);
+			if (seekChainRef.current.timer) clearTimeout(seekChainRef.current.timer);
 			// Bekleyen tek dokunuş: oynatıcı kapanırken tetiklenmemeli
 			// (kullanıcı oynatıcıdan çıkarken kontroller birden açılmasın).
 			if (pendingSingleTapTimerRef.current) {
@@ -224,113 +239,114 @@ export default function usePlayerGestures({
 	}, []);
 
 	// ── Çift dokunma mantığı ───────────────────────────────────
-	const handleTap = useCallback((x) => {
-		const s = stateRef.current;
-		// Monotonik saat (bkz. `now()`): `Date.now()` saat değişiminde geriye
-		// atlayıp çift dokunma penceresini bozabilir. `pressStartRef` de aynı
-		// kaynağı kullanır, böylece iki zaman aynı tabanda ölçülür.
-		const tapTime = now();
-		const { width } = getSize();
+	/*
+	 * ── Çoklu dokunuşla sarma (YouTube tarzı zincir) ──────────
+	 *
+	 * ⚠️ KÖK NEDEN (kullanıcı: "çift dokunmayla sararken arayüz açılıp
+	 * kapanıyor, süre hep ±10 görünüyor"):
+	 *
+	 *   1. Çift dokunuştan sonra `lastTapRef` sıfırlanıyordu; 3. dokunuş
+	 *      yeniden "ilk dokunuş" sayılıp 280 ms sonra `onSingleTap`
+	 *      (kontrolleri aç/kapa) tetikliyordu. Hızlı sarma sırasında her
+	 *      ikinci dokunuşta arayüz böyle açılıp kapanıyordu.
+	 *   2. Çift dokunuş `onInteractionStart` çağırıp kontrolleri ZORLA
+	 *      gizliyordu.
+	 *   3. Gösterge her seferinde sabit `seekDuration` yazıyordu.
+	 *
+	 * Çözüm: ilk çift dokunuş zinciri BAŞLATIR; `MULTI_TAP_SEEK_WINDOW_MS`
+	 * içindeki her dokunuş (aynı yarıda) doğrudan sarar, tek-dokunuş hiç
+	 * çalışmaz, kontrollere dokunulmaz ve gösterge GERÇEKTEN uygulanan
+	 * toplamı yazar (10 → 20 → 30 sn; baş/sonda kırpılırsa gerçek miktar).
+	 */
+	const endSeekChain = useCallback(() => {
+		const chain = seekChainRef.current;
+		if (chain.timer) clearTimeout(chain.timer);
+		seekChainRef.current = { active: false, side: null, total: 0, timer: null };
+	}, []);
 
-		/*
-		 * ⚠️ ÇİFT DOKUNMA TESPİTİ.
-		 *
-		 * "Damga var mı" kontrolü `last.time > 0` idi. Bu, ilk dokunuşun
-		 * zaman damgası **tam olarak 0** olduğunda (monotonik saat
-		 * başlangıcı, `performance.now()`) çift dokunmayı hiç yakalayamaz
-		 * ve kullanıcı her dokunuşta yalnızca tek dokunuş davranışı
-		 * görürdü. Varlık ayrı bir bayrakla tutulur.
-		 *
-		 * `lastTapRef.current.time` artık sadece zaman farkı için kullanılır.
-		 */
-		const isDoubleTap =
-			lastTapRef.current.pending === true &&
-			tapTime - lastTapRef.current.time < DOUBLE_TAP_WINDOW_MS;
+	const performSeekTap = useCallback(
+		(side) => {
+			const s = stateRef.current;
+			const signed = side === "rewind" ? -s.seekDuration : s.seekDuration;
+			// `onSeekBy` gerçekte uygulanan farkı döndürür (kırpma sonrası).
+			const applied = s.onSeekBy?.(signed);
+			const chain = seekChainRef.current;
+			if (chain.timer) clearTimeout(chain.timer);
+			chain.active = true;
+			chain.side = side;
+			chain.total += typeof applied === "number" ? applied : signed;
+			chain.timer = setTimeout(endSeekChain, MULTI_TAP_SEEK_WINDOW_MS);
+			flashDoubleTap(side, Math.round(Math.abs(chain.total)));
+		},
+		[endSeekChain, flashDoubleTap],
+	);
 
-		if (isDoubleTap) {
-			/*
-			 * ⚠️ SORUN 8 — ÇİFT DOKUNMADA HUD AÇILIP KAPANIYORDU.
-			 *
-			 * "çift dokunma ile sararken her dokunuşta player hudu açılıp
-			 * kapanıyor."
-			 *
-			 * Mekanizma: `handleTap` İLK dokunuşta damgayı basıp
-			 * `onSingleTap` çağırıyordu (kontrolleri açıp kapatır). İKİNCİ
-			 * dokunuşta `isDoubleTap` doğru yakalansa bile ilk dokunuşun
-			 * `onSingleTap`'i çoktan çalışmış, HUD bir kez açılıp kapanmış
-			 * oluyordu. Sonuç: her çift dokunuşta iki kez sarma, iki kez
-			 * kontrol açılıp kapanması.
-			 *
-			 * Çözüm: ilk dokunuşta `onSingleTap` HİÇ çalıştırılmaz; yalnızca
-			 * damga basılır. `pendingSingleTapTimer` süresi dolmadan ikinci
-			 * dokunuş gelmezse tek dokunuş YANLAŞIM tetiklenir.
-			 *
-			 * Böylece: tek dokunuş = kontroller açılır (aynı gecikme,
-			 * fark edilmez); çift dokunuş = sarma olur, kontroller
-			 * karışmaz.
-			 */
+	const handleTap = useCallback(
+		(x) => {
+			const s = stateRef.current;
+			// Monotonik saat (bkz. `now()`).
+			const tapTime = now();
+			const { width } = getSize();
+			const zone = getTapZone(x, width, s);
+			const chain = seekChainRef.current;
+
+			const cancelPendingSingleTap = () => {
+				if (pendingSingleTapTimerRef.current) {
+					clearTimeout(pendingSingleTapTimerRef.current);
+					pendingSingleTapTimerRef.current = null;
+				}
+				lastTapRef.current = { time: 0, x: 0, pending: false };
+			};
+
+			// 1) Zincir sürüyor: aynı yarıdaki her dokunuş tekrar sarar.
+			if (chain.active) {
+				if (zone === chain.side) {
+					cancelPendingSingleTap();
+					performSeekTap(zone);
+					return;
+				}
+				// Karşı yarı / orta: zincir biter, bu dokunuş sıfırdan değerlendirilir.
+				endSeekChain();
+			}
+
+			// 2) Çift dokunma. Varlık ayrı `pending` bayrağıyla tutulur
+			// (`time > 0` kontrolü, damga 0 iken çift dokunmayı kaçırırdı).
+			const isDoubleTap =
+				lastTapRef.current.pending === true &&
+				tapTime - lastTapRef.current.time < DOUBLE_TAP_WINDOW_MS;
+
+			if (isDoubleTap) {
+				cancelPendingSingleTap();
+				// Ortada (veya canlıda) play/pause.
+				if (zone === "center") {
+					s.onTogglePlayPause?.();
+					return;
+				}
+				if (s.flags.doubleTapSeek === false) return;
+				// ⚠️ `onInteractionStart` ÇAĞRILMAZ: sarma kontrolleri
+				// açıp kapatmamalı. `onSeekBy` zaten gizleme sayacını yeniler.
+				performSeekTap(zone);
+				return;
+			}
+
+			// 3) İlk dokunuş. Basılı kalma (>200 ms) "tap" sayılmaz; bu
+			// kontrol damga basılmadan ÖNCE yapılır, yoksa `pending` takılı kalırdı.
+			if (tapTime - pressStartRef.current.time > MAX_TAP_HOLD_MS) return;
+
+			lastTapRef.current = { time: tapTime, x, pending: true };
 			if (pendingSingleTapTimerRef.current) {
 				clearTimeout(pendingSingleTapTimerRef.current);
+			}
+			pendingSingleTapTimerRef.current = setTimeout(() => {
 				pendingSingleTapTimerRef.current = null;
-			}
-			lastTapRef.current = { time: 0, x: 0, pending: false };
-			s.onInteractionStart?.();
-
-			// Canlıda seek yok; ortadaki bölge play/pause yapar.
-			if (!s.canSeek) {
-				s.onTogglePlayPause?.();
-				return;
-			}
-
-			const half = width / 2;
-			const pauseZone = width * DOUBLE_TAP_PAUSE_ZONE;
-			const inPauseZone = x > half - pauseZone && x < half + pauseZone;
-
-			// ±15% ortada play/pause (Netflix). Kapalıysa ortada da seek yok,
-			// çünkü "ortada ileri" yanıltıcıdır; kullanıcı play/pause bekler.
-			if (inPauseZone && s.flags.doubleTapPause) {
-				s.onTogglePlayPause?.();
-				return;
-			}
-
-			if (x < half) {
-				s.onSeekBy?.(-s.seekDuration);
-				flashDoubleTap("rewind", s.seekDuration);
-			} else {
-				s.onSeekBy?.(s.seekDuration);
-				flashDoubleTap("forward", s.seekDuration);
-			}
-			return;
-		}
-
-		// İlk dokunuş: damgayı tut, `onSingleTap`'i HENÜZ ÇAĞIRMA.
-		// İkinci dokunuş 280 ms içinde gelirse yukarıda yakalanır ve
-		// tek dokunuş tetiklenmez. Süre dolarsa aşağıdaki zamanlayıcı
-		// onu tetikler.
-		lastTapRef.current = { time: tapTime, x, pending: true };
-
-		// Basılı kalma (>200 ms) uzun basıştır, "tap" sayılmaz.
-		if (tapTime - pressStartRef.current.time > MAX_TAP_HOLD_MS) return;
-
-		/*
-		 * Bekleyen tek dokunuşu zamanla. Bu, çift dokunma penceresiyle
-		 * aynı süre: ikinci dokunuş bu sürede gelirse `isDoubleTap`
-		 * yakalar ve bu zamanlayıcı iptal edilir (aşağıdaki temizleme).
-		 */
-		if (pendingSingleTapTimerRef.current) {
-			clearTimeout(pendingSingleTapTimerRef.current);
-		}
-		pendingSingleTapTimerRef.current = setTimeout(() => {
-			pendingSingleTapTimerRef.current = null;
-			// Damga hâlâ duruyorsa ve başka bir dokunuş gelmemişse bu
-			// gerçekten TEK dokunuştu. `pending` bayrağını da temizle ki
-			// sonraki dokunuş yanlışlıkla çift sayılmasın.
-			if (!lastTapRef.current.pending) return;
-			if (lastTapRef.current.time !== tapTime) return;
-			lastTapRef.current = { time: 0, x: 0, pending: false };
-			s.onSingleTap?.();
-		}, DOUBLE_TAP_WINDOW_MS);
-	}, [getSize, flashDoubleTap]);
+				if (!lastTapRef.current.pending) return;
+				if (lastTapRef.current.time !== tapTime) return;
+				lastTapRef.current = { time: 0, x: 0, pending: false };
+				stateRef.current.onSingleTap?.();
+			}, DOUBLE_TAP_WINDOW_MS);
+		},
+		[getSize, performSeekTap, endSeekChain],
+	);
 
 	// ── Yatay sürükleme → seek önizleme (KUADRATİK) ─────────────
 	const applySwipeSeek = useCallback((currentX) => {
@@ -988,4 +1004,18 @@ function clampZoom(scale) {
  */
 function snapZoom(scale) {
 	return Math.abs(scale - 1) < ZOOM_SNAP ? 1 : scale;
+}
+
+/**
+ * Dokunulan bölge: "rewind" (sol), "forward" (sağ) veya "center" (play/pause).
+ * Canlıda (`canSeek` false) her yer "center" sayılır.
+ */
+function getTapZone(x, width, s) {
+	if (!s.canSeek) return "center";
+	const half = width / 2;
+	const pauseZone = width * DOUBLE_TAP_PAUSE_ZONE;
+	if (s.flags.doubleTapPause && x > half - pauseZone && x < half + pauseZone) {
+		return "center";
+	}
+	return x < half ? "rewind" : "forward";
 }
