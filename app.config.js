@@ -164,23 +164,31 @@ export default ({ config }) => {
 		 * sertifikaların EŞLEŞMESİ gerekir. disableCodeSigning bilgisi:
 		 * DISABLE_CODE_SIGNING=1 ile test amaçlı kapatılabilir.
 		 */
-		runtimeVersion: { policy: "appVersion" },
-		updates: {
-			url: "https://ota.burakaydogan.tk/manifest",
-			codeSigningMetadata:
-				process.env.DISABLE_CODE_SIGNING === "1"
+		runtimeVersion: "1",
+		...{
+			updates: {
+				url: "https://ota.burakaydogan.net.tr/manifest",
+				codeSigningMetadata: process.env.DISABLE_CODE_SIGNING
 					? undefined
 					: { keyid: "main", alg: "rsa-v1_5-sha256" },
-			codeSigningCertificate:
-				process.env.DISABLE_CODE_SIGNING === "1"
+				codeSigningCertificate: process.env.DISABLE_CODE_SIGNING
 					? undefined
 					: "./certs/certificate.pem",
-			enabled: true,
-			checkAutomatically: "ON_ERROR_RECOVERY",
-			fallbackToCacheTimeout: 0,
-			requestHeaders: {
-				"expo-channel-name": dir,
-				"expo-app-id": "46297b13-b95e-43b4-90da-cebab8f8741a",
+				enabled: true,
+				checkAutomatically: "ON_ERROR_RECOVERY",
+				fallbackToCacheTimeout: 0,
+				requestHeaders: {
+					/*
+					 * XPrem güncelleme seçimini expo-app-id + expo-channel-name
+					 * ikilisiyle yapar. Channel build SIRASINDA APK'ya gömülür;
+					 * RELEASE_CHANNEL tanımsızsa JSON.stringify değeri SESSİZCE
+					 * düşürür ve sunucu channel çözümleyemez — fallback şart
+					 * (manuel `bunx expo prebuild` sırasında env'i unutmak kolay).
+					 */
+					"expo-channel-name":
+						process.env.RELEASE_CHANNEL || "production",
+					"expo-app-id": "46297b13-b95e-43b4-90da-cebab8f8741a",
+				},
 			},
 		},
 
