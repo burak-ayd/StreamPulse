@@ -357,7 +357,7 @@ export default function SettingsScreen() {
 							icon="extension-puzzle-outline"
 							iconBg="#2563EB"
 							label="Eklentiler"
-							subtitle="Eklenti görünürlüğü ve kaynak yönetimi"
+							subtitle="Eklenti görünürlüğü ve yönetimi"
 							badgeText={
 								totalPluginsCount > 0
 									? `${activePluginsCount}/${totalPluginsCount} Aktif`

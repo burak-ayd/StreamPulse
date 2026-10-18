@@ -186,7 +186,7 @@ export default ({ config }) => {
 					 * (manuel `bunx expo prebuild` sırasında env'i unutmak kolay).
 					 */
 					"expo-channel-name":
-						process.env.RELEASE_CHANNEL || "production",
+						process.env.RELEASE_CHANNEL || "release",
 					"expo-app-id": "46297b13-b95e-43b4-90da-cebab8f8741a",
 				},
 			},
