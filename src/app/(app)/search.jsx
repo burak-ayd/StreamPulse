@@ -12,6 +12,7 @@ import {
 	removeFromSearchHistory,
 } from "@/utils/storage";
 import { useTvMetrics } from "@/utils/tvMetrics";
+import { useReactiveData } from "@/utils/storageListener";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import {
@@ -189,16 +190,24 @@ export default function SearchScreen() {
 		}
 	}, [params?.plugin]);
 
+	// Arama geçmişini diskten yükler. `useCallback`: hem ekran açılışında hem
+	// de senkronizasyon geçmişi değiştirdiğinde aynı fonksiyon kullanılır.
+	const loadSearchHistory = useCallback(async () => {
+		const history = await getSearchHistory();
+		setSearchHistory(history || []);
+	}, []);
+
 	// Ekran yaşam döngüsü yönetimi:
 	// Arama sayfasından çıkıldığında, eğer bir film/dizi detayına gidilmediyse
 	// (yani ana sayfa, keşfet veya başka bir sayfaya gidildiyse) arama sıfırlanır.
 	useEffect(() => {
 		isNavigatingToDetail = false;
 
-		// Kayıtlı arama geçmişini AsyncStorage'dan yükle
-		getSearchHistory().then((history) => {
-			setSearchHistory(history || []);
-		});
+		// Kayıtlı arama geçmişini AsyncStorage'dan yükle.
+		// `setState` `await` sonrasında çalıştığı için kural burada yanlış
+		// pozitif veriyor (dosyada aynı desen için bkz. yukarısı).
+		// eslint-disable-next-line react-hooks/set-state-in-effect
+		loadSearchHistory();
 
 		return () => {
 			// Arama sayfasındaki listelenen içerikler DIŞINDA bir yere gidilirse sıfırla
@@ -206,7 +215,12 @@ export default function SearchScreen() {
 				resetSearchMemoryCache();
 			}
 		};
-	}, []);
+	}, [loadSearchHistory]);
+
+	// Başka bir cihazda yapılan arama senkronize olduğunda (sıralamasıyla
+	// birlikte) liste yeniden okunur: ekran odaktayken açılıp kapanmasına
+	// gerek kalmaz.
+	useReactiveData(loadSearchHistory, "user_search_history");
 
 	// İçerik boyutu hazır olduğunda önceki kaydırma konumunu (scroll) geri yükle
 	const handleContentSizeChange = () => {
@@ -750,7 +764,7 @@ export default function SearchScreen() {
 									<View style={styles.historyList}>
 										{searchHistory.map((item, index) => (
 											<TVPressable
-												key={`${item}-${index}`}
+												key={`${item.q}-${index}`}
 												style={({ focused }) => [
 													styles.historyItem,
 													{
@@ -762,7 +776,7 @@ export default function SearchScreen() {
 													focused && styles.historyItemFocused,
 												]}
 												activeOpacity={0.7}
-												onPress={() => handleSearch(item)}>
+												onPress={() => handleSearch(item.q)}>
 												<View style={styles.historyItemContent}>
 													<Ionicons
 														name="search-outline"
@@ -777,13 +791,13 @@ export default function SearchScreen() {
 															{ color: colors.text },
 														]}
 														numberOfLines={1}>
-														{item}
+														{item.q}
 													</Text>
 												</View>
 												<TVPressable
 													onPress={() =>
 														handleDeleteHistoryItem(
-															item,
+															item.q,
 														)
 													}
 													style={({ focused }) => [
