@@ -5,14 +5,16 @@
  * app.config.js → `updates` bloğundan APK'ya gömülür. Bu modül yalnızca
  * JS tarafının ÇALIŞMA ZAMANI tercihlerini tutar.
  *
- * UX kararı (modem sessiz-uygulama modeli):
+ * UX kararı (sessiz-uygulama modeli):
  *   - Kontrol açılışta ve ön plana dönüşte sessizce yapılır
  *     (src/hooks/useOtaUpdate.js), kullanıcı hiçbir şey görmez.
- *   - Güncelleme sessizce İNDİRİLİR. Bildirim tercihi KAPALIYSA
- *     (varsayılan) indirme sonrası hiçbir mesaj çıkmaz; yeni bundle
- *     uygulamayı yeniden açtığında otomatik devreye girer.
+ *   - Güncelleme sessizce İNDİRİLİR. Kullanıcı uygulama ARKA PLANA
+ *     geçtiğinde (güvenli ekranda ise) JS sessizce yeniden yüklenir;
+ *     uygulamaya bir sonraki dönüşünde yeni sürüm zaten aktiftir.
+ *     Ötelenemezse (oynatıcı/indirme/form açık vb.) bir sonraki tam
+ *     açılışta otomatik devreye girer.
  *   - Tercih AÇIKSA "Şimdi yenile" sorusu çıkar, kullanıcı istemezse
- *     aynı sessiz döngüye düşer (bir sonraki açılış).
+ *     aynı sessiz döngüye düşer (arka plan / sonraki açılış).
  *
  * Esin ve referans: AstorTest2 proje akışı; tercih cihaz-yerel, AsyncStorage.
  */

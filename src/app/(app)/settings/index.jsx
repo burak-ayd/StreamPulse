@@ -483,8 +483,8 @@ export default function SettingsScreen() {
 						{/*
 						 * OTA bildirim tercihi (expo-updates · custom server).
 						 * KAPALI (varsayılan): JS güncellemesi sessizce iner,
-						 * uygulamayı yeniden açtığında otomatik uygulanır —
-						 * modern uygulamalardaki gibi kullanıcı fark etmez.
+						 * arka plana geçtiğinizde uygulanır — uygulamaya
+						 * dönüşte yeni sürüm zaten aktiftir, fark etmez.
 						 * AÇIK: indirilen her sürümde "Şimdi yenile?" sorusu.
 						 * Kontrol akışı RootLayout'tan yürür; burada sadece tercih.
 						 */}
@@ -495,7 +495,7 @@ export default function SettingsScreen() {
 							subtitle={
 								otaNotifyEnabled
 									? "İndirilen her sürümde onay sorulur"
-									: "Sessizce uygulanır · yeniden açılışta geçerli"
+									: "Sessizce uygulanır · arka planda otomatik"
 							}
 							showChevron={false}
 							rightComponent={
