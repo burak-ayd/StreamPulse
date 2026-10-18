@@ -573,11 +573,17 @@ export async function searchPluginContent(pluginName, query) {
  * @returns {Promise<Array>} Array of extractor results: [{ extractor, result: { name, url, referer, headers, subtitles } }]
  */
 export async function extractVideoSources(url) {
+	// ⏱ 30 sn sınırı: RN fetch'in kendi zarfı olduğu sürece (timeout yok)
+	// ağ takılırken "kaynak yükleniyor" ekranı sonsuza kadar dönüyordu.
+	// (AbortController kalıbı: AbortSignal.timeout Hermes'te sürüme bağımlı.)
+	const kontrol = new AbortController();
+	const zamanlimiti = setTimeout(() => kontrol.abort(), 30000);
 	try {
 		const response = await fetch(`${API_BASE_URL}/api/extract`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ url }),
+			signal: kontrol.signal,
 		});
 		if (response.ok) {
 			const data = await response.json();
@@ -616,6 +622,8 @@ export async function extractVideoSources(url) {
 		}
 	} catch (error) {
 		console.warn("API extractVideoSources error:", error.message);
+	} finally {
+		clearTimeout(zamanlimiti);
 	}
 	return [];
 }
