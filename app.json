@@ -2,7 +2,7 @@
   "expo": {
     "name": "Stream Pulse",
     "slug": "StreamPulse",
-    "version": "1.0.30",
+    "version": "1.0.31",
     "orientation": "default",
     "icon": "./assets/icons/release/icon.png",
     "scheme": "streampulse",
@@ -117,6 +117,7 @@
       "expo-image",
       "expo-status-bar",
       "expo-secure-store",
+      "expo-updates",
       "./scripts/withSplitApk.js",
       "./scripts/withGradleJvmArgs.js",
       "./scripts/withCustomApkName.js",
