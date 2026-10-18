@@ -136,7 +136,54 @@ export default ({ config }) => {
 		...config,
 		owner: "darkpuye",
 		name: getAppName(),
-		runtimeVersion: "1",
+
+		/*
+		 * ── OTA (expo-updates · custom server) ─────────────────────
+		 *
+		 * runtimeVersion = appVersion politikası: sürüm numarası her APK
+		 * derlemesinde bump-version.js ile arttığı için runtimeVersion da
+		 * otomatik artar. JS-only değişiklikte sürüm DEĞİŞMEZ → sunucudaki
+		 * güncelleme aynı runtime'a düşer → APK yeniden derlemeye gerek
+		 * kalmadan OTA ile gider. Native/gradle/plugin değişikliği →
+		 * sürüm ARTMAK ZORUNDA (APK derlemesi her şeye bağlı bulundu).
+		 *
+		 * Sunucu: AstorTest2'de kullanılan custom Expo Updates protokol
+		 * sunucusu (ota.burakaydogan.tk/manifest). İstekler
+		 * `expo-app-id` (StreamPulse'a özgü kayıt) ve `expo-channel-name`
+		 * başlığıyla gider; kanal APP_VARIANT'tan türetilir.
+		 *
+		 * checkAutomatically ON_ERROR_RECOVERY: açılışta bekleme YOK;
+		 * kontrol manuel olarak JS tarafında (src/hooks/useOtaUpdate.js)
+		 * açılış + foreground'da yapılır. fallbackToCacheTimeout=0 →
+		 * embedded bundle anında başlar, güncelleme arka planda iner.
+		 *
+		 * Kod imzası: sunucu manifest'i private key ile imzalar; APK'ya
+		 * gömülü `certs/certificate.pem` (public) doğrular. İmza tutmazsa
+		 * güncelleme REDDEDİLİR. certs/*.pem .gitignore'da (makine-lokal,
+		 * AstorTest2 ile aynı tutum); sunucunun imza anahtarı ile bu
+		 * sertifikaların EŞLEŞMESİ gerekir. disableCodeSigning bilgisi:
+		 * DISABLE_CODE_SIGNING=1 ile test amaçlı kapatılabilir.
+		 */
+		runtimeVersion: { policy: "appVersion" },
+		updates: {
+			url: "https://ota.burakaydogan.tk/manifest",
+			codeSigningMetadata:
+				process.env.DISABLE_CODE_SIGNING === "1"
+					? undefined
+					: { keyid: "main", alg: "rsa-v1_5-sha256" },
+			codeSigningCertificate:
+				process.env.DISABLE_CODE_SIGNING === "1"
+					? undefined
+					: "./certs/certificate.pem",
+			enabled: true,
+			checkAutomatically: "ON_ERROR_RECOVERY",
+			fallbackToCacheTimeout: 0,
+			requestHeaders: {
+				"expo-channel-name": dir,
+				"expo-app-id": "46297b13-b95e-43b4-90da-cebab8f8741a",
+			},
+		},
+
 		icon: p.icon,
 
 		ios: {

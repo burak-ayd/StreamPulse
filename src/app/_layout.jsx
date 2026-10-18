@@ -7,6 +7,7 @@ import { AppUpdateProvider } from "@/context/AppUpdateContext";
 import UpdateBanner from "@/components/update/UpdateBanner";
 import UpdateSheet from "@/components/update/UpdateSheet";
 import SplashOverlay from "@/components/splash/SplashOverlay";
+import { useOtaUpdate } from "@/hooks/useOtaUpdate";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { Stack } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -92,6 +93,16 @@ export default function RootLayout() {
 
 		lockTVOrientation();
 	}, []);
+
+	/*
+	 * ── OTA güncellemeleri (expo-updates · custom server) ───────────
+	 *
+	 * APK yeniden derlemeye gerek bırakmayan JS sürüm akışı: açılışta ve
+	 * ön plana dönüşte sessiz kontrol + indirme. Varsayılan KULLANICIYA
+	 * hiç görünmez; güncelleme bir sonraki açılışta otomatik uygulanır.
+	 * Bildirim tercihi Ayarlar → "Güncelleme Bildirimi" satırında.
+	 */
+	useOtaUpdate();
 
 	return (
 		<ThemeProvider>

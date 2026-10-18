@@ -1,25 +1,26 @@
 import BottomNavigation from "@/components/BottomNavigation";
-import { useNavLayout } from "@/hooks/useNavLayout";
-import { useTvMetrics } from "@/utils/tvMetrics";
-import { useAuth } from "@/context/AuthContext";
 import LanguageBadge from "@/components/common/LanguageBadge";
+import TVPressable from "@/components/common/TVPressable";
+import { useAppUpdate } from "@/context/AppUpdateContext";
+import { useAuth } from "@/context/AuthContext";
 import {
 	LANGUAGE_DISPLAY_MODES,
 	useLanguageDisplay,
 } from "@/context/LanguageDisplayContext";
 import { useThemeContext } from "@/context/ThemeContext";
-import { useAppUpdate } from "@/context/AppUpdateContext";
+import { useNavLayout } from "@/hooks/useNavLayout";
 import { fetchPlatforms } from "@/services/api";
+import { getNotifyOnUpdate, setNotifyOnUpdate } from "@/services/otaUpdate";
 import { openLogin } from "@/utils/authRoutes";
 import {
 	clearAllUserData,
 	getPluginVisibilitySettings,
 	getSelectedPlatform,
 } from "@/utils/storage";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import TVPressable from "@/components/common/TVPressable";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
 	Alert,
 	BackHandler,
@@ -191,7 +192,27 @@ export default function SettingsScreen() {
 		openSheet: openUpdateSheet,
 	} = useAppUpdate();
 
-	const { languageDisplayMode, setLanguageDisplayMode } = useLanguageDisplay();
+	/*
+	 * OTA bildirim tercihi (expo-updates · custom server): KAPALI
+	 * (varsayılan) güncelleme sessizce iner ve uygulamayı yeniden
+	 * açtığında kendiliğinden uygulanır; AÇIK ise "Şimdi yenile?"
+	 * sorusu gelir. Kontrol tetiklediği YOK — akış RootLayout'taki
+	 * useOtaUpdate ile zaten arka planda dönüyor.
+	 */
+	const [otaNotifyEnabled, setOtaNotifyEnabled] = useState(false);
+
+	useEffect(() => {
+		let isMounted = true;
+		getNotifyOnUpdate().then((value) => {
+			if (isMounted) setOtaNotifyEnabled(value);
+		});
+		return () => {
+			isMounted = false;
+		};
+	}, []);
+
+	const { languageDisplayMode, setLanguageDisplayMode } =
+		useLanguageDisplay();
 	const [languageModalVisible, setLanguageModalVisible] = useState(false);
 
 	// Modals for sub-settings
@@ -302,7 +323,13 @@ export default function SettingsScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right"]}
-				style={[styles.safeArea, { backgroundColor: colors.bg, paddingLeft: contentPaddingLeft }]}>
+				style={[
+					styles.safeArea,
+					{
+						backgroundColor: colors.bg,
+						paddingLeft: contentPaddingLeft,
+					},
+				]}>
 				<StatusBar
 					barStyle={
 						theme === "dark" ? "light-content" : "dark-content"
@@ -323,7 +350,6 @@ export default function SettingsScreen() {
 								}
 							: null,
 					]}>
-
 					{/* KATEGORİ 1: İÇERİK VE KAYNAKLAR */}
 					<SettingsSection title="İÇERİK VE KAYNAKLAR">
 						{/* Eklentiler */}
@@ -391,10 +417,11 @@ export default function SettingsScreen() {
 							label="Dil Bilgisi Gösterimi"
 							subtitle="İçeriklerde dil ve altyazı rozeti stili"
 							badgeText={
-								languageDisplayMode === LANGUAGE_DISPLAY_MODES.ICON
+								languageDisplayMode ===
+								LANGUAGE_DISPLAY_MODES.ICON
 									? "Simge"
 									: languageDisplayMode ===
-											LANGUAGE_DISPLAY_MODES.ICON_TEXT
+										  LANGUAGE_DISPLAY_MODES.ICON_TEXT
 										? "Simge + Yazı"
 										: "Yazı"
 							}
@@ -446,9 +473,46 @@ export default function SettingsScreen() {
 											: `v${installedVersion} yüklü • güncellemeleri kontrol et`
 							}
 							badgeText={pendingRelease ? "Güncelle" : undefined}
-							badgeColor={pendingRelease ? colors.primary : undefined}
+							badgeColor={
+								pendingRelease ? colors.primary : undefined
+							}
 							showChevron={false}
 							onPress={openUpdateSheet}
+						/>
+
+						{/*
+						 * OTA bildirim tercihi (expo-updates · custom server).
+						 * KAPALI (varsayılan): JS güncellemesi sessizce iner,
+						 * uygulamayı yeniden açtığında otomatik uygulanır —
+						 * modern uygulamalardaki gibi kullanıcı fark etmez.
+						 * AÇIK: indirilen her sürümde "Şimdi yenile?" sorusu.
+						 * Kontrol akışı RootLayout'tan yürür; burada sadece tercih.
+						 */}
+						<SettingRow
+							icon="sparkles-outline"
+							iconBg="#F59E0B"
+							label="Güncelleme Bildirimi"
+							subtitle={
+								otaNotifyEnabled
+									? "İndirilen her sürümde onay sorulur"
+									: "Sessizce uygulanır · yeniden açılışta geçerli"
+							}
+							showChevron={false}
+							rightComponent={
+								<Switch
+									value={otaNotifyEnabled}
+									trackColor={{
+										false: colors.border,
+										true: colors.primary,
+									}}
+									thumbColor="#ffffff"
+								/>
+							}
+							onPress={() => {
+								const next = !otaNotifyEnabled;
+								setOtaNotifyEnabled(next);
+								setNotifyOnUpdate(next);
+							}}
 						/>
 					</SettingsSection>
 
@@ -483,7 +547,9 @@ export default function SettingsScreen() {
 								subtitle="Kod ya da QR okutarak TV'nizi bağlayın"
 								onPress={() =>
 									isLoggedIn
-										? router.push("/(app)/settings/tv-connect")
+										? router.push(
+												"/(app)/settings/tv-connect",
+											)
 										: openLogin(router)
 								}
 							/>
@@ -500,7 +566,9 @@ export default function SettingsScreen() {
 							iconBg="#EF4444"
 							label="Oturum Teşhisi"
 							subtitle="Çıkış olaylarının kaydı (hata ayıklama)"
-							onPress={() => router.push("/(app)/settings/authDiag")}
+							onPress={() =>
+								router.push("/(app)/settings/authDiag")
+							}
 						/>
 
 						{/* Yerel Verileri Sıfırla */}
@@ -542,7 +610,9 @@ export default function SettingsScreen() {
 									Genel Ayarlar
 								</Text>
 								<TVPressable
-									focusedStyle={styles.modalCloseButtonFocused}
+									focusedStyle={
+										styles.modalCloseButtonFocused
+									}
 									onPress={() =>
 										setGeneralModalVisible(false)
 									}
@@ -702,7 +772,9 @@ export default function SettingsScreen() {
 									Düzen Tercihleri
 								</Text>
 								<TVPressable
-									focusedStyle={styles.modalCloseButtonFocused}
+									focusedStyle={
+										styles.modalCloseButtonFocused
+									}
 									onPress={() =>
 										setLayoutModalVisible(false)
 									}>
@@ -781,7 +853,9 @@ export default function SettingsScreen() {
 									Dil Bilgisi Gösterimi
 								</Text>
 								<TVPressable
-									focusedStyle={styles.modalCloseButtonFocused}
+									focusedStyle={
+										styles.modalCloseButtonFocused
+									}
 									onPress={() =>
 										setLanguageModalVisible(false)
 									}>
@@ -831,7 +905,9 @@ export default function SettingsScreen() {
 													: colors.border,
 											},
 										]}
-										focusedStyle={styles.modalOptionCardFocused}
+										focusedStyle={
+											styles.modalOptionCardFocused
+										}
 										activeOpacity={0.7}
 										onPress={() => {
 											setLanguageDisplayMode(opt.key);
@@ -872,8 +948,7 @@ export default function SettingsScreen() {
 											style={[
 												styles.radioOuter,
 												isSelected && {
-													borderColor:
-														colors.primary,
+													borderColor: colors.primary,
 												},
 											]}>
 											{isSelected && (
@@ -1021,7 +1096,8 @@ const styles = StyleSheet.create({
 		paddingVertical: 12,
 		borderBottomWidth: StyleSheet.hairlineWidth,
 	},
-	modalHeader: {		flexDirection: "row",
+	modalHeader: {
+		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
 		marginBottom: 20,
