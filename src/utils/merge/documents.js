@@ -50,60 +50,117 @@ export function mergeDocument(localDoc, remoteDoc) {
 }
 
 /**
- * Arama geçmişini birleştirir (Benzersiz sorgular, en yeniden en eskiye, cap 20)
+ * Gelen değeri listeye çevirir.
+ *
+ * ⚠️ `|| []` YETMEZ. Boş JSONB dizi bazı sunucu katmanlarında boş NESNE `{}`
+ * olarak döner (Python'da `[] or {}` -> `{}`). `{}` truthy olduğu için
+ * `payload || []` fallback'i onu yakalamaz ve `({}).forEach` undefined
+ * döner → "undefined is not a function". Bu yüzden tip gerçekten doğrulanır.
+ * @param {unknown} value
+ * @returns {Array<unknown>}
+ */
+function asSearchList(value) {
+	if (Array.isArray(value)) return value;
+	if (typeof value === "string" && value.trim().length > 0) {
+		// Bazı istemciler JSON metni gönderebilir; bir kez çözmeyi dene
+		try {
+			const parsed = JSON.parse(value);
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+	return [];
+}
+
+/**
+ * Tek bir geçmiş kaydını `{ q, time }` biçimine çevirir.
+ *
+ * ⚠️ ESKİ SÜRÜMLER DÜZ METİN yazıyordu (`["matrix", "dune"]`). Bir damga
+ * taşımadıkları için birleştirmede hepsinin `time` değeri 0 kalıyordu ve
+ * sıralama hiçbir şey yapmıyordu: başka cihazda yapılan aramalar listenin
+ * SONUNA düşüyordu (kullanıcı bildirimi). Eski kayıtlar yine kabul edilir;
+ * damgası sonradan `normalizeSearchHistory` tarafından verilir.
+ *
+ * @param {string|object} item
+ * @returns {{q: string, time: number}|null}
+ */
+export function normalizeSearchEntry(item) {
+	if (typeof item === "string") {
+		const q = item.trim();
+		return q ? { q, time: 0 } : null;
+	}
+	if (item && typeof item === "object") {
+		const q = String(item.q ?? item.query ?? "").trim();
+		if (!q) return null;
+		const raw = Number(item.time ?? item._hlc?.wall ?? 0);
+		return { q, time: Number.isFinite(raw) && raw > 0 ? raw : 0 };
+	}
+	return null;
+}
+
+/**
+ * Geçmiş listesini normalize eder: her kayıt `{ q, time }` olur, tekrarlar
+ * (büyük/küçük harf duyarsız) atılır, SIRA KORUNUR.
+ *
+ * `fallbackTime` ("şimdi") verilirse damgasız kayıtlara listenin KENDİ sırası
+ * korunarak azalan damga atanır (`fallbackTime - index`). Böylece eski
+ * sürümden gelen geçmiş ilk senkronizasyonda karışmaz; en üstteki kayıt
+ * "şimdi", altındaki bir milisaniye önce sayılır.
+ *
+ * @param {Array<string|object>} rawList
+ * @param {{fallbackTime?: number}} [options] - 0 = damgasızları olduğu gibi bırak
+ * @returns {Array<{q: string, time: number}>}
+ */
+export function normalizeSearchHistory(rawList, { fallbackTime = 0 } = {}) {
+	const out = [];
+	const seen = new Set();
+
+	asSearchList(rawList).forEach((item, index) => {
+		const entry = normalizeSearchEntry(item);
+		if (!entry) return;
+
+		const key = entry.q.toLowerCase();
+		if (seen.has(key)) return;
+		seen.add(key);
+
+		if (entry.time === 0 && fallbackTime > 0) {
+			entry.time = fallbackTime - index;
+		}
+		out.push(entry);
+	});
+
+	return out;
+}
+
+/**
+ * Arama geçmişini birleştirir: sorgu başına EN SON aranma anı kazanır,
+ * liste bu damgaya göre yeniden-eskiye sıralanır, 20 kayıtta kırpılır.
+ *
  * @param {Array<string|object>} localHistory
  * @param {Array<string|object>} remoteHistory
- * @returns {Array<string>}
+ * @returns {Array<{q: string, time: number}>}
  */
 export function mergeSearchHistory(localHistory = [], remoteHistory = []) {
-	// ⚠️ `|| []` YETMEZ. Boş JSONB dizi bazı sunucu katmanlarında boş NESNE `{}`
-	// olarak döner (Python'da `[] or {}` -> `{}`). `{}` truthy olduğu için
-	// `payload || []` fallback'i onu yakalamaz ve `({}).forEach` undefined
-	// döner → "undefined is not a function". Bu yüzden tip gerçekten doğrulanır.
-	const asList = (value) => {
-		if (Array.isArray(value)) return value;
-		if (typeof value === "string" && value.trim().length > 0) {
-			// Bazı istemciler JSON metni gönderebilir; bir kez çözmeyi dene
-			try {
-				const parsed = JSON.parse(value);
-				return Array.isArray(parsed) ? parsed : [];
-			} catch {
-				return [];
-			}
-		}
-		return [];
-	};
-
-	const normalizeItem = (item) => {
-		if (typeof item === "string") return { q: item.trim(), time: 0 };
-		if (item && typeof item === "object") {
-			return {
-				q: (item.q || item.query || "").trim(),
-				time: item._hlc?.wall || item.time || 0,
-			};
-		}
-		return null;
-	};
+	const now = Date.now();
+	const local = normalizeSearchHistory(localHistory, { fallbackTime: now });
+	const remote = normalizeSearchHistory(remoteHistory, { fallbackTime: now });
 
 	const itemsMap = new Map();
 
-	const add = (item) => {
-		const norm = normalizeItem(item);
-		if (!norm || !norm.q) return;
-
-		const existing = itemsMap.get(norm.q.toLowerCase());
+	const add = (norm) => {
+		const key = norm.q.toLowerCase();
+		const existing = itemsMap.get(key);
 		if (!existing || norm.time > existing.time) {
-			itemsMap.set(norm.q.toLowerCase(), norm);
+			itemsMap.set(key, norm);
 		}
 	};
 
-	asList(localHistory).forEach(add);
-	asList(remoteHistory).forEach(add);
+	local.forEach(add);
+	remote.forEach(add);
 
 	// Sırala: en son aranan en başta
 	const sorted = Array.from(itemsMap.values()).sort((a, b) => b.time - a.time);
 
-	// String array olarak dön ve sınırla (20)
-	const stringList = sorted.map((s) => s.q);
-	return capList(stringList, SIZE_CAPS.search_history || 20);
+	return capList(sorted, SIZE_CAPS.search_history || 20);
 }

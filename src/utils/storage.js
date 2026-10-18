@@ -4,6 +4,7 @@ import { getDeviceId } from "./deviceId";
 import { now as getHlcNow } from "./hlc";
 import { filterPayload, capList, SIZE_CAPS } from "./fieldWhitelist";
 import { canonicalType } from "./mediaType";
+import { normalizeSearchHistory } from "./merge/documents";
 
 export const STORAGE_KEYS = {
 	USER_PROFILE: "user_profile",
@@ -824,9 +825,14 @@ export function isLibraryHidden(hiddenList, item) {
 }
 
 /**
- * Arama geçmişini getirir
+ * Arama geçmişini ham hâliyle okur (normalize etmez).
+ *
+ * ⚠️ Bu fonksiyon `mutate()` içinden çağrılmak üzere vardır: iç içe `mutate`
+ * çağrısı kuyruğu kilitler (`getSearchHistory` → `mutate` → tekrar
+ * `getSearchHistory`). Yazma fonksiyonları bu yüzden ham okumayı kullanır.
+ * @returns {Promise<Array<unknown>>}
  */
-export async function getSearchHistory() {
+async function readSearchHistoryRaw() {
 	try {
 		const data = await AsyncStorage.getItem(STORAGE_KEYS.SEARCH_HISTORY);
 		return data ? JSON.parse(data) : [];
@@ -837,18 +843,90 @@ export async function getSearchHistory() {
 }
 
 /**
+ * Disk üzerindeki liste, normalize edilmiş listeyle aynı mı?
+ * Aynıysa gereksiz yazma (ve gereksiz push) yapılmaz.
+ */
+function isSearchHistoryStored(stored, normalized) {
+	if (!Array.isArray(stored) || stored.length !== normalized.length) return false;
+	return stored.every((item, index) => {
+		const entry = normalized[index];
+		return (
+			item &&
+			typeof item === "object" &&
+			!Array.isArray(item) &&
+			item.q === entry.q &&
+			Number(item.time) === entry.time
+		);
+	});
+}
+
+/**
+ * Arama geçmişini getirir ve damgasız kayıtları KALICI olarak damgalar.
+ *
+ * Her kayıt `{ q, time }` biçimindedir; `time` = sorgunun bu hesapta en son
+ * arandığı an (epoch ms). Sıralama cihazlar arası bu damgaya göre yapılır:
+ * damgasız (düz metin) kayıtlarla `mergeSearchHistory` sıralayamıyordu ve
+ * başka cihazdan gelen aramalar listenin sonuna düşüyordu.
+ *
+ * Eski sürümün yazdığı düz metin liste ilk okumada, mevcut sırası korunarak
+ * damgalanır ve diske yazılır. Yazmazsak her okuma farklı bir "şimdi" üretir
+ * (sıralama oynar) ve sunucuya damgasız liste geri giderdi.
+ *
+ * @returns {Promise<Array<{q: string, time: number}>>}
+ */
+export async function getSearchHistory() {
+	try {
+		const raw = await readSearchHistoryRaw();
+		// `fallbackTime` sayesinde damgasız kayıtlar mevcut sıralarını korur.
+		const normalized = normalizeSearchHistory(raw, {
+			fallbackTime: Date.now(),
+		});
+
+		if (isSearchHistoryStored(raw, normalized)) return normalized;
+
+		// Kilit altında yeniden oku: bu arada bir arama eklenmiş olabilir.
+		return await mutate(STORAGE_KEYS.SEARCH_HISTORY, async () => {
+			const current = await readSearchHistoryRaw();
+			const fixed = normalizeSearchHistory(current, {
+				fallbackTime: Date.now(),
+			});
+			if (!isSearchHistoryStored(current, fixed)) {
+				await AsyncStorage.setItem(
+					STORAGE_KEYS.SEARCH_HISTORY,
+					JSON.stringify(fixed),
+				);
+				notifyStorageChange(STORAGE_KEYS.SEARCH_HISTORY, fixed);
+			}
+			return fixed;
+		});
+	} catch (error) {
+		console.error("Arama geçmişi okunurken hata:", error);
+		return [];
+	}
+}
+
+/**
  * Arama geçmişine yeni sorgu ekler (en fazla 20 adet)
+ *
+ * Sorguya ŞU AN damgası verilir ve liste damgaya göre yeniden sıralanır:
+ * böylece başka cihazda daha yeni yapılmış bir arama, yerelde eski bir
+ * sorguyu tekrar ararken listenin başına geçer.
  */
 export async function addToSearchHistory(query) {
 	return mutate(STORAGE_KEYS.SEARCH_HISTORY, async () => {
 		try {
 			if (!query || !query.trim()) return [];
 			const trimmed = query.trim();
-			const history = await getSearchHistory();
+			const history = normalizeSearchHistory(await readSearchHistoryRaw(), {
+				fallbackTime: Date.now(),
+			});
 			const filtered = history.filter(
-				(item) => item.toLowerCase() !== trimmed.toLowerCase(),
+				(item) => item.q.toLowerCase() !== trimmed.toLowerCase(),
 			);
-			const updated = [trimmed, ...filtered].slice(0, SIZE_CAPS.search_history || 20);
+			const updated = capList(
+				[{ q: trimmed, time: Date.now() }, ...filtered],
+				SIZE_CAPS.search_history || 20,
+			);
 			await AsyncStorage.setItem(
 				STORAGE_KEYS.SEARCH_HISTORY,
 				JSON.stringify(updated),
@@ -868,9 +946,11 @@ export async function addToSearchHistory(query) {
 export async function removeFromSearchHistory(query) {
 	return mutate(STORAGE_KEYS.SEARCH_HISTORY, async () => {
 		try {
-			const history = await getSearchHistory();
+			const history = normalizeSearchHistory(await readSearchHistoryRaw(), {
+				fallbackTime: Date.now(),
+			});
 			const updated = history.filter(
-				(item) => item.toLowerCase() !== query.toLowerCase(),
+				(item) => item.q.toLowerCase() !== query.toLowerCase(),
 			);
 			await AsyncStorage.setItem(
 				STORAGE_KEYS.SEARCH_HISTORY,
