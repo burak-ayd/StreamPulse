@@ -190,11 +190,30 @@ export default function SearchScreen() {
 		}
 	}, [params?.plugin]);
 
+	/*
+	 * Geçmiş okumaları arasında sıra koruması.
+	 *
+	 * Aynı anda birden fazla okuma uçabilir (ekran açılışı + senkronizasyon
+	 * bildirimi + silme sonrası). Geç dönen bir okuma, daha yeni bir sonucun
+	 * üstüne yazarsa SİLİNEN arama ekranda geri gelir; her okumaya sıra
+	 * numarası verip yalnızca en sonuncusunu uyguluyoruz.
+	 */
+	const historyLoadRef = useRef(0);
+
 	// Arama geçmişini diskten yükler. `useCallback`: hem ekran açılışında hem
 	// de senkronizasyon geçmişi değiştirdiğinde aynı fonksiyon kullanılır.
 	const loadSearchHistory = useCallback(async () => {
+		const loadId = ++historyLoadRef.current;
 		const history = await getSearchHistory();
+		if (loadId !== historyLoadRef.current) return;
 		setSearchHistory(history || []);
+	}, []);
+
+	// Yazma işlemlerinin döndürdüğü listeyi uygular; uçuştaki eski okumaları
+	// geçersiz kılar (kilit altında üretilmiş liste her zaman daha yenidir).
+	const applySearchHistory = useCallback((list) => {
+		historyLoadRef.current += 1;
+		setSearchHistory(Array.isArray(list) ? list : []);
 	}, []);
 
 	// Ekran yaşam döngüsü yönetimi:
@@ -203,10 +222,7 @@ export default function SearchScreen() {
 	useEffect(() => {
 		isNavigatingToDetail = false;
 
-		// Kayıtlı arama geçmişini AsyncStorage'dan yükle.
-		// `setState` `await` sonrasında çalıştığı için kural burada yanlış
-		// pozitif veriyor (dosyada aynı desen için bkz. yukarısı).
-		// eslint-disable-next-line react-hooks/set-state-in-effect
+		// Kayıtlı arama geçmişini AsyncStorage'dan yükle
 		loadSearchHistory();
 
 		return () => {
@@ -248,7 +264,7 @@ export default function SearchScreen() {
 
 		// Arama geçmişine ekle ve listeyi güncelle
 		addToSearchHistory(target).then((updated) => {
-			if (updated) setSearchHistory(updated);
+			if (updated) applySearchHistory(updated);
 		});
 
 		// Bellek önbelleğini güncelle
@@ -302,13 +318,13 @@ export default function SearchScreen() {
 	// Geçmişten tekil arama sorgusunu sil
 	const handleDeleteHistoryItem = async (queryToDelete) => {
 		const updated = await removeFromSearchHistory(queryToDelete);
-		setSearchHistory(updated || []);
+		applySearchHistory(updated);
 	};
 
 	// Tüm geçmişi temizle
 	const handleClearAllHistory = async () => {
 		await clearSearchHistory();
-		setSearchHistory([]);
+		applySearchHistory([]);
 	};
 
 	// Arama alanını ve sonuçları sıfırla

@@ -69,6 +69,10 @@ export const SIZE_CAPS = {
 	watch_history: 500,
 	continue_watching: 50,
 	search_history: 20,
+	// Silme kayıtları (tombstone): silinen sorgu görünen listeden çıkar ama
+	// "şu an silindi" bilgisi taşınmak zorundadır, yoksa öteki cihazın
+	// listesindeki kopya bir sonraki birleştirmede öğeyi geri getirir.
+	search_history_deleted: 50,
 	downloads: 200,
 };
 

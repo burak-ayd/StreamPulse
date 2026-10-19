@@ -16,7 +16,7 @@ import { now as getHlcNow, update as mergeHlc } from "@/utils/hlc";
 import { filterPayload } from "@/utils/fieldWhitelist";
 import { mergeFavorites } from "@/utils/merge/favorites";
 import { mergeLibraryList } from "@/utils/merge/library";
-import { mergeDocument, mergeSearchHistory } from "@/utils/merge/documents";
+import { mergeDocument, mergeSearchHistoryDoc } from "@/utils/merge/documents";
 import { notifyStorageChange } from "@/utils/storageListener";
 import { hasSession } from "./token";
 import { STORAGE_KEYS } from "@/utils/storage";
@@ -593,12 +593,16 @@ async function applyPullData(pullData, { full = false } = {}) {
 	if (documents.search_history) {
 		try {
 			const localRaw = await AsyncStorage.getItem("user_search_history");
-			const localHistory = localRaw ? JSON.parse(localRaw) : [];
-			// Sunucu boş diziyi `{}` olarak dönebilir; mergeSearchHistory zaten
-			// tipi doğruluyor ama burada da netleştiriyoruz.
-			const rawRemote = documents.search_history?.payload;
-			const remoteHistory = Array.isArray(rawRemote) ? rawRemote : [];
-			const merged = mergeSearchHistory(localHistory, remoteHistory);
+			const localDoc = localRaw ? JSON.parse(localRaw) : null;
+			/*
+			 * ⚠️ Sunucudan gelen payload DİZİ olmayabilir. `mergeSearchHistoryDoc`
+			 * hem eski düz diziyi (v1) hem `{items, deleted, clearedAt}` belgesini
+			 * (v2) kabul eder. Payload'ı burada diziye ZORLAMAK, v2 belgedeki
+			 * silme kayıtlarını ve "tümünü temizle" damgasını çöpe atardı:
+			 * silinen aramalar öteki cihazdan geri gelirdi.
+			 */
+			const remoteDoc = documents.search_history?.payload;
+			const merged = mergeSearchHistoryDoc(localDoc, remoteDoc);
 			await AsyncStorage.setItem("user_search_history", JSON.stringify(merged));
 			notifyStorageChange("user_search_history", merged, { source: "sync" });
 			markDoc("search_history", documents.search_history, merged);
