@@ -4,7 +4,7 @@ import { getDeviceId } from "./deviceId";
 import { now as getHlcNow } from "./hlc";
 import { filterPayload, capList, SIZE_CAPS } from "./fieldWhitelist";
 import { canonicalType } from "./mediaType";
-import { normalizeSearchHistory } from "./merge/documents";
+import { resolveSearchDoc } from "./merge/documents";
 
 export const STORAGE_KEYS = {
 	USER_PROFILE: "user_profile",
@@ -825,79 +825,90 @@ export function isLibraryHidden(hiddenList, item) {
 }
 
 /**
- * Arama geçmişini ham hâliyle okur (normalize etmez).
+ * Arama geçmişi belgesini ham hâliyle okur (normalize etmez).
  *
  * ⚠️ Bu fonksiyon `mutate()` içinden çağrılmak üzere vardır: iç içe `mutate`
  * çağrısı kuyruğu kilitler (`getSearchHistory` → `mutate` → tekrar
  * `getSearchHistory`). Yazma fonksiyonları bu yüzden ham okumayı kullanır.
- * @returns {Promise<Array<unknown>>}
+ * @returns {Promise<unknown>} v2 belge, v1 dizi veya null
  */
-async function readSearchHistoryRaw() {
+async function readSearchHistoryDocRaw() {
 	try {
 		const data = await AsyncStorage.getItem(STORAGE_KEYS.SEARCH_HISTORY);
-		return data ? JSON.parse(data) : [];
+		return data ? JSON.parse(data) : null;
 	} catch (error) {
 		console.error("Arama geçmişi okunurken hata:", error);
-		return [];
+		return null;
 	}
 }
 
-/**
- * Disk üzerindeki liste, normalize edilmiş listeyle aynı mı?
- * Aynıysa gereksiz yazma (ve gereksiz push) yapılmaz.
- */
-function isSearchHistoryStored(stored, normalized) {
-	if (!Array.isArray(stored) || stored.length !== normalized.length) return false;
-	return stored.every((item, index) => {
-		const entry = normalized[index];
+/** İki kayıt listesi (q + time) birebir aynı mı? */
+function isSameSearchEntries(a, b) {
+	if (!Array.isArray(a) || !Array.isArray(b)) return false;
+	if (a.length !== b.length) return false;
+	return a.every((entry, index) => {
+		const other = b[index];
 		return (
-			item &&
-			typeof item === "object" &&
-			!Array.isArray(item) &&
-			item.q === entry.q &&
-			Number(item.time) === entry.time
+			entry &&
+			other &&
+			typeof entry === "object" &&
+			typeof other === "object" &&
+			entry.q === other.q &&
+			Number(entry.time) === Number(other.time)
 		);
 	});
 }
 
 /**
- * Arama geçmişini getirir ve damgasız kayıtları KALICI olarak damgalar.
+ * Disk üzerindeki belge, çözümlenmiş (resolved) belgeyle aynı mı?
  *
- * Her kayıt `{ q, time }` biçimindedir; `time` = sorgunun bu hesapta en son
- * arandığı an (epoch ms). Sıralama cihazlar arası bu damgaya göre yapılır:
- * damgasız (düz metin) kayıtlarla `mergeSearchHistory` sıralayamıyordu ve
- * başka cihazdan gelen aramalar listenin sonuna düşüyordu.
+ * ⚠️ `JSON.stringify` karşılaştırması KULLANILMAZ: sunucu JSONB anahtarları
+ * yeniden sıralayabilir. Sıralama farkı "değişti" sanılıp her pull'da yazma
+ * ve push tetiklenirdi.
+ */
+function isSameSearchDoc(stored, resolved) {
+	if (!stored || typeof stored !== "object" || Array.isArray(stored)) return false;
+	if (!resolved) return false;
+	if (Number(stored.clearedAt || 0) !== Number(resolved.clearedAt || 0)) return false;
+	return (
+		isSameSearchEntries(stored.items, resolved.items) &&
+		isSameSearchEntries(stored.deleted, resolved.deleted)
+	);
+}
+
+/**
+ * Arama geçmişini getirir (görünen liste: en yeni önce) ve belgeyi kalıcı
+ * olarak tutarlı hâle getirir.
  *
- * Eski sürümün yazdığı düz metin liste ilk okumada, mevcut sırası korunarak
- * damgalanır ve diske yazılır. Yazmazsak her okuma farklı bir "şimdi" üretir
- * (sıralama oynar) ve sunucuya damgasız liste geri giderdi.
+ * Her kayıt `{ q, time }`; `time` = sorgunun bu hesapta en son arandığı an.
+ * Disk/sunucudaki belge `{ items, deleted, clearedAt }` taşır (bkz.
+ * `merge/documents.js`): silme bilgisi ve "tümünü temizle" damgası olmadan
+ * başka cihazdan gelen kopya silinen aramayı geri getiriyordu.
+ *
+ * Eski sürümün yazdığı düz metin liste de kabul edilir; ilk okumada
+ * damgalanıp diske yazılır, böylece sunucuya da damgalı hâli gider.
  *
  * @returns {Promise<Array<{q: string, time: number}>>}
  */
 export async function getSearchHistory() {
 	try {
-		const raw = await readSearchHistoryRaw();
-		// `fallbackTime` sayesinde damgasız kayıtlar mevcut sıralarını korur.
-		const normalized = normalizeSearchHistory(raw, {
-			fallbackTime: Date.now(),
-		});
+		const raw = await readSearchHistoryDocRaw();
+		const resolved = resolveSearchDoc(raw);
 
-		if (isSearchHistoryStored(raw, normalized)) return normalized;
+		if (isSameSearchDoc(raw, resolved)) return resolved.items;
 
 		// Kilit altında yeniden oku: bu arada bir arama eklenmiş olabilir.
 		return await mutate(STORAGE_KEYS.SEARCH_HISTORY, async () => {
-			const current = await readSearchHistoryRaw();
-			const fixed = normalizeSearchHistory(current, {
-				fallbackTime: Date.now(),
-			});
-			if (!isSearchHistoryStored(current, fixed)) {
+			const current = await readSearchHistoryDocRaw();
+			const doc = resolveSearchDoc(current);
+			if (!isSameSearchDoc(current, doc)) {
 				await AsyncStorage.setItem(
 					STORAGE_KEYS.SEARCH_HISTORY,
-					JSON.stringify(fixed),
+					JSON.stringify(doc),
 				);
-				notifyStorageChange(STORAGE_KEYS.SEARCH_HISTORY, fixed);
+				notifyStorageChange(STORAGE_KEYS.SEARCH_HISTORY, doc);
 			}
-			return fixed;
+			return doc.items;
 		});
 	} catch (error) {
 		console.error("Arama geçmişi okunurken hata:", error);
@@ -908,31 +919,35 @@ export async function getSearchHistory() {
 /**
  * Arama geçmişine yeni sorgu ekler (en fazla 20 adet)
  *
- * Sorguya ŞU AN damgası verilir ve liste damgaya göre yeniden sıralanır:
- * böylece başka cihazda daha yeni yapılmış bir arama, yerelde eski bir
- * sorguyu tekrar ararken listenin başına geçer.
+ * Sorguya ŞU AN damgası verilir; liste damgaya göre sıralanır. Aynı sorgu
+ * daha önce silinmişse silme kaydı kaldırılır (yeni arama silmeden yenidir).
  */
 export async function addToSearchHistory(query) {
 	return mutate(STORAGE_KEYS.SEARCH_HISTORY, async () => {
 		try {
 			if (!query || !query.trim()) return [];
 			const trimmed = query.trim();
-			const history = normalizeSearchHistory(await readSearchHistoryRaw(), {
-				fallbackTime: Date.now(),
-			});
-			const filtered = history.filter(
-				(item) => item.q.toLowerCase() !== trimmed.toLowerCase(),
-			);
-			const updated = capList(
-				[{ q: trimmed, time: Date.now() }, ...filtered],
-				SIZE_CAPS.search_history || 20,
-			);
+			const key = trimmed.toLowerCase();
+			const doc = resolveSearchDoc(await readSearchHistoryDocRaw());
+
+			const updated = {
+				...doc,
+				items: capList(
+					[
+						{ q: trimmed, time: Date.now() },
+						...doc.items.filter((item) => item.q.toLowerCase() !== key),
+					],
+					SIZE_CAPS.search_history || 20,
+				),
+				deleted: doc.deleted.filter((entry) => entry.q.toLowerCase() !== key),
+			};
+
 			await AsyncStorage.setItem(
 				STORAGE_KEYS.SEARCH_HISTORY,
 				JSON.stringify(updated),
 			);
 			notifyStorageChange(STORAGE_KEYS.SEARCH_HISTORY, updated);
-			return updated;
+			return updated.items;
 		} catch (error) {
 			console.error("Arama geçmişi kaydedilirken hata:", error);
 			return [];
@@ -941,23 +956,39 @@ export async function addToSearchHistory(query) {
 }
 
 /**
- * Arama geçmişinden tek bir sorguyu siler
+ * Arama geçmişinden tek bir sorguyu siler.
+ *
+ * ⚠️ Öğeyi listeden çıkarmak YETMEZ: o öğe öteki cihazın listesinde durduğu
+ * sürece bir sonraki birleştirmede geri gelir (kullanıcı bildirimi: "sildiğim
+ * arama tekrar geliyor"). Bu yüzden silme, damgalı bir SİLME KAYDI olarak da
+ * yazılır; birleştirme silme kaydını kaydı bastırır.
  */
 export async function removeFromSearchHistory(query) {
 	return mutate(STORAGE_KEYS.SEARCH_HISTORY, async () => {
 		try {
-			const history = normalizeSearchHistory(await readSearchHistoryRaw(), {
-				fallbackTime: Date.now(),
-			});
-			const updated = history.filter(
-				(item) => item.q.toLowerCase() !== query.toLowerCase(),
-			);
+			const trimmed = String(query || "").trim();
+			if (!trimmed) return [];
+			const key = trimmed.toLowerCase();
+			const doc = resolveSearchDoc(await readSearchHistoryDocRaw());
+
+			const updated = {
+				...doc,
+				items: doc.items.filter((item) => item.q.toLowerCase() !== key),
+				deleted: capList(
+					[
+						{ q: trimmed, time: Date.now() },
+						...doc.deleted.filter((entry) => entry.q.toLowerCase() !== key),
+					],
+					SIZE_CAPS.search_history_deleted || 50,
+				),
+			};
+
 			await AsyncStorage.setItem(
 				STORAGE_KEYS.SEARCH_HISTORY,
 				JSON.stringify(updated),
 			);
 			notifyStorageChange(STORAGE_KEYS.SEARCH_HISTORY, updated);
-			return updated;
+			return updated.items;
 		} catch (error) {
 			console.error("Arama geçmişinden silinirken hata:", error);
 			return [];
@@ -974,10 +1005,23 @@ export async function clearSearchHistory() {
 			// ⚠️ `removeItem` KULLANILMAZ. Anahtarı silersek
 			// `collectLocalPushData()` grubu "diskte yok" diye ATLAR, boş liste
 			// sunucuya hiç gitmez ve bir sonraki pull'da SİLİNEN ARAMALAR
-			// hesaptan geri gelir. Boş DİZİYİ yazıyoruz: LWW ile sunucuya
-			// temizleme bilgisi gider ve diğer cihazlar da sıfırlanır.
-			await AsyncStorage.setItem(STORAGE_KEYS.SEARCH_HISTORY, JSON.stringify([]));
-			notifyStorageChange(STORAGE_KEYS.SEARCH_HISTORY, []);
+			// hesaptan geri gelir.
+			//
+			// ⚠️ Boş DİZİ de YETMEZ: birleştirme boş listeyi "hiç kayıt yok"
+			// sayıp sunucudaki/öteki cihazdaki kayıtları geri getiriyordu
+			// (kullanıcı: "bir cihazda sildiğim aramalar diğer cihazı açınca
+			// geri geliyor"). Temizleme, TÜM kayıtları düşüren bir damga
+			// (`clearedAt`) olarak taşınır; öteki cihazlar da bu damgayı alır.
+			const cleared = resolveSearchDoc({
+				items: [],
+				deleted: [],
+				clearedAt: Date.now(),
+			});
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.SEARCH_HISTORY,
+				JSON.stringify(cleared),
+			);
+			notifyStorageChange(STORAGE_KEYS.SEARCH_HISTORY, cleared);
 			return [];
 		} catch (error) {
 			console.error("Arama geçmişi temizlenirken hata:", error);
