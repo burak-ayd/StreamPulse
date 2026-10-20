@@ -38,6 +38,7 @@ import {
 
 // Components
 import ActionButtons from "@components/MovieDetailComponents/ActionButtons";
+import NotificationPreferenceCard from "@components/MovieDetailComponents/NotificationPreferenceCard";
 import CastSection from "@components/MovieDetailComponents/CastSection";
 import CrewSection from "@components/MovieDetailComponents/CrewSection";
 import ErrorState from "@components/MovieDetailComponents/ErrorState";
@@ -291,6 +292,9 @@ export default function MovieDetailsScreen() {
 					pluginDetail.fragman_url || pluginDetail.trailer_url,
 				url: pluginDetail.url || movieUrl,
 				plugin: pluginName,
+				// TMDB zenginleştirmesinden gelen dizi kimliği — bildirim
+				// kartının peşine geçer (`NotificationPreferenceCard`).
+				tmdb_id: pluginDetail.tmdb_id || null,
 				seasons: pluginDetail.seasons || passedMovie?.seasons || null,
 				episodes:
 					pluginDetail.episodes || passedMovie?.episodes || null,
@@ -362,6 +366,7 @@ export default function MovieDetailsScreen() {
 				production_co: null,
 				url: movieUrl,
 				plugin: pluginName,
+				tmdb_id: passedMovie.tmdb_id || null,
 				seasons: null,
 				episodes: null,
 				cast_members: [],
@@ -909,6 +914,21 @@ export default function MovieDetailsScreen() {
 							onOpenTrailer={handleOpenTrailer}
 						/>
 					)}
+
+					{/* Yeni Bölüm Bildirimi Kartı — yalnızca dizi + tmdb eşleşmesi varken */}
+					{isSeries &&
+						content?.tmdb_id &&
+						(content?.url || movieUrl) && (
+							<NotificationPreferenceCard
+								key={String(content.tmdb_id)}
+								tmdbId={content.tmdb_id}
+								diziUrl={content?.url || movieUrl}
+								kaynakAdi={content?.plugin || pluginName || null}
+								diziBasligi={
+									content?.title || passedMovie?.seriesTitle || null
+								}
+							/>
+						)}
 
 					{/* Ses & Altyazı Bilgi Çubuğu (Yalnızca backend sonucunda varsa gösterilir) */}
 					{audioSubtitleOptions.length > 0 && (
