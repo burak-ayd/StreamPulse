@@ -32,6 +32,7 @@ export default function HomeSkeleton({
 	onPlatformPress,
 	onSearchPress,
 	onProfilePress,
+	onNotificationsPress,
 }) {
 	const { height } = useWindowDimensions();
 
@@ -51,6 +52,7 @@ export default function HomeSkeleton({
 				onPlatformPress={onPlatformPress}
 				onSearchPress={onSearchPress}
 				onProfilePress={onProfilePress}
+				onNotificationsPress={onNotificationsPress}
 			/>
 
 			{Array.from({ length: rowCount }).map((_, index) => (

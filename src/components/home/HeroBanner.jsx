@@ -1,4 +1,5 @@
 import LanguageBadge from "@/components/common/LanguageBadge";
+import RozetNokta from "@/components/common/RozetNokta";
 import TVPressable from "@/components/common/TVPressable";
 import {
 	SkeletonBlock,
@@ -8,7 +9,7 @@ import {
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import { LinearGradient } from "expo-linear-gradient";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	Platform,
 	StyleSheet,
@@ -16,6 +17,7 @@ import {
 	View,
 	useWindowDimensions,
 } from "react-native";
+import { okunmamisSayisiGetir, rozetAbone } from "@/services/bildirimApi";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /**
@@ -70,6 +72,11 @@ export default function HeroBanner({
 	onSearchPress,
 	onProfilePress,
 	/**
+	 * Bildirim zili — profil simgesinin hemen yanında. Alt menü
+	 * çubuğundan taşındı; ana ekran gelen kutusuna yönlenir.
+	 */
+	onNotificationsPress,
+	/**
 	 * İskelet modu — `movie` henüz yokken.
 	 *
 	 * Hero, ekranın en büyük ve en çok yer değiştiren bloğu. Ayrı bir
@@ -83,6 +90,24 @@ export default function HeroBanner({
 	const insets = useSafeAreaInsets();
 	const { width: winW, height: winH } = useWindowDimensions();
 	const skeletonColors = useSkeletonColors();
+
+	/*
+	 * Okunmamış bildirim sayacı — alt menü çubuğundan taşınan zilin
+	 * rozet değeri. Serviste modül önbelleği + abonelik var; gelen
+	 * kutusu ile rozet ağ verisini TEK tazelenmede paylaşır.
+	 */
+	const [rozet, setRozet] = useState(0);
+	useEffect(() => {
+		const cik = rozetAbone(setRozet);
+		let canli = true;
+		okunmamisSayisiGetir().then((sayi) => {
+			if (canli) setRozet(sayi);
+		});
+		return () => {
+			canli = false;
+			cik();
+		};
+	}, []);
 
 	// İçerik alanının gerçek genişliği. Sol ray (TV / tablet yatay) açıkken
 	// ekran genişliğinden küçüktür; bu yüzden tahmin etmiyoruz, ölçüyoruz.
@@ -292,41 +317,70 @@ export default function HeroBanner({
 				</TVPressable>
 			)}
 
-			<TVPressable
-				style={[
-					styles.profileButton,
-					{
-						width: ui.headerBtn,
-						height: ui.headerBtn,
-						borderRadius: ui.headerBtn / 2,
-						borderWidth: 2,
-					},
-				]}
-				focusedStyle={styles.profileButtonFocused}
-				onPress={onProfilePress}>
-				{userAvatarUrl ? (
-					<Image
-						source={{ uri: userAvatarUrl }}
-						style={[
-							styles.avatarImage,
-							{ borderRadius: ui.headerBtn / 2 - 2 },
-						]}
-						contentFit="cover"
-					/>
-				) : (
-					<View
-						style={[
-							styles.avatarPlaceholder,
-							{ borderRadius: ui.headerBtn / 2 - 2 },
-						]}>
-						<Ionicons
-							name="person"
-							size={Math.round(ui.headerIcon * 0.8)}
-							color="#38bdf8"
+			{/* Sağ uç kümesi: bildirim zili + profil simgesi. Zil, alt menü
+			    çubuğundan taşındı (2026-10-21): çubuk beş öğeye indi,
+			    bildirim girişi profil simgesinin yanında yaşıyor. */}
+			<View style={styles.headerRightGroup}>
+				<TVPressable
+					style={[
+						styles.headerIconButton,
+						{
+							width: ui.headerBtn,
+							height: ui.headerBtn,
+							borderRadius: ui.headerBtn / 2,
+						},
+					]}
+					focusedStyle={styles.headerIconButtonFocused}
+					onPress={onNotificationsPress}
+					accessibilityLabel="Bildirimler">
+					{({ focused }) => (
+						<View>
+							<Ionicons
+								name="notifications-outline"
+								size={ui.headerIcon}
+								color={focused ? "#ffffff" : "#e5e7eb"}
+							/>
+							<RozetNokta deger={rozet} />
+						</View>
+					)}
+				</TVPressable>
+
+				<TVPressable
+					style={[
+						styles.profileButton,
+						{
+							width: ui.headerBtn,
+							height: ui.headerBtn,
+							borderRadius: ui.headerBtn / 2,
+							borderWidth: 2,
+						},
+					]}
+					focusedStyle={styles.profileButtonFocused}
+					onPress={onProfilePress}>
+					{userAvatarUrl ? (
+						<Image
+							source={{ uri: userAvatarUrl }}
+							style={[
+								styles.avatarImage,
+								{ borderRadius: ui.headerBtn / 2 - 2 },
+							]}
+							contentFit="cover"
 						/>
-					</View>
-				)}
-			</TVPressable>
+					) : (
+						<View
+							style={[
+								styles.avatarPlaceholder,
+								{ borderRadius: ui.headerBtn / 2 - 2 },
+							]}>
+							<Ionicons
+								name="person"
+								size={Math.round(ui.headerIcon * 0.8)}
+								color="#38bdf8"
+							/>
+						</View>
+					)}
+				</TVPressable>
+			</View>
 		</View>
 	);
 
@@ -722,6 +776,12 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
+	},
+	/** Sağ uç kümesi: bildirim zili + profil simgesi bitişik durur. */
+	headerRightGroup: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 10,
 	},
 	heroTitle: {
 		color: "#ffffff",
