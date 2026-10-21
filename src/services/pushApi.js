@@ -34,6 +34,7 @@ import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import { router } from "expo-router";
+import Constants from "expo-constants";
 import { authFetch } from "./apiClient";
 import { hasSession } from "./token";
 
@@ -100,27 +101,60 @@ export async function cihazKimligi() {
 // ─── Expo push token ────────────────────────────────────────
 
 /**
- * Expo Push token'ını alır: izin iste, jetonu çöz.
- * @returns {Promise<{token: string, platform: string}|null>}
+ * Expo Push token'ını alır: kanal + izin + kayıt.
+ *
+ * Tuzak: `getDevicePushTokenAsync()` NATİVE jetonu (Android'de FCM
+ * token'ı) döndürür — sunucu sözleşmesindeki `ExponentPushToken[...]`
+ * biçiminden FARKLIDİR. Expo biçimli token `getExpoPushTokenAsync()`
+ * ile üretilir: FCM jetonunu Expo push servisine, app.json'daki
+ * `extra.eas.projectId` altına kaydeder. Gradle ile alınan derlemelerde
+ * de akış aynıdır (EAS Build şart değildir).
+ *
+ * @returns {Promise<{token: string?, platform: string?, mesaj: string?}>}
  */
 async function _expoTokenAl() {
 	try {
+		// Android 13+: izin istemi, en az bir kanal VARSA görüntülenir —
+		// token çekiminden önce kanalı garanti et (doküman kuralı).
+		if (Platform.OS === "android") {
+			await Notifications.setNotificationChannelAsync("bildirimler", {
+				name: "Bildirimler",
+				importance: Notifications.AndroidImportance.HIGH,
+				lightColor: "#FF3D5E",
+			});
+		}
 		const mevcut = await Notifications.getPermissionsAsync();
-		const izin = mevcut?.granted ? mevcut : await Notifications.requestPermissionsAsync();
+		const izin = mevcut?.granted
+			? mevcut
+			: await Notifications.requestPermissionsAsync();
 		if (!izin?.granted) {
 			console.warn("Bildirim izni verilmedi — push kaydı atlandı.");
-			return null;
+			return { mesaj: "Bildirim izni verilmedi." };
 		}
-		const yanit = await Notifications.getDevicePushTokenAsync();
+		const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+		const yanit = projectId
+			? await Notifications.getExpoPushTokenAsync({ projectId })
+			: await Notifications.getExpoPushTokenAsync();
 		const token = String(yanit?.data ?? "").trim();
 		if (!token.startsWith("Expo")) {
-			console.warn("Beklenmeyen push token biçimi:", token.slice(0, 10));
-			return null;
+			console.warn("Beklenmeyen Expo push token biçimi:", token.slice(0, 12));
+			return { mesaj: "Token biçimi beklenmedik." };
 		}
-		return { token, platform: Platform.OS === "ios" ? "ios" : "android" };
+		return {
+			token,
+			platform: Platform.OS === "ios" ? "ios" : "android",
+		};
 	} catch (e) {
-		console.warn("Expo push token alınamadı:", e?.message);
-		return null;
+		const mesaj = String(e?.message ?? e ?? "");
+		if (/firebase|fcm/i.test(mesaj)) {
+			console.warn(
+				"Expo push token alınamadı — Firebase/FCM kurulumu eksik (proje köküne google-services.json koyup derle):",
+				mesaj,
+			);
+			return { mesaj: "Firebase/FCM kurulumu eksik." };
+		}
+		console.warn("Expo push token alınamadı:", mesaj || e);
+		return { mesaj: "Token alınamadı (izleyin: adb logcat)." };
 	}
 }
 
@@ -143,7 +177,13 @@ export async function cihazKaydiYaz() {
 	_kayitUcusu = (async () => {
 		try {
 			const jeton = await _expoTokenAl();
-			if (!jeton) return { ok: false, prefs: null, mesaj: "Jeton alınamadı." };
+			if (!jeton?.token) {
+				return {
+					ok: false,
+					prefs: null,
+					mesaj: jeton?.mesaj ?? "Jeton alınamadı.",
+				};
+			}
 			const cihaz = await cihazKimligi();
 			if (!cihaz) return { ok: false, prefs: null, mesaj: "Cihaz etiketi yok." };
 
