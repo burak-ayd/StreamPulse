@@ -42,6 +42,7 @@ example
 # generated native folders
 /ios
 /android
+google-services.json
 
 # ikon üretim hattı ara çıktıları (assets/icons/ commit'lenir, assets/generated/ edilmez)
 /assets/generated/
