@@ -11,6 +11,13 @@ import { useThemeContext } from "@/context/ThemeContext";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { fetchPlatforms } from "@/services/api";
 import { getNotifyOnUpdate, setNotifyOnUpdate } from "@/services/otaUpdate";
+import {
+	pushTercihOku,
+	pushTercihYaz,
+	saatEtiketi,
+	VARSAYILAN_SECENEKLER,
+} from "@/services/pushApi";
+import { hasSession } from "@/services/token";
 import { openLogin } from "@/utils/authRoutes";
 import {
 	clearAllUserData,
@@ -210,6 +217,79 @@ export default function SettingsScreen() {
 			isMounted = false;
 		};
 	}, []);
+
+	/*
+	 * Günlük özet push tercihi (sunucu Faz 5 sözleşmesi):
+	 *
+	 * - `pushTercihOku` giriş yoksa `null` döner → bilinen varsayılanla
+	 *   gösterir ama Switch kilidini `pushOturumVar` taşır (hesap şart).
+	 * - Yazımlar güvenlidir: başarıda sunucunun döndürdüğü tercih yazılır;
+	 *   hatada yerel değer GERİ alınır ve kullanıcı bilgilendirilir.
+	 */
+	const [pushTercihi, setPushTercihi] = useState(VARSAYILAN_SECENEKLER);
+	const [pushOturumVar, setPushOturumVar] = useState(false);
+	const [pushYaziyor, setPushYaziyor] = useState(false);
+	const [pushSaatModal, setPushSaatModal] = useState(false);
+
+	useFocusEffect(
+		useCallback(() => {
+			let isMounted = true;
+			async function pushYukle() {
+				const [oturum, tercih] = await Promise.all([
+					hasSession(),
+					pushTercihOku(),
+				]);
+				if (!isMounted) return;
+				setPushOturumVar(Boolean(oturum));
+				if (tercih) setPushTercihi(tercih);
+				else if (!oturum) setPushTercihi(VARSAYILAN_SECENEKLER);
+			}
+			pushYukle();
+			return () => {
+				isMounted = false;
+			};
+		}, []),
+	);
+
+	const pushToggle = useCallback(async () => {
+		if (!pushOturumVar || pushYaziyor) return;
+		const sonraki = !pushTercihi.enabled;
+		setPushTercihi((eski) => ({ ...eski, enabled: sonraki }));
+		const sonuc = await pushTercihYaz({ enabled: sonraki });
+		if (!sonuc.ok) {
+			setPushTercihi((eski) => ({ ...eski, enabled: !sonraki }));
+			Alert.alert(
+				"Ayar yazılamadı",
+				sonuc.mesaj || "Sunucuya ulaşılamadı.",
+			);
+		} else if (sonuc.data) {
+			setPushTercihi(sonuc.data);
+		}
+	}, [pushOturumVar, pushYaziyor, pushTercihi.enabled]);
+
+	const pushSaatSec = useCallback(
+		async (saat) => {
+			setPushSaatModal(false);
+			if (!pushOturumVar || pushYaziyor) return;
+			if (saat === pushTercihi.saat) return;
+			const onceki = pushTercihi.saat;
+			setPushTercihi((eski) => ({ ...eski, saat }));
+			setPushYaziyor(true);
+			const sonuc = await pushTercihYaz({
+				enabled: pushTercihi.enabled,
+				saat,
+			});
+			setPushYaziyor(false);
+			if (!sonuc.ok) {
+				setPushTercihi((eski) => ({ ...eski, saat: onceki }));
+				Alert.alert(
+					"Saat yazılamadı",
+					sonuc.mesaj || "Sunucuya ulaşılamadı.",
+				);
+			}
+		},
+		[pushOturumVar, pushYaziyor, pushTercihi],
+	);
 
 	const { languageDisplayMode, setLanguageDisplayMode } =
 		useLanguageDisplay();
@@ -516,6 +596,48 @@ export default function SettingsScreen() {
 						/>
 					</SettingsSection>
 
+					{/* KATEGORİ 3.5: BİLDİRİM ÖZETİ (PUSH — sunucu Faz 5) */}
+					<SettingsSection title="BİLDİRİM ÖZETİ (PUSH)">
+						<SettingRow
+							icon="notifications-outline"
+							iconBg="#FF3D5E"
+							label="Günlük Özet Push"
+							subtitle={
+								!pushOturumVar
+									? "Hesap gerekli — girişte cihaz otomatik kaydedilir"
+									: pushTercihi.enabled
+										? `Her akşam ${saatEtiketi(pushTercihi.saat)} civarı — okunmayanlardan TEK özet`
+										: "Kapalı — uygulama içi gelen kutusundan izler"
+							}
+							showChevron={false}
+							rightComponent={
+								<Switch
+									value={Boolean(pushTercihi.enabled)}
+									trackColor={{
+										false: colors.border,
+										true: "#FF3D5E",
+									}}
+									thumbColor="#ffffff"
+									disabled={!pushOturumVar || pushYaziyor}
+								/>
+							}
+							onPress={pushToggle}
+						/>
+						<SettingRow
+							icon="time-outline"
+							iconBg="#0EA5E9"
+							label="Özet Saati"
+							subtitle={
+								!pushOturumVar
+									? "Hesap gerekli"
+									: `${saatEtiketi(pushTercihi.saat)} · ${pushTercihi.tz}`
+							}
+							onPress={
+								pushOturumVar ? () => setPushSaatModal(true) : undefined
+							}
+						/>
+					</SettingsSection>
+
 					{/* KATEGORİ 4: SİSTEM VE YEDEKLEME */}
 					<SettingsSection title="SİSTEM VE VERİ">
 						{/* Cihazlar ve Senkronizasyon */}
@@ -744,6 +866,86 @@ export default function SettingsScreen() {
 									Kapat
 								</Text>
 							</TVPressable>
+						</View>
+					</View>
+				</Modal>
+
+				{/* ÖZET SAATİ MODAL — 0..23 ızgara */}
+				<Modal
+					visible={pushSaatModal}
+					animationType="fade"
+					transparent={true}
+					onRequestClose={() => setPushSaatModal(false)}>
+					<View style={styles.modalOverlay}>
+						<View
+							style={[
+								styles.modalContent,
+								{
+									backgroundColor: colors.cardBg,
+									borderColor: colors.border,
+								},
+							]}>
+							<View style={styles.modalHeader}>
+								<Text
+									style={[
+										styles.modalTitle,
+										{ color: colors.text },
+									]}>
+									Özet Saati
+								</Text>
+								<TVPressable
+									focusedStyle={
+										styles.modalCloseButtonFocused
+									}
+									onPress={() => setPushSaatModal(false)}
+									hitSlop={{
+										top: 8,
+										bottom: 8,
+										left: 8,
+										right: 8,
+									}}>
+									<Ionicons
+										name="close"
+										size={24}
+										color={colors.text}
+									/>
+								</TVPressable>
+							</View>
+							<View style={styles.pushSaatIzgarasi}>
+								{Array.from({ length: 24 }, (_, i) => i).map(
+									(saat) => (
+										<TVPressable
+											key={saat}
+											style={styles.pushSaatHane}
+											focusedStyle={
+												styles.pushSaatHaneOdakli
+											}
+											onPress={() => pushSaatSec(saat)}>
+											<Text
+												style={[
+													styles.pushSaatYazi,
+													{
+														color:
+															saat ===
+															pushTercihi.saat
+																? "#ffffff"
+																: colors.text,
+													},
+												]}>
+												{saatEtiketi(saat)}
+											</Text>
+										</TVPressable>
+									),
+								)}
+							</View>
+							<Text
+								style={[
+									styles.pushSaatNot,
+									{ color: colors.textSecondary },
+								]}>
+								Özet, seçtiğin saatte cihazın KENDİ saat
+								diliminde gelir ({pushTercihi.tz}).
+							</Text>
 						</View>
 					</View>
 				</Modal>
@@ -1200,5 +1402,35 @@ const styles = StyleSheet.create({
 		borderWidth: 2,
 		borderColor: "#ffffff",
 		transform: [{ scale: 1.04 }],
+	},
+	pushSaatIzgarasi: {
+		flexDirection: "row",
+		flexWrap: "wrap",
+		justifyContent: "center",
+		gap: 8,
+		paddingVertical: 8,
+	},
+	pushSaatHane: {
+		alignItems: "center",
+		justifyContent: "center",
+		width: 64,
+		height: 40,
+		borderRadius: 10,
+		borderColor: "rgba(255,255,255,0.12)",
+		borderWidth: 1,
+	},
+	pushSaatHaneOdakli: {
+		borderWidth: 2,
+		borderColor: "#ffffff",
+		transform: [{ scale: 1.05 }],
+	},
+	pushSaatYazi: {
+		fontSize: 14,
+		fontWeight: "600",
+	},
+	pushSaatNot: {
+		fontSize: 12,
+		textAlign: "center",
+		marginTop: 8,
 	},
 });

@@ -28,6 +28,7 @@ import { hasSession, clearTokens, saveTokens } from "@/services/token";
 import { authDiag } from "@/utils/authDiagnostics";
 import { getAuthUser, saveAuthUser, clearAuthUser } from "@/utils/storage";
 import { setSyncOwner, resetSyncState } from "@/services/sync";
+import { cihazKaydiYaz, cihazKaydiSil } from "@/services/pushApi";
 
 /**
  * @typedef {object} AuthUser
@@ -297,6 +298,15 @@ export function AuthProvider({ children }) {
 	// ─── Çıkış yap ──────────────────────────────────────
 	const logout = useCallback(async () => {
 		try {
+			// Push kaydı silimi token'lar YAŞARKEN yapılır: apiLogout
+			// token'ları temizler; ondan sonra gelen silme isteği
+			// 401'e düşer. Sözleşme fonksiyonun fırlatmadığını söyler —
+			// try yine de çıkışı push hatasına bağlamaz.
+			await cihazKaydiSil();
+		} catch (_e) {
+			/* ulaşılamadıysa: satır sonraki kayıtta yeniden kazanılır */
+		}
+		try {
 			await apiLogout();
 		} finally {
 			authDiag.record("logout", { kaynak: "kullanici_istegi" });
@@ -323,6 +333,20 @@ export function AuthProvider({ children }) {
 			setStatus("authenticated");
 		}
 	}, []);
+
+	// ─── Push token kaydı (Faz 5 istemci ara katmanı) ────
+	//
+	// TEK bağlama noktası: durum "authenticated" olduğu anda cihaz
+	// kaydı yazılır; login/signup/adoptSession/checkSession/oturum
+	// devamlarının BÜTÜNÜ bu efektle taşınır. Kayıt upsert'tir ve
+	// idempotenttir — çift çağrı yalnızca `last_seen` tazeler.
+	// Çıkış tarafı aşağıdaki `logout`'ta: silme isteği token'lar
+	// geçerliyken giderek 401'e düşmez.
+	useEffect(() => {
+		if (status === "authenticated") {
+			void cihazKaydiYaz();
+		}
+	}, [status]);
 
 	const value = useMemo(
 		() => ({
