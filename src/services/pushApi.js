@@ -100,6 +100,48 @@ export async function cihazKimligi() {
 
 // ─── Expo push token ────────────────────────────────────────
 
+/** Sunucu payload'ı ile AYNI kanal kimliği (PushGorevi'de channelId). */
+const KANAL_ID = "bildirimler";
+
+/**
+ * Kanal tasarımı + kalıntı temizliği (idempotent; her token kaydında ucuz):
+ * - `bildirimler` kanalı YENİDEN ADLANDIRILIR: aynı id ile sadece
+ *   name/description güncellenir (Android izinli alanlar), sunucunun
+ *   channelId özelliği olduğu gibi çalışmaya devam eder.
+ * - channelId'siz bildirimler expo-notifications'da "Miscellaneous"
+ *   yedek kanalına düşer; geçmişteki kanalsız gönderim bu yedek kanalı
+ *   meydana getirmiş olabilir → adı misc görünen YABANCI kanal silinir.
+ *   Android'in bildirim ayarlarında böylece tek ve kendini anlatan
+ *   kanal kalır ("Yeni Bölüm Bildirimleri").
+ */
+async function _kanalHazirla() {
+	try {
+		await Notifications.setNotificationChannelAsync(KANAL_ID, {
+			name: "Yeni Bölüm Bildirimleri",
+			description:
+				"Takip ettiğiniz dizilerde yeni bölüm — günün TEK özeti burada gelir.",
+			importance: Notifications.AndroidImportance.HIGH,
+			lightColor: "#FF3D5E",
+		});
+		try {
+			const kanallar = await Notifications.getNotificationChannelsAsync();
+			for (const kanal of kanallar ?? []) {
+				if ((kanal?.id ?? "") === KANAL_ID) continue;
+				if (!/misc/i.test(String(kanal?.name ?? ""))) continue;
+				await Notifications.deleteNotificationChannelAsync(kanal.id);
+				console.warn("Yedek 'Miscellaneous' kanalı temizlendi:", kanal.id);
+			}
+		} catch (temizlikHatasi) {
+			console.warn(
+				"Kanal temizlik taraması atlandı:",
+				temizlikHatasi?.message,
+			);
+		}
+	} catch (e) {
+		console.warn("Bildirim kanalı hazırlanamadı:", e?.message);
+	}
+}
+
 /**
  * Expo Push token'ını alır: kanal + izin + kayıt.
  *
@@ -117,11 +159,7 @@ async function _expoTokenAl() {
 		// Android 13+: izin istemi, en az bir kanal VARSA görüntülenir —
 		// token çekiminden önce kanalı garanti et (doküman kuralı).
 		if (Platform.OS === "android") {
-			await Notifications.setNotificationChannelAsync("bildirimler", {
-				name: "Bildirimler",
-				importance: Notifications.AndroidImportance.HIGH,
-				lightColor: "#FF3D5E",
-			});
+			await _kanalHazirla();
 		}
 		const mevcut = await Notifications.getPermissionsAsync();
 		const izin = mevcut?.granted
