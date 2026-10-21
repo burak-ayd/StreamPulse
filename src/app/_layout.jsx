@@ -14,6 +14,7 @@ import React, { useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { startNetworkQualityWatch } from "@/utils/imageQuality";
+import { pushTepkisiBagla } from "@/services/pushApi";
 
 /*
  * ⚠️ Bu import YALNIZCA isimler için değil: modül YÜKLENİRKEN
@@ -73,6 +74,16 @@ export default function RootLayout() {
 	 * ve yavaş wifi'de küçük görsel göstermeye devam ederdi.
 	 */
 	useEffect(() => startNetworkQualityWatch(), []);
+
+	/*
+	 * ── Push dokunma köprüsü (Faz 5) ──────────────────────────────
+	 *
+	 * "Yeni bölüm bildirimleri" özet push'una dokunuşu gelen kutusuna
+	 * bağlar: soğuk açılış dokunuşu da, ön/arka plandaki dokunuş da
+	 * `/(app)/bildirimler` ekranına yönlenir. Web ve TV'de no-op —
+	 * bu platformlarda Expo push token üretilmez.
+	 */
+	useEffect(() => pushTepkisiBagla(), []);
 
 	useEffect(() => {
 		async function lockTVOrientation() {
