@@ -2,7 +2,7 @@
   "expo": {
     "name": "Stream Pulse",
     "slug": "StreamPulse",
-    "version": "1.0.35",
+    "version": "1.0.36",
     "orientation": "default",
     "icon": "./assets/icons/release/icon.png",
     "scheme": "streampulse",
@@ -55,6 +55,9 @@
         "expo-notifications",
         {
           "icon": "./assets/icons/release/notification-icon.png",
+          "defaultChannel": "default",
+          "enableRemoteNotifications": true,
+          "enableBackgroundRemoteNotifications": true,
           "color": "#FF3D5E"
         }
       ],
