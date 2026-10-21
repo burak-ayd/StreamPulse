@@ -692,6 +692,9 @@ export default function Index() {
 						onPlatformPress={() => setIsPlatformModalVisible(true)}
 						onSearchPress={handleHeaderSearch}
 						onProfilePress={() => router.push("/(app)/profile")}
+						onNotificationsPress={() =>
+							router.push("/(app)/bildirimler")
+						}
 					/>
 				) : (
 					<FlatList
@@ -753,6 +756,9 @@ export default function Index() {
 							}
 							onSearchPress={handleHeaderSearch}
 							onProfilePress={() => router.push("/(app)/profile")}
+							onNotificationsPress={() =>
+								router.push("/(app)/bildirimler")
+							}
 						/>
 
 						{/*

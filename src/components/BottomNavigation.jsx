@@ -1,13 +1,9 @@
 import TVPressable from "@/components/common/TVPressable";
 import { NAV_RAIL_WIDTH, useNavLayout } from "@/hooks/useNavLayout";
-import {
-	okunmamisSayisiGetir,
-	rozetAbone,
-} from "@/services/bildirimApi";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useEffect } from "react";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 
 /** @deprecated Geriye uyumluluk: artık useNavLayout'ı kullanın. */
 export const TV_NAV_WIDTH = NAV_RAIL_WIDTH;
@@ -16,32 +12,9 @@ const NAV_ITEMS = [
 	{ id: "home", icon: "home", route: "/(app)" },
 	{ id: "search", icon: "search", route: "/(app)/search" },
 	{ id: "library", icon: "folder", route: "/(app)/library" },
-	{ id: "bildirim", icon: "notifications", route: "/(app)/bildirimler" },
 	{ id: "downloads", icon: "download", route: "/(app)/downloads" },
 	{ id: "settings", icon: "settings", route: "/(app)/settings" },
 ];
-
-/**
- * Okunmamış adet rozet noktası — `deger` 0 ise hiç çizilmez.
- * TV rayı ikon kutusuna ve telefon barındaki hap gövdeye
- * `pointerEvents: "none"` ile bindirilir; dokunuş bandın kendisine gider.
- */
-function RozetNokta({ deger }) {
-	if (!deger || deger <= 0) return null;
-	const metin = deger > 99 ? "99+" : String(deger);
-	return (
-		<View
-			pointerEvents="none"
-			style={[
-				styles.rozetNokta,
-				metin.length > 1 ? styles.rozetNoktaGenis : null,
-			]}>
-			<Text style={styles.rozetYazi} maxFontSizeMultiplier={1.1}>
-				{metin}
-			</Text>
-		</View>
-	);
-}
 
 /**
  * ⚠️ SORUN 3'ÜN KÖK NEDENİ: Sol rayın dikey payı.
@@ -111,24 +84,6 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 	const { isSideRail } = useNavLayout();
 	const { height } = useWindowDimensions();
 
-	/*
-	 * Okunmamış bildirim sayaç — serviste modül önbelleği + abonelik var;
-	 * bileşen TV'de ekran başına birden çok örnekte yaşasa bile bunun
-	 * sayesinde ağ istekleri TEK tazelenmede birleşir.
-	 */
-	const [rozet, setRozet] = useState(0);
-	useEffect(() => {
-		const cik = rozetAbone(setRozet);
-		let canli = true;
-		okunmamisSayisiGetir().then((sayi) => {
-			if (canli) setRozet(sayi);
-		});
-		return () => {
-			canli = false;
-			cik();
-		};
-	}, []);
-
 	const activeSection = NAV_ITEMS.find((i) => i.route === activeRoute)?.id;
 
 	useEffect(() => {
@@ -183,9 +138,6 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 													: "#8E8E93"
 											}
 										/>
-										{item.id === "bildirim" && (
-											<RozetNokta deger={rozet} />
-										)}
 									</View>
 								)}
 							</TVPressable>
@@ -227,9 +179,6 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 									size={22}
 									color={focused || isActive ? "#ffffff" : "#8E8E93"}
 								/>
-								{item.id === "bildirim" && (
-									<RozetNokta deger={rozet} />
-								)}
 							</View>
 						)}
 					</TVPressable>
@@ -339,29 +288,5 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(255, 59, 48, 0.25)",
 		borderColor: "#FF3B30",
 		borderWidth: 1.5,
-	},
-
-	// --- Okunmamış rozet noktası (TV rayı + telefon barı ortak) ---
-	rozetNokta: {
-		position: "absolute",
-		top: -4,
-		right: -7,
-		minWidth: 17,
-		height: 17,
-		borderRadius: 9,
-		backgroundColor: "#E50914",
-		borderWidth: 1.5,
-		borderColor: "#0d0e12",
-		paddingHorizontal: 3.5,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	rozetNoktaGenis: {
-		borderRadius: 9,
-	},
-	rozetYazi: {
-		color: "#ffffff",
-		fontSize: 9.5,
-		fontWeight: "800",
 	},
 });

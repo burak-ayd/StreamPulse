@@ -457,12 +457,7 @@ export default function ProfileScreen() {
 				<ProfileTopBar
 					onBack={handleBack}
 					syncHealthy={syncHealthy}
-					onNotifications={() =>
-						Alert.alert(
-							"Bildirimler",
-							"Henüz bildirim yok. Şu an yalnızca izleme geçmişi ve senkronizasyon durumu bu ekranda gösteriliyor.",
-						)
-					}
+					onNotifications={() => router.push("/(app)/bildirimler")}
 					// Ayar düğmesi doğrudan SENKRONİZASYON ayarlarını açar.
 					// Genel ayarlara alt navigasyondaki "Ayarlar" girilir; buraya
 					// ikinci bir genel ayar girişi koymak yol bulmacayı dağıtıyor.
