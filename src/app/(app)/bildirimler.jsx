@@ -8,8 +8,10 @@
  *
  * Davranış:
  * - Odağa girince yenilenir; satıra dokunmak tek satırı okundu sayar.
+ * - UZUN BASIŞ satırı siler (onaylı); sunucudaki DELETE /{id} ucu yalnız
+ *   sahibin satırını siler. İyimser çıkar, sunucu reddederse geri gelir.
  * - Sağ üstteki "Tümü okundu" toplu işaretleme ister; rozet
- *   (BottomNavigation) servisin abonelik yayınıyla eş zamanlı güncellenir.
+ *   (ana ekran kromundaki zil) servisin abonelik yayınıyla güncellenir.
  * - Giriş yoksa sakince bir "hesap gerekli" kartı gösterir — hata fırlatmaz.
  */
 
@@ -20,6 +22,7 @@ import { openLogin } from "@/utils/authRoutes";
 
 import {
 	basliklariOku,
+	bildirimSil,
 	gelenKutusuGetir,
 	goreceZaman,
 	okunduIsaretle,
@@ -171,6 +174,35 @@ export default function BildirimlerScreen() {
 		);
 	};
 
+	/** Uzun basış → satır silme onayı. İyimser çıkarır; hatada geri koyar. */
+	const satiriSil = (satir) => {
+		Alert.alert(
+			"Bildirimi sil",
+			`"${satirBasligi(satir, baslikHafizasi.current)}" listenden silinecek.`,
+			[
+				{ text: "Vazgeç", style: "cancel" },
+				{
+					text: "Sil",
+					style: "destructive",
+					onPress: async () => {
+						// İyimser çıkar; sunucu reddederse satır geri gelir
+						// (başka cihazda silinmiş olabilir — sonraki çekim
+						// sunucu hakikatini zaten kesinleştirir).
+						setSatirlar((eski) => eski.filter((e) => e.id !== satir.id));
+						const tamam = await bildirimSil(satir.id);
+						if (!tamam) {
+							setSatirlar((eski) =>
+								eski.some((e) => e.id === satir.id)
+									? eski
+									: [satir, ...eski],
+							);
+						}
+					},
+				},
+			],
+		);
+	};
+
 	/** Eski sayfa: `has_more` true ise son satırın `created_at`'i imleçtir. */
 	const eskiSayfayiCek = async () => {
 		if (!dahaVar || satirlar.length === 0) return;
@@ -188,6 +220,7 @@ export default function BildirimlerScreen() {
 		return (
 			<TVPressable
 				onPress={() => satiriOkunduSay(item)}
+				onLongPress={() => satiriSil(item)}
 				style={[
 					styles.satir,
 					{

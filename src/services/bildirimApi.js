@@ -7,16 +7,17 @@
  *   GET  /api/notifications?before=&limit=     → gelen kutusu
  *   GET  /api/notifications/unread-count       → { count }
  *   POST /api/notifications/read               → { updated } (ids | all)
+ *   DELETE /api/notifications/{id}             → { deleted } (yalnız sahibi)
  *
  * Kural: her fonksiyon hata FIRLATMAZ — arayüz her senaryoda etkisiz bir
  * değerle devam edebilsin diye null/boş/0 döndürür ve hatayı `console.warn`
  * ile teşhisi yerde bırakır.
  *
  * ─── Rozet ─────────────────────────────────────────────────────
- * `BottomNavigation` cihaz başına BİRDEN fazla kez mountlanır (TV `<Stack/>`
- * ekranları tutar). Bu yüzden okunmamış sayı MODÜL SEVİYESİNDE önbellekli:
- * 60 sn TTL + uçuş dedupe; yeni okuma sonucun abonelere yayılır. Böylece beş
- * örnek ortada sadece İSTEK üretir.
+ * Abone yüzeyleri (ana ekran kromundaki zil, gelen kutusu) cihaz başına
+ * birden fazla örnek mountlanabildiğinden okunmamış sayı MODÜL
+ * SEVİYESİNDE önbellekli: 60 sn TTL + uçuş dedupe; yeni okuma/silme
+ * sonucun abonelere yayılır. Böylece beş örnek ortada sadece İSTEK üretir.
  *
  * ─── Başlık anımsatıcısı ────────────────────────────────────────
  * `notification.series_title` sunucuda BİLEREK NULL yazılır (tasarım
@@ -327,6 +328,37 @@ export async function okunduTumunuIsaretle() {
 	}
 }
 
+// ─── Silme ───────────────────────────────────────────────────
+
+/**
+ * Tek bildirimi siler (`DELETE /api/notifications/{id}`). Başarıdan sonra
+ * rozet TAZELENİR — okunmamış bir satır silindiyse rozet düşer.
+ *
+ * 404 özel bir durum değildir: satır başka cihazdan silinmiş olabilir;
+ * çağıran taraf iyimser temizlik yapmışsa satır zaten ekranda yoktur.
+ *
+ * @param {number} id
+ * @returns {Promise<boolean>} sunucu satırı sildiyse true
+ */
+export async function bildirimSil(id) {
+	if (!Number.isFinite(id)) return false;
+	if (!(await hasSession())) return false;
+	try {
+		const res = await authFetch(`${API_PREFIX}/${id}`, {
+			method: "DELETE",
+		});
+		if (!res.ok) {
+			console.warn("Bildirim silme başarısız:", res.status);
+			return false;
+		}
+		void okunmamisSayisiGetir({ force: true });
+		return true;
+	} catch (e) {
+		console.warn("Bildirim silme hatası:", e?.message);
+		return false;
+	}
+}
+
 // ─── Ortak biçim yardımcıları ─────────────────────────────────
 
 /**
@@ -367,5 +399,6 @@ export default {
 	rozetAbone,
 	okunduIsaretle,
 	okunduTumunuIsaretle,
+	bildirimSil,
 	goreceZaman,
 };
