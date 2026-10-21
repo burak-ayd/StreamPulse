@@ -3,6 +3,7 @@
  *
  * Sunucu uçları (MovieAppNew `api/routes/bildirim.py`):
  *   GET  /api/notifications/settings?tmdb_id=  → tercih (yoksa varsayılan)
+ *   GET  /api/notifications/settings-list      → { items: [...] } (tüm tercihler)
  *   PUT  /api/notifications/settings           → tercih yaz (upsert)
  *   GET  /api/notifications?before=&limit=     → gelen kutusu
  *   GET  /api/notifications/unread-count       → { count }
@@ -18,6 +19,11 @@
  * birden fazla örnek mountlanabildiğinden okunmamış sayı MODÜL
  * SEVİYESİNDE önbellekli: 60 sn TTL + uçuş dedupe; yeni okuma/silme
  * sonucun abonelere yayılır. Böylece beş örnek ortada sadece İSTEK üretir.
+ * Sayı her değiştiğinde uygulama SİMGESİNİN launcher rozetine de yazılır
+ * (`setBadgeCountAsync`): Android'de başlatıcı desteği değişkendir
+ * (desteklemeyen başlatıcıda söz `false` ile sessizce döner);
+ * destekleyen başlatıcıda (MIUI dahil) simge doğrudan okunmamış
+ * adedi gösterir.
  *
  * ─── Başlık anımsatıcısı ────────────────────────────────────────
  * `notification.series_title` sunucuda BİLEREK NULL yazılır (tasarım
@@ -28,6 +34,8 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
+import { Platform } from "react-native";
 import { authFetch } from "./apiClient";
 import { hasSession } from "./token";
 
@@ -114,6 +122,34 @@ export async function tercihOku(tmdbId) {
 	} catch (e) {
 		console.warn("Bildirim tercihi okuma hatası:", e?.message);
 		return null;
+	}
+}
+
+/**
+ * Kullanıcının TÜM bildirim tercihleri (`GET /settings-list`).
+ *
+ * Ayar ekranındaki "Takip Edilen Diziler" bölümü bu uçtan beslenir:
+ * satırlar sunucuda EN YENİ güncellenen sıraya dizilmiş olarak gelir;
+ * görünen başlıklar ÇAĞIRAN taraf tarafından `basliklariOku` eşleşmesiyle
+ * çözülür (başlık sunucuda bilinçli saklanmaz — yerel karar).
+ *
+ * @returns {Promise<Array<{tmdb_id: string, enabled: boolean,
+ *                     mode: string, watched_provider: string|null}>>}
+ *          giriş yoksa / hatada boş dizi
+ */
+export async function bildirimTercihListesi() {
+	if (!(await hasSession())) return [];
+	try {
+		const res = await authFetch(`${API_PREFIX}/settings-list`);
+		if (!res.ok) {
+			console.warn("Bildirim tercih listesi başarısız:", res.status);
+			return [];
+		}
+		const govde = await res.json();
+		return Array.isArray(govde?.items) ? govde.items : [];
+	} catch (e) {
+		console.warn("Bildirim tercih listesi hatası:", e?.message);
+		return [];
 	}
 }
 
@@ -229,6 +265,7 @@ export function rozetAbone(fonk) {
 
 function _rozetYay(sayi) {
 	_rozet = { sayi, zamanMs: Date.now() };
+	_simgeRozetYaz(sayi);
 	for (const abone of _rozetAboneler) {
 		try {
 			abone(sayi);
@@ -236,6 +273,23 @@ function _rozetYay(sayi) {
 			/* abone hatası rozeti engellemesin */
 		}
 	}
+}
+
+/**
+ * Launcher rozeti: uygulama simgesi üzerindeki okunmamış sayısı.
+ * Uygulama içi rozetin (zil) tamamlayıcısıdır — her değişimde TEK
+ * yazım; başlatıcı desteklemiyorsa `false` çözülür ve sessizce
+ * geçilir. TV'de simge rozeti anlamsızdır; web'de API yoktur.
+ *
+ * @param {number} sayi
+ * @returns {void}
+ */
+function _simgeRozetYaz(sayi) {
+	if (Platform.isTV) return;
+	if (Platform.OS !== "android" && Platform.OS !== "ios") return;
+	void Notifications.setBadgeCountAsync(sayi).catch((e) => {
+		console.warn("Uygulama simge rozeti yazılamadı:", e?.message);
+	});
 }
 
 /**
@@ -394,6 +448,7 @@ export default {
 	basliklariOku,
 	tercihOku,
 	tercihYaz,
+	bildirimTercihListesi,
 	gelenKutusuGetir,
 	okunmamisSayisiGetir,
 	rozetAbone,

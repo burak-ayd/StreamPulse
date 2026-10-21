@@ -10,6 +10,11 @@ import {
 import { useThemeContext } from "@/context/ThemeContext";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { fetchPlatforms } from "@/services/api";
+import {
+	basliklariOku,
+	bildirimTercihListesi,
+	tercihYaz,
+} from "@/services/bildirimApi";
 import { getNotifyOnUpdate, setNotifyOnUpdate } from "@/services/otaUpdate";
 import {
 	pushTercihOku,
@@ -31,6 +36,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
 	Alert,
 	BackHandler,
+	Linking,
 	Modal,
 	ScrollView,
 	StatusBar,
@@ -289,6 +295,85 @@ export default function SettingsScreen() {
 			}
 		},
 		[pushOturumVar, pushYaziyor, pushTercihi],
+	);
+
+	// ─── Takip edilen diziler (bildirim ayarlarının sunucu kaynağı) ───
+	// `GET /settings-list` kullanıcının TÜM tercih satırlarını döner;
+	// başlık çözümü cihazdaki anımsatıcıyla (basliklariOku) zenginleşir.
+	// Odak her dönüşte tazelenir; oturumsuz ekranda bölüm tümüyle gizli.
+	const [takipListesi, setTakipListesi] = useState([]);
+	const [baslikMagaza, setBaslikMagaza] = useState({});
+	const [takipYuklendi, setTakipYuklendi] = useState(false);
+	const [takipYaziyor, setTakipYaziyor] = useState(null);
+
+	useFocusEffect(
+		useCallback(() => {
+			let isMounted = true;
+			async function takipYukle() {
+				const oturumVar = Boolean(await hasSession());
+				let satirlar = [];
+				let magaza = {};
+				if (oturumVar) {
+					[satirlar, magaza] = await Promise.all([
+						bildirimTercihListesi(),
+						basliklariOku(),
+					]);
+				}
+				if (!isMounted) return;
+				setBaslikMagaza(magaza ?? {});
+				setTakipListesi(Array.isArray(satirlar) ? satirlar : []);
+				setTakipYuklendi(true);
+			}
+			takipYukle();
+			return () => {
+				isMounted = false;
+			};
+		}, []),
+	);
+
+	const takipGecistir = useCallback(
+		async (tercih) => {
+			if (takipYaziyor) return;
+			const tekrar = !tercih.enabled;
+			setTakipYaziyor(tercih.tmdb_id);
+			// İyimser gösterim: sunucu onayına kadar yeni değer; hatada geri.
+			setTakipListesi((eski) =>
+				eski.map((s) =>
+					s.tmdb_id === tercih.tmdb_id ? { ...s, enabled: tekrar } : s,
+				),
+			);
+			const sonuc = await tercihYaz({
+				tmdbId: tercih.tmdb_id,
+				enabled: tekrar,
+				mode: tercih.mode || "watched_source",
+				watchedProvider: tercih.watched_provider ?? null,
+			});
+			setTakipYaziyor(null);
+			if (!sonuc.ok) {
+				setTakipListesi((eski) =>
+					eski.map((s) =>
+						s.tmdb_id === tercih.tmdb_id
+							? { ...s, enabled: tercih.enabled }
+							: s,
+					),
+				);
+				Alert.alert(
+					"Bildirim ayarı yazılamadı",
+					sonuc.mesaj || "Sunucuya ulaşılamadı.",
+				);
+				return;
+			}
+			if (sonuc.data) {
+				// Sunucunun kanonik yanıtını satıra işle
+				// (all_sources → watched_provider NULL temizliği dahil).
+				setTakipListesi((eski) =>
+					eski.map((s) =>
+						s.tmdb_id === tercih.tmdb_id ? { ...s, ...sonuc.data } : s,
+					),
+				);
+			}
+		},
+		[takipYaziyor],
 	);
 
 	const { languageDisplayMode, setLanguageDisplayMode } =
@@ -596,8 +681,8 @@ export default function SettingsScreen() {
 						/>
 					</SettingsSection>
 
-					{/* KATEGORİ 3.5: BİLDİRİM ÖZETİ (PUSH — sunucu Faz 5) */}
-					<SettingsSection title="BİLDİRİM ÖZETİ (PUSH)">
+					{/* KATEGORİ 3.5: BİLDİRİM AYARLARI (push + takip + sistem) */}
+					<SettingsSection title="BİLDİRİM AYARLARI">
 						<SettingRow
 							icon="notifications-outline"
 							iconBg="#FF3D5E"
@@ -636,6 +721,77 @@ export default function SettingsScreen() {
 								pushOturumVar ? () => setPushSaatModal(true) : undefined
 							}
 						/>
+						<SettingRow
+							icon="settings-outline"
+							iconBg="#64748B"
+							label="Telefon Bildirim Ayarları"
+							subtitle="Android'in kanal ayarları — ses, titreşim, öncelik"
+							showChevron={false}
+							onPress={() => {
+								Linking.openSettings().catch(() => {
+									Alert.alert(
+										"Telefon Bildirim Ayarları",
+										"Telefonun ayar sayfası açılamadı.",
+									);
+								});
+							}}
+						/>
+						{pushOturumVar && takipYuklendi ? (
+							<>
+								<SettingRow
+									icon="tv-outline"
+									iconBg="#FF3D5E"
+									label="Takip Edilen Diziler"
+									subtitle={
+										takipListesi.length > 0
+											? `${takipListesi.length} dizi — anahtarla aç/kapat`
+											: "Henüz takip yok — dizinin sayfasında zile dokun"
+									}
+									showChevron={false}
+								/>
+								{takipListesi.slice(0, 30).map((tercih) => (
+									<SettingRow
+										key={tercih.tmdb_id}
+										icon="bell-outline"
+										iconBg="#F97316"
+										label={
+											baslikMagaza[tercih.tmdb_id] ??
+											`Dizi #${String(tercih.tmdb_id).replace(/[^0-9]/g, "")}`
+										}
+										subtitle={
+											tercih.mode === "all_sources"
+												? "Tüm kaynaklardaki yeni bölümler"
+												: `Kaynak: ${tercih.watched_provider ?? "?"}`
+										}
+										showChevron={false}
+										rightComponent={
+											<Switch
+												value={Boolean(tercih.enabled)}
+												trackColor={{
+													false: colors.border,
+													true: "#FF3D5E",
+												}}
+												thumbColor="#ffffff"
+												disabled={takipYaziyor === tercih.tmdb_id}
+											/>
+										}
+										onPress={() => void takipGecistir(tercih)}
+									/>
+								))}
+								{takipListesi.length > 30 ? (
+									<View style={{ padding: 12 }}>
+										<Text
+											style={{
+												fontSize: 12,
+												color: colors.textSecondary,
+											}}>
+											+ {takipListesi.length - 30} dizi daha — dizinin
+											kartındaki çan düğmesiyle ayrı ayrı yönetilir
+										</Text>
+									</View>
+								) : null}
+							</>
+						) : null}
 					</SettingsSection>
 
 					{/* KATEGORİ 4: SİSTEM VE YEDEKLEME */}
@@ -822,15 +978,17 @@ export default function SettingsScreen() {
 								]}
 							/>
 
-							{/* Bildirimler */}
+							{/* Telefon Bildirim Ayarları */}
 							<TVPressable
 								style={styles.modalRow}
 								focusedStyle={styles.settingRowFocused}
 								onPress={() => {
-									Alert.alert(
-										"Bildirimler",
-										"Tüm uygulama içi bildirimler aktiftir.",
-									);
+									Linking.openSettings().catch(() => {
+										Alert.alert(
+											"Telefon Bildirim Ayarları",
+											"Telefonun ayar sayfası açılamadı.",
+										);
+									});
 								}}>
 								<View style={styles.modalRowInfo}>
 									<Text
@@ -838,14 +996,14 @@ export default function SettingsScreen() {
 											styles.modalRowTitle,
 											{ color: colors.text },
 										]}>
-										Bildirimler
+										Telefon Bildirim Ayarları
 									</Text>
 									<Text
 										style={[
 											styles.modalRowSubtitle,
 											{ color: colors.textSecondary },
 										]}>
-										Yeni bölüm ve içerik uyarıları
+										Bildirim kanalları telefonun ayarlarında yönetilir
 									</Text>
 								</View>
 								<Ionicons

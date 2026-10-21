@@ -28,6 +28,7 @@ import { hasSession, clearTokens, saveTokens } from "@/services/token";
 import { authDiag } from "@/utils/authDiagnostics";
 import { getAuthUser, saveAuthUser, clearAuthUser } from "@/utils/storage";
 import { setSyncOwner, resetSyncState } from "@/services/sync";
+import { okunmamisSayisiGetir } from "@/services/bildirimApi";
 import { cihazKaydiYaz, cihazKaydiSil } from "@/services/pushApi";
 
 /**
@@ -314,6 +315,9 @@ export function AuthProvider({ children }) {
 			// istemci eski bir "son indirme" noktası bildirir ve sunucudaki veri
 			// daha eski sayılır → boş kütüphane.
 			resetSyncState();
+			// Çıkışta simge rozeti de sıfırlanır: oturumsuz kullanıcıda
+			// okunmamış sayısı 0 yayar, launcher rozeti boşalır.
+			void okunmamisSayisiGetir({ force: true });
 			// Saklanan kimlik de silinir: çıkışta kimse tanınmamalı
 			clearAuthUser().catch(() => {});
 			setUser(null);
