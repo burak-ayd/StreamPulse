@@ -132,13 +132,16 @@ export async function tercihOku(tmdbId) {
 /**
  * Kullanıcının TÜM bildirim tercihleri (`GET /settings-list`).
  *
- * Ayar ekranındaki "Takip Edilen Diziler" bölümü bu uçtan beslenir:
- * satırlar sunucuda EN YENİ güncellenen sıraya dizilmiş olarak gelir;
- * görünen başlıklar ÇAĞIRAN taraf tarafından `basliklariOku` eşleşmesiyle
- * çözülür (başlık sunucuda bilinçli saklanmaz — yerel karar).
+ * "Takip Edilen Diziler" sayfası (settings/takipEdilen) bu uçtan
+ * beslenir: satırlar sunucuda EN YENİ güncellenen sıraya dizilmiş
+ * olarak gelir; görünen başlıklar ÇAĞIRAN taraf tarafından
+ * `basliklariOku` eşleşmesiyle çözülür (başlık sunucuda bilinçli
+ * saklanmaz — yerel karar). Satırın `created_at` alanı (sunucu
+ * 1.14.7+) sayfanın "eklenme sırası" sıralamalarını besler.
  *
  * @returns {Promise<Array<{tmdb_id: string, enabled: boolean,
- *                     mode: string, watched_provider: string|null}>>}
+ *                     mode: string, watched_provider: string|null,
+ *                     created_at: string|null}>>}
  *          giriş yoksa / hatada boş dizi
  */
 export async function bildirimTercihListesi() {

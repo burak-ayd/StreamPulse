@@ -10,11 +10,7 @@ import {
 import { useThemeContext } from "@/context/ThemeContext";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { fetchPlatforms } from "@/services/api";
-import {
-	basliklariOku,
-	bildirimTercihListesi,
-	tercihYaz,
-} from "@/services/bildirimApi";
+import { bildirimTercihListesi } from "@/services/bildirimApi";
 import { getNotifyOnUpdate, setNotifyOnUpdate } from "@/services/otaUpdate";
 import {
 	pushTercihOku,
@@ -297,14 +293,13 @@ export default function SettingsScreen() {
 		[pushOturumVar, pushYaziyor, pushTercihi],
 	);
 
-	// ─── Takip edilen diziler (bildirim ayarlarının sunucu kaynağı) ───
-	// `GET /settings-list` kullanıcının TÜM tercih satırlarını döner;
-	// başlık çözümü cihazdaki anımsatıcıyla (basliklariOku) zenginleşir.
-	// Odak her dönüşte tazelenir; oturumsuz ekranda bölüm tümüyle gizli.
+	// ─── Takip edilen diziler (özet girdi) ─────────────────────────
+	// Listenin TAMAMI `/(app)/settings/takipEdilen` sayfasında yönetilir
+	// (eklenti filtresi + sıralama); burada yalnız ÖZET girdi var:
+	// `GET /settings-list` adedi tazeler, odağa her girişte yenilenir.
+	// Oturumsuz ekranda girdi gizli.
 	const [takipListesi, setTakipListesi] = useState([]);
-	const [baslikMagaza, setBaslikMagaza] = useState({});
 	const [takipYuklendi, setTakipYuklendi] = useState(false);
-	const [takipYaziyor, setTakipYaziyor] = useState(null);
 
 	useFocusEffect(
 		useCallback(() => {
@@ -312,15 +307,10 @@ export default function SettingsScreen() {
 			async function takipYukle() {
 				const oturumVar = Boolean(await hasSession());
 				let satirlar = [];
-				let magaza = {};
 				if (oturumVar) {
-					[satirlar, magaza] = await Promise.all([
-						bildirimTercihListesi(),
-						basliklariOku(),
-					]);
+					satirlar = await bildirimTercihListesi();
 				}
 				if (!isMounted) return;
-				setBaslikMagaza(magaza ?? {});
 				setTakipListesi(Array.isArray(satirlar) ? satirlar : []);
 				setTakipYuklendi(true);
 			}
@@ -331,50 +321,6 @@ export default function SettingsScreen() {
 		}, []),
 	);
 
-	const takipGecistir = useCallback(
-		async (tercih) => {
-			if (takipYaziyor) return;
-			const tekrar = !tercih.enabled;
-			setTakipYaziyor(tercih.tmdb_id);
-			// İyimser gösterim: sunucu onayına kadar yeni değer; hatada geri.
-			setTakipListesi((eski) =>
-				eski.map((s) =>
-					s.tmdb_id === tercih.tmdb_id ? { ...s, enabled: tekrar } : s,
-				),
-			);
-			const sonuc = await tercihYaz({
-				tmdbId: tercih.tmdb_id,
-				enabled: tekrar,
-				mode: tercih.mode || "watched_source",
-				watchedProvider: tercih.watched_provider ?? null,
-			});
-			setTakipYaziyor(null);
-			if (!sonuc.ok) {
-				setTakipListesi((eski) =>
-					eski.map((s) =>
-						s.tmdb_id === tercih.tmdb_id
-							? { ...s, enabled: tercih.enabled }
-							: s,
-					),
-				);
-				Alert.alert(
-					"Bildirim ayarı yazılamadı",
-					sonuc.mesaj || "Sunucuya ulaşılamadı.",
-				);
-				return;
-			}
-			if (sonuc.data) {
-				// Sunucunun kanonik yanıtını satıra işle
-				// (all_sources → watched_provider NULL temizliği dahil).
-				setTakipListesi((eski) =>
-					eski.map((s) =>
-						s.tmdb_id === tercih.tmdb_id ? { ...s, ...sonuc.data } : s,
-					),
-				);
-			}
-		},
-		[takipYaziyor],
-	);
 
 	const { languageDisplayMode, setLanguageDisplayMode } =
 		useLanguageDisplay();
@@ -737,60 +683,19 @@ export default function SettingsScreen() {
 							}}
 						/>
 						{pushOturumVar && takipYuklendi ? (
-							<>
-								<SettingRow
-									icon="tv-outline"
-									iconBg="#FF3D5E"
-									label="Takip Edilen Diziler"
-									subtitle={
-										takipListesi.length > 0
-											? `${takipListesi.length} dizi — anahtarla aç/kapat`
-											: "Henüz takip yok — dizinin sayfasında zile dokun"
-									}
-									showChevron={false}
-								/>
-								{takipListesi.slice(0, 30).map((tercih) => (
-									<SettingRow
-										key={tercih.tmdb_id}
-										icon="bell-outline"
-										iconBg="#F97316"
-										label={
-											baslikMagaza[tercih.tmdb_id] ??
-											`Dizi #${String(tercih.tmdb_id).replace(/[^0-9]/g, "")}`
-										}
-										subtitle={
-											tercih.mode === "all_sources"
-												? "Tüm kaynaklardaki yeni bölümler"
-												: `Kaynak: ${tercih.watched_provider ?? "?"}`
-										}
-										showChevron={false}
-										rightComponent={
-											<Switch
-												value={Boolean(tercih.enabled)}
-												trackColor={{
-													false: colors.border,
-													true: "#FF3D5E",
-												}}
-												thumbColor="#ffffff"
-												disabled={takipYaziyor === tercih.tmdb_id}
-											/>
-										}
-										onPress={() => void takipGecistir(tercih)}
-									/>
-								))}
-								{takipListesi.length > 30 ? (
-									<View style={{ padding: 12 }}>
-										<Text
-											style={{
-												fontSize: 12,
-												color: colors.textSecondary,
-											}}>
-											+ {takipListesi.length - 30} dizi daha — dizinin
-											kartındaki çan düğmesiyle ayrı ayrı yönetilir
-										</Text>
-									</View>
-								) : null}
-							</>
+							<SettingRow
+								icon="tv-outline"
+								iconBg="#FF3D5E"
+								label="Takip Edilen Diziler"
+								subtitle={
+									takipListesi.length > 0
+										? `${takipListesi.length} dizi — listeyi kendi sayfasında yönet`
+										: "Henüz takip yok — dizinin sayfasında zile dokun"
+								}
+								onPress={() =>
+									router.push("/(app)/settings/takipEdilen")
+								}
+							/>
 						) : null}
 					</SettingsSection>
 
