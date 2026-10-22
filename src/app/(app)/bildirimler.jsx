@@ -23,6 +23,8 @@ import { openLogin } from "@/utils/authRoutes";
 
 import {
 	basliklariOku,
+	bildirimHedef,
+	bildirimHedefeGec,
 	bildirimSil,
 	bildirimleriTumunuSil,
 	gelenKutusuGetir,
@@ -176,6 +178,23 @@ export default function BildirimlerScreen() {
 		);
 	};
 
+	/**
+	 * Satıra dokunma (Faz 6 karar 2, 2026-10-23): bölümü DOĞRUDAN
+	 * OYNATMA. Satır önce okundu damgası alır (gezinti beklemez);
+	 * sunucunun hedef yanıtında dizi sayfa adresi VARSA derin bağ açılır
+	 * (ekran hedef bölümü otomatik oynatır). Adres öğrenilmemişse ya da
+	 * hatada dokunma klasik davranışa iner — yalnız okundu damgası.
+	 */
+	const satirAc = async (satir) => {
+		void satiriOkunduSay(satir);
+		try {
+			const hedef = await bildirimHedef(satir.id);
+			if (hedef && bildirimHedefeGec(router, hedef)) return;
+		} catch (e) {
+			console.warn("Bildirim hedefi açılamadı:", e?.message);
+		}
+	};
+
 	/** Uzun basış → satır silme onayı. İyimser çıkarır; hatada geri koyar. */
 	const satiriSil = (satir) => {
 		Alert.alert(
@@ -245,7 +264,7 @@ export default function BildirimlerScreen() {
 		const okundu = Boolean(item.read_at);
 		return (
 			<TVPressable
-				onPress={() => satiriOkunduSay(item)}
+				onPress={() => satirAc(item)}
 				onLongPress={() => satiriSil(item)}
 				style={[
 					styles.satir,

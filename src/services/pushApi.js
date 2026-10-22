@@ -37,6 +37,7 @@ import { router } from "expo-router";
 import Constants from "expo-constants";
 import { authFetch } from "./apiClient";
 import { hasSession } from "./token";
+import { bildirimHedef, bildirimHedefeGec } from "./bildirimApi";
 
 const API_PREFIX = "/api/push";
 
@@ -397,10 +398,21 @@ export function pushTepkisiBagla() {
 	return temiz;
 }
 
-function _dokunmayiYonlendir(yanit) {
+async function _dokunmayiYonlendir(yanit) {
 	try {
 		const veri = yanit?.notification?.request?.content?.data ?? {};
 		if (veri?.kind !== "bildirim_ozeti") return;
+		// Faz 6 karar 2 (2026-10-23): TEK bekleyen bölümde dokunma DİZİ
+		// SAYFASINA derin bağ açar; hedef adresi sunucuda öğrenilmemişse
+		// (dizi_url boş) güvenli çözüm — gelen kutusu ekranı.
+		if (
+			Number(veri?.count) === 1 &&
+			veri?.id != null &&
+			veri?.provider != null
+		) {
+			const hedef = await bildirimHedef(veri.id);
+			if (hedef && bildirimHedefeGec(router, hedef)) return;
+		}
 		router.push("/(app)/bildirimler");
 	} catch (e) {
 		console.warn("Push dokunma yönlendirme hatası:", e?.message);

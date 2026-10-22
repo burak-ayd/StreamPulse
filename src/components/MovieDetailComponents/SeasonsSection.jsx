@@ -8,6 +8,7 @@ import React, {
 	useEffect,
 	useImperativeHandle,
 	useMemo,
+	useRef,
 	useState,
 } from "react";
 import {
@@ -92,6 +93,9 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 		episodesProgress = {},
 		totalEpisodes = 0,
 		onSetWatched,
+		// Derin bağ otomatik oynatma hedefi ({sezon, bolum}) ya da null —
+		// FilmDetails derin bağdan doldurur (Faz 6 karar 2).
+		otomatikBolum = null,
 	},
 	ref,
 ) {
@@ -224,6 +228,63 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 
 		return listCopy;
 	}, [normalizedSeasons, selectedSeason, seasonKeys, sortOrder]);
+
+	// ─── Derin bağ otomatik oynatma (Faz 6 karar 2) ────────────────────
+	// Bildirim kartından gelen `otomatikBolum` ({sezon, bolum}): hedef
+	// sezonun bölüm listesi HAZIR olunca BİR KEZ oynatılır. Önce seçili
+	// sezon hedefe çekilir (ekranın kontrollediği durumda
+	// `handleSeasonSelect` aynı onay zincirini kullanır), sonra hedef
+	// bölüm geçerli listede bulunur ve elle dokunma yoluyla aynı
+	// oynatıcı akışına gönderilir — "Sonraki bölüm" verisi de doğru
+	// sırada kurulur.
+	// `otomatikOynatildiRef` tek oynatmayı garantiler: etki her koşumunda
+	// yeniden çalışsa bile (fonksiyon kimlikleri değişken) yeniden
+	// basmaz; oynatıcıdan geri dönüp aynı ekran örneğine dönmek dahil.
+	const otomatikOynatildiRef = useRef(false);
+	useEffect(() => {
+		if (!otomatikBolum || otomatikOynatildiRef.current) return;
+		const sezonKey =
+			otomatikBolum.sezon != null ? String(otomatikBolum.sezon) : "";
+		if (!normalizedSeasons) return; // listelerin gelmesini bekle
+		if (!sezonKey || !normalizedSeasons[sezonKey]) {
+			// Hedef bozuk ya da plugin bu sezonu vermiyor: güvenli vazgeçiş —
+			// satır okundu damgasını zaten aldı; kullanıcı elle gezinebilir.
+			otomatikOynatildiRef.current = true;
+			return;
+		}
+		if (String(selectedSeason) !== sezonKey) {
+			handleSeasonSelect(sezonKey);
+			return; // seçili sezon değişince etkinin yeni koşumu oynatır
+		}
+		const hedefNo = Number(otomatikBolum.bolum);
+		if (!Number.isFinite(hedefNo) || hedefNo < 1) {
+			otomatikOynatildiRef.current = true;
+			return;
+		}
+		const hedefIndex = sortedEpisodes.findIndex(
+			(ep) => Number(ep.episode || ep.episode_number) === hedefNo,
+		);
+		if (hedefIndex < 0) {
+			// Bölüm bu koşumda listede yok: sonsuz bekleme yapmaktansa
+			// tekrar denemeyi kes; kullanıcı elle bölüme basabilir.
+			otomatikOynatildiRef.current = true;
+			return;
+		}
+		const hedef = sortedEpisodes[hedefIndex];
+		if (!hedef?.url) {
+			otomatikOynatildiRef.current = true;
+			return;
+		}
+		otomatikOynatildiRef.current = true;
+		handleEpisodeClick(hedef, hedefIndex);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		otomatikBolum,
+		normalizedSeasons,
+		selectedSeason,
+		sortedEpisodes,
+		handleSeasonSelect,
+	]);
 
 	// Tekil bölüm indirme hazırlığı
 	const handleDownloadEpisode = async (ep, epNumber, epTitle) => {
