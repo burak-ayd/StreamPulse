@@ -49,7 +49,10 @@ const ROZET_TTL_MS = 60_000;
 
 /**
  * Dizi kimliğini kanonik `tmdb-tv-<id>` anahtarına indirger (sunucu
- * `media_keyi` ile aynı sözleşme). Sadece tam sayı kabul; tanınmayan
+ * `media_keyi` ile aynı sözleşme). Kabul: çıplak tam sayı VE ZATEN
+ * kanonik `tmdb-tv-<id>` — sunucu satırından/Ayarlar listesinden
+ * gelen kanonik anahtar ikinci kez doğrulanınca reddedilmesin (1.0.40
+ * düzeltmesi: kart `anahtar`'ı yazıcıya geri veriyordu). Tanınmayan
  * biçim null döner — istemci fazla akıl yürütmeyi reddeder.
  *
  * @param {string|number} tmdbId
@@ -57,8 +60,9 @@ const ROZET_TTL_MS = 60_000;
  */
 export function mediaKimligi(tmdbId) {
 	const s = String(tmdbId ?? "").trim();
-	if (!/^\d+$/.test(s)) return null;
-	return `tmdb-tv-${s}`;
+	if (/^\d+$/.test(s)) return `tmdb-tv-${s}`;
+	if (/^tmdb-tv-\d+$/.test(s)) return s; // kanonik girdi geçer
+	return null;
 }
 
 // ─── Yerel başlık anımsatıcısı ────────────────────────────────
