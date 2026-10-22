@@ -221,6 +221,40 @@ export async function tercihYaz({
 	}
 }
 
+/**
+ * Tercih SİL (takipten çıkar) — `DELETE /settings?tmdb_id=` (sunucu
+ * 1.14.8+).
+ *
+ * Satır tamamen listeden KALKAR: aç/kapat düğmesinin tersi değildir
+ * (kapatmak yalnız susturur, satır durur). Satır yoksa ya da
+ * başkasına aitse sunucu 404 döner — iki durum da istemcide false'a
+ * iner (varlık sızdırma yok).
+ *
+ * @param {{tmdbId: string|number}} girdiler
+ * @returns {Promise<boolean>} true = en az bir satır silindi
+ */
+export async function tercihSil({ tmdbId } = {}) {
+	const anahtar = mediaKimligi(tmdbId);
+	if (!anahtar) return false;
+	if (!(await hasSession())) return false;
+	try {
+		const res = await authFetch(
+			`${API_PREFIX}/settings?tmdb_id=${encodeURIComponent(anahtar)}`,
+			{ method: "DELETE" },
+		);
+		if (!res.ok) {
+			// 404: satır zaten yok (başka cihazdan çıkarılmış olabilir) —
+			// sessiz false; silinemezse kullanıcı yeniden dener.
+			console.warn("Bildirim tercihi silme başarısız:", res.status);
+			return false;
+		}
+		return true;
+	} catch (e) {
+		console.warn("Bildirim tercihi silme hatası:", e?.message);
+		return false;
+	}
+}
+
 // ─── Gelen kutusu ─────────────────────────────────────────────
 
 /**
@@ -610,6 +644,7 @@ export default {
 	basliklariOku,
 	tercihOku,
 	tercihYaz,
+	tercihSil,
 	bildirimTercihListesi,
 	gelenKutusuGetir,
 	okunmamisSayisiGetir,
