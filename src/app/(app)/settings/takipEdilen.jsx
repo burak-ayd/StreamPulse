@@ -19,6 +19,11 @@
  * bildirim aldığı için kaynak süzgeçlerinde de çıkar; çipi bunu
  * doğrular. Anahtar düğmesiyle aç/kapat (aç/kapat akışı Ayarlar'dan
  * taşındı — dizi başına TEK satır; sunucu upsert `(user_id, tmdb_id)`).
+ *
+ * ÇIKARMA (1.0.42): kartta çöp düğmesi ya da UZUN BASIŞ — sunucudan
+ * tercih satırı SİLİNİR (DELETE /settings; 1.14.8+ ucu), listede
+ * kalmaz. Aç/kapattan farkı budur: kapatmak satırı susturur, çıkarma
+ * satırı siler. Onaylı; iyimser çıkarılır, hata da geri gelir.
  */
 
 import TVPressable from "@/components/common/TVPressable";
@@ -28,6 +33,7 @@ import { openLogin } from "@/utils/authRoutes";
 import {
 	basliklariOku,
 	bildirimTercihListesi,
+	tercihSil,
 	tercihYaz,
 } from "@/services/bildirimApi";
 import { hasSession } from "@/services/token";
@@ -198,6 +204,64 @@ export default function TakipEdilenDizilerScreen() {
 		];
 	}, [satirlar]);
 
+	/**
+	 * Süzgeç düşüşü: seçili kapı son satırın çıkmasıyla boş alırsa
+	 * görünüm sessizce "Tümü"ne iner (çip kaybolur, seçim çipe bağlı).
+	 */
+	const gecerliFiltre = kaynakCipleri.some((c) => c.id === filtre)
+		? filtre
+		: "tumu";
+
+	/**
+	 * Satırı listeden ÇIKAR (1.0.42): onaylı — sunucudan tercih satırı
+	 * SİLİNİR (tercihSil; 1.14.8+ ucu). Aç/kapatun tersi değildir:
+	 * kapatım satırı susturur, çıkarma satırı siler. İyimser çıkar;
+	 * sunucu reddederse satır geri gelir (başka cihazla yarışta satır
+	 * az önce silinmiş olabilir — tekrar deneme).
+	 */
+	const satiriCikar = useCallback(
+		(satir) => {
+			// gorunen'den gelen biçimli satırda etiket hazır; çıplak
+			// satırdaysa (yeniden eklem akışında) aynı çözüm uygulanır.
+			const etiket =
+				satir.etiket ??
+				magaza[satir.tmdb_id] ??
+				`Dizi #${String(satir.tmdb_id).replace(/[^0-9]/g, "")}`;
+			Alert.alert(
+				"Takipten çıkar",
+				`"${etiket}" bildirim takibinden çıkar; listede görünmez ve bölüm bildirimi verilmez. Dizinin sayfasında yeniden takip kurabilirsin.`,
+				[
+					{ text: "Vazgeç", style: "cancel" },
+					{
+						text: "Çıkar",
+						style: "destructive",
+						onPress: async () => {
+							// İyimser çıkar; hata tüm satırı geri koyar.
+							setSatirlar((eski) =>
+								eski.filter((s) => s.tmdb_id !== satir.tmdb_id),
+							);
+							const tamam = await tercihSil({
+								tmdbId: satir.tmdb_id,
+							});
+							if (!tamam) {
+								setSatirlar((eski) =>
+									eski.some((s) => s.tmdb_id === satir.tmdb_id)
+										? eski
+										: [satir, ...eski],
+								);
+								Alert.alert(
+									"Çıkarılamadı",
+									"Sunucuya ulaşılamadı; satır listede bırakıldı.",
+								);
+							}
+						},
+					},
+				],
+			);
+		},
+		[magaza],
+	);
+
 	/** Çekim hâli: etiket + eklenme zamanı (Eksik zaman → 0). */
 	const sekilli = useMemo(
 		() =>
@@ -214,11 +278,12 @@ export default function TakipEdilenDizilerScreen() {
 	/** Süzgeç + sırala: all_sources dizisi her kaynak süzgeçine de girer. */
 	const gorunen = useMemo(() => {
 		let liste = sekilli;
-		if (filtre === "tum_kaynaklar") {
+		if (gecerliFiltre === "tum_kaynaklar") {
 			liste = sekilli.filter((s) => s.mode === "all_sources");
-		} else if (filtre !== "tumu") {
+		} else if (gecerliFiltre !== "tumu") {
 			liste = sekilli.filter(
-				(s) => s.mode === "all_sources" || s.watched_provider === filtre,
+				(s) =>
+					s.mode === "all_sources" || s.watched_provider === gecerliFiltre,
 			);
 		}
 		const kopya = [...liste];
@@ -236,13 +301,15 @@ export default function TakipEdilenDizilerScreen() {
 				kopya.sort((a, b) => a.etiket.localeCompare(b.etiket, "tr"));
 		}
 		return kopya;
-	}, [sekilli, filtre, siralama]);
+	}, [sekilli, gecerliFiltre, siralama]);
 
-	/** Tek dizi kartı: başlık + kaynak çip(ler)i + anahtar düğmesi. */
+	/** Tek dizi kartı: başlık + kaynak çip(ler)i + çöp + anahtar düğmesi. */
 	const kartKutucuk = ({ item }) => {
 		const acik = Boolean(item.enabled);
 		return (
-			<View
+			<TVPressable
+				onLongPress={() => satiriCikar(item)}
+				focusedStyle={styles.kartOdak}
 				style={[
 					styles.kart,
 					{
@@ -302,6 +369,17 @@ export default function TakipEdilenDizilerScreen() {
 						</View>
 					</View>
 				</View>
+				<TVPressable
+					onPress={() => satiriCikar(item)}
+					style={styles.kartCop}
+					focusedStyle={styles.cipOdak}
+					accessibilityLabel={`${item.etiket} takipten çıkar`}>
+					<Ionicons
+						name="trash-outline"
+						size={sp(17)}
+						color="#E50914"
+					/>
+				</TVPressable>
 				<Switch
 					value={acik}
 					trackColor={{
@@ -312,7 +390,7 @@ export default function TakipEdilenDizilerScreen() {
 					disabled={yaziyor === item.tmdb_id}
 					onValueChange={() => void gecistir(item)}
 				/>
-			</View>
+			</TVPressable>
 		);
 	};
 
@@ -628,6 +706,17 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		paddingHorizontal: 8,
 		paddingVertical: 3,
+	},
+	kartCop: {
+		width: 30,
+		height: 30,
+		alignItems: "center",
+		justifyContent: "center",
+		borderRadius: 8,
+		marginRight: 2,
+	},
+	kartOdak: {
+		borderColor: "rgba(229, 9, 20, 0.55)",
 	},
 	listeGovde: {
 		paddingHorizontal: 14,
