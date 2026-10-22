@@ -439,6 +439,135 @@ export async function bildirimleriTumunuSil() {
 	}
 }
 
+// ─── Gelen kutusu derin bağ (Faz 6 karar 2; sunucu 1.14.6) ─────
+
+/**
+ * Tek bildirimin derin bağ hedefi (`GET /{id}/hedef`).
+ *
+ * Satırın `(kaynak, dizi)` çifti sunucuda `series_audit_state`'ten
+ * çözülür; dizi sayfa adresi öğrenilmemişse `dizi_url` null gelir —
+ * çağıran güvenli çözüme (gelen kutusu) döner. Hata ya da
+ * hesapsızlıkta da hatayı fırlatmadan null döner.
+ *
+ * @param {number|string} id - bildirim satır kimliği
+ * @returns {Promise<{id:number, tmdb_id:string, series_title:string|null,
+ *                     provider:string, season:number, episode:number,
+ *                     dizi_url:string|null}|null>}
+ */
+export async function bildirimHedef(id) {
+	if (!id) return null;
+	if (!(await hasSession())) return null;
+	try {
+		const res = await authFetch(
+			`${API_PREFIX}/${encodeURIComponent(String(id))}/hedef`,
+		);
+		if (!res.ok) return null;
+		return await res.json();
+	} catch (e) {
+		console.warn("Bildirim hedefi okuma hatası:", e?.message);
+		return null;
+	}
+}
+
+/**
+ * Dizi sayfasına derin bağ: hedef adrese gider ve bölümü otomatik
+ * oynatma paramlarını taşır (ekran `otomatikSezon`/`otomatikBolum`
+ * algısını bölüm listeleri hazır olunca oynatıcıya çevirir).
+ *
+ * `id` dizi sayfa adresidir — ekran http ile başlayan kimliği beyan
+ * adresi okur (MovieDetails'in mevcut çözümü).
+ *
+ * @param {object} router - expo-router yönlendiricisi
+ * @param {{provider:string, dizi_url:string, season:(number|null),
+ *           episode:(number|null), series_title:(string|null)}} hedef
+ * @returns {boolean} yönlenildiyse true; değilse çağıran mevcut
+ *                    davranışıyla (gelen kutusu) sürer
+ */
+export function bildirimHedefeGec(router, hedef) {
+	if (!router || !hedef?.dizi_url || !hedef?.provider) return false;
+	router.push({
+		pathname: "/(app)/MovieDetails/[id]",
+		params: {
+			id: hedef.dizi_url,
+			plugin: hedef.provider,
+			otomatikSezon: String(hedef.season ?? ""),
+			otomatikBolum: String(hedef.episode ?? ""),
+			movieData: JSON.stringify({
+				id: hedef.dizi_url,
+				url: hedef.dizi_url,
+				title: hedef.series_title || null,
+				plugin: hedef.provider,
+				seriesTitle: hedef.series_title || undefined,
+				initialSeason: hedef.season ?? undefined,
+				initialEpisode: hedef.episode ?? undefined,
+			}),
+		},
+	});
+	return true;
+}
+
+/**
+ * Favori ile bildirim tercihini otomatik hizalar (Faz 6.2; kullanıcı
+ * kararı 2026-10-23).
+ *
+ * - Favoriye EKLENİNCE tercih YOKSA `enabled=true` kurar
+ *   (watched_source modunda ekranın güncel kaynağına bağlanıp sunucuda
+ *   denetim çiftini tohumlar). Kullanıcının MEVCUT tercihi — kapatılmış
+ *   dahil — DOKUNULMAZ: bilinçli kapatma ezilmez.
+ * - Favoriden ÇIKARILINCA tercih VAR VE AÇIK ise `enabled=false`
+ *   yazılır; satır SILINMEZ (elle yeniden açılabilir).
+ * - Dizi/tmdb bilgisi yok, oturum yok ya da hata → sessiz vazgeçiş:
+ *   favori akışı hiçbir koşulda bloklanmaz.
+ *
+ * @param {{tmdbId:string|number|null, isSeries:boolean,
+ *           watchedProvider:string|null, diziUrl:string|null,
+ *           favoride:boolean}} girdiler
+ */
+export async function tercihFavoriIleHizala({
+	tmdbId,
+	isSeries,
+	watchedProvider = null,
+	diziUrl = null,
+	favoride,
+}) {
+	if (!isSeries || !tmdbId) return;
+	if (!(await hasSession())) return;
+	try {
+		const tercih = await tercihOku(tmdbId);
+		if (favoride) {
+			// Zaten açık: kullanıcı bilinçlidir; üstüne yazılmaz.
+			if (tercih?.enabled) return;
+			const sonuc = await tercihYaz({
+				tmdbId,
+				enabled: true,
+				mode: "watched_source",
+				watchedProvider: watchedProvider ?? null,
+				diziUrl: diziUrl ?? null,
+			});
+			if (!sonuc.ok) {
+				console.warn("Otomatik takip kurulamadı:", sonuc.mesaj);
+			}
+		} else {
+			// Kapalı ya da hiç yok: susturulacak açık tercih demek değil.
+			if (!tercih || !tercih.enabled) return;
+			const sonuc = await tercihYaz({
+				tmdbId,
+				enabled: false,
+				mode: tercih.mode || "watched_source",
+				// DB CHECK: watched_source modunda kaynak zorunlu — mevcut
+				// kaynak korunur, eksikse ekranın güncel kaynağı tamamlar.
+				watchedProvider: tercih.watched_provider || watchedProvider || null,
+				diziUrl: tercih.dizi_url || diziUrl || null,
+			});
+			if (!sonuc.ok) {
+				console.warn("Otomatik takip susturulamadı:", sonuc.mesaj);
+			}
+		}
+	} catch (e) {
+		console.warn("Favori-bildirim hizalama hatası:", e?.message);
+	}
+}
+
 // ─── Ortak biçim yardımcıları ─────────────────────────────────
 
 /**
@@ -481,5 +610,9 @@ export default {
 	okunduIsaretle,
 	okunduTumunuIsaretle,
 	bildirimSil,
+	bildirimleriTumunuSil,
+	bildirimHedef,
+	bildirimHedefeGec,
+	tercihFavoriIleHizala,
 	goreceZaman,
 };

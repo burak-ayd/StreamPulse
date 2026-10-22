@@ -48,6 +48,7 @@ import MetadataSection from "@components/MovieDetailComponents/MetadataSection";
 import OverviewSection from "@components/MovieDetailComponents/OverviewSection";
 import RelatedContent from "@components/MovieDetailComponents/RelatedContent";
 import SeasonsSection from "@components/MovieDetailComponents/SeasonsSection";
+import { tercihFavoriIleHizala } from "@/services/bildirimApi";
 
 /**
  * Detay Sayfası Bölüm / Bileşen Aktiflik Ayarları
@@ -82,6 +83,18 @@ export default function MovieDetailsScreen() {
 			return null;
 		}
 	}, [params.movieData]);
+
+	// Bildirim derin bağ hedefi (Faz 6 karar 2, 2026-10-23): otomatik
+	// oynatılacak sezon/bölüm. Paramlar yoksa null — ekran eskisi gibi
+	// davranır. Memo yalnız rota paramlarını sayılar; "bölüm listeleri
+	// hazır olunca bir kez oynat" davranışı SeasonsSection içindedir.
+	const otomatikBolum = useMemo(() => {
+		const sezon = Number(params.otomatikSezon);
+		const bolum = Number(params.otomatikBolum);
+		if (!Number.isFinite(sezon) || sezon < 1) return null;
+		if (!Number.isFinite(bolum) || bolum < 1) return null;
+		return { sezon, bolum };
+	}, [params.otomatikSezon, params.otomatikBolum]);
 
 	const { colors, theme } = useThemeContext();
 	const router = useRouter();
@@ -592,9 +605,11 @@ export default function MovieDetailsScreen() {
 	const [watchlistStatus, setWatchlistStatus] = useState(null); // 'watching' | 'planned' | 'completed' | null
 	const [isListSelectModalVisible, setIsListSelectModalVisible] =
 		useState(false);
-	const [selectedSeason, setSelectedSeason] = useState(
-		passedMovie?.initialSeason ? String(passedMovie.initialSeason) : null,
-	);
+	const [selectedSeason, setSelectedSeason] = useState(() => {
+		// Deep-link automatic target takes priority in the starting season (Faz 6 decision 2).
+		const ilk = otomatikBolum?.sezon ?? passedMovie?.initialSeason;
+		return ilk != null ? String(ilk) : null;
+	});
 
 	// Bölüm seçim modu / işlem menüsü durumunu geri tuşunda kapatabilmek
 	// için SeasonsSection referansı (bkz. aşağıdaki BackHandler).
@@ -800,6 +815,16 @@ export default function MovieDetailsScreen() {
 		try {
 			const updated = await toggleFavorite(movieItem);
 			setIsFav(Boolean(updated));
+			// Faz 6.2 (user decision 2026-10-23): add-to-favorites automatically
+			// starts tracking (if the existing preference is preserved), remove-to-favorites
+			// automatically mutes an preference that is on. It never blocks the favorite flow.
+			void tercihFavoriIleHizala({
+				tmdbId: content?.tmdb_id,
+				isSeries: Boolean(isSeries),
+				watchedProvider: pluginName,
+				diziUrl: content?.url || movieUrl,
+				favoride: Boolean(updated),
+			});
 		} catch (e) {
 			console.error("Favori değiştirme hatası:", e);
 		}
@@ -814,7 +839,16 @@ export default function MovieDetailsScreen() {
 		setWatchlistStatus(newList);
 		setInWatchlist(Boolean(newList));
 		if (newFav !== undefined) {
-			setIsFav(newFav);
+			setIsFav(Boolean(newFav));
+			// ListSelectModal içindeki favori düğmesi de Faz 6.2 hizalamasına
+			// girer (favori verme → otomatik takip; çıkarma → sustur).
+			void tercihFavoriIleHizala({
+				tmdbId: content?.tmdb_id,
+				isSeries: Boolean(isSeries),
+				watchedProvider: pluginName,
+				diziUrl: content?.url || movieUrl,
+				favoride: Boolean(newFav),
+			});
 		}
 	};
 
@@ -1373,9 +1407,10 @@ export default function MovieDetailsScreen() {
 								seasons={content.seasons}
 								episodes={content.episodes}
 								loading={pluginLoading && !content.seasons}
-								initialSeason={passedMovie?.initialSeason}
+								initialSeason={otomatikBolum?.sezon ?? passedMovie?.initialSeason}
 								selectedSeason={selectedSeason}
 								onSeasonChange={setSelectedSeason}
+								otomatikBolum={otomatikBolum}
 								seriesTitle={content.title}
 								posterUrl={
 									content.poster_url || content.backdrop_url
