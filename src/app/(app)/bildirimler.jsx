@@ -10,7 +10,8 @@
  * - Odağa girince yenilenir; satıra dokunmak tek satırı okundu sayar.
  * - UZUN BASIŞ satırı siler (onaylı); sunucudaki DELETE /{id} ucu yalnız
  *   sahibin satırını siler. İyimser çıkar, sunucu reddederse geri gelir.
- * - Sağ üstteki "Tümü okundu" toplu işaretleme ister; rozet
+ * - Sağ üstteki "Tümü okundu" toplu işaretleme, yanındaki çöp kutusu
+ *   ise her şeyi SİLER (onaylı; sunucudaki id'siz DELETE ucu); rozet
  *   (ana ekran kromundaki zil) servisin abonelik yayınıyla güncellenir.
  * - Giriş yoksa sakince bir "hesap gerekli" kartı gösterir — hata fırlatmaz.
  */
@@ -23,6 +24,7 @@ import { openLogin } from "@/utils/authRoutes";
 import {
 	basliklariOku,
 	bildirimSil,
+	bildirimleriTumunuSil,
 	gelenKutusuGetir,
 	goreceZaman,
 	okunduIsaretle,
@@ -203,6 +205,30 @@ export default function BildirimlerScreen() {
 		);
 	};
 
+	/** Üst çubuğun toplu silmesi — gelen kutusunu tümüyle boşaltır. */
+	const tumunuSil = () => {
+		if (satirlar.length === 0) return;
+		Alert.alert(
+			"Tümünü sil",
+			"Gelen kutusundaki tüm bildirimler — okunmuşlar dahil — silinecek. Bu işlem geri alınamaz.",
+			[
+				{ text: "Vazgeç", style: "cancel" },
+				{
+					text: "Sil",
+					style: "destructive",
+					onPress: async () => {
+						// İyimser boşalt; sunucu reddederse liste gerçek
+						// hakikatinden yeniden kurulur (basiliCek).
+						setSatirlar([]);
+						setDahaVar(false);
+						const adet = await bildirimleriTumunuSil();
+						if (adet === null) void basiliCek();
+					},
+				},
+			],
+		);
+	};
+
 	/** Eski sayfa: `has_more` true ise son satırın `created_at`'i imleçtir. */
 	const eskiSayfayiCek = async () => {
 		if (!dahaVar || satirlar.length === 0) return;
@@ -308,17 +334,32 @@ export default function BildirimlerScreen() {
 					<Text style={[styles.topBarTitle, { color: colors.text }]}>
 						Bildirimler
 					</Text>
-					{okunmamisAdet > 0 ? (
-						<TVPressable
-							onPress={tumunuOkunduSay}
-							focusedStyle={styles.topBarBtnFocused}
-							style={[styles.topBarBtn, styles.topBarBtnMetin]}
-							accessibilityLabel="Tümünü okundu say">
-							<Text
-								style={{ color: "#E50914", fontSize: sp(13.5) }}>
-								Tümü okundu
-							</Text>
-						</TVPressable>
+					{satirlar.length > 0 ? (
+						<View style={styles.topBarEylemler}>
+							{okunmamisAdet > 0 && (
+								<TVPressable
+									onPress={tumunuOkunduSay}
+									focusedStyle={styles.topBarBtnFocused}
+									style={[styles.topBarBtn, styles.topBarBtnMetin]}
+									accessibilityLabel="Tümünü okundu say">
+									<Text
+										style={{ color: "#E50914", fontSize: sp(13.5) }}>
+										Tümü okundu
+									</Text>
+								</TVPressable>
+							)}
+							<TVPressable
+								onPress={tumunuSil}
+								focusedStyle={styles.topBarBtnFocused}
+								style={styles.topBarBtn}
+								accessibilityLabel="Tüm bildirimleri sil">
+								<Ionicons
+									name="trash-outline"
+									size={sp(19)}
+									color="#E50914"
+								/>
+							</TVPressable>
+						</View>
 					) : (
 						<View style={styles.topBarSpacer} />
 					)}
@@ -472,6 +513,11 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	topBarSpacer: { width: 38 },
+	topBarEylemler: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 2,
+	},
 	listeGovde: {
 		paddingHorizontal: 14,
 		paddingVertical: 12,

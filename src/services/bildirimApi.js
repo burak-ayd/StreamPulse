@@ -413,6 +413,32 @@ export async function bildirimSil(id) {
 	}
 }
 
+/**
+ * Gelen kutusunu tamamen boşaltır (`DELETE /api/notifications`):
+ * okunmuş + okunmamış tüm satırlar silinir. Başarıdan sonra rozet
+ * TAZELENİR — okunmamışlar da kalktığı için rozet 0'a düşer.
+ *
+ * @returns {Promise<number|null>} silinen satır sayısı; hatada null
+ */
+export async function bildirimleriTumunuSil() {
+	if (!(await hasSession())) return null;
+	try {
+		const res = await authFetch(`${API_PREFIX}`, {
+			method: "DELETE",
+		});
+		if (!res.ok) {
+			console.warn("Tümünü-sil başarısız:", res.status);
+			return null;
+		}
+		const govde = await res.json();
+		void okunmamisSayisiGetir({ force: true });
+		return Number.isFinite(govde?.deleted) ? govde.deleted : null;
+	} catch (e) {
+		console.warn("Tümünü-sil hatası:", e?.message);
+		return null;
+	}
+}
+
 // ─── Ortak biçim yardımcıları ─────────────────────────────────
 
 /**
