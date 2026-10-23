@@ -4,6 +4,7 @@ import { useTvMetrics } from "@/utils/tvMetrics";
 import { useThemeContext } from "@/context/ThemeContext";
 import { getUserProfile, saveUserProfile } from "@/utils/storage";
 import { pushImmediately } from "@/services/sync";
+import { updateProfile } from "@/services/apiClient";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
@@ -30,7 +31,7 @@ export default function EditProfile() {
 	const { theme, colors } = useThemeContext();
 	// TV: profil formu ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
 	const { contentMaxWidth } = useTvMetrics();
-	const { user, isLoggedIn } = useAuth();
+	const { user, isLoggedIn, refreshUser } = useAuth();
 	const router = useRouter();
 	const [isLoading, setIsLoading] = useState(false);
 
@@ -169,6 +170,41 @@ export default function EditProfile() {
 		setIsLoading(true);
 
 		try {
+			// 1) Sunucu — user_profiles satırı (avatar, bio, doğum tarihi...).
+			//    Girişliyken kaydın "yalnızca cihazda kalması" hatasını burada
+			//    düzeltiyoruz: blob senkronu yeterli değildi, /api/auth/me
+			//    user_profiles kolonlarından okuyordu.
+			let sunucuMesaji = null;
+			if (isLoggedIn && user?.id) {
+				try {
+					const sonuc = await updateProfile({
+						username: username.trim(),
+						display_name: displayName.trim(),
+						avatar_url: avatarUrl || null,
+						bio: bio.trim() || null,
+						language: language,
+						is_private: isPrivate,
+						birth_date: birthDate || null,
+					});
+					if (sonuc.ok) {
+						// Oturum kullanıcısını güncelle (avatar vb. ekranda
+						// hemen yansısın).
+						refreshUser?.();
+					} else {
+						sunucuMesaji =
+							sonuc.reason === "validation"
+								? sonuc.detail || "Girdi sunucu tarafından reddedildi."
+								: sonuc.reason === "auth"
+									? "Oturum doğrulanamadı, lütfen tekrar giriş yapın."
+									: null;
+						console.warn("Profil sunucuya yazılamadı:", sonuc.reason, sonuc.detail ?? "");
+					}
+				} catch (e) {
+					console.warn("Profil güncelleme isteği hata verdi:", e);
+				}
+			}
+
+			// 2) Yerel — çevrimdışı kullanım + senkron blob'u (user_profile).
 			await saveUserProfile({
 				username: username.trim(),
 				displayName: displayName.trim(),
@@ -184,12 +220,18 @@ export default function EditProfile() {
 				console.warn("Profil senkronizasyonu tetiklenemedi:", e);
 			}
 
-			Alert.alert("Başarılı", "Profil kaydedildi.", [
-				{
-					text: "Tamam",
-					onPress: () => router.back(),
-				},
-			]);
+			Alert.alert(
+				sunucuMesaji ? "Kısmen kaydedildi" : "Başarılı",
+				sunucuMesaji
+					? `${sunucuMesaji}\n(Profil cihazda kaydedildi, sunucuya yazılamadı.)`
+					: "Profil kaydedildi.",
+				[
+					{
+						text: "Tamam",
+						onPress: () => router.back(),
+					},
+				],
+			);
 		} catch (error) {
 			Alert.alert(
 				"Hata",
