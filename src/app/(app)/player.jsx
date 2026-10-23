@@ -5,6 +5,7 @@ import {
 	fetchLiveStreams,
 	oynatilabilirAkislaraCevir,
 } from "@/services/liveApi";
+import { DownloadManager } from "@/services/downloadManager";
 import { addToWatchHistory, getContinueWatching } from "@/utils/storage";
 import { resetBrightness } from "@/utils/deviceControls";
 import {
@@ -305,6 +306,47 @@ export default function PlayerScreen() {
 	 */
 	const kaynaklariGetir = useCallback(async () => {
 		if (!isCanli) {
+			/*
+			 * ── Çevrimdışı oynatma (Faz 5, madde 14) ──────────────────
+			 *
+			 * İçerik (film: id/url; dizi: seriesId + sezon/bölüm) için
+			 * tamamlanmış bir indirme varsa yerel dosya TEK kaynak olarak
+			 * döndürülür ve `/api/extract` atlanır: ofiste/veri bitmiş
+			 * telefonda "içerik zaten elimde" dururken sunucu turu
+			 * gereksizdir ve ağ yokken extract çöker. Altyazı indirilmişse
+			 * `.srt` yolu da kaynağa verilir (`useSubtitles` bunu harici
+			 * altyazı olarak yükler). Çevrimiçi izlemek isteyen kullanıcının
+			 * indirmeyi listeden silmesi yeterlidir (ruling: Faz 5).
+			 */
+			const localDownload = await DownloadManager.findCompletedDownload({
+				contentId,
+				url: targetUrl,
+				seriesId: seriesInfo?.seriesId,
+				seriesTitle: seriesInfo?.seriesTitle || title,
+				season: seriesInfo?.season,
+				episode: seriesInfo?.episode,
+			});
+			if (localDownload?.filePath) {
+				const subtitles = localDownload.subtitlePath
+					? [{ name: localDownload.subtitleLang || "Yerel Altyazı", url: localDownload.subtitlePath }]
+					: [];
+				return {
+					kaynaklar: [
+						{
+							extractor: "Yerel İndirme",
+							result: {
+								name: "Yerel Dosya",
+								url: localDownload.filePath,
+								type: "mp4",
+								is_hls: false,
+								subtitles,
+							},
+						},
+					],
+					hata: null,
+					elenen: 0,
+				};
+			}
 			const extracted = await extractVideoSources(targetUrl);
 			return { kaynaklar: extracted, hata: null, elenen: 0 };
 		}
@@ -314,7 +356,7 @@ export default function PlayerScreen() {
 		}
 		const { kaynaklar, elenen } = oynatilabilirAkislaraCevir(sonuc.streams);
 		return { kaynaklar, hata: null, elenen };
-	}, [isCanli, liveKanalId, targetUrl]);
+	}, [isCanli, liveKanalId, targetUrl, contentId, seriesInfo, title]);
 	/** Makine tarafı hata sınıfını kullanıcı metnine çevirir. */
 	const canliHataMesaji = useCallback(
 		(reason) =>

@@ -437,6 +437,7 @@ async function enqueue(spec) {
 		pluginName: spec.pluginName || "",
 		type: spec.type === "series" ? "series" : "movie",
 		seriesTitle: spec.seriesTitle || null,
+		seriesId: spec.seriesId || null,
 		seasonNumber: spec.seasonNumber || null,
 		episodeNumber: spec.episodeNumber || null,
 		episodeTitle: spec.episodeTitle || null,
@@ -611,6 +612,46 @@ async function shouldAskBeforeDownload(pluginName) {
 	return pref.alwaysAsk !== false;
 }
 
+/**
+ * Tamamlanmış bir indirmeyi içeriğe göre bulur (çevrimdışı oynatma, Faz 5).
+ *
+ * Eşleşme kuralları:
+ *  - film: `contentId` veya kaynak URL birebir eşleşir
+ *  - dizi: `seriesId` + sezon/bölüm numaraları eşleşir (seriesId bilinmiyorsa
+ *    başlık eşleşmesine düşer)
+ *
+ * @param {{ contentId?: string, url?: string, seriesId?: string,
+ *          seriesTitle?: string, season?: number, episode?: number }} key
+ * @returns {Promise<object|null>} Tamamlanmış indirme öğesi
+ *          ({ filePath, subtitlePath, ... }); yoksa null
+ */
+async function findCompletedDownload(key = {}) {
+	if (!initialized) await initialize();
+	const { contentId, url, seriesId, seriesTitle, season, episode } = key;
+	const wantSeason = Number(season);
+	const wantEpisode = Number(episode);
+	for (const item of items.values()) {
+		if (item.status !== DOWNLOAD_STATUS.COMPLETED || !item.filePath) continue;
+		if (item.type === "series") {
+			if (!Number.isFinite(wantSeason) || !Number.isFinite(wantEpisode)) continue;
+			if (Number(item.seasonNumber) !== wantSeason) continue;
+			if (Number(item.episodeNumber) !== wantEpisode) continue;
+			if (seriesId && item.seriesId && item.seriesId === seriesId) return item;
+			if (
+				seriesTitle &&
+				String(item.seriesTitle || "").toLowerCase().trim() ===
+					String(seriesTitle).toLowerCase().trim()
+			) {
+				return item;
+			}
+			continue;
+		}
+		if (contentId && item.contentId === contentId) return item;
+		if (url && item.contentId === url) return item;
+	}
+	return null;
+}
+
 export const DownloadManager = {
 	// durum sabitleri
 	DOWNLOAD_STATUS,
@@ -628,6 +669,7 @@ export const DownloadManager = {
 	onProgress,
 	onStatusChange,
 	shouldAskBeforeDownload,
+	findCompletedDownload,
 	// yardımcılar (UI/test için)
 	buildDownloadFileName,
 	buildDownloadTargetPath,

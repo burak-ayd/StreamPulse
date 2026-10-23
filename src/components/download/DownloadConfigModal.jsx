@@ -158,6 +158,7 @@ export default function DownloadConfigModal({
 			const isSeries = Boolean(episode && episode.season && episode.episode);
 			await enqueueDownload({
 				contentId: content?.id || content?.url,
+				seriesId: isSeries ? content?.id || content?.url : null,
 				contentTitle: content?.title || "İçerik",
 				pluginName,
 				type: isSeries ? "series" : "movie",
