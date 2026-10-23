@@ -39,6 +39,11 @@ const DOC_SYNC_META_KEY = STORAGE_KEYS.DOC_SYNC_META;
  * @type {{[group: string]: {label: string, doc: string, key: string}}}
  */
 export const SYNC_GROUPS = {
+	user_profile: {
+		label: "Profil (avatar, ad, bio...)",
+		doc: "user_profile",
+		key: STORAGE_KEYS.USER_PROFILE,
+	},
 	player_settings: {
 		label: "Oynatıcı ve altyazı ayarları",
 		doc: "player_settings",
@@ -456,6 +461,7 @@ async function collectLocalPushData() {
 		}
 	};
 
+	await doc("user_profile");
 	await doc("player_settings");
 	await doc("search_history");
 	await doc("plugin_visibility");
@@ -587,6 +593,23 @@ async function applyPullData(pullData, { full = false } = {}) {
 			}
 		} catch (e) {
 			console.error("Pull player_settings birleştirme hatası:", e);
+		}
+	}
+
+	// Profil belgesi (avatar, görünen ad, bio...) — LWW tek belge
+	if (documents.user_profile) {
+		try {
+			const localRaw = await AsyncStorage.getItem("user_profile");
+			const localProfile = localRaw ? JSON.parse(localRaw) : null;
+			const merged = mergeDocument(localProfile, documents.user_profile);
+			const payload = merged?.payload || merged;
+			if (payload) {
+				await AsyncStorage.setItem("user_profile", JSON.stringify(payload));
+				notifyStorageChange("user_profile", payload, { source: "sync" });
+				markDoc("user_profile", documents.user_profile, payload);
+			}
+		} catch (e) {
+			console.error("Pull user_profile birleştirme hatası:", e);
 		}
 	}
 
