@@ -1,7 +1,7 @@
 {
 	"name": "streampulse",
 	"main": "expo-router/entry",
-	"version": "1.0.49",
+	"version": "1.0.50",
 	"dependencies": {
 		"@expo/ui": "~57.0.22",
 		"@gorhom/bottom-sheet": "^5",
