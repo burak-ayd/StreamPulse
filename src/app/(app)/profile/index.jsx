@@ -164,6 +164,7 @@ export default function ProfileScreen() {
 		"user_watchlist",
 		"user_watch_history",
 		"user_continue_watching",
+		"user_profile",
 	]);
 
 	// Android donanım geri tuşu — kök yığında varsayılana bırakılır;
