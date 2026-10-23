@@ -2,6 +2,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { SyncProvider } from "@/context/SyncContext";
 import { LanguageDisplayProvider } from "@/context/LanguageDisplayContext";
 import { PlayerSettingsProvider } from "@/context/PlayerSettingsContext";
+import { DownloadProvider } from "@/context/DownloadContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AppUpdateProvider } from "@/context/AppUpdateContext";
 import UpdateBanner from "@/components/update/UpdateBanner";
@@ -129,6 +130,7 @@ export default function RootLayout() {
 				<AuthProvider>
 					<SyncProvider>
 						<PlayerSettingsProvider>
+							<DownloadProvider>
 							<LanguageDisplayProvider>
 								<SafeAreaProvider>
 									{/*
@@ -178,7 +180,8 @@ export default function RootLayout() {
 									<SplashOverlay visible={splashVisible} />
 								</SafeAreaProvider>
 							</LanguageDisplayProvider>
-						</PlayerSettingsProvider>
+						</DownloadProvider>
+					</PlayerSettingsProvider>
 					</SyncProvider>
 				</AuthProvider>
 			</AppUpdateProvider>

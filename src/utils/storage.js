@@ -20,6 +20,10 @@ export const STORAGE_KEYS = {
 	PLAYER_SETTINGS: "app_player_settings",
 	SELECTED_PLATFORM: "user_selected_platform",
 	DOWNLOADS: "streampulse_downloads_list",
+	// İndirme sistemi ayarları (bkz. download_feature_plan.md §2.1)
+	DOWNLOAD_SETTINGS: "app_download_settings",
+	// Eklenti başına indirme tercihleri (bkz. download_feature_plan.md §2.2)
+	PLUGIN_DOWNLOAD_PREFS: "app_plugin_download_prefs",
 	CONTINUE_WATCHING: "user_continue_watching",
 	PLUGIN_VISIBILITY: "streampulse_plugin_visibility",
 	CATEGORY_VISIBILITY: "streampulse_category_visibility",
@@ -90,6 +94,8 @@ export async function clearAllUserData() {
 		STORAGE_KEYS.PLAYER_SETTINGS,
 		STORAGE_KEYS.SELECTED_PLATFORM,
 		STORAGE_KEYS.DOWNLOADS,
+		STORAGE_KEYS.DOWNLOAD_SETTINGS,
+		STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS,
 		STORAGE_KEYS.CONTINUE_WATCHING,
 		STORAGE_KEYS.PLUGIN_VISIBILITY,
 		STORAGE_KEYS.CATEGORY_VISIBILITY,
@@ -1193,6 +1199,206 @@ export async function deleteDownloadItem(itemId) {
 	});
 }
 
+/**
+ * ── İNDİRME SİSTEMİ AYARLARI (download_feature_plan.md §2.1) ──────────
+ */
+export const DEFAULT_DOWNLOAD_SETTINGS = {
+	// Eş zamanlı indirme sayısı (kuyruktan kaç tanesi aynı anda indirilir)
+	maxConcurrentDownloads: 2, // 1-5 arası
+	// Eş zamanlı bağlantı sayısı (tek dosya için paralel parça sayısı, ileriki fazlar)
+	maxConnectionsPerDownload: 4, // 1-8 arası
+	// İndirme konumu (iOS'ta sandbox: documentDirectory + bu yol)
+	downloadPath: "Downloads/StreamPulse",
+	// Her indirmede onay modal'ı gösterilsin mi?
+	alwaysAskBeforeDownload: true,
+};
+
+/**
+ * Genel indirme ayarlarını okur; ilk okumada varsayılanları diske yazar
+ * (kalıbı: `getPlayerSettings` — push/collect'in key'i bulabilmesi için).
+ */
+export async function getDownloadSettings() {
+	return mutate(STORAGE_KEYS.DOWNLOAD_SETTINGS, async () => {
+		try {
+			const data = await AsyncStorage.getItem(STORAGE_KEYS.DOWNLOAD_SETTINGS);
+			if (data) {
+				return { ...DEFAULT_DOWNLOAD_SETTINGS, ...JSON.parse(data) };
+			}
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.DOWNLOAD_SETTINGS,
+				JSON.stringify(DEFAULT_DOWNLOAD_SETTINGS),
+			);
+			return DEFAULT_DOWNLOAD_SETTINGS;
+		} catch (error) {
+			console.error("İndirme ayarları okunurken hata:", error);
+			return DEFAULT_DOWNLOAD_SETTINGS;
+		}
+	});
+}
+
+/**
+ * Genel indirme ayarlarını günceller (kısmi güncelleme).
+ * `maxConcurrentDownloads`/`maxConnectionsPerDownload` aralık dışına
+ * çıkarılmaz — ayarlar ekranı zaten seçenek listesi sunar, ama diskteki
+ * eski/bozuk bir kayıt da sınır içinde normalize edilir.
+ */
+export async function saveDownloadSettings(updates) {
+	return mutate(STORAGE_KEYS.DOWNLOAD_SETTINGS, async () => {
+		try {
+			const current = await getDownloadSettings();
+			const clamped = { ...updates };
+			clampRange(clamped, "maxConcurrentDownloads", 1, 5);
+			clampRange(clamped, "maxConnectionsPerDownload", 1, 8);
+			const updated = { ...current, ...clamped };
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.DOWNLOAD_SETTINGS,
+				JSON.stringify(updated),
+			);
+			notifyStorageChange(STORAGE_KEYS.DOWNLOAD_SETTINGS, updated);
+			return updated;
+		} catch (error) {
+			console.error("İndirme ayarları kaydedilirken hata:", error);
+			throw error;
+		}
+	});
+}
+
+/**
+ * Genel indirme ayarlarını varsayılana sıfırlar (ayarlar sayfası "sıfırla").
+ * Eklenti tercihleri ayrı bir depoda durur; bu fonksiyona DOKUNMAZ.
+ */
+export async function resetDownloadSettings() {
+	return mutate(STORAGE_KEYS.DOWNLOAD_SETTINGS, async () => {
+		try {
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.DOWNLOAD_SETTINGS,
+				JSON.stringify(DEFAULT_DOWNLOAD_SETTINGS),
+			);
+			notifyStorageChange(STORAGE_KEYS.DOWNLOAD_SETTINGS, DEFAULT_DOWNLOAD_SETTINGS);
+			return DEFAULT_DOWNLOAD_SETTINGS;
+		} catch (error) {
+			console.error("İndirme ayarları sıfırlanırken hata:", error);
+			return DEFAULT_DOWNLOAD_SETTINGS;
+		}
+	});
+}
+
+/** Sayısal alanı [min, max] aralığına sabitler (sadece sayıysa). */
+function clampRange(target, key, min, max) {
+	const v = Number(target[key]);
+	if (target[key] !== undefined) {
+		target[key] = Number.isFinite(v)
+			? Math.min(max, Math.max(min, Math.floor(v)))
+			: undefined;
+	}
+}
+
+/**
+ * ── EKLENTİ BAŞINA İNDİRME TERCİHLERİ (download_feature_plan.md §2.2) ─
+ *
+ * Depo biçimi: `{ [pluginName]: { preferredSource, preferredAudioTrack,
+ * preferredSubtitle, downloadSubtitle, alwaysAsk } }`
+ */
+export async function getPluginDownloadPrefs() {
+	return mutate(STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS, async () => {
+		try {
+			const data = await AsyncStorage.getItem(STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS);
+			const parsed = data ? JSON.parse(data) : {};
+			return parsed && typeof parsed === "object" ? parsed : {};
+		} catch (error) {
+			console.error("Eklenti indirme tercihleri okunurken hata:", error);
+			return {};
+		}
+	});
+}
+
+/**
+ * Belirli bir eklentinin indirme tercihini okur (yoksa null).
+ */
+export async function getPluginDownloadPref(pluginName) {
+	if (!pluginName) return null;
+	const prefs = await getPluginDownloadPrefs();
+	return prefs[pluginName] || null;
+}
+
+/**
+ * Bir eklentinin indirme tercihini kaydeder (kısmi güncelleme; boş güncelleme
+ * yine de kayıt üretmez — tercihsiz eklenti "ayar yapılmadı" görünür).
+ */
+export async function savePluginDownloadPref(pluginName, updates) {
+	if (!pluginName || typeof pluginName !== "string") {
+		throw new Error("savePluginDownloadPref: pluginName gerekli");
+	}
+	return mutate(STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS, async () => {
+		try {
+			const prefs = await getPluginDownloadPrefs();
+			const merged = { ...(prefs[pluginName] || {}), ...updates };
+			const existing = prefs[pluginName];
+			const isEmptyUpdate =
+				updates &&
+				!updates.preferredSource &&
+				!updates.preferredAudioTrack &&
+				!updates.preferredSubtitle &&
+				updates.downloadSubtitle === undefined &&
+				updates.alwaysAsk === undefined;
+			if (isEmptyUpdate && !existing) {
+				return prefs;
+			}
+			const updated = { ...prefs, [pluginName]: merged };
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS,
+				JSON.stringify(updated),
+			);
+			notifyStorageChange(STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS, updated);
+			return updated;
+		} catch (error) {
+			console.error("Eklenti indirme tercihi kaydedilirken hata:", error);
+			throw error;
+		}
+	});
+}
+
+/**
+ * Bir eklentinin indirme tercihini siler.
+ */
+export async function deletePluginDownloadPref(pluginName) {
+	return mutate(STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS, async () => {
+		try {
+			const prefs = await getPluginDownloadPrefs();
+			if (!prefs[pluginName]) return prefs;
+			const { [pluginName]: _ustu, ...updated } = prefs;
+			void _ustu;
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS,
+				JSON.stringify(updated),
+			);
+			notifyStorageChange(STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS, updated);
+			return updated;
+		} catch (error) {
+			console.error("Eklenti indirme tercihi silinirken hata:", error);
+			throw error;
+		}
+	});
+}
+
+/**
+ * Tüm eklenti indirme tercihlerini siler ("Tüm Tercihleri Sıfırla").
+ */
+export async function resetPluginDownloadPrefs() {
+	return mutate(STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS, async () => {
+		try {
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS,
+				JSON.stringify({}),
+			);
+			notifyStorageChange(STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS, {});
+			return {};
+		} catch (error) {
+			console.error("Eklenti tercihi sıfırlama hatası:", error);
+			return {};
+		}
+	});
+}
 /**
  * Kaldığın yerden devam et listesini getirir (en son izlenen üstte)
  */
