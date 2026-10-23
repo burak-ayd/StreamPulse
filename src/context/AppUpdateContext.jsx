@@ -33,7 +33,10 @@ export function AppUpdateProvider({ children }) {
 	const [progress, setProgress] = useState(0);
 	const [error, setError] = useState(null);
 	const [statusMessage, setStatusMessage] = useState("");
-	const [currentVersion, setCurrentVersion] = useState(
+	const [currentVersion, setCurrentVersion] = useState(() =>
+		// OTA ile yüklenen sürüm manifestte gelir; yoksa app.json versiyonu.
+		Updates.manifest?.extra?.expoClient?.version ||
+		Constants.expoConfig?.version ||
 		appUpdateConfig.fallbackVersion
 	);
 	const [sheetVisible, setSheetVisible] = useState(false);
