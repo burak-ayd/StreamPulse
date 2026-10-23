@@ -35,6 +35,7 @@ import {
 	bildirimTercihListesi,
 	tercihSil,
 	tercihYaz,
+	tumuTohumla,
 } from "@/services/bildirimApi";
 import { hasSession } from "@/services/token";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -172,9 +173,23 @@ export default function TakipEdilenDizilerScreen() {
 						s.tmdb_id === satir.tmdb_id ? { ...s, ...sonuc.data } : s,
 					),
 				);
+				// TÜM KAYNAKLAR TOHUMU (1.0.45): Ayarlar sayfasındaki anahtar da
+				// detay kartıyla aynı tohumu çalıştırır — AÇILMASINA sadece
+				// all_sources modunda ve özgün başlıkta (simge başlığı "Dizi #N"
+				// ise arama anlamsız olduğundan sessiz atlanır). Zaten adresli
+				// kaynaklar sunucuda atlınır; çıktığı kaynak için de koşar.
+				if (tekrar && satir.mode === "all_sources") {
+					const baslik = magaza[satir.tmdb_id];
+					if (baslik) {
+						void tumuTohumla({
+							tmdbId: satir.tmdb_id,
+							diziBasligi: baslik,
+						});
+					}
+				}
 			}
 		},
-		[yaziyor],
+		[yaziyor, magaza],
 	);
 
 	/** Filtre çip adayları: Tümü + (varsa) Tüm kaynaklar + kaynak adları. */
