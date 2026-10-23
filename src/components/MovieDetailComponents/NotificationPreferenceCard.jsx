@@ -11,6 +11,9 @@
  *   - Tercih zaten başka kaynakta açıysa "Bu kaynağa geç" ipucu çıkar;
  *     izlediğin kaynağı buradan güncelleyebilirsin (denetim çifti yeni
  *     kaynağa taşınır; eski bağlantı sunucuda kalır, zararı yok).
+ *   - `diziDurumu` (TMDB `status`) "Ended"/"Canceled" ise alt yazı
+ *     vaat yerine bilgi verir: dizi bitti — yeni bölüm beklenmiyor
+ *     (Faz 6.3); kart ve anahtar normal çalışmayı sürdürür.
  *
  * Kart YALNIZCA dizi + `tmdb_id` + `dizi_url` üçü birden varken çizilir;
  * zenginleştirici tmdb eşleşmemişse (ya da içerik filmse) kart sessizce
@@ -40,8 +43,22 @@ import {
  * Kart alt yazısı — durum makinesi ne düşünüyorsa onu yazar (yanlış vaat
  * yok): kapalıyken ne olacağını, açıkken hangi kaynağın tarandığını
  * ya da tüm kaynaklar modunu açıkça belirtir.
+ *
+ * Faz 6.3 (1.0.43): TMDB'de diziyi bitmiş ("ended") ya da iptal edilmiş
+ * ("canceled") görüyorsa vaat cümlesi ÇIKMAZ — yerine bilginin ta
+ * kendisi yazar: bitmiş dizide denetim yeni bölüm bulamaz; kapatmadan
+ * takip kalabilir, ileti yalnız beklentiyi doğrular.
  */
-function durumCumlesi(tercih, kaynakAdi) {
+function durumCumlesi(tercih, kaynakAdi, diziDurumu) {
+	// content.status ham TMDB yazımı taşıyabilir ("Ended") — yazımın
+	// küçük/büyük ve İngiliz "cancelled" biçimi de kapsanır.
+	const d = String(diziDurumu || "").toLowerCase();
+	if (d === "ended") {
+		return "Dizi tamamlandı — yeni bölüm beklenmiyor.";
+	}
+	if (d === "canceled" || d === "cancelled") {
+		return "Dizi iptal edilmiş — yeni bölüm beklenmiyor.";
+	}
 	if (!tercih || !tercih.enabled) {
 		return `Açıldığında ${kaynakAdi || "takip ettiğin kaynak"} yeni bölüm çıktığında bildirim düşer.`;
 	}
@@ -59,6 +76,7 @@ export default function NotificationPreferenceCard({
 	diziUrl,
 	kaynakAdi,
 	diziBasligi,
+	diziDurumu,
 }) {
 	const { colors } = useThemeContext();
 	const { isTV, sp } = useTvMetrics();
@@ -209,7 +227,7 @@ export default function NotificationPreferenceCard({
 						numberOfLines={2}>
 						{yukleniyor || islemVar
 							? "Tercih yükleniyor…"
-							: durumCumlesi(tercih, kaynakAdi)}
+							: durumCumlesi(tercih, kaynakAdi, diziDurumu)}
 					</Text>
 				</View>
 				{/* Anahtar SALT görsel; dokunuş TVPressable'da toplar */}
