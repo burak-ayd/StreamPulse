@@ -1500,9 +1500,9 @@ export default function VideoPlayer({
 											size={30}
 											color="#FFFFFF"
 										/>
-										<Text style={styles.roundLabel}>
+										{/* <Text style={styles.roundLabel}>
 											{seekDuration}
-										</Text>
+										</Text> */}
 									</View>
 								</TVPressable>
 							) : (
