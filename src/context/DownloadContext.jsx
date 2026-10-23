@@ -90,6 +90,22 @@ export function DownloadProvider({ children }) {
 		[],
 	);
 
+	const pauseAllDownloads = useMemo(
+		() => async () => {
+			await DownloadManager.pauseAll();
+			syncQueue();
+		},
+		[],
+	);
+
+	const resumeAllDownloads = useMemo(
+		() => async () => {
+			await DownloadManager.resumeAll();
+			syncQueue();
+		},
+		[],
+	);
+
 	const removeDownload = useMemo(
 		() => async (downloadId) => {
 			await DownloadManager.remove(downloadId);
@@ -130,6 +146,8 @@ export function DownloadProvider({ children }) {
 			pauseDownload,
 			resumeDownload,
 			cancelDownload,
+			pauseAll: pauseAllDownloads,
+			resumeAll: resumeAllDownloads,
 			removeDownload,
 			updateSettings,
 			resetSettings,
@@ -144,6 +162,8 @@ export function DownloadProvider({ children }) {
 			pauseDownload,
 			resumeDownload,
 			cancelDownload,
+			pauseAllDownloads,
+			resumeAllDownloads,
 			removeDownload,
 			updateSettings,
 			resetSettings,
