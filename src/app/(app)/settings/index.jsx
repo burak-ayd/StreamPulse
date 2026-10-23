@@ -512,6 +512,19 @@ export default function SettingsScreen() {
 							}
 						/>
 
+						{/* İndirme (download_feature_plan.md Faz 3) */}
+						<SettingRow
+							icon="download-outline"
+							iconBg="#06B6D4"
+							label="İndirme"
+							subtitle="Eş zamanlı indirme, konum ve eklenti tercihleri"
+							onPress={() =>
+								router.push({
+									pathname: "/(app)/settings/download",
+								})
+							}
+						/>
+
 						{/* Düzen */}
 						<SettingRow
 							icon="grid-outline"

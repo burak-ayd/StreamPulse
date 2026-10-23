@@ -5,3 +5,6 @@ Ruling: Backend bu repoda yer almıyor (API dış sunucu). Backend değişikliğ
 
 Task 1 (Faz 1 - Altyapi): complete (commit 7e6e318, test: npx eslint (degisen 4 dosya) → 0 yeni hata; npx tsc --noEmit → baseline 4/4)
 Task 2 (Faz 2 - Modal): in progress
+
+Task 2 (Faz 2 - Modal): complete (commit 6fe1058, test: eslint degisen 2 dosya → temiz; tsc → baseline 4/4)
+Ruling: Dizide hangi bolumun indirilecegi planda net degil; karar ActionButtons'da uygulandi: izleme suruyorsa o bolum, degilse ilk sezonun ilk URL'li bolumu. Yanlis bolum secilirse kullanicidan kaynakli UX gecici — modalda bolum secimi sonraki fazda eklenebilir. Maliyeti: kullanicinin "yanlis bolumu indirdi" sikayeti.
