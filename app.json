@@ -2,7 +2,7 @@
   "expo": {
     "name": "Stream Pulse",
     "slug": "StreamPulse",
-    "version": "1.0.56",
+    "version": "1.0.57",
     "orientation": "default",
     "icon": "./assets/icons/release/icon.png",
     "scheme": "streampulse",
@@ -87,6 +87,7 @@
             "enableShrinkResourcesInReleaseBuilds": true,
             "useLegacyPackaging": true,
             "enablePngCrunchInReleaseBuilds": true,
+            "largeHeap": true,
             "extraManifestParams": {
               "application": {
                 "android:banner": "@drawable/notification_icon"

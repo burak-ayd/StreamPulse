@@ -295,6 +295,7 @@ function parseMediaPlaylist(text, baseUrl) {
 	let isFmp4 = false;
 	let totalDuration = 0;
 	let pendingByterange = null;
+	let currentDur = 0;
 	for (const raw of text.split(/\r?\n/)) {
 		const line = raw.trim();
 		if (!line) continue;
@@ -305,10 +306,10 @@ function parseMediaPlaylist(text, baseUrl) {
 			isFmp4 = true;
 			const uriM = line.match(/URI="([^"]+)"/);
 			if (uriM) {
-				segments.push({ url: resolveUrl(baseUrl, uriM[1]), init: true });
+				segments.push({ url: resolveUrl(baseUrl, uriM[1]), init: true, duration: 0 });
 			}
 		} else if (line.startsWith("#EXTINF")) {
-			totalDuration += parseFloat(
+			currentDur = parseFloat(
 				(line.match(/#EXTINF:([\d.]+)/) || [])[1] || "0",
 			);
 		} else if (line.startsWith("#EXT-X-BYTERANGE")) {
@@ -320,7 +321,9 @@ function parseMediaPlaylist(text, baseUrl) {
 				};
 			}
 		} else if (!line.startsWith("#")) {
-			const seg = { url: resolveUrl(baseUrl, line) };
+			const seg = { url: resolveUrl(baseUrl, line), duration: currentDur };
+			currentDur = 0;
+			totalDuration += seg.duration;
 			if (pendingByterange) {
 				seg.byterange = pendingByterange;
 				pendingByterange = null;
@@ -331,22 +334,19 @@ function parseMediaPlaylist(text, baseUrl) {
 	return { segments, encrypted, isFmp4, totalDuration };
 }
 
-/** Tek segmentin içeriğini byte dizisi olarak indirir. */
-async function fetchSegment(segment, headers) {
-	const kontrol = new AbortController();
-	const zaman = setTimeout(() => kontrol.abort(), 90000);
-	try {
-		const h = { ...headers };
-		if (segment.byterange && segment.byterange.start >= 0) {
-			const s = segment.byterange.start;
-			h.Range = `bytes=${s}-${s + segment.byterange.length - 1}`;
-		}
-		const res = await fetch(segment.url, { headers: h, signal: kontrol.signal });
-		if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		return await res.arrayBuffer();
-	} finally {
-		clearTimeout(zaman);
-	}
+/**
+ * Tek segmenti indirir: gövdeyi NATIVE olarak doğrudan geçici dosyaya
+ * akıtır (expo.modules.fetch'in response gövdesini DirectByteBuffer'larda
+ * biriktirmesi OOM'ye yol açıyordu — bkz. cihaz testi çökmesi). Dönen
+ * değer, diske yazılmış dosyanın kendisidir; JS belleğine içerik girmez.
+ */
+async function fetchSegmentToDisk(segment, headers, destUri) {
+	const dest = new ExpoFile(destUri);
+	const indirilen = await ExpoFile.downloadFileAsync(segment.url, dest, {
+		idempotent: true,
+		headers,
+	});
+	return indirilen;
 }
 
 /**
@@ -354,11 +354,11 @@ async function fetchSegment(segment, headers) {
  * artan bekleme ile `attempts` kez dener, tümü başarısız olursa fırlatır
  * (dış akış `_hlsState.nextSegmentIndex` ile aynı segmentten devam eder).
  */
-async function fetchSegmentWithRetry(segment, headers, attempts = 3) {
+async function fetchSegmentWithRetry(segment, headers, destUri, attempts = 3) {
 	let sonHata = null;
 	for (let deneme = 1; deneme <= attempts; deneme++) {
 		try {
-			return await fetchSegment(segment, headers);
+			return await fetchSegmentToDisk(segment, headers, destUri);
 		} catch (e) {
 			sonHata = e;
 			console.warn(
@@ -394,6 +394,9 @@ async function runHlsDownload(item) {
 			bestBandwidth = best.bandwidth;
 		}
 	}
+	// bestBandwidth YALNIZCA kaba bir başlangıç sinyalidir; boyut tahmini
+	// segment ölçümüyle yapılır (bkz. aşağıdaki not).
+	void bestBandwidth;
 
 	// 2) Media playlist
 	const mediaText = await fetchText(mediaUrl, headers);
@@ -410,11 +413,22 @@ async function runHlsDownload(item) {
 		throw err;
 	}
 
-	// 3) Toplam boyut tahmini (bant genişliği × süre); yoksa segment sayısıyla
-	const estimate = bestBandwidth > 0 ? bestBandwidth * totalDuration : 0;
+	// 3) Toplam boyut: BANDWIDTH tabanlı tahmin KULLANILMAZ — cihaz testinde
+	// 6.42GB gösterip gerçek ~800-900MB indirdi. İndirme başladıktan sonra
+	// ölçülen bitrate × toplam süre kullanılır.
 
 	const base = FileSystem.documentDirectory || FileSystem.cacheDirectory;
 	const tempUri = `${base}${TEMP_DIR_NAME}/${item.id}.part`;
+	const segUri = `${base}${TEMP_DIR_NAME}/${item.id}.seg`;
+
+	// Header'ları normalize et: Cookie'nin object biçimi native katmanda
+	// string beklenir (react-native-video sözleşmesi ile aynı).
+	const normalizedHeaders = { ...headers };
+	if (normalizedHeaders.Cookie && typeof normalizedHeaders.Cookie === "object") {
+		normalizedHeaders.Cookie = Object.entries(normalizedHeaders.Cookie)
+			.map(([k, v]) => `${k}=${v}`)
+			.join("; ");
+	}
 
 	const outFile = new ExpoFile(tempUri);
 	const startIdx = item._hlsState?.nextSegmentIndex || 0;
@@ -426,7 +440,8 @@ async function runHlsDownload(item) {
 
 	try {
 		let written = startIdx ? item.downloadedBytes || 0 : 0;
-		item.totalBytes = estimate;
+		item.totalBytes = 0; // ölçüm gelene kadar segment sayısıyla ilerlenir
+		let completedDur = 0;
 		for (let i = startIdx; i < segments.length; i++) {
 			current = i;
 			// Duraklat/iptal: segment sınırında kontrol — status manager'da
@@ -436,24 +451,45 @@ async function runHlsDownload(item) {
 				await persist(item, { force: true });
 				return;
 			}
-			const buf = await fetchSegmentWithRetry(segments[i], headers, 3);
-			handle.writeBytes(new Uint8Array(buf));
-			written += buf.byteLength;
+			const segDosyasi = await fetchSegmentWithRetry(
+				segments[i],
+				normalizedHeaders,
+				segUri,
+				3,
+			);
+			// Tek segmentin içeriği (≈2-10 MB) JS belleğine ALICI anında
+			// girer ve yazma sonrası referans düşer — birikimli retansiyon yok.
+			const segBytes = await segDosyasi.bytes();
+			handle.writeBytes(segBytes);
+			written += segBytes.byteLength;
+			completedDur += segments[i].duration || 0;
+			// Boyut tahmini: ölçülen gerçek bitrate × toplam süre. Master
+			// playlist'teki BANDWIDTH değeri gerçek ortalamayı yansıtmıyor
+			// (VBR + şişirilmiş değer; cihaz testinde 6.42GB gösterip gerçek
+			// ~800-900MB indirdi) — bu yüzden ölçümle yakınsıyor.
 			item.downloadedBytes = written;
+			if (completedDur > 0 && written > 0 && totalDuration > 0) {
+				item.totalBytes = Math.ceil(
+					(written / completedDur) * totalDuration,
+				);
+			}
+			item.progress =
+				item.totalBytes > 0
+					? Math.min(0.99, written / item.totalBytes)
+					: (i + 1) / segments.length;
+			item.resumable = true;
+			item.lastResumeOffset = written;
 			// ⚠️ Segment index'i her tamamlanan segmentte yaz: süreç aniden
 			// ölürse (sistem kill, çökme) kayıt "downloading" olarak durur;
 			// initialize() onu "paused"a çeker ve resume BU index'ten Append
 			// ile devam eder. Index yazılmazsa resume baştan başlayıp
 			// indirilen yüzlerce MB'i silerdi (cihaz testinde görüldü).
 			item._hlsState = { nextSegmentIndex: i + 1 };
-			item.progress =
-				estimate > 0
-					? Math.min(0.99, written / estimate)
-					: (i + 1) / segments.length;
-			item.resumable = true;
-			item.lastResumeOffset = written;
 			emitProgress(item);
 			await persist(item);
+			// GC'ye nefes payı: doğrudan next fetch ile ezberbozan hız yerine
+			// kısa bir bekleme — native tamponların toplanmasına izin verir.
+			await new Promise((r) => setTimeout(r, 20));
 		}
 		item._hlsState = { nextSegmentIndex: current };
 	} catch (err) {
@@ -467,6 +503,8 @@ async function runHlsDownload(item) {
 		} catch (_e) {
 			/* handle zaten kapalıysa sorun değil */
 		}
+		// Seg geçici dosyasını temizle
+		await FileSystem.deleteAsync(segUri, { idempotent: true }).catch(() => {});
 	}
 
 	return { ext: isFmp4 ? "mp4" : "ts" };
