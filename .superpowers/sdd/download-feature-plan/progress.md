@@ -8,3 +8,6 @@ Task 2 (Faz 2 - Modal): in progress
 
 Task 2 (Faz 2 - Modal): complete (commit 6fe1058, test: eslint degisen 2 dosya → temiz; tsc → baseline 4/4)
 Ruling: Dizide hangi bolumun indirilecegi planda net degil; karar ActionButtons'da uygulandi: izleme suruyorsa o bolum, degilse ilk sezonun ilk URL'li bolumu. Yanlis bolum secilirse kullanicidan kaynakli UX gecici — modalda bolum secimi sonraki fazda eklenebilir. Maliyeti: kullanicinin "yanlis bolumu indirdi" sikayeti.
+
+Task 3 (Faz 3 - Ayarlar): complete (commit 95b192e, test: eslint degisen 2 dosya → temiz; tsc → baseline 4/4)
+Task 4 (Faz 4 - Indirme ekrani): complete (test: eslint downloads.jsx → temiz; tsc → baseline 4/4)
