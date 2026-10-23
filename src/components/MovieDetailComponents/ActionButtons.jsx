@@ -1,9 +1,11 @@
 import TVPressable from "@/components/common/TVPressable";
+import DownloadConfigModal from "@/components/download/DownloadConfigModal";
 import { useThemeContext } from "@/context/ThemeContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
 	Alert,
 	Linking,
@@ -41,6 +43,10 @@ export default function ActionButtons({
 }) {
 	const { colors, theme } = useThemeContext();
 	const router = useRouter();
+
+	// İndirme modalı (Faz 2): hedef içerik + bölüm (dizide) burada tutulur.
+	const [downloadModalVisible, setDownloadModalVisible] = useState(false);
+	const [downloadTarget, setDownloadTarget] = useState(null);
 
 	// TV: punto, yükseklik ve odak ölçeği büyür (bkz. utils/tvMetrics.js).
 	const { sp, isTV, focusScale } = useTvMetrics();
@@ -219,7 +225,68 @@ export default function ActionButtons({
 	};
 
 	const handleDownload = () => {
-		Alert.alert("İndirme", "İndirme özelliği yakında eklenecek!");
+		// İndirme akışı (download_feature_plan.md Faz 2):
+		// dizi olsa da olmasa DownloadConfigModal açılır. Dizide hangi
+		// bölümün indirileceği:
+		//   1) izleme sürüyorsa (in_progress) o bölüm,
+		//   2) değilse ilk sezonun ilk bölümü.
+		// URL'si bulunamayan içerikte bilgi mesajı gösterilir.
+		if (isSeries) {
+			let targetEpisode = null;
+
+			if (isInProgress && watchProgress?.url) {
+				targetEpisode = {
+					season: watchProgress.season || 1,
+					episode: watchProgress.episode || 1,
+					episodeTitle: watchProgress.episodeTitle || null,
+					url: watchProgress.url,
+				};
+			}
+
+			if (!targetEpisode && content?.seasons) {
+				const seasonKeys = Object.keys(content.seasons).sort(
+					(a, b) => Number(a) - Number(b),
+				);
+				for (const sKey of seasonKeys) {
+					const epList = content.seasons[sKey];
+					if (Array.isArray(epList) && epList.length > 0) {
+						const first = epList.find((e) => e?.url) || epList[0];
+						if (first?.url) {
+							targetEpisode = {
+								season: Number(sKey),
+								episode: Number(first.episode || first.episode_number || 1),
+								episodeTitle: first.title || null,
+								url: first.url,
+							};
+							break;
+						}
+					}
+				}
+			}
+
+			if (!targetEpisode?.url) {
+				Alert.alert(
+					"Bilgi",
+					"İndirme için oynatılabilir bölüm bağlantısı bulunamadı.",
+				);
+				return;
+			}
+
+			setDownloadTarget({
+				content,
+				episode: targetEpisode,
+			});
+			setDownloadModalVisible(true);
+			return;
+		}
+
+		// Film: içerik adresi yeterli.
+		if (!content?.url) {
+			Alert.alert("Bilgi", "İndirme için video bağlantısı bulunamadı.");
+			return;
+		}
+		setDownloadTarget({ content, episode: null });
+		setDownloadModalVisible(true);
 	};
 
 	// Determine watchlist display config based on watchlistStatus or inWatchlist
@@ -420,6 +487,14 @@ export default function ActionButtons({
 					</TVPressable>
 				))}
 			</View>
+
+			{/* İndirme öncesi kaynak/altyazı seçimi (Faz 2) */}
+			<DownloadConfigModal
+				visible={downloadModalVisible}
+				onClose={() => setDownloadModalVisible(false)}
+				content={content}
+				episode={downloadTarget?.episode || null}
+			/>
 		</View>
 	);
 }
