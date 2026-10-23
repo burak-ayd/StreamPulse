@@ -440,6 +440,12 @@ async function runHlsDownload(item) {
 			handle.writeBytes(new Uint8Array(buf));
 			written += buf.byteLength;
 			item.downloadedBytes = written;
+			// ⚠️ Segment index'i her tamamlanan segmentte yaz: süreç aniden
+			// ölürse (sistem kill, çökme) kayıt "downloading" olarak durur;
+			// initialize() onu "paused"a çeker ve resume BU index'ten Append
+			// ile devam eder. Index yazılmazsa resume baştan başlayıp
+			// indirilen yüzlerce MB'i silerdi (cihaz testinde görüldü).
+			item._hlsState = { nextSegmentIndex: i + 1 };
 			item.progress =
 				estimate > 0
 					? Math.min(0.99, written / estimate)
