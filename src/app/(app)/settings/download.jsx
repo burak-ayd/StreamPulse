@@ -14,6 +14,7 @@
 import TVPressable from "@/components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
+import { Directory } from "expo-file-system";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -243,22 +244,72 @@ export default function DownloadSettingsScreen() {
 							valueText={`${settings.maxConnectionsPerDownload} bağlantı`}
 							onPress={() => openOption("connections")}
 						/>
-						{/* Konum: bilgi satırı. iOS sandbox ve Android Scoped Storage
-						    nedeniyle yol kullanıcı tarafından değiştirilemez;
-						    gösterim amaçlıdır (plan §12 kısıtları). */}
-						<View style={styles.valueRow}>
-							<View style={[styles.valueIcon, { backgroundColor: "#64748B" }]}>
-								<Ionicons name="folder-open-outline" size={16} color="#ffffff" />
-							</View>
-							<View style={styles.valueRowText}>
-								<Text style={[styles.valueRowTitle, { color: colors.text }]}>
-									İndirme Konumu
-								</Text>
-								<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
-									{settings.downloadPath}
-								</Text>
-							</View>
-						</View>
+						{/* İndirme konumu: kullanıcı SAF ile bir klasör seçer; tamamlanan
+						    indirmeler oraya kopyalanır (oynatma dahili kopyadan). */}
+		<TVPressable
+			style={styles.valueRow}
+			focusedStyle={styles.rowFocused}
+			onPress={async () => {
+				try {
+					const secilen = await Directory.pickDirectoryAsync(
+						settings.downloadDirUri || undefined,
+					);
+					if (!secilen?.uri) return;
+					setSettings(
+						await saveDownloadSettings({ downloadDirUri: secilen.uri }),
+					);
+				} catch (e) {
+					console.warn("Klasör seçilemedi:", e?.message);
+				}
+			}}>
+			<View style={[styles.valueIcon, { backgroundColor: "#0EA5E9" }]}>
+				<Ionicons name="folder-open-outline" size={16} color="#ffffff" />
+			</View>
+			<View style={styles.valueRowText}>
+				<Text style={[styles.valueRowTitle, { color: colors.text }]}>
+					İndirme Konumu
+				</Text>
+				<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
+					{settings.downloadDirUri
+						? "Seçili klasör — tamamlanan indirmeler buraya kopyalanır"
+						: "Klasör seç (İndirilenler gibi) — dokun"}
+				</Text>
+			</View>
+			<Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+		</TVPressable>
+
+		{/* Otomatik dışa aktarma: yalnızca klasör seçiliyken anlamlı */}
+		{settings.downloadDirUri ? (
+			<TVPressable
+				style={styles.toggleRow}
+				focusedStyle={styles.rowFocused}
+				onPress={async () =>
+					setSettings(
+						await saveDownloadSettings({
+							autoExport: settings.autoExport === false,
+						}),
+					)
+				}
+				accessibilityRole="switch"
+				accessibilityState={{ checked: settings.autoExport !== false }}>
+				<View style={[styles.valueIcon, { backgroundColor: "#10B981" }]}>
+					<Ionicons name="share-outline" size={16} color="#ffffff" />
+				</View>
+				<View style={styles.valueRowText}>
+					<Text style={[styles.valueRowTitle, { color: colors.text }]}>
+						Tamamlanınca Dışa Aktar
+					</Text>
+					<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
+						İndirme bitince seçili klasöre otomatik kopyalanır
+					</Text>
+				</View>
+				<Switch
+					value={settings.autoExport !== false}
+					trackColor={{ false: colors.border, true: colors.primary }}
+					thumbColor="#ffffff"
+				/>
+			</TVPressable>
+		) : null}
 						{/* Her defasında sor */}
 						<TVPressable
 							style={styles.toggleRow}

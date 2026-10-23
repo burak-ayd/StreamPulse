@@ -330,8 +330,11 @@ export default function PlayerScreen() {
 				const subtitles = localDownload.subtitlePath
 					? [{ name: localDownload.subtitleLang || "Yerel Altyazı", url: localDownload.subtitlePath }]
 					: [];
-				// .ts dosyaları ExoPlayer'da uzantıdan tanınır; type ipucu
-				// yalnızca mp4/fMP4 için verilir.
+				// İndirme biçimleri:
+				//  • HLS klasörü → filePath master.m3u8 (ExoPlayer yerel HLS'i,
+				//    ses rendition'ları dahil, ağdan oynatır gibi oynatır)
+				//  • tek dosya → .mp4/.ts (eski indirmeler)
+				const isHlsMaster = localDownload.filePath.endsWith(".m3u8");
 				const isTs = localDownload.filePath.endsWith(".ts");
 				return {
 					kaynaklar: [
@@ -340,8 +343,8 @@ export default function PlayerScreen() {
 							result: {
 								name: "Yerel Dosya",
 								url: localDownload.filePath,
-								type: isTs ? undefined : "mp4",
-								is_hls: false,
+								type: isHlsMaster ? "m3u8" : isTs ? undefined : "mp4",
+								is_hls: isHlsMaster,
 								subtitles,
 							},
 						},

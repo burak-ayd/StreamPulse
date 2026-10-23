@@ -19,9 +19,9 @@
  */
 
 import TVPressable from "@/components/common/TVPressable";
-import { useDownload } from "@/context/DownloadContext";
 import { useThemeContext } from "@/context/ThemeContext";
 import { extractVideoSources } from "@/services/api";
+import { DownloadManager } from "@/services/downloadManager";
 import {
 	getPluginDownloadPref,
 	savePluginDownloadPref,
@@ -54,9 +54,10 @@ export default function DownloadConfigModal({
 	content,
 	// Dizi ise indirilecek bölüm: { season, episode, episodeTitle, url }
 	episode = null,
+	// Sağlayıcıdan gelir (döngüsel import olmasın diye context yerine prop).
+	enqueueDownload,
 }) {
 	const { colors, theme } = useThemeContext();
-	const { enqueueDownload } = useDownload();
 
 	const [loading, setLoading] = useState(false);
 	const [loadError, setLoadError] = useState(null);
@@ -67,6 +68,10 @@ export default function DownloadConfigModal({
 	const [remember, setRemember] = useState(false);
 	const [alwaysAsk, setAlwaysAsk] = useState(false);
 	const [starting, setStarting] = useState(false);
+	// HLS ses rendition'ları (master playlist'ten): izlerken görülen
+	// "Türkçe/Français" seçenekleri buradan gelir.
+	const [audioTracks, setAudioTracks] = useState([]);
+	const [selectedAudioIdx, setSelectedAudioIdx] = useState(0);
 
 	const pluginName = content?.plugin || "";
 	const targetUrl = (episode?.url || content?.url) || "";
@@ -132,21 +137,49 @@ export default function DownloadConfigModal({
 
 	const selectedSource = sources[selectedSourceIdx] || null;
 	const subtitleList = selectedSource?.result?.subtitles || [];
-	/**
-	 * Ses parçası bilgisi extract sonuçlarında genellikle taşınmaz
-	 * (oynatıcıda sunucu tarafı yerine `react-native-video` ses parçaları
-	 * kullanılır). Kaynak taşıyorsa listelenir, taşımıyorsa bölüm gizlenir
-	 * ve "orijinal" varsayılır — kullanıcıya sahte seçenek gösterilmez.
-	 */
-	const audioTracks = selectedSource?.result?.audioTracks || null;
 
+	/**
+	 * Ses parçaları: HLS kaynaklarında master playlist'in
+	 * `#EXT-X-MEDIA:TYPE=AUDIO` girdileri listelenir (oynatıcıda görülen
+	 * "Türkçe / Français" seçeneklerinin kaynağı budur; extract sonucu ses
+	 * parçası taşımaz). Seçim kaynağa bağlıdır: kaynak değişince yenilenir.
+	 */
+	useEffect(() => {
+		let cancelled = false;
+		const url = selectedSource?.result?.url;
+		if (!visible || !url || !url.includes(".m3u8")) {
+			// Senkron setState effect içinde yasak (lint): durumu sıfırlamak
+			// yerine boş listeye TÜRETİYORUZ.
+			return;
+		}
+		(async () => {
+			const tracks = await DownloadManager.listHlsAudioTracks(
+				url,
+				selectedSource?.result?.headers || {},
+			);
+			if (cancelled) return;
+			setAudioTracks(tracks);
+			const defIdx = tracks.findIndex((t) => t.isDefault);
+			setSelectedAudioIdx(defIdx >= 0 ? defIdx : 0);
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [visible, selectedSource]);
+
+	// Kaynak HLS değilse ses rendition listesi gösterilmez (durum türetilir).
+	const sesSecenekleri = selectedSource?.result?.url?.includes(".m3u8")
+		? audioTracks
+		: [];
 	const startDownload = async () => {
 		if (!selectedSource?.result?.url || starting) return;
 		setStarting(true);
 		try {
 			if (remember && pluginName) {
+				const secilenSesPref = sesSecenekleri[selectedAudioIdx] || null;
 				await savePluginDownloadPref(pluginName, {
 					preferredSource: selectedSource.extractor,
+					preferredAudioTrack: secilenSesPref?.language || null,
 					preferredSubtitle:
 						selectedSubtitleIdx >= 0
 							? subtitleList[selectedSubtitleIdx]?.name || null
@@ -156,6 +189,7 @@ export default function DownloadConfigModal({
 				});
 			}
 			const isSeries = Boolean(episode && episode.season && episode.episode);
+			const secilenSes = sesSecenekleri[selectedAudioIdx] || null;
 			await enqueueDownload({
 				contentId: content?.id || content?.url,
 				seriesId: isSeries ? content?.id || content?.url : null,
@@ -169,7 +203,10 @@ export default function DownloadConfigModal({
 				sourceUrl: selectedSource.result.url,
 				sourceName: selectedSource.extractor,
 				sourceHeaders: selectedSource.result.headers || {},
-				audioTrack: audioTracks ? selectedSource.result.audioTrack || null : null,
+				// Ses rendition seçimi: HLS indirme bu dili ayrı playlist
+				// olarak indirir; oynatıcı yerel HLS'te parçayı seçebilir.
+				audioLanguage: secilenSes?.language || null,
+				audioTrackName: secilenSes?.name || null,
 				subtitleUrl:
 					selectedSubtitleIdx >= 0 && downloadSubtitle
 						? subtitleList[selectedSubtitleIdx]?.url || null
@@ -296,16 +333,17 @@ export default function DownloadConfigModal({
 									});
 								})}
 
-								{/* 2. Ses parçası (yalnızca kaynak taşıyorsa) */}
-								{audioTracks?.length ? (
+								{/* 2. Ses parçası — HLS master'daki rendition'lar */}
+								{sesSecenekleri.length ? (
 									<>
 										{renderSectionTitle("volume-medium-outline", "Ses Parçası")}
-										{audioTracks.map((t, idx) =>
+										{sesSecenekleri.map((t, idx) =>
 											renderOptionRow({
 												key: `aud-${idx}`,
-												label: t.title || t.language || `Parça ${idx + 1}`,
-												selected: false,
-												onPress: () => {},
+												label: t.name || t.language || `Parça ${idx + 1}`,
+												note: t.isDefault ? "Varsayılan" : null,
+												selected: selectedAudioIdx === idx,
+												onPress: () => setSelectedAudioIdx(idx),
 											}),
 										)}
 									</>

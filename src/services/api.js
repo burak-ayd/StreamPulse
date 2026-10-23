@@ -80,6 +80,10 @@ const FALLBACK_CONTENT_DETAILS = {
 };
 
 // In-memory cache store to prevent repeated API calls
+// İndirme modalı ↔ oynatıcı arasında paylaşılan extract önbelleği (#8)
+const EXTRACT_CACHE_TTL_MS = 10 * 60 * 1000;
+const extractCache = new Map(); // url -> { at, sources }
+
 const apiCache = {
 	platforms: null,
 	categories: new Map(), // platformName -> categories list
@@ -573,6 +577,15 @@ export async function searchPluginContent(pluginName, query) {
  * @returns {Promise<Array>} Array of extractor results: [{ extractor, result: { name, url, referer, headers, subtitles } }]
  */
 export async function extractVideoSources(url) {
+	// ⚡ Kısa ömürlü önbellek: oynatıcı ve indirme modalı aynı bölüm için
+	// `/api/extract`'i tekrar tekrar çağırıyordu (modal'ın "kaynaklar
+	// yükleniyor" beklemesi kullanıcı raporu: #8). Sonuç 10 dk cache'lenir;
+	// segment URL'leri token'lı ve süreli olduğu için TTL kısa tutulur.
+	const simdi = Date.now();
+	const cacheHit = extractCache.get(url);
+	if (cacheHit && simdi - cacheHit.at < EXTRACT_CACHE_TTL_MS) {
+		return cacheHit.sources;
+	}
 	// ⏱ 30 sn sınırı: RN fetch'in kendi zarfı olduğu sürece (timeout yok)
 	// ağ takılırken "kaynak yükleniyor" ekranı sonsuza kadar dönüyordu.
 	// (AbortController kalıbı: AbortSignal.timeout Hermes'te sürüme bağımlı.)
@@ -588,7 +601,7 @@ export async function extractVideoSources(url) {
 		if (response.ok) {
 			const data = await response.json();
 			if (Array.isArray(data)) {
-				return data.map((item) => {
+				const sources = data.map((item) => {
 					const streamUrl = item?.result?.url || "";
 					const isHls =
 						item?.result?.is_hls === true ||
@@ -616,6 +629,8 @@ export async function extractVideoSources(url) {
 						},
 					};
 				});
+				extractCache.set(url, { at: Date.now(), sources });
+				return sources;
 			}
 		} else {
 			console.warn("API extract failed with status:", response.status);

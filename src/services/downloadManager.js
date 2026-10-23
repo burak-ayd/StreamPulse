@@ -19,7 +19,7 @@
  */
 
 import * as FileSystem from "expo-file-system/legacy";
-import { File as ExpoFile, FileMode } from "expo-file-system";
+import { Directory, File as ExpoFile } from "expo-file-system";
 import {
 	deleteDownloadItem,
 	getDownloadSettings,
@@ -221,20 +221,28 @@ function isHlsUrl(url) {
 	);
 }
 
-// ── HLS indirme (Faz 5, madde 11) ───────────────────────────────────
+// ── HLS indirme — YEREL HLS KLASÖRÜ ─────────────────────────────────
 //
-// Bu eklenti ekosisteminde kaynakların çoğu HLS (api.js'in tespitine
-// göre rapidvid/close/rapidrame vb. hepsi m3u8). Cihaz testi gösterdi
-// ki MP4-only indirme pratikte hiçbir içeriği indirilemez bırakıyor
-// (örn. Lupin S4E1: tek kaynak Rapidrame m3u8). Bu yüzden HLS desteği
-// zorunlu hale geldi — Ruling: plan §11 "HLS ayrı çalışma" önerisi
-// cihaz testi ile aşılır.
+// Neden tek dosya değil?
+//   Bu ekosistemde (rapidrame vb.) master playlist'te ses AYRI rendition
+//   olarak durur:
+//     #EXT-X-MEDIA:TYPE=AUDIO,NAME="Türkçe",LANGUAGE="tr",URI="…audio.m3u8"
+//     #EXT-X-STREAM-INF:…AUDIO="audio0" / video.m3u8
+//   Video segmentleri yalnızca görüntü + (varsa) orijinal sesi taşır;
+//   Türkçe dublaj ayrı segmentlerdedir. Bunları tek dosyada birleştirmek
+//   muxing ister (CloudStream bunu FFmpeg ile yapar). RN'de muxer yok.
 //
-// Yöntem: master playlist → en yüksek bant genişlikli varyant → media
-// playlist → segmentler sırayla fetch edilip FileMode.Append ile tek
-// dosyaya yazılır. TS segmentleri concat-by-design olduğu için birleşik
-// dosya ExoPlayer'da oynatılır (fMP4: init + parçalar, .mp4 olarak).
-// Şifreli (AES-128) akışlar `HLS_ENCRYPTED` ile pas geçilir.
+// Bu yüzden indirme, HLS'i olduğu gibi diske alır: master.m3u8 + video.m3u8
+// + audio.m3u8 + segment dosyaları. Playlist'ler YERELLEŞTİRİLİR (URI'ler
+// yerel dosya adlarına çevrilir) ve oynatıcı yerel master.m3u8'i açar —
+// ExoPlayer yerel HLS'te de tüm ses parçalarını görür/seçtirir, yani
+// "izlerken ne görüyorsam indirirken de aynısı" doğal olarak sağlanır.
+//
+// Yan faydalar:
+//   • İlerleme SEGMENT SAYISINA göre → dalgalanmayan, kesin tamamlanan yüzde.
+//   • Segmentler ayrı dosya → Append/Truncate gerekmez (SAF dostu),
+//     duraklat/devam = var olan dosyaları atla.
+//   • Bitişte toplam boyut segment dosyalarının gerçek toplamıdır.
 
 /** Metin isteği + zaman sınırı. */
 async function fetchText(url, headers, timeoutMs = 30000) {
@@ -261,12 +269,31 @@ function resolveUrl(base, rel) {
 	return `${base.replace(/[^/]*$/, "")}${relative}`;
 }
 
-/** Master playlist'ten varyantları (bant genişliği + çözünürlük) çıkarır. */
+/**
+ * Master playlist'i çözer: video varyantları + ses rendition'ları.
+ * @returns {{variants: Array, audioTracks: Array}}
+ */
 function parseMasterPlaylist(text, baseUrl) {
 	const lines = text.split(/\r?\n/);
 	const variants = [];
+	const audioTracks = [];
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i].trim();
+		if (line.startsWith("#EXT-X-MEDIA")) {
+			const type = (line.match(/TYPE=([A-Z-]+)/) || [])[1];
+			if (type !== "AUDIO") continue;
+			const uriM = line.match(/URI="([^"]+)"/);
+			if (!uriM) continue;
+			audioTracks.push({
+				name: (line.match(/NAME="([^"]*)"/) || [])[1] || "Ses",
+				language:
+					(line.match(/LANGUAGE="([^"]*)"/) || [])[1]?.toLowerCase() || null,
+				group: (line.match(/GROUP-ID="([^"]*)"/) || [])[1] || null,
+				isDefault: /DEFAULT=YES/i.test(line),
+				url: resolveUrl(baseUrl, uriM[1]),
+			});
+			continue;
+		}
 		if (!line.startsWith("#EXT-X-STREAM-INF")) continue;
 		const bandwidth = Number((line.match(/BANDWIDTH=(\d+)/) || [])[1] || 0);
 		const resolution = (line.match(/RESOLUTION=(\d+x\d+)/) || [])[1] || null;
@@ -282,10 +309,13 @@ function parseMasterPlaylist(text, baseUrl) {
 				url: resolveUrl(baseUrl, lines[j]),
 				bandwidth,
 				resolution,
+				audioGroup: (line.match(/AUDIO="([^"]*)"/) || [])[1] || null,
+				codecs: (line.match(/CODECS="([^"]*)"/) || [])[1] || null,
+				frameRate: (line.match(/FRAME-RATE=([\d.]+)/) || [])[1] || null,
 			});
 		}
 	}
-	return variants;
+	return { variants, audioTracks };
 }
 
 /** Media playlist'ten segmentleri + şifre/format bilgilerini çıkarır. */
@@ -335,25 +365,18 @@ function parseMediaPlaylist(text, baseUrl) {
 }
 
 /**
- * Tek segmenti indirir: gövdeyi NATIVE olarak doğrudan geçici dosyaya
- * akıtır (expo.modules.fetch'in response gövdesini DirectByteBuffer'larda
- * biriktirmesi OOM'ye yol açıyordu — bkz. cihaz testi çökmesi). Dönen
- * değer, diske yazılmış dosyanın kendisidir; JS belleğine içerik girmez.
+ * Tek segmenti doğrudan hedef dosyaya indirir (native akış, JS belleğine
+ * içerik girmez — eski arrayBuffer yolu OOM üretiyordu).
  */
 async function fetchSegmentToDisk(segment, headers, destUri) {
 	const dest = new ExpoFile(destUri);
-	const indirilen = await ExpoFile.downloadFileAsync(segment.url, dest, {
+	return await ExpoFile.downloadFileAsync(segment.url, dest, {
 		idempotent: true,
 		headers,
 	});
-	return indirilen;
 }
 
-/**
- * Geçici ağ/DNS hatalarına dayanıklı segment indirme: deneme başına
- * artan bekleme ile `attempts` kez dener, tümü başarısız olursa fırlatır
- * (dış akış `_hlsState.nextSegmentIndex` ile aynı segmentten devam eder).
- */
+/** Geçici ağ hatalarına dayanıklı segment indirme (dest'e yazar). */
 async function fetchSegmentWithRetry(segment, headers, destUri, attempts = 3) {
 	let sonHata = null;
 	for (let deneme = 1; deneme <= attempts; deneme++) {
@@ -371,143 +394,271 @@ async function fetchSegmentWithRetry(segment, headers, destUri, attempts = 3) {
 	throw sonHata;
 }
 
+/** Dosyaya metin yazar (varsa üzerine, yoksa oluşturur). SAF uyumlu. */
+function writeTextFile(uri, text) {
+	const f = new ExpoFile(uri);
+	try {
+		if (!f.exists) f.create({ intermediates: true });
+	} catch (e) {
+		void e;
+	}
+	f.write(text);
+}
+
+/** Header'ları native katmanın beklediği düz biçime getirir. */
+function normalizeHeaders(headers) {
+	const h = { ...(headers || {}) };
+	if (h.Cookie && typeof h.Cookie === "object") {
+		h.Cookie = Object.entries(h.Cookie)
+			.map(([k, v]) => `${k}=${v}`)
+			.join("; ");
+	}
+	return h;
+}
+
+/** Media playlist metnini, segment URI'lerini yerel dosya adlarına çevirerek üretir. */
+function buildLocalMediaPlaylist({ segments, localNames, headerTags }) {
+	const out = ["#EXTM3U", ...headerTags];
+	segments.forEach((seg, idx) => {
+		if (seg.init) return; // init segment ayrıca ele alınır
+		out.push(`#EXTINF:${seg.duration.toFixed(3)},`);
+		out.push(localNames[idx]);
+	});
+	out.push("#EXT-X-ENDLIST");
+	return out.join("\n");
+}
+
 /**
- * HLS akışını segment segment indirip tek dosyada birleştirir.
- * Duraklatma: segment sınırlarında (`_hlsState.nextSegmentIndex`),
- * devam: Append modunda kaldığı segmentten.
- * @returns {Promise<{ext: string}>} tamamlanan dosyanın uzantısı
+ * Playlist'in başlık etiketlerini (VERSION/TARGETDURATION/…) korur.
+ */
+function playlistHeaderTags(text) {
+	return text
+		.split(/\r?\n/)
+		.map((l) => l.trim())
+		.filter(
+			(l) =>
+				l.startsWith("#EXT-X-VERSION") ||
+				l.startsWith("#EXT-X-TARGETDURATION") ||
+				l.startsWith("#EXT-X-MEDIA-SEQUENCE") ||
+				l.startsWith("#EXT-X-DISCONTINUITY-SEQUENCE") ||
+				l.startsWith("#EXT-X-PLAYLIST-TYPE"),
+		);
+}
+
+/**
+ * HLS akışını yerel klasöre indirir.
+ * @returns {Promise<{dirUri: string, masterUri: string, totalBytes: number}>}
  */
 async function runHlsDownload(item) {
-	const headers = item.sourceHeaders || {};
+	const headers = normalizeHeaders(item.sourceHeaders);
 
-	// 1) Master → en iyi varyant
-	let mediaUrl = item.sourceUrl;
-	let bestBandwidth = 0;
+	// 1) Master → en yüksek kaliteli varyant + ses rendition'ları
 	const masterText = await fetchText(item.sourceUrl, headers);
-	if (masterText.includes("#EXT-X-STREAM-INF")) {
-		const variants = parseMasterPlaylist(masterText, item.sourceUrl);
-		if (variants.length) {
-			const best = variants.reduce((a, b) =>
-				b.bandwidth > a.bandwidth ? b : a,
-			);
-			mediaUrl = best.url;
-			bestBandwidth = best.bandwidth;
-		}
-	}
-	// bestBandwidth YALNIZCA kaba bir başlangıç sinyalidir; boyut tahmini
-	// segment ölçümüyle yapılır (bkz. aşağıdaki not).
-	void bestBandwidth;
+	const { variants, audioTracks } = masterText.includes("#EXT-X-STREAM-INF")
+		? parseMasterPlaylist(masterText, item.sourceUrl)
+		: { variants: [], audioTracks: [] };
 
-	// 2) Media playlist
-	const mediaText = await fetchText(mediaUrl, headers);
-	const { segments, encrypted, isFmp4, totalDuration } =
-		parseMediaPlaylist(mediaText, mediaUrl);
-	if (!segments.length) {
+	const bestVariant = variants.length
+		? variants.reduce((a, b) => (b.bandwidth > a.bandwidth ? b : a))
+		: null;
+	const videoPlaylistUrl = bestVariant?.url || item.sourceUrl;
+
+	// Seçilen ses dili: kullanıcı tercihi → yoksa DEFAULT rendition
+	const wantedLang = (item.audioLanguage || "").toLowerCase();
+	let audioTrack = null;
+	if (audioTracks.length) {
+		audioTrack =
+			(wantedLang && audioTracks.find((t) => t.language === wantedLang)) ||
+			audioTracks.find((t) => t.isDefault) ||
+			audioTracks[0];
+	}
+
+	// 2) Oynat listeleri
+	const videoText = await fetchText(videoPlaylistUrl, headers);
+	const videoPlaylist = parseMediaPlaylist(videoText, videoPlaylistUrl);
+	if (!videoPlaylist.segments.length) {
 		throw new Error("HLS oynat listesinde segment bulunamadı");
 	}
-	if (encrypted) {
+	if (videoPlaylist.encrypted) {
 		const err = new Error(
 			"Bu akış şifreli (AES-128); şifreli HLS indirme desteklenmiyor.",
 		);
 		err.errorCode = "HLS_ENCRYPTED";
 		throw err;
 	}
-
-	// 3) Toplam boyut: BANDWIDTH tabanlı tahmin KULLANILMAZ — cihaz testinde
-	// 6.42GB gösterip gerçek ~800-900MB indirdi. İndirme başladıktan sonra
-	// ölçülen bitrate × toplam süre kullanılır.
-
-	const base = FileSystem.documentDirectory || FileSystem.cacheDirectory;
-	const tempUri = `${base}${TEMP_DIR_NAME}/${item.id}.part`;
-	const segUri = `${base}${TEMP_DIR_NAME}/${item.id}.seg`;
-
-	// Header'ları normalize et: Cookie'nin object biçimi native katmanda
-	// string beklenir (react-native-video sözleşmesi ile aynı).
-	const normalizedHeaders = { ...headers };
-	if (normalizedHeaders.Cookie && typeof normalizedHeaders.Cookie === "object") {
-		normalizedHeaders.Cookie = Object.entries(normalizedHeaders.Cookie)
-			.map(([k, v]) => `${k}=${v}`)
-			.join("; ");
-	}
-
-	const outFile = new ExpoFile(tempUri);
-	const startIdx = item._hlsState?.nextSegmentIndex || 0;
-	const handle = startIdx
-		? outFile.open(FileMode.Append)
-		: outFile.open(FileMode.Truncate);
-	// Retry'da kaldığı segment (catch bloğunda da görünmesi için try dışında)
-	let current = startIdx;
-
-	try {
-		let written = startIdx ? item.downloadedBytes || 0 : 0;
-		item.totalBytes = 0; // ölçüm gelene kadar segment sayısıyla ilerlenir
-		let completedDur = 0;
-		for (let i = startIdx; i < segments.length; i++) {
-			current = i;
-			// Duraklat/iptal: segment sınırında kontrol — status manager'da
-			// değiştirilmiştir; döngü burada durur, durum persist edilir.
-			if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) {
-				item._hlsState = { nextSegmentIndex: i };
-				await persist(item, { force: true });
-				return;
-			}
-			const segDosyasi = await fetchSegmentWithRetry(
-				segments[i],
-				normalizedHeaders,
-				segUri,
-				3,
+	let audioPlaylist = null;
+	let audioPlaylistText = "";
+	if (audioTrack) {
+		audioPlaylistText = await fetchText(audioTrack.url, headers);
+		audioPlaylist = parseMediaPlaylist(audioPlaylistText, audioTrack.url);
+		if (audioPlaylist.encrypted) {
+			const err = new Error(
+				"Bu akışın ses parçası şifreli (AES-128); indirme desteklenmiyor.",
 			);
-			// Tek segmentin içeriği (≈2-10 MB) JS belleğine ALICI anında
-			// girer ve yazma sonrası referans düşer — birikimli retansiyon yok.
-			const segBytes = await segDosyasi.bytes();
-			handle.writeBytes(segBytes);
-			written += segBytes.byteLength;
-			completedDur += segments[i].duration || 0;
-			// Boyut tahmini: ölçülen gerçek bitrate × toplam süre. Master
-			// playlist'teki BANDWIDTH değeri gerçek ortalamayı yansıtmıyor
-			// (VBR + şişirilmiş değer; cihaz testinde 6.42GB gösterip gerçek
-			// ~800-900MB indirdi) — bu yüzden ölçümle yakınsıyor.
-			item.downloadedBytes = written;
-			if (completedDur > 0 && written > 0 && totalDuration > 0) {
-				item.totalBytes = Math.ceil(
-					(written / completedDur) * totalDuration,
-				);
-			}
-			item.progress =
-				item.totalBytes > 0
-					? Math.min(0.99, written / item.totalBytes)
-					: (i + 1) / segments.length;
-			item.resumable = true;
-			item.lastResumeOffset = written;
-			// ⚠️ Segment index'i her tamamlanan segmentte yaz: süreç aniden
-			// ölürse (sistem kill, çökme) kayıt "downloading" olarak durur;
-			// initialize() onu "paused"a çeker ve resume BU index'ten Append
-			// ile devam eder. Index yazılmazsa resume baştan başlayıp
-			// indirilen yüzlerce MB'i silerdi (cihaz testinde görüldü).
-			item._hlsState = { nextSegmentIndex: i + 1 };
-			emitProgress(item);
-			await persist(item);
-			// GC'ye nefes payı: doğrudan next fetch ile ezberbozan hız yerine
-			// kısa bir bekleme — native tamponların toplanmasına izin verir.
-			await new Promise((r) => setTimeout(r, 20));
+			err.errorCode = "HLS_ENCRYPTED";
+			throw err;
 		}
-		item._hlsState = { nextSegmentIndex: current };
-	} catch (err) {
-		// Retry yolunda kaldığı segmenti hatırla: devam Append ile o segmenti
-		// yeniden indirip ekler (yarım yazılmış kuyruk segmenti kabul edilir).
-		item._hlsState = { nextSegmentIndex: current };
-		throw err;
-	} finally {
-		try {
-			handle.close();
-		} catch (_e) {
-			/* handle zaten kapalıysa sorun değil */
-		}
-		// Seg geçici dosyasını temizle
-		await FileSystem.deleteAsync(segUri, { idempotent: true }).catch(() => {});
 	}
 
-	return { ext: isFmp4 ? "mp4" : "ts" };
+	// 3) Hedef klasör — içerik başına tek klasör
+	const settings = await getDownloadSettings();
+	const base = resolveBaseDirectory(settings.downloadPath);
+	const folderName = sanitizeFileName(item.seriesTitle || item.contentTitle);
+	const dirUri = `${base.full}${folderName}/`;
+	const dir = new Directory(dirUri);
+	try {
+		dir.create({ intermediates: true, idempotent: true });
+	} catch (e) {
+		// zaten varsa sorun değil
+		void e;
+	}
+
+	// 4) İndirilecek işler: video segmentleri + ses segmentleri
+	const videoJobs = videoPlaylist.segments
+		.filter((s) => !s.init)
+		.map((seg, idx) => ({ seg, name: `v${String(idx + 1).padStart(5, "0")}.ts` }));
+	const audioJobs = audioPlaylist
+		? audioPlaylist.segments
+				.filter((s) => !s.init)
+				.map((seg, idx) => ({ seg, name: `a${String(idx + 1).padStart(5, "0")}.ts` }))
+		: [];
+	const allJobs = [...videoJobs, ...audioJobs];
+
+	// Duraklat/devam: var olan segment dosyaları atlanır (kendini onaran resume)
+	let done = 0;
+	let written = 0;
+	for (const job of allJobs) {
+		const f = new ExpoFile(`${dirUri}${job.name}`);
+		if (f.exists) {
+			done += 1;
+			written += f.size || 0;
+		}
+	}
+	item.totalBytes = 0;
+	item.downloadedBytes = written;
+	item.progress = allJobs.length ? done / allJobs.length : 0;
+	if (done > 0) {
+		emitProgress(item);
+		await persist(item, { force: true });
+	}
+
+	const tempoDir = `${FileSystem.documentDirectory || FileSystem.cacheDirectory}${TEMP_DIR_NAME}/`;
+	await FileSystem.makeDirectoryAsync(tempoDir, { intermediates: true }).catch(() => {});
+
+	for (const job of allJobs) {
+		if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) {
+			await persist(item, { force: true });
+			return;
+		}
+		const destUri = `${dirUri}${job.name}`;
+		const target = new ExpoFile(destUri);
+		if (target.exists) continue; // bu turda zaten indirildi
+		// Önce geçici dosyaya indir, sonra hedefe taşı: yarım kalan segment
+		// "var" sayılıp bozuk içerikle oynatılmasın.
+		const tempUri = `${tempoDir}${item.id}-${job.name}`;
+		const indirilen = await fetchSegmentWithRetry(job.seg, headers, tempUri, 3);
+		try {
+			const hedef = new ExpoFile(destUri);
+			if (hedef.exists) hedef.delete();
+			await indirilen.move(hedef);
+		} catch (moveErr) {
+			console.warn("Segment taşınamadı, yerinde kullanılacak:", moveErr?.message);
+			// taşınamazsa geçici dosya zaten indirildi; hedef adıyla kopyala
+			try {
+				await FileSystem.moveAsync({ from: tempUri, to: destUri });
+			} catch (_e) {
+				/* bir sonraki turda yeniden denenecek */
+			}
+		}
+		done += 1;
+		try {
+			written += new ExpoFile(destUri).size || 0;
+		} catch (_e) {
+			/* boyut okunamazsa sayaç değişmez */
+		}
+		item.downloadedBytes = written;
+		item.progress = Math.min(0.99, done / allJobs.length);
+		item.resumable = true;
+		item.lastResumeOffset = done;
+		emitProgress(item);
+		await persist(item);
+		await new Promise((r) => setTimeout(r, 15));
+	}
+
+	// 5) Yerelleştirilmiş playlist'ler
+	const videNames = videoPlaylist.segments.map((s, idx) =>
+		s.init ? "init.mp4" : videoJobs.find((j) => j.seg === s)?.name || `v${idx + 1}.ts`,
+	);
+	const videoLocal = buildLocalMediaPlaylist({
+		segments: videoPlaylist.segments,
+		localNames: videNames,
+		headerTags: playlistHeaderTags(videoText),
+	});
+	writeTextFile(`${dirUri}video.m3u8`, videoLocal);
+
+	let masterLines = ["#EXTM3U", "#EXT-X-VERSION:3"];
+	if (audioPlaylist) {
+		const audioNames = audioPlaylist.segments.map(
+			(s, idx) => audioJobs.find((j) => j.seg === s)?.name || `a${idx + 1}.ts`,
+		);
+		const audioLocal = buildLocalMediaPlaylist({
+			segments: audioPlaylist.segments,
+			localNames: audioNames,
+			headerTags: playlistHeaderTags(audioPlaylistText),
+		});
+		writeTextFile(`${dirUri}audio.m3u8`, audioLocal);
+		masterLines.push(
+			`#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio0",NAME="${audioTrack.name}",LANGUAGE="${audioTrack.language || "und"}",DEFAULT=YES,AUTOSELECT=YES,CHANNELS="2",URI="audio.m3u8"`,
+		);
+	}
+	const bandwidth = bestVariant?.bandwidth || 2000000;
+	const resolutionAttr = bestVariant?.resolution
+		? `,RESOLUTION=${bestVariant.resolution}`
+		: "";
+	const codecsAttr = bestVariant?.codecs ? `,CODECS="${bestVariant.codecs}"` : "";
+	const audioAttr = audioPlaylist ? ',AUDIO="audio0"' : "";
+	masterLines.push(
+		`#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth}${resolutionAttr}${codecsAttr}${audioAttr}`,
+		"video.m3u8",
+	);
+	const masterUri = `${dirUri}master.m3u8`;
+	writeTextFile(masterUri, masterLines.join("\n"));
+
+	// 6) Gerçek toplam boyut: segment dosyalarının toplamı
+	let toplam = 0;
+	for (const job of allJobs) {
+		try {
+			toplam += new ExpoFile(`${dirUri}${job.name}`).size || 0;
+		} catch (_e) {
+			/* okunamayan dosya yok sayılır */
+		}
+	}
+	return {
+		dirUri,
+		masterUri,
+		totalBytes: toplam,
+		ext: "m3u8",
+	};
+}
+
+/**
+ * modal için: HLS kaynağının ses parçalarını listeler.
+ * @returns {Promise<Array<{name, language, isDefault}>>}
+ */
+async function listHlsAudioTracks(sourceUrl, headers) {
+	try {
+		const text = await fetchText(sourceUrl, normalizeHeaders(headers), 20000);
+		if (!text.includes("#EXT-X-MEDIA")) return [];
+		const { audioTracks } = parseMasterPlaylist(text, sourceUrl);
+		return audioTracks.map((t) => ({
+			name: t.name,
+			language: t.language,
+			isDefault: t.isDefault,
+		}));
+	} catch (e) {
+		console.warn("Ses parçaları listelenemedi:", e?.message);
+		return [];
+	}
 }
 
 // ── Kuyruk çalıştırma ───────────────────────────────────────────────
@@ -565,17 +716,14 @@ async function runDownload(item) {
 		const settings = await getDownloadSettings();
 
 		let ext = "mp4";
+		let hlsResult = null;
 		if (isHls) {
-			const hlsResult = await runHlsDownload(item);
+			hlsResult = await runHlsDownload(item);
 			// Segment sınırında duraklatıldı/iptal edildi: döngü temiz döndü.
 			if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) {
-				if (item.status === DOWNLOAD_STATUS.CANCELLED) {
-					await FileSystem.deleteAsync(tempUri, { idempotent: true }).catch(() => {});
-				}
 				pump();
 				return;
 			}
-			ext = hlsResult?.ext || "ts";
 		} else {
 			let resumable = resumables.get(item.id);
 			if (!resumable) {
@@ -606,31 +754,53 @@ async function runDownload(item) {
 			}
 		}
 
-		// Varış yolunu (gerçek uzantıyla) hazırla ve dosyayı taşı
-		const targetPath = buildDownloadTargetPath(item, settings, ext);
-		const targetDir = targetPath.substring(0, targetPath.lastIndexOf("/") + 1);
-		await FileSystem.makeDirectoryAsync(targetDir, { intermediates: true }).catch(() => {});
-		try {
-			await FileSystem.moveAsync({ from: tempUri, to: targetPath });
-		} catch (moveErr) {
-			// Aynı isimde tamamlanmış dosya varsa üzerine yaz (yeniden indirme)
-			void moveErr;
-			await FileSystem.deleteAsync(targetPath, { idempotent: true }).catch(() => {});
-			await FileSystem.moveAsync({ from: tempUri, to: targetPath });
-		}
-
-		// Altyazı (varsa ve istendiyse): aynı adla .srt
-		if (item.subtitleUrl && item.downloadSubtitle !== false) {
-			const subtitlePath = targetPath.replace(/\.[a-z0-9]+$/i, ".srt");
+		let targetPath;
+		if (isHls) {
+			// HLS: çıktı bir KLASÖR (master.m3u8 + video/audio playlist + segmentler).
+			// Klasör zaten yerinde; taşıma yok. Altyazı klasör içine yazılır.
+			targetPath = hlsResult.masterUri;
+			item.isHlsFolder = true;
+			item.hlsDir = hlsResult.dirUri;
+			item.totalBytes = hlsResult.totalBytes || 0;
+			if (item.subtitleUrl && item.downloadSubtitle !== false) {
+				const subPath = `${hlsResult.dirUri}subtitle.vtt`;
+				try {
+					const subResult = await FileSystem.downloadAsync(
+						item.subtitleUrl,
+						subPath,
+					);
+					item.subtitlePath = subResult?.uri || subPath;
+				} catch (subErr) {
+					console.warn("Altyazı indirilemedi:", subErr?.message);
+				}
+			}
+		} else {
+			// Varış yolunu (gerçek uzantıyla) hazırla ve dosyayı taşı
+			targetPath = buildDownloadTargetPath(item, settings, ext);
+			const targetDir = targetPath.substring(0, targetPath.lastIndexOf("/") + 1);
+			await FileSystem.makeDirectoryAsync(targetDir, { intermediates: true }).catch(() => {});
 			try {
-				const subResult = await FileSystem.downloadAsync(
-					item.subtitleUrl,
-					subtitlePath,
-				);
-				item.subtitlePath = subResult?.uri || subtitlePath;
-			} catch (subErr) {
-				// Altyazı indirilemedi → video indirmeyi BOZMAZ, yalnızca not edilir.
-				console.warn("Altyazı indirilemedi:", subErr?.message);
+				await FileSystem.moveAsync({ from: tempUri, to: targetPath });
+			} catch (moveErr) {
+				// Aynı isimde tamamlanmış dosya varsa üzerine yaz (yeniden indirme)
+				void moveErr;
+				await FileSystem.deleteAsync(targetPath, { idempotent: true }).catch(() => {});
+				await FileSystem.moveAsync({ from: tempUri, to: targetPath });
+			}
+
+			// Altyazı (varsa ve istendiyse): aynı adla .srt
+			if (item.subtitleUrl && item.downloadSubtitle !== false) {
+				const subtitlePath = targetPath.replace(/\.[a-z0-9]+$/i, ".srt");
+				try {
+					const subResult = await FileSystem.downloadAsync(
+						item.subtitleUrl,
+						subtitlePath,
+					);
+					item.subtitlePath = subResult?.uri || subtitlePath;
+				} catch (subErr) {
+					// Altyazı indirilemedi → video indirmeyi BOZMAZ, yalnızca not edilir.
+					console.warn("Altyazı indirilemedi:", subErr?.message);
+				}
 			}
 		}
 
@@ -643,6 +813,16 @@ async function runDownload(item) {
 			_hlsState: null,
 		});
 		await persist(item, { force: true });
+		// Otomatik dışa aktarma (#1): kullanıcı bir klasör seçtiyse tamamlanan
+		// indirme oraya kopyalanır (oynatma kopyası uygulama deposunda kalır).
+		try {
+			const ayarlar = await getDownloadSettings();
+			if (ayarlar.downloadDirUri && ayarlar.autoExport !== false) {
+				await exportDownload(item.id);
+			}
+		} catch (e) {
+			console.warn("Otomatik dışa aktarma atlandı:", e?.message);
+		}
 		pump();
 	} catch (err) {
 		// pauseAsync çağrısı kontrolsüz bir şekilde hata fırlatmadan akışı
@@ -703,6 +883,10 @@ async function initialize() {
 	const list = Array.isArray(stored) ? stored : [];
 	for (const raw of list) {
 		if (!raw || !raw.id) continue;
+		// Eski sürümün "pending" yer tutucuları (gerçek indirme motoru yokken
+		// yazılan kayıtlar) kuyruğa alınmaz — aksi halde "Hata" kartı olarak
+		// görünürlerdi.
+		if (raw.status === "pending") continue;
 		const item = { ...raw };
 		if (item.status === DOWNLOAD_STATUS.DOWNLOADING) {
 			item.status = DOWNLOAD_STATUS.PAUSED;
@@ -755,7 +939,9 @@ async function enqueue(spec) {
 		sourceUrl: spec.sourceUrl,
 		sourceName: spec.sourceName || "",
 		sourceHeaders: spec.sourceHeaders || {},
-		audioTrack: spec.audioTrack || null,
+		audioTrack: spec.audioLanguage
+			? String(spec.audioLanguage)
+			: spec.audioTrack || null,
 		subtitleUrl: spec.subtitleUrl || null,
 		subtitleLang: spec.subtitleLang || null,
 		downloadSubtitle: spec.downloadSubtitle !== false,
@@ -922,6 +1108,52 @@ function onStatusChange(callback) {
 }
 
 /**
+ * Tamamlanmış indirmeyi kullanıcının seçtiği klasöre (SAF) kopyalar (#1).
+ *
+ * ⚠️ Neden "taşı" değil "kopyala"? HLS indirmesi çok sayıda segment
+ * dosyasından oluşur ve oynatıcı bunları `content://` altında güvenilir
+ * biçimde çözemez. Bu yüzden oynatılabilir kopya uygulama deposunda
+ * kalır, dışa aktarılan kopya kullanıcının "İndirilenler" klasöründe
+ * görünür (bilgisayardan/başka uygulamadan erişilebilir).
+ *
+ * @returns {Promise<boolean>} kopyalama başarılı mı
+ */
+async function exportDownload(downloadId) {
+	const item = items.get(downloadId);
+	if (!item || item.status !== DOWNLOAD_STATUS.COMPLETED) return false;
+	const settings = await getDownloadSettings();
+	if (!settings.downloadDirUri) return false;
+	try {
+		const hedefKok = new Directory(settings.downloadDirUri);
+		if (item.isHlsFolder && item.hlsDir) {
+			const kaynak = new Directory(item.hlsDir);
+			const hedefAd = sanitizeFileName(
+				`${item.seriesTitle || item.contentTitle}-S${pad2(item.seasonNumber)}xE${pad2(item.episodeNumber)}`,
+			).replace(/-S00xE00$/, "");
+			const hedefDir = new Directory(hedefKok, hedefAd || item.id);
+			if (!hedefDir.exists) {
+				hedefDir.create({ intermediates: true, idempotent: true });
+			}
+			for (const entry of kaynak.list()) {
+				const dst = new ExpoFile(hedefDir, entry.name);
+				if (dst.exists) continue;
+				await entry.copy(dst);
+			}
+			return true;
+		}
+		if (item.filePath) {
+			const src = new ExpoFile(item.filePath);
+			const dst = new ExpoFile(hedefKok, src.name);
+			if (!dst.exists) await src.copy(dst);
+			return true;
+		}
+	} catch (e) {
+		console.warn("Dışa aktarma hatası:", e?.message);
+	}
+	return false;
+}
+
+/**
  * Öğeyi kuyruktan tamamen kaldırır: aktif indirmeyi keser, kısmi dosyayı
  * siler ve AsyncStorage'daki (DOWNLOADS) kaydı da düşürür — yoksa "silinen"
  * indirme uygulama yeniden açıldığında geri dönerdi.
@@ -934,6 +1166,15 @@ async function remove(downloadId) {
 	}
 	items.delete(downloadId);
 	runtime.delete(downloadId);
+	// HLS indirmeleri bir KLASÖR oluşturur (master.m3u8 + segmentler):
+	// kayıt silinince klasör de silinmeli, aksi halde disk şişer.
+	if (item.hlsDir) {
+		try {
+			await FileSystem.deleteAsync(item.hlsDir, { idempotent: true });
+		} catch (_e) {
+			/* klasör yoksa sorun değil */
+		}
+	}
 	try {
 		const base = FileSystem.documentDirectory || FileSystem.cacheDirectory;
 		await FileSystem.deleteAsync(`${base}${TEMP_DIR_NAME}/${item.id}.part`, {
@@ -1016,6 +1257,8 @@ export const DownloadManager = {
 	onStatusChange,
 	shouldAskBeforeDownload,
 	findCompletedDownload,
+	listHlsAudioTracks,
+	exportDownload,
 	// yardımcılar (UI/test için)
 	buildDownloadFileName,
 	buildDownloadTargetPath,

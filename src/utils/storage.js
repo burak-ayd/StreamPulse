@@ -1209,6 +1209,11 @@ export const DEFAULT_DOWNLOAD_SETTINGS = {
 	maxConnectionsPerDownload: 4, // 1-8 arası
 	// İndirme konumu (iOS'ta sandbox: documentDirectory + bu yol)
 	downloadPath: "Downloads/StreamPulse",
+	// Kullanıcının seçtiği dışa aktarma klasörü (SAF tree URI). Boşsa
+	// dışa aktarma yapılmaz; indirme her zaman uygulama deposunda oynatılır.
+	downloadDirUri: null,
+	// Tamamlanınca seçili klasöre otomatik kopyala
+	autoExport: true,
 	// Her indirmede onay modal'ı gösterilsin mi?
 	alwaysAskBeforeDownload: true,
 };

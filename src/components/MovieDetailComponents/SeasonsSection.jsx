@@ -1,5 +1,6 @@
 import TVPressable from "@components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
+import { useDownload } from "@/context/DownloadContext";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import React, {
@@ -22,7 +23,6 @@ import {
 	Text,
 	View,
 } from "react-native";
-import { getDownloads, saveDownloadItem } from "@/utils/storage";
 import { formatTime } from "@/utils/formatters";
 import ActionMenuModal from "@/components/modal/ActionMenuModal";
 
@@ -100,11 +100,11 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	ref,
 ) {
 	const { colors, theme } = useThemeContext();
+	const { requestDownload, isDownloaded } = useDownload();
 	const router = useRouter();
 
 	const [isSeasonModalOpen, setIsSeasonModalOpen] = useState(false);
 	const [sortOrder, setSortOrder] = useState("asc"); // 'asc' (1->N) | 'desc' (N->1)
-	const [downloadQueueMap, setDownloadQueueMap] = useState({});
 
 	// ─── "İzlendi işaretle" durumu ─────────────────────────────────────────
 	// Veri yazımı çağıran ekranda yapılır (`onSetWatched`); bu bileşen
@@ -190,28 +190,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 		[onSeasonChange],
 	);
 
-	// Mevcut indirmeleri kontrol et
-	useEffect(() => {
-		let isMounted = true;
-		getDownloads()
-			.then((downloads) => {
-				if (!isMounted) return;
-				const map = {};
-				(downloads || []).forEach((item) => {
-					if (item.id) map[item.id] = true;
-					if (item.url) map[item.url] = true;
-				});
-				setDownloadQueueMap(map);
-			})
-			.catch((e) => {
-				console.warn("İndirmeler kontrol edilemedi:", e);
-			});
-		return () => {
-			isMounted = false;
-		};
-	}, []);
 
-	// Seçili sezonun bölümleri (sıralama filtresi uygulanmış)
 	const sortedEpisodes = useMemo(() => {
 		if (!normalizedSeasons) return [];
 		const rawList =
@@ -285,108 +264,79 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 		sortedEpisodes,
 		handleSeasonSelect,
 	]);
+	// ── İndirme (gerçek akış) ──────────────────────────────────────────
+	// Ortak tetikleyici: kaynak/altyazı/ses seçimi DownloadContext'te.
+	// Dizi bilgisi (`content`) burada yoksa içerik kimliği seriesTitle'dan
+	// türetilir; bölüm nesnesi modal'a taşınır.
+	const seriesContent = useMemo(
+		() => ({
+			id: content?.id || content?.url || seriesTitle,
+			url: content?.url,
+			title: seriesTitle || content?.title || "Dizi",
+			plugin: content?.plugin || content?.pluginName || null,
+			poster_url: posterUrl,
+			seasons,
+		}),
+		[content, seriesTitle, posterUrl, seasons],
+	);
 
-	// Tekil bölüm indirme hazırlığı
-	const handleDownloadEpisode = async (ep, epNumber, epTitle) => {
-		const downloadId =
-			ep.url || `${seriesTitle || "dizi"}-S${selectedSeason}E${epNumber}`;
-		const isAlreadyQueued = Boolean(
-			downloadQueueMap[downloadId] ||
-				(ep.url && downloadQueueMap[ep.url]),
-		);
-
-		if (isAlreadyQueued) {
-			Alert.alert("İndirme", `"${epTitle}" zaten indirme listesinde.`);
+	const handleDownloadEpisode = (ep, epNumber, epTitle) => {
+		const epIndirildiMi = isDownloaded({
+			contentId: seriesContent.id,
+			seriesId: seriesContent.id,
+			season: selectedSeason,
+			episode: epNumber,
+		});
+		if (epIndirildiMi) {
+			Alert.alert("İndirme", `"${epTitle}" zaten indirildi.`);
 			return;
 		}
-
-		try {
-			const downloadItem = {
-				id: downloadId,
-				title: `${seriesTitle} - ${selectedSeason}. Sezon ${epNumber}. Bölüm`,
-				url: ep.url,
-				poster: ep.poster || posterUrl,
-				type: "series",
-				seriesTitle: seriesTitle || content?.title || "Dizi",
-				season: selectedSeason,
-				episode: epNumber,
+		requestDownload({
+			content: seriesContent,
+			episode: {
+				season: Number(selectedSeason),
+				episode: Number(epNumber),
 				episodeTitle: epTitle,
-				createdAt: new Date().toISOString(),
-				status: "pending", // İleride eklenecek indirme motoru için hazır durum
-			};
-
-			await saveDownloadItem(downloadItem);
-			setDownloadQueueMap((prev) => ({
-				...prev,
-				[downloadId]: true,
-				...(ep.url ? { [ep.url]: true } : {}),
-			}));
-
-			Alert.alert(
-				"İndirme Hazırlığı",
-				`"${epTitle}" indirme sırasına alındı.\n(İndirme özelliği hazırlandığında otomatik olarak indirilecektir)`,
-			);
-		} catch (error) {
-			console.error("İndirme kaydı hatası:", error);
-			Alert.alert("Hata", "İndirme sırasına eklenemedi.");
-		}
+				url: ep.url,
+			},
+		});
 	};
 
-	// Tüm sezonu indirme hazırlığı
-	const handleDownloadSeason = async () => {
+	// Tüm sezonu indirme: her bölüm kuyruğa ayrı ayrı girer; eş zamanlılık
+	// sınırı DownloadManager'da (maxConcurrentDownloads).
+	const handleDownloadSeason = () => {
 		if (sortedEpisodes.length === 0) return;
-
 		Alert.alert(
 			"Sezonu İndir",
-			`${selectedSeason}. Sezondaki toplam ${sortedEpisodes.length} bölüm indirme kuyruğuna eklensin mi?`,
+			`${selectedSeason}. Sezondaki ${sortedEpisodes.length} bölüm indirme kuyruğuna eklensin mi?`,
 			[
 				{ text: "Vazgeç", style: "cancel" },
 				{
 					text: "Tümünü Ekle",
-					onPress: async () => {
-						try {
-							const newMap = { ...downloadQueueMap };
-							for (let i = 0; i < sortedEpisodes.length; i++) {
-								const ep = sortedEpisodes[i];
-								const epNumber =
-									ep.episode || ep.episode_number || i + 1;
-								const epTitle =
-									ep.title && ep.title.trim() !== ""
-										? ep.title.trim()
-										: `${selectedSeason}. Sezon ${epNumber}. Bölüm`;
-								const downloadId =
-									ep.url ||
-									`${seriesTitle || "dizi"}-S${selectedSeason}E${epNumber}`;
-
-								const downloadItem = {
-									id: downloadId,
-									title: `${seriesTitle} - ${selectedSeason}. Sezon ${epNumber}. Bölüm`,
-									url: ep.url,
-									poster: ep.poster || posterUrl,
-									type: "series",
-									seriesTitle:
-										seriesTitle || content?.title || "Dizi",
-									season: selectedSeason,
-									episode: epNumber,
+					onPress: () => {
+						sortedEpisodes.forEach((ep, i) => {
+							const epNumber = ep.episode || ep.episode_number || i + 1;
+							const epTitle =
+								ep.title && ep.title.trim() !== ""
+									? ep.title.trim()
+									: `${selectedSeason}. Sezon ${epNumber}. Bölüm`;
+							const indirildi = isDownloaded({
+								contentId: seriesContent.id,
+								seriesId: seriesContent.id,
+								season: selectedSeason,
+								episode: epNumber,
+							});
+							if (indirildi || !ep.url) return;
+							requestDownload({
+								content: seriesContent,
+								episode: {
+									season: Number(selectedSeason),
+									episode: Number(epNumber),
 									episodeTitle: epTitle,
-									createdAt: new Date().toISOString(),
-									status: "pending",
-								};
-
-								await saveDownloadItem(downloadItem);
-								newMap[downloadId] = true;
-								if (ep.url) newMap[ep.url] = true;
-							}
-
-							setDownloadQueueMap(newMap);
-							Alert.alert(
-								"İndirme Hazırlığı Tamamlandı",
-								`${selectedSeason}. Sezondaki ${sortedEpisodes.length} bölüm indirme listesine eklendi.`,
-							);
-						} catch (error) {
-							console.error("Toplu indirme hatası:", error);
-							Alert.alert("Hata", "Sezon bölümleri eklenirken hata oluştu.");
-						}
+									url: ep.url,
+								},
+							});
+						});
 					},
 				},
 			],
@@ -675,15 +625,57 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 					icon: "list-outline",
 					onPress: () => enterSelectionMode(),
 				},
+
+				{
+					key: "season-download",
+					label: "Sezonu İndir",
+					description: "Seçili sezonun bölümlerini indirme kuyruğuna ekle",
+					icon: "download-outline",
+					iconColor: "#38bdf8",
+					iconBg: "rgba(56, 189, 248, 0.15)",
+					onPress: () => {
+						setMenuState(null);
+						handleDownloadSeason();
+					},
+				},
 			];
 		}
 
 		const { ep, index } = menuState;
 		const done = isEpisodeCompleted(ep, index);
+		const buBolumIndirildi = isDownloaded({
+			contentId: content?.id || content?.url || seriesTitle,
+			seriesId: content?.id || content?.url || seriesTitle,
+			season: selectedSeason,
+			episode: ep.episode || ep.episode_number || index + 1,
+		});
 		const singleMark = buildMarksForKeyList([
 			episodeSelectionKey(ep, index),
 		]);
 		return [
+			{
+				key: "ep-download",
+				label: buBolumIndirildi ? "İndirildi" : "Bölümü İndir",
+				description: buBolumIndirildi
+					? "Bu bölüm zaten indirildi"
+					: "İndirme ayarlarıyla kuyruğa ekle",
+				icon: buBolumIndirildi
+					? "checkmark-done-outline"
+					: "download-outline",
+				iconColor: buBolumIndirildi ? "#10b981" : "#38bdf8",
+				iconBg: buBolumIndirildi
+					? "rgba(16, 185, 129, 0.15)"
+					: "rgba(56, 189, 248, 0.15)",
+				onPress: () => {
+					setMenuState(null);
+					handleDownloadEpisode(
+						ep,
+						ep.episode || ep.episode_number || index + 1,
+						ep.title ||
+							`${selectedSeason}. Sezon ${ep.episode || ep.episode_number || index + 1}. Bölüm`,
+					);
+				},
+			},
 			done
 				? {
 						key: "ep-unmark",
@@ -719,6 +711,12 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 		enterSelectionMode,
 		isEpisodeCompleted,
 		buildMarksForKeyList,
+		isDownloaded,
+		handleDownloadEpisode,
+		handleDownloadSeason,
+		seriesTitle,
+		content?.id,
+		content?.url,
 		episodeSelectionKey,
 	]);
 
@@ -994,13 +992,14 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 					? `${epNumber}. ${rawTitle}`
 					: `${selectedSeason}. ${epNumber}. Bölüm`;
 
-					const downloadId =
-						ep.url ||
-						`${seriesTitle || "dizi"}-S${selectedSeason}E${epNumber}`;
-					const isQueued = Boolean(
-						downloadQueueMap[downloadId] ||
-							(ep.url && downloadQueueMap[ep.url]),
-					);
+
+					const epIndirildi = isDownloaded({
+						contentId: content?.id || content?.url || seriesTitle,
+						seriesId: content?.id || content?.url || seriesTitle,
+						season: selectedSeason,
+						episode: epNumber,
+					});
+
 
 					const epKey = `s${selectedSeason}_e${epNumber}`;
 					const epProgress =
@@ -1215,13 +1214,13 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 								hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
 								<Ionicons
 									name={
-										isQueued
-											? "checkmark"
+										epIndirildi
+											? "checkmark-done-outline"
 											: "download-outline"
 									}
 									size={15}
 									color={
-										isQueued
+										epIndirildi
 											? "#10b981"
 											: isInProgress
 												? colors.text
