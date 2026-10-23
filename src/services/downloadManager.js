@@ -350,6 +350,28 @@ async function fetchSegment(segment, headers) {
 }
 
 /**
+ * Geçici ağ/DNS hatalarına dayanıklı segment indirme: deneme başına
+ * artan bekleme ile `attempts` kez dener, tümü başarısız olursa fırlatır
+ * (dış akış `_hlsState.nextSegmentIndex` ile aynı segmentten devam eder).
+ */
+async function fetchSegmentWithRetry(segment, headers, attempts = 3) {
+	let sonHata = null;
+	for (let deneme = 1; deneme <= attempts; deneme++) {
+		try {
+			return await fetchSegment(segment, headers);
+		} catch (e) {
+			sonHata = e;
+			console.warn(
+				`Segment fetch deneme ${deneme}/${attempts} başarısız:`,
+				e?.message,
+			);
+			await new Promise((r) => setTimeout(r, 1000 * deneme));
+		}
+	}
+	throw sonHata;
+}
+
+/**
  * HLS akışını segment segment indirip tek dosyada birleştirir.
  * Duraklatma: segment sınırlarında (`_hlsState.nextSegmentIndex`),
  * devam: Append modunda kaldığı segmentten.
@@ -406,6 +428,7 @@ async function runHlsDownload(item) {
 		let written = startIdx ? item.downloadedBytes || 0 : 0;
 		item.totalBytes = estimate;
 		for (let i = startIdx; i < segments.length; i++) {
+			current = i;
 			// Duraklat/iptal: segment sınırında kontrol — status manager'da
 			// değiştirilmiştir; döngü burada durur, durum persist edilir.
 			if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) {
@@ -413,7 +436,7 @@ async function runHlsDownload(item) {
 				await persist(item, { force: true });
 				return;
 			}
-			const buf = await fetchSegment(segments[i], headers);
+			const buf = await fetchSegmentWithRetry(segments[i], headers, 3);
 			handle.writeBytes(new Uint8Array(buf));
 			written += buf.byteLength;
 			item.downloadedBytes = written;
