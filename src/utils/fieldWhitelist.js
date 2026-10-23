@@ -37,6 +37,7 @@ export const LIBRARY_FIELDS = [
  * Senkronize edilecek belge türleri (user_documents).
  */
 export const SYNCABLE_DOC_TYPES = [
+	"user_profile",
 	"player_settings",
 	"search_history",
 	"theme",

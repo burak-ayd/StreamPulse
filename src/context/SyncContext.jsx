@@ -215,6 +215,7 @@ export function SyncProvider({ children }) {
 		//    yazılsın. Bunlar seyrek değişir (birkaç dokunuş), debounce'un
 		//    getireceği "birazdan olacak" gecikmesi gereksiz.
 		const IMMEDIATE_KEYS = [
+			"user_profile",                 // profil (avatar, ad, bio...)
 			"app_player_settings",          // oynatıcı / altyazı ayarları
 			"streampulse_plugin_visibility",   // eklenti görünürlüğü
 			"streampulse_category_visibility", // kategori görünürlüğü

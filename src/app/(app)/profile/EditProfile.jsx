@@ -3,6 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { useThemeContext } from "@/context/ThemeContext";
 import { getUserProfile, saveUserProfile } from "@/utils/storage";
+import { pushImmediately } from "@/services/sync";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
@@ -177,6 +178,11 @@ export default function EditProfile() {
 				isPrivate: isPrivate,
 				birthDate: birthDate,
 			});
+			try {
+				await pushImmediately();
+			} catch (e) {
+				console.warn("Profil senkronizasyonu tetiklenemedi:", e);
+			}
 
 			Alert.alert("Başarılı", "Profil kaydedildi.", [
 				{
