@@ -11,3 +11,7 @@ Ruling: Dizide hangi bolumun indirilecegi planda net degil; karar ActionButtons'
 
 Task 3 (Faz 3 - Ayarlar): complete (commit 95b192e, test: eslint degisen 2 dosya → temiz; tsc → baseline 4/4)
 Task 4 (Faz 4 - Indirme ekrani): complete (test: eslint downloads.jsx → temiz; tsc → baseline 4/4)
+
+Task 5 (Faz 5): KISMİ — madde 14 (çevrimdışı oynatma) uygulandı; 11 (HLS), 12 (arka plan), 13 (bildirim) ertelendi.
+Ruling: Faz 5 istegе bağlıydı; plan HLS'yi "ayrı bir çalışma" olarak öneriyor, arka plan indirme expo-task-manager + native rebuild, bildirimler expo-notifications + FGS ister — cihaz testi olmadan riskli. Çevrimdışı oynatma JS tarafında güvenli: kaynaklariGetir tamamlanmış indirmeyi bulup yerel dosyayı tek kaynak döndürür (extract atlanır). Maliyet: indirmesi olan kullanıcı çevrimiçi izlemek için indirmeyi silmek zorunda; ileride "çevrimiçi izle" seçeneği eklenebilir.
+Ruling: İndirme öğesine seriesId alanı eklendi (eşleştirme için) — planın DOWNLOAD_ITEM şemasında yoktu; gerıye uyumlu ekleme.
