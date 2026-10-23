@@ -489,6 +489,60 @@ function parseMeBody(data) {
  *                 Token'a dokunulmaz.
  *   - `network` → fetch reddedildi (uçak modu, zaman aşımı). Token'a dokunulmaz.
  */
+/**
+ * Kendi profilini günceller — `PUT /api/auth/me` (sunucu sözleşmesi:
+ * gelen alanlar yazılır, gelmeyen/`None` gelen korunur).
+ *
+ * @param {{ username?: string, display_name?: string, avatar_url?: string,
+ *   bio?: string, language?: string, is_private?: boolean, birth_date?: string }} fields
+ * @returns {Promise<{ok: true, user: object, devices: object[]}|{ok: false, reason: string, detail?: string}>}
+ */
+export async function updateProfile(fields) {
+	try {
+		const response = await authFetch("/api/auth/me", {
+			method: "PUT",
+			body: JSON.stringify(fields ?? {}),
+		});
+
+		if (response.ok) {
+			await authDiag.record("updateProfile", { sonuc: "ok", http: response.status });
+			return parseMeBody(await response.json());
+		}
+
+		// 400/409: doğrulama / kullanıcı adı çakışması — detayı öne çıkar.
+		if (response.status === 400 || response.status === 409) {
+			let detail = null;
+			try {
+				const body = await response.clone().json();
+				detail = body?.detail ?? body?.code ?? body?.message ?? null;
+			} catch (_e) { /* gövde JSON değilse sessiz */ }
+			await authDiag.record("updateProfile", { sonuc: "dogrulama", http: response.status });
+			return { ok: false, reason: "validation", detail };
+		}
+
+		if (response.status === 401 || response.status === 403) {
+			const terminal = getAuthOutcome(response) === REFRESH_OUTCOME.TERMINAL;
+			await authDiag.record("updateProfile", {
+				sonuc: terminal ? "auth" : "server",
+				http: response.status,
+				yenileme: getAuthOutcome(response) ?? "denenmedi",
+			});
+			return terminal
+				? { ok: false, reason: "auth" }
+				: { ok: false, reason: "server" };
+		}
+
+		await authDiag.record("updateProfile", { sonuc: "server", http: response.status });
+		return { ok: false, reason: "server" };
+	} catch (hata) {
+		await authDiag.record("updateProfile", {
+			sonuc: "network",
+			mesaj: String(hata?.message ?? hata),
+		});
+		return { ok: false, reason: "network" };
+	}
+}
+
 export async function getMe() {
 	try {
 		let response = await authFetch("/api/auth/me");
