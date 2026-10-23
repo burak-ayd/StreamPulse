@@ -1780,6 +1780,7 @@ export async function markEpisodesWatched(content, marks = [], options = {}) {
 	try {
 		const titleLower = (seriesTitle || "").toLowerCase().trim();
 		const current = continueBefore.find((i) => {
+			if (plugin && i?.plugin && i.plugin !== plugin) return false;
 			if (seriesId && (i.seriesId === seriesId || i.id === seriesId))
 				return true;
 			const t = (i.seriesTitle || i.title || "").toLowerCase().trim();
@@ -1889,13 +1890,15 @@ export async function unmarkEpisodesWatched(content, marks = []) {
 				if (!item || item._deleted) return item;
 
 				const matchesSeries =
-					(seriesId &&
-						(item.seriesId === seriesId || item.id === seriesId)) ||
-					(titleLower &&
-						(item.seriesTitle || "").toLowerCase().trim() ===
-							titleLower) ||
-					(titleLower &&
-						(item.title || "").toLowerCase().trim() === titleLower);
+					(!plugin || !item?.plugin || item.plugin === plugin) && (
+						(seriesId &&
+							(item.seriesId === seriesId || item.id === seriesId)) ||
+						(titleLower &&
+							(item.seriesTitle || "").toLowerCase().trim() ===
+								titleLower) ||
+						(titleLower &&
+							(item.title || "").toLowerCase().trim() === titleLower)
+					);
 				if (!matchesSeries) return item;
 
 				const isEpisode =
@@ -1978,8 +1981,17 @@ export async function getContentWatchProgress(content) {
 		]);
 
 		if (isSeries) {
+			// Eklenti (plugin) kapsamı: aynı başlığa sahip farklı eklentilerin
+			// izleme durumu birbirine karışmasın.
+			const plugin = content?.plugin || null;
+			const matchesPlugin = (item) => {
+				if (!plugin || !item?.plugin) return true;
+				return item.plugin === plugin;
+			};
+
 			// 1. Dizi için devam eden bölüm var mı kontrol et
 			const continueEpisode = continueList.find((item) => {
+				if (!matchesPlugin(item)) return false;
 				if (item.seriesId && (item.seriesId === contentId || item.seriesId === contentUrl)) return true;
 				if (item.id && (item.id === contentId || item.id === contentUrl)) return true;
 				if (contentTitle && item.seriesTitle && item.seriesTitle.toLowerCase().trim() === contentTitle) return true;
@@ -2006,6 +2018,7 @@ export async function getContentWatchProgress(content) {
 			const completedEpisodes = watchHistory.filter((item) => {
 				const isComp = item.isCompleted || (item.progress && item.progress >= 0.9);
 				if (!isComp) return false;
+				if (!matchesPlugin(item)) return false;
 				const matches =
 					(contentId && (item.seriesId === contentId || item.id === contentId)) ||
 					(contentUrl && (item.seriesId === contentUrl || item.url === contentUrl)) ||
@@ -2014,47 +2027,111 @@ export async function getContentWatchProgress(content) {
 				return Boolean(matches);
 			});
 
-			if (completedEpisodes.length > 0) {
-				// Toplam bölüm sayısını hesapla
-				let totalEp = 0;
-				if (content?.seasons && typeof content.seasons === "object" && !Array.isArray(content.seasons)) {
-					totalEp = Object.values(content.seasons).reduce(
-						(acc, list) => acc + (Array.isArray(list) ? list.length : 0),
-						0,
+			// Tüm bölümleri düz listeye çevir (sezon + bölüm sıralı)
+			const allEpisodes = [];
+			const pushEps = (list, seasonKey) => {
+				if (!Array.isArray(list)) return;
+				list.forEach((ep, index) => {
+					const epNumber = ep.episode || ep.episode_number || index + 1;
+					const sNum = Number(ep.season || ep.season_number || seasonKey);
+					allEpisodes.push({
+						season: Number.isFinite(sNum) ? sNum : Number(seasonKey) || 1,
+						episode: Number(epNumber) || epNumber,
+						url: ep.url || null,
+						id: ep.id || null,
+						title: ep.title || null,
+					});
+				});
+			};
+			if (content?.seasons && typeof content.seasons === "object" && !Array.isArray(content.seasons)) {
+				Object.entries(content.seasons).forEach(([sKey, list]) =>
+					pushEps(list, sKey),
+				);
+			} else if (Array.isArray(content?.seasons)) {
+				content.seasons.forEach((seasonObj, sIdx) => {
+					const sKey =
+						seasonObj?.season || seasonObj?.season_number || sIdx + 1;
+					pushEps(
+						Array.isArray(seasonObj?.episodes)
+							? seasonObj.episodes
+							: seasonObj?.items,
+						sKey,
 					);
-				}
-				if (!totalEp && completedEpisodes[0]?.totalEpisodes) {
-					totalEp = completedEpisodes[0].totalEpisodes;
-				}
+				});
+			}
+			if (allEpisodes.length === 0 && Array.isArray(content?.episodes)) {
+				pushEps(content.episodes, 1);
+			}
+			allEpisodes.sort((a, b) => {
+				if (a.season !== b.season) return a.season - b.season;
+				return (Number(a.episode) || 0) - (Number(b.episode) || 0);
+			});
 
-				// Eğer tüm bölümler bittiyse -> completed
-				if (totalEp > 0 && completedEpisodes.length >= totalEp) {
-					return {
-						status: "completed",
-						completedCount: completedEpisodes.length,
-						totalEpisodes: totalEp,
-						progress: 1.0,
-					};
+			const completedSet = new Set(
+				completedEpisodes.map((c) => {
+					if (c.season && c.episode)
+						return `s${Number(c.season)}_e${Number(c.episode)}`;
+					if (c.url) return `url:${c.url}`;
+					if (c.id) return `id:${c.id}`;
+					return null;
+				}).filter(Boolean),
+			);
+			const isCompletedEp = (ep) => {
+				if (completedSet.has(`s${ep.season}_e${ep.episode}`)) return true;
+				if (ep.url && completedSet.has(`url:${ep.url}`)) return true;
+				if (ep.id && completedSet.has(`id:${ep.id}`)) return true;
+				return false;
+			};
+
+			// Toplam bölüm sayısı
+			let totalEp = allEpisodes.length;
+			if (!totalEp && content?.seasons && typeof content.seasons === "object" && !Array.isArray(content.seasons)) {
+				totalEp = Object.values(content.seasons).reduce(
+					(acc, list) => acc + (Array.isArray(list) ? list.length : 0),
+					0,
+				);
+			}
+			if (!totalEp && completedEpisodes[0]?.totalEpisodes) {
+				totalEp = completedEpisodes[0].totalEpisodes;
+			}
+
+			// Yeni sezon / sonraki bölüm tespiti: tamamlanmamış ilk bölümü bul
+			const nextUnwatched = allEpisodes.find((ep) => !isCompletedEp(ep));
+
+			// Hiç izleme yoksa not_started (UI "Oynat" gösterir).
+			if (completedEpisodes.length === 0) {
+				return { status: "not_started" };
+			}
+
+			if (nextUnwatched) {
+				// Eğer tamamlanan bölüm yoksa not_started (ama yine de ilk bölümü öner)
+				if (completedEpisodes.length === 0 && !continueEpisode) {
+					// Hiç izleme yok; varsayılan ilk bölüm zaten UI'da seçili
 				}
-
-				// Henüz tümü bitmedi ama tamamlanan bölümler var -> in_progress (son izlenen bölüm bilgisi)
-				const latestWatched = [...completedEpisodes].sort(
-					(a, b) =>
-						new Date(b.watchedAt || 0).getTime() -
-						new Date(a.watchedAt || 0).getTime(),
-				)[0];
-
 				return {
 					status: "in_progress",
-					hasCompletedEpisodes: true,
+					hasCompletedEpisodes: completedEpisodes.length > 0,
 					completedCount: completedEpisodes.length,
 					totalEpisodes: totalEp,
-					season: latestWatched?.season,
-					episode: latestWatched?.episode,
-					episodeTitle: latestWatched?.episodeTitle,
-					url: latestWatched?.url,
+					season: nextUnwatched.season,
+					episode: nextUnwatched.episode,
+					episodeTitle: nextUnwatched.title,
+					url: nextUnwatched.url,
 					currentTime: 0,
-					progress: totalEp > 0 ? completedEpisodes.length / totalEp : 0,
+					progress:
+						totalEp > 0
+							? completedEpisodes.length / totalEp
+							: 0,
+				};
+			}
+
+			// Tüm bölümler tamamlandı
+			if (totalEp > 0) {
+				return {
+					status: "completed",
+					completedCount: completedEpisodes.length,
+					totalEpisodes: totalEp,
+					progress: 1.0,
 				};
 			}
 
@@ -2113,7 +2190,7 @@ export async function getContentWatchProgress(content) {
  * @param {string} seriesTitle - Dizi Adı
  * @returns {Promise<Object>} { [urlOrKey]: { status: 'completed'|'in_progress', currentTime, duration, progress } }
  */
-export async function getSeriesEpisodesProgress(seriesId, seriesTitle) {
+export async function getSeriesEpisodesProgress(seriesId, seriesTitle, plugin = null) {
 	try {
 		const [continueList, watchHistory] = await Promise.all([
 			getContinueWatching(),

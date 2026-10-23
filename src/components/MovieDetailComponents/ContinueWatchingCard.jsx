@@ -127,20 +127,21 @@ export default function ContinueWatchingCard({
 				? content.runtime_minutes * 60
 				: 0;
 
-	let progressPercent = 12;
-	if (duration > 0) {
+	let progressPercent = 0;
+	if (duration > 0 && currentTime > 0) {
 		const pct = Math.round((currentTime / duration) * 100);
-		progressPercent = Math.min(100, Math.max(1, pct));
-	} else if (watchProgress?.progress) {
+		progressPercent = Math.min(100, Math.max(0, pct));
+	} else if (watchProgress?.progress && watchProgress.progress > 0) {
 		progressPercent = Math.min(
 			100,
-			Math.max(1, Math.round(watchProgress.progress * 100)),
+			Math.max(0, Math.round(watchProgress.progress * 100)),
 		);
 	}
 
 	// Kalan süre ve geçerli dakika
-	const currentMinute = Math.max(1, Math.floor(currentTime / 60));
-	let subtitleText = `${currentMinute}. dakika izlendi`;
+	const currentMinute = Math.floor(currentTime / 60);
+	let subtitleText =
+		currentTime > 0 ? `${currentMinute}. dakika izlendi` : "Henüz başlanmadı";
 	if (duration > 0 && duration > currentTime) {
 		const remainingSecs = Math.max(0, duration - currentTime);
 		const remHours = Math.floor(remainingSecs / 3600);
@@ -316,7 +317,7 @@ export default function ContinueWatchingCard({
 							style={[
 								styles.progressFill,
 								{
-									width: `${Math.min(100, Math.max(4, progressPercent))}%`,
+									width: `${Math.min(100, Math.max(0, progressPercent))}%`,
 								},
 							]}>
 							{/* Gösterge Noktası */}

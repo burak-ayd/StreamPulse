@@ -22,6 +22,8 @@ import {
 } from "react";
 import { Alert } from "react-native";
 import { appUpdateConfig, getUpdateManager } from "@/services/appUpdate";
+import * as Updates from "expo-updates";
+import Constants from "expo-constants";
 
 const AppUpdateContext = createContext(null);
 

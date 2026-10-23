@@ -446,7 +446,7 @@ export default function MovieDetailsScreen() {
 			);
 
 		if (isSeries) {
-			getSeriesEpisodesProgress(content.id || content.url, content.title)
+			getSeriesEpisodesProgress(content.id || content.url, content.title, content.plugin || pluginName)
 				.then((res) => {
 					if (isMounted) setEpisodesProgress(res || {});
 				})
@@ -610,6 +610,17 @@ export default function MovieDetailsScreen() {
 		const ilk = otomatikBolum?.sezon ?? passedMovie?.initialSeason;
 		return ilk != null ? String(ilk) : null;
 	});
+
+	// Dizi detayında seçili sezon: en son izlenen sezondan devam et.
+	// Yeni sezon gelmişse ve önceki sezonlar tamamlanmışsa getContentWatchProgress
+	// zaten yeni sezonun ilk bölümünü döndürür; burada onu seçili yaparız.
+	useEffect(() => {
+		if (!isSeries || !watchProgress) return;
+		const s = watchProgress.season ?? watchProgress.continueItem?.season;
+		if (s != null) {
+			setSelectedSeason(String(s));
+		}
+	}, [isSeries, watchProgress]);
 
 	// Bölüm seçim modu / işlem menüsü durumunu geri tuşunda kapatabilmek
 	// için SeasonsSection referansı (bkz. aşağıdaki BackHandler).
