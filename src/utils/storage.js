@@ -2198,14 +2198,19 @@ export async function getSeriesEpisodesProgress(seriesId, seriesTitle, plugin = 
 		]);
 
 		const titleLower = (seriesTitle || "").toLowerCase().trim();
+		// Eklenti kapsamı: aynı başlıklı farklı eklentilerin (ör. HDfilmcehennemi
+		// vs Filmmakinesi "Shogun") ilerlemesi birbirine karışmasın.
+		const matchesPlugin = (item) =>
+			!plugin || !item?.plugin || item.plugin === plugin;
 		const result = {};
 
 		// 1. Tamamlanan bölümler (Watch History)
 		watchHistory.forEach((item) => {
 			const matchesSeries =
-				(seriesId && (item.seriesId === seriesId || item.id === seriesId)) ||
+				matchesPlugin(item) &&
+				((seriesId && (item.seriesId === seriesId || item.id === seriesId)) ||
 				(titleLower && item.seriesTitle?.toLowerCase().trim() === titleLower) ||
-				(titleLower && item.title?.toLowerCase().trim() === titleLower);
+				(titleLower && item.title?.toLowerCase().trim() === titleLower));
 
 			if (matchesSeries && (item.isCompleted || (item.progress && item.progress >= 0.9))) {
 				const info = {
@@ -2228,9 +2233,10 @@ export async function getSeriesEpisodesProgress(seriesId, seriesTitle, plugin = 
 		// 2. Devam eden bölümler (Continue Watching) - en güncel durumu yansıtır
 		continueList.forEach((item) => {
 			const matchesSeries =
-				(seriesId && (item.seriesId === seriesId || item.id === seriesId)) ||
+				matchesPlugin(item) &&
+				((seriesId && (item.seriesId === seriesId || item.id === seriesId)) ||
 				(titleLower && item.seriesTitle?.toLowerCase().trim() === titleLower) ||
-				(titleLower && item.title?.toLowerCase().trim() === titleLower);
+				(titleLower && item.title?.toLowerCase().trim() === titleLower));
 
 			if (matchesSeries) {
 				const info = {
