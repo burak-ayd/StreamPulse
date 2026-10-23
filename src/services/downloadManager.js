@@ -19,6 +19,7 @@
  */
 
 import * as FileSystem from "expo-file-system/legacy";
+import { File as ExpoFile, FileMode } from "expo-file-system";
 import {
 	deleteDownloadItem,
 	getDownloadSettings,
@@ -128,10 +129,10 @@ export function buildDownloadFileName(item) {
 	return safeTitle || generateDownloadId();
 }
 
-/** İndirme öğesinin varış yolunu (dosya adıyla) döndürür. */
-export function buildDownloadTargetPath(item, settings) {
+/** İndirme öğesinin varış yolunu (dosya adı + uzantıyla) döndürür. */
+export function buildDownloadTargetPath(item, settings, ext = "mp4") {
 	const dir = resolveBaseDirectory(settings.downloadPath);
-	const fileName = `${buildDownloadFileName(item)}.mp4`;
+	const fileName = `${buildDownloadFileName(item)}.${ext}`;
 	return `${dir.full}${fileName}`;
 }
 
@@ -208,16 +209,238 @@ function classifyError(err) {
 }
 
 /**
- * URL'nin desteklenen doğrudan indirme olduğunu (HLS değil) kontrol eder.
+ * URL'nin HLS/M3U8 oynat listesi mi (plan §11)?
  */
-function isDirectMediaUrl(url) {
-	return !(
+function isHlsUrl(url) {
+	return (
 		(url || "").includes(".m3u8") ||
 		(url || "").includes("/hls/") ||
 		(url || "").includes("/hls2/") ||
 		(url || "").includes(".urlset") ||
 		(url || "").includes("master.txt")
 	);
+}
+
+// ── HLS indirme (Faz 5, madde 11) ───────────────────────────────────
+//
+// Bu eklenti ekosisteminde kaynakların çoğu HLS (api.js'in tespitine
+// göre rapidvid/close/rapidrame vb. hepsi m3u8). Cihaz testi gösterdi
+// ki MP4-only indirme pratikte hiçbir içeriği indirilemez bırakıyor
+// (örn. Lupin S4E1: tek kaynak Rapidrame m3u8). Bu yüzden HLS desteği
+// zorunlu hale geldi — Ruling: plan §11 "HLS ayrı çalışma" önerisi
+// cihaz testi ile aşılır.
+//
+// Yöntem: master playlist → en yüksek bant genişlikli varyant → media
+// playlist → segmentler sırayla fetch edilip FileMode.Append ile tek
+// dosyaya yazılır. TS segmentleri concat-by-design olduğu için birleşik
+// dosya ExoPlayer'da oynatılır (fMP4: init + parçalar, .mp4 olarak).
+// Şifreli (AES-128) akışlar `HLS_ENCRYPTED` ile pas geçilir.
+
+/** Metin isteği + zaman sınırı. */
+async function fetchText(url, headers, timeoutMs = 30000) {
+	const kontrol = new AbortController();
+	const zaman = setTimeout(() => kontrol.abort(), timeoutMs);
+	try {
+		const res = await fetch(url, { headers, signal: kontrol.signal });
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		return await res.text();
+	} finally {
+		clearTimeout(zaman);
+	}
+}
+
+/** Base URL'e göre göreli oynat listesi adresini çözer. */
+function resolveUrl(base, rel) {
+	const relative = String(rel || "").trim();
+	if (!relative) return base;
+	if (/^https?:/i.test(relative)) return relative;
+	if (relative.startsWith("/")) {
+		const m = base.match(/^https?:\/\/[^/]+/);
+		return m ? `${m[0]}${relative}` : relative;
+	}
+	return `${base.replace(/[^/]*$/, "")}${relative}`;
+}
+
+/** Master playlist'ten varyantları (bant genişliği + çözünürlük) çıkarır. */
+function parseMasterPlaylist(text, baseUrl) {
+	const lines = text.split(/\r?\n/);
+	const variants = [];
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i].trim();
+		if (!line.startsWith("#EXT-X-STREAM-INF")) continue;
+		const bandwidth = Number((line.match(/BANDWIDTH=(\d+)/) || [])[1] || 0);
+		const resolution = (line.match(/RESOLUTION=(\d+x\d+)/) || [])[1] || null;
+		let j = i + 1;
+		while (
+			j < lines.length &&
+			(!lines[j].trim() || lines[j].trim().startsWith("#"))
+		) {
+			j++;
+		}
+		if (j < lines.length) {
+			variants.push({
+				url: resolveUrl(baseUrl, lines[j]),
+				bandwidth,
+				resolution,
+			});
+		}
+	}
+	return variants;
+}
+
+/** Media playlist'ten segmentleri + şifre/format bilgilerini çıkarır. */
+function parseMediaPlaylist(text, baseUrl) {
+	const segments = [];
+	let encrypted = false;
+	let isFmp4 = false;
+	let totalDuration = 0;
+	let pendingByterange = null;
+	for (const raw of text.split(/\r?\n/)) {
+		const line = raw.trim();
+		if (!line) continue;
+		if (line.startsWith("#EXT-X-KEY")) {
+			const method = (line.match(/METHOD=([A-Za-z0-9-]+)/) || [])[1] || "NONE";
+			if (method !== "NONE") encrypted = true;
+		} else if (line.startsWith("#EXT-X-MAP")) {
+			isFmp4 = true;
+			const uriM = line.match(/URI="([^"]+)"/);
+			if (uriM) {
+				segments.push({ url: resolveUrl(baseUrl, uriM[1]), init: true });
+			}
+		} else if (line.startsWith("#EXTINF")) {
+			totalDuration += parseFloat(
+				(line.match(/#EXTINF:([\d.]+)/) || [])[1] || "0",
+			);
+		} else if (line.startsWith("#EXT-X-BYTERANGE")) {
+			const m = line.match(/#EXT-X-BYTERANGE:(\d+)(?:@(\d+))?/);
+			if (m) {
+				pendingByterange = {
+					length: Number(m[1]),
+					start: m[2] !== undefined ? Number(m[2]) : null,
+				};
+			}
+		} else if (!line.startsWith("#")) {
+			const seg = { url: resolveUrl(baseUrl, line) };
+			if (pendingByterange) {
+				seg.byterange = pendingByterange;
+				pendingByterange = null;
+			}
+			segments.push(seg);
+		}
+	}
+	return { segments, encrypted, isFmp4, totalDuration };
+}
+
+/** Tek segmentin içeriğini byte dizisi olarak indirir. */
+async function fetchSegment(segment, headers) {
+	const kontrol = new AbortController();
+	const zaman = setTimeout(() => kontrol.abort(), 90000);
+	try {
+		const h = { ...headers };
+		if (segment.byterange && segment.byterange.start >= 0) {
+			const s = segment.byterange.start;
+			h.Range = `bytes=${s}-${s + segment.byterange.length - 1}`;
+		}
+		const res = await fetch(segment.url, { headers: h, signal: kontrol.signal });
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		return await res.arrayBuffer();
+	} finally {
+		clearTimeout(zaman);
+	}
+}
+
+/**
+ * HLS akışını segment segment indirip tek dosyada birleştirir.
+ * Duraklatma: segment sınırlarında (`_hlsState.nextSegmentIndex`),
+ * devam: Append modunda kaldığı segmentten.
+ * @returns {Promise<{ext: string}>} tamamlanan dosyanın uzantısı
+ */
+async function runHlsDownload(item) {
+	const headers = item.sourceHeaders || {};
+
+	// 1) Master → en iyi varyant
+	let mediaUrl = item.sourceUrl;
+	let bestBandwidth = 0;
+	const masterText = await fetchText(item.sourceUrl, headers);
+	if (masterText.includes("#EXT-X-STREAM-INF")) {
+		const variants = parseMasterPlaylist(masterText, item.sourceUrl);
+		if (variants.length) {
+			const best = variants.reduce((a, b) =>
+				b.bandwidth > a.bandwidth ? b : a,
+			);
+			mediaUrl = best.url;
+			bestBandwidth = best.bandwidth;
+		}
+	}
+
+	// 2) Media playlist
+	const mediaText = await fetchText(mediaUrl, headers);
+	const { segments, encrypted, isFmp4, totalDuration } =
+		parseMediaPlaylist(mediaText, mediaUrl);
+	if (!segments.length) {
+		throw new Error("HLS oynat listesinde segment bulunamadı");
+	}
+	if (encrypted) {
+		const err = new Error(
+			"Bu akış şifreli (AES-128); şifreli HLS indirme desteklenmiyor.",
+		);
+		err.errorCode = "HLS_ENCRYPTED";
+		throw err;
+	}
+
+	// 3) Toplam boyut tahmini (bant genişliği × süre); yoksa segment sayısıyla
+	const estimate = bestBandwidth > 0 ? bestBandwidth * totalDuration : 0;
+
+	const base = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+	const tempUri = `${base}${TEMP_DIR_NAME}/${item.id}.part`;
+
+	const outFile = new ExpoFile(tempUri);
+	const startIdx = item._hlsState?.nextSegmentIndex || 0;
+	const handle = startIdx
+		? outFile.open(FileMode.Append)
+		: outFile.open(FileMode.Truncate);
+	// Retry'da kaldığı segment (catch bloğunda da görünmesi için try dışında)
+	let current = startIdx;
+
+	try {
+		let written = startIdx ? item.downloadedBytes || 0 : 0;
+		item.totalBytes = estimate;
+		for (let i = startIdx; i < segments.length; i++) {
+			// Duraklat/iptal: segment sınırında kontrol — status manager'da
+			// değiştirilmiştir; döngü burada durur, durum persist edilir.
+			if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) {
+				item._hlsState = { nextSegmentIndex: i };
+				await persist(item, { force: true });
+				return;
+			}
+			const buf = await fetchSegment(segments[i], headers);
+			handle.writeBytes(new Uint8Array(buf));
+			written += buf.byteLength;
+			item.downloadedBytes = written;
+			item.progress =
+				estimate > 0
+					? Math.min(0.99, written / estimate)
+					: (i + 1) / segments.length;
+			item.resumable = true;
+			item.lastResumeOffset = written;
+			emitProgress(item);
+			await persist(item);
+		}
+		item._hlsState = { nextSegmentIndex: current };
+	} catch (err) {
+		// Retry yolunda kaldığı segmenti hatırla: devam Append ile o segmenti
+		// yeniden indirip ekler (yarım yazılmış kuyruk segmenti kabul edilir).
+		item._hlsState = { nextSegmentIndex: current };
+		throw err;
+	} finally {
+		try {
+			handle.close();
+		} catch (_e) {
+			/* handle zaten kapalıysa sorun değil */
+		}
+	}
+
+	return { ext: isFmp4 ? "mp4" : "ts" };
 }
 
 // ── Kuyruk çalıştırma ───────────────────────────────────────────────
@@ -247,6 +470,9 @@ function pump() {
 /**
  * Tek bir indirmeyi başlatır/durdurur (mevcut durumdan itibaren).
  * Ayrı async akış; hataları öğeye yazar, dışarı fırlatmaz.
+ *
+ * Dallanma: HLS/M3U8 → segment indirme döngüsü (`runHlsDownload`);
+ * düz URL → DownloadResumable (HTTP Range ile duraklat/devam).
  */
 async function runDownload(item) {
 	if (!initialized) {
@@ -257,16 +483,7 @@ async function runDownload(item) {
 		return;
 	}
 
-	// HLS desteklenmiyor (plan §11): kullanıcıya anlamlı bir hata göster.
-	if (!isDirectMediaUrl(item.sourceUrl)) {
-		setStatus(item, DOWNLOAD_STATUS.FAILED, {
-			error: "Bu kaynak HLS/M3U8 akışı; doğrudan indirme henüz desteklenmiyor.",
-			errorCode: "HLS_UNSUPPORTED",
-		});
-		await persist(item, { force: true });
-		pump();
-		return;
-	}
+	const isHls = isHlsUrl(item.sourceUrl);
 
 	setStatus(item, DOWNLOAD_STATUS.DOWNLOADING);
 	await persist(item, { force: true });
@@ -279,51 +496,65 @@ async function runDownload(item) {
 		const tempUri = `${tempDir}${item.id}.part`;
 
 		const settings = await getDownloadSettings();
-		const targetPath = buildDownloadTargetPath(item, settings);
 
-		let resumable = resumables.get(item.id);
-		if (!resumable) {
-			// Uygulama yeniden açılıp "paused"ten gelen kayıt resumeData taşır.
-			const savedState = item._resumableState || null;
-			resumable = FileSystem.createDownloadResumable(
-				item.sourceUrl,
-				tempUri,
-				{ headers: item.sourceHeaders || {} },
-				(progress) => handleProgress(item, progress),
-				savedState?.resumeData || null,
-			);
+		let ext = "mp4";
+		if (isHls) {
+			const hlsResult = await runHlsDownload(item);
+			// Segment sınırında duraklatıldı/iptal edildi: döngü temiz döndü.
+			if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) {
+				if (item.status === DOWNLOAD_STATUS.CANCELLED) {
+					await FileSystem.deleteAsync(tempUri, { idempotent: true }).catch(() => {});
+				}
+				pump();
+				return;
+			}
+			ext = hlsResult?.ext || "ts";
+		} else {
+			let resumable = resumables.get(item.id);
+			if (!resumable) {
+				// Uygulama yeniden açılıp "paused"ten gelen kayıt resumeData taşır.
+				const savedState = item._resumableState || null;
+				resumable = FileSystem.createDownloadResumable(
+					item.sourceUrl,
+					tempUri,
+					{ headers: item.sourceHeaders || {} },
+					(progress) => handleProgress(item, progress),
+					savedState?.resumeData || null,
+				);
+			}
+			resumables.set(item.id, resumable);
+
+			// ⚠️ Yarış koruması: resumable haritaya girilecek ile downloadAsync
+			// başlayacak arasında pause/cancel tetiklendi ise indirmeyi HİÇ
+			// başlatma — "hayalet indirme" bırakırdı (UI duraklatılmış gösterirken
+			// dosya arka planda büyürdü).
+			if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) {
+				resumables.delete(item.id);
+				return;
+			}
+
+			const result = await resumable.downloadAsync();
+			if (!result?.uri) {
+				throw new Error("İndirme sonucu alınamadı (boş uri)");
+			}
 		}
-		resumables.set(item.id, resumable);
 
-		// ⚠️ Yarış koruması: resumable haritaya girilecek ile downloadAsync
-		// başlayacak arasında pause/cancel tetiklendi ise indirmeyi HİÇ
-		// başlatma — "hayalet indirme" bırakırdı (UI duraklatılmış gösterirken
-		// dosya arka planda büyürdü).
-		if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) {
-			resumables.delete(item.id);
-			return;
-		}
-
-		const result = await resumable.downloadAsync();
-		if (!result?.uri) {
-			throw new Error("İndirme sonucu alınamadı (boş uri)");
-		}
-
-		// Varış klasörünü hazırla ve dosyayı taşı
+		// Varış yolunu (gerçek uzantıyla) hazırla ve dosyayı taşı
+		const targetPath = buildDownloadTargetPath(item, settings, ext);
 		const targetDir = targetPath.substring(0, targetPath.lastIndexOf("/") + 1);
 		await FileSystem.makeDirectoryAsync(targetDir, { intermediates: true }).catch(() => {});
 		try {
-			await FileSystem.moveAsync({ from: result.uri, to: targetPath });
+			await FileSystem.moveAsync({ from: tempUri, to: targetPath });
 		} catch (moveErr) {
 			// Aynı isimde tamamlanmış dosya varsa üzerine yaz (yeniden indirme)
 			void moveErr;
 			await FileSystem.deleteAsync(targetPath, { idempotent: true }).catch(() => {});
-			await FileSystem.moveAsync({ from: result.uri, to: targetPath });
+			await FileSystem.moveAsync({ from: tempUri, to: targetPath });
 		}
 
 		// Altyazı (varsa ve istendiyse): aynı adla .srt
 		if (item.subtitleUrl && item.downloadSubtitle !== false) {
-			const subtitlePath = targetPath.replace(/\.mp4$/, ".srt");
+			const subtitlePath = targetPath.replace(/\.[a-z0-9]+$/i, ".srt");
 			try {
 				const subResult = await FileSystem.downloadAsync(
 					item.subtitleUrl,
@@ -342,6 +573,7 @@ async function runDownload(item) {
 			resumable: true,
 			lastResumeOffset: 0,
 			_resumableState: null,
+			_hlsState: null,
 		});
 		await persist(item, { force: true });
 		pump();
@@ -367,7 +599,7 @@ async function runDownload(item) {
 		} else {
 			setStatus(item, DOWNLOAD_STATUS.FAILED, {
 				error: err?.message || "İndirme başarısız",
-				errorCode: classifyError(err),
+				errorCode: err?.errorCode || classifyError(err),
 			});
 			await persist(item, { force: true });
 			pump();

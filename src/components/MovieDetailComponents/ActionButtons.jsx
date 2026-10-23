@@ -274,7 +274,7 @@ export default function ActionButtons({
 			extractVideoSources(targetUrl),
 		]);
 		const usable = (Array.isArray(sources) ? sources : []).filter(
-			(s) => s?.result?.url && s?.result?.is_hls !== true,
+			(s) => Boolean(s?.result?.url),
 		);
 		const chosen =
 			(pref?.preferredSource &&

@@ -230,9 +230,7 @@ export default function DownloadConfigModal({
 		</View>
 	);
 
-	const hasDirectSource = sources.some(
-		(s) => s?.result?.url && s?.result?.is_hls !== true,
-	);
+	const hasDirectSource = sources.some((s) => Boolean(s?.result?.url));
 
 	return (
 		<Modal
@@ -288,9 +286,9 @@ export default function DownloadConfigModal({
 									return renderOptionRow({
 										key: `src-${idx}`,
 										label: sourceLabel(s),
-										note: isHls ? "HLS akışı — doğrudan indirme desteklenmiyor" : null,
+										note: isHls ? "HLS akışı — segment segment indirilir" : null,
 										selected: idx === selectedSourceIdx,
-										disabled: isHls || !s?.result?.url,
+										disabled: !s?.result?.url,
 										onPress: () => {
 											setSelectedSourceIdx(idx);
 											setSelectedSubtitleIdx(-1);
@@ -385,7 +383,7 @@ export default function DownloadConfigModal({
 const styles = StyleSheet.create({
 	backdrop: { flex: 1, justifyContent: "flex-end" },
 	sheet: {
-		maxHeight: "88%",
+		height: "88%",
 		borderTopLeftRadius: 20,
 		borderTopRightRadius: 20,
 		borderWidth: 1,
