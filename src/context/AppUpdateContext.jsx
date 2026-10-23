@@ -59,6 +59,13 @@ export function AppUpdateProvider({ children }) {
 
 	const managerRef = useRef(null);
 
+	// `check`in "güncel" mesajı güncel durum değerini okumalı; state'i
+	// bağımlılığa almak `check`i her sürüm değişiminde yeniden kurar.
+	const currentVersionRef = useRef(currentVersion);
+	useEffect(() => {
+		currentVersionRef.current = currentVersion;
+	}, [currentVersion]);
+
 	const check = useCallback(async ({ manual = false } = {}) => {
 		const manager = managerRef.current;
 		if (!manager) return;
@@ -70,7 +77,12 @@ export function AppUpdateProvider({ children }) {
 
 		const result = await manager.checkForUpdate();
 
-		if (result.currentVersion) setCurrentVersion(result.currentVersion);
+		// ⚠️ `result.currentVersion` NATİVE APK'nın versionName'idir; OTA ile
+		// güncellenmiş bir JS, eski bir APK üstünde çalışıyorsa bu değer bayat
+		// kalır (kullanıcı: ayarlarda v1.0.37 görünüyor, sürüm 1.0.46).
+		// Gösterilen sürüm ÇALIŞAN JS'in sürümü olmalıdır — o da OTA
+		// manifestindeki / app.json'daki sürümdür ve başlangıçta zaten
+		// yazıldı. Native değeri EZMEZ.
 
 		switch (result.status) {
 			case "update-available":
@@ -89,7 +101,7 @@ export function AppUpdateProvider({ children }) {
 				if (manual) {
 					setSheetVisible(true);
 					setStatusMessage(
-						`Uygulamanız güncel (v${result.currentVersion}).`
+						`Uygulamanız güncel (v${currentVersionRef.current}).`
 					);
 				}
 				break;
