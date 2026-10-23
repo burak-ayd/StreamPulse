@@ -30,3 +30,7 @@ Final: minor (deferred): yerel file:// altyazi useSubtitles fetch'inde yuklenmey
 Final: minor (deferred): initialize() pausedAt/emitStatus yazilmiyor; retry yolu resumeData kaydetmiyor; emitProgress UI tick throttle'siz
 Final: minor (deferred): enqueue tekillestirme yarisi (iki ekran senaryosu)
 Final: minor (deferred): maxConnectionsPerDownload ayari manager'da islevsiz (ileriki faz)
+
+Final: fixed minor queued-Duraklat no-op — manager pause() artik QUEUED'i de duraklatir
+Final: fixed minor yerel file:// altyazi — useSubtitles file:// icin expo-file-system readAsStringAsync kullanir
+Final: fixed minor initialize() pausedAt dolduruyor; maxConnectionsPerDownload satirina "ileriki faz" notu

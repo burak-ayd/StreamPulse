@@ -407,9 +407,11 @@ async function initialize() {
 		const item = { ...raw };
 		if (item.status === DOWNLOAD_STATUS.DOWNLOADING) {
 			item.status = DOWNLOAD_STATUS.PAUSED;
+			item.pausedAt = new Date().toISOString();
 		}
 		if (item.status === DOWNLOAD_STATUS.QUEUED) {
 			item.status = DOWNLOAD_STATUS.PAUSED;
+			item.pausedAt = new Date().toISOString();
 		}
 		items.set(item.id, item);
 		runtime.set(item.id, {
@@ -505,10 +507,23 @@ function getItem(downloadId) {
  * `savable()` çağırmak daima boş resumeData üretir → devam sıfırdan
  * indirme olurdu. Bu yüzden: 1) pauseAsync bekle → 2) dönen savable
  * durumunu öğeye yaz → 3) o zaman PAUSED'a geç.
+ *
+ * "Sırada" (queued) öğede de duraklatma anlamlıdır: indirme hiç başlamadı,
+ * o yüzden yalnızca durum değişir; kuyrukta yer tutan öğe ileri başlasın
+ * diye kullanıcı sırada bekleyeni askıya alabilir.
  */
 async function pause(downloadId) {
 	const item = items.get(downloadId);
 	if (!item) return;
+
+	// Queued: henüz dosya indirmesi başlamadı — resumable yok, sadece durum.
+	if (item.status === DOWNLOAD_STATUS.QUEUED) {
+		setStatus(item, DOWNLOAD_STATUS.PAUSED);
+		await persist(item, { force: true });
+		pump();
+		return;
+	}
+
 	if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) return;
 
 	const resumable = resumables.get(downloadId);
