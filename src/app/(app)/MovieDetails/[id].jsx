@@ -961,6 +961,9 @@ export default function MovieDetailsScreen() {
 								diziBasligi={
 									content?.title || passedMovie?.seriesTitle || null
 								}
+								// Faz 6.3: TMDB dizi durumu — bitmiş dizide kart
+								// vaat yerine "yeni bölüm beklenmiyor" der.
+								diziDurumu={content?.status || null}
 							/>
 						)}
 
