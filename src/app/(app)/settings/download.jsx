@@ -51,8 +51,8 @@ const SUBTITLE_OPTIONS = [
 	{ label: "İngilizce (en)", value: "en" },
 ];
 
-/** Seçenek sayfası ortak satırı: başlık + rozet + açma davranışı. */
-function ValueRow({ colors, icon, iconBg, title, valueText, onPress }) {
+/** Seçenek sayfası ortak satırı: başlık (+alt not) + rozet + açma davranışı. */
+function ValueRow({ colors, icon, iconBg, title, subtitle, valueText, onPress }) {
 	return (
 		<TVPressable
 			style={styles.valueRow}
@@ -63,6 +63,11 @@ function ValueRow({ colors, icon, iconBg, title, valueText, onPress }) {
 			</View>
 			<View style={styles.valueRowText}>
 				<Text style={[styles.valueRowTitle, { color: colors.text }]}>{title}</Text>
+				{subtitle ? (
+					<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
+						{subtitle}
+					</Text>
+				) : null}
 			</View>
 			<Text style={[styles.valueRowValue, { color: colors.primary }]}>
 				{valueText}
@@ -234,6 +239,7 @@ export default function DownloadSettingsScreen() {
 							icon="link-outline"
 							iconBg="#8B5CF6"
 							title="Eş Zamanlı Bağlantı"
+							subtitle="Dosya başına paralel parça indirme — ileriki fazda etkinleşecek"
 							valueText={`${settings.maxConnectionsPerDownload} bağlantı`}
 							onPress={() => openOption("connections")}
 						/>

@@ -241,11 +241,27 @@ export default function useSubtitles({
 	useEffect(() => {
 		if (!selectedSubtitle?.uri) return;
 		let isMounted = true;
-		fetch(selectedSubtitle.uri, { headers: subtitleHeaders })
-			.then((res) => {
-				if (!res.ok) throw new Error("HTTP " + res.status);
-				return res.text();
-			})
+
+		/*
+		 * Yerel altyazı (çevrimdışı oynatma, Faz 5): uri `file://` ise RN
+		 * fetch'in ağ katmanı Android'de bu scheme'i desteklemez → altyazı
+		 * sessizce yüklenmezdi. Dosyayı `expo-file-system` okur ve metni
+		 * aynı ayrıştırıcıya besler.
+		 */
+		const readFileText = async () => {
+			if (selectedSubtitle.uri.startsWith("file://")) {
+				const { readAsStringAsync } =
+					await import("expo-file-system/legacy");
+				return readAsStringAsync(selectedSubtitle.uri);
+			}
+			const res = await fetch(selectedSubtitle.uri, {
+				headers: subtitleHeaders,
+			});
+			if (!res.ok) throw new Error("HTTP " + res.status);
+			return res.text();
+		};
+
+		readFileText()
 			.then((text) => {
 				if (!isMounted) return;
 				setParsedCues(parseSubtitleContent(text));
