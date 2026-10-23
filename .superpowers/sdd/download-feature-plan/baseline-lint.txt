@@ -1,0 +1,279 @@
+
+D:\Projeler\ReactNative\StreamPulse\src\app\(app)\MovieDetails\[id].jsx
+  460:5  warning  React Hook useCallback has a missing dependency: 'pluginName'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     react-hooks/exhaustive-deps
+  621:4  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  619 | 		const s = watchProgress.season ?? watchProgress.continueItem?.season;
+  620 | 		if (s != null) {
+> 621 | 			setSelectedSeason(String(s));
+      | 			^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  622 | 		}
+  623 | 	}, [isSeries, watchProgress]);
+  624 |  react-hooks/set-state-in-effect
+
+D:\Projeler\ReactNative\StreamPulse\src\app\(app)\discover.jsx
+  7:33  error  Unable to resolve path to module '@context/ThemeContext'  import/no-unresolved
+
+D:\Projeler\ReactNative\StreamPulse\src\app\(app)\search.jsx
+    5:33  error  Unable to resolve path to module '@context/ThemeContext'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          import/no-unresolved
+  383:3   error  Error: Cannot reassign variables declared outside of the component/hook
+
+Variable `isNavigatingToDetail` is declared outside of the component/hook. Reassigning this value during render is a form of side effect, which can cause unpredictable behavior depending on when the component happens to re-render. If this variable is used in rendering, use useState instead. Otherwise, consider updating it in an effect. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#side-effects-must-run-outside-of-render).
+
+  381 | 	// Bu ge├ği┼şte araman─▒n ve scroll konumunun korunmas─▒ i├ğin bayrak i┼şaretlenir.
+  382 | 	const handleItemPress = (item) => {
+> 383 | 		isNavigatingToDetail = true;
+      | 		^^^^^^^^^^^^^^^^^^^^ `isNavigatingToDetail` cannot be reassigned
+  384 |
+  385 | 		const movieWithPlugin = {
+  386 | 			...item,  react-hooks/globals
+  888:9   error  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react/no-unescaped-entities
+  888:29  error  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react/no-unescaped-entities
+  902:9   error  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react/no-unescaped-entities
+  902:29  error  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react/no-unescaped-entities
+
+D:\Projeler\ReactNative\StreamPulse\src\app\(app)\settings\plugins.jsx
+  103:3   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  101 |
+  102 | 	useEffect(() => {
+> 103 | 		loadData();
+      | 		^^^^^^^^ Avoid calling setState() directly within an effect
+  104 | 	}, [loadData]);
+  105 |
+  106 | 	const handleRefresh = () => {  react-hooks/set-state-in-effect
+  429:30  error  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react/no-unescaped-entities
+  429:42  error  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react/no-unescaped-entities
+
+D:\Projeler\ReactNative\StreamPulse\src\app\+not-found.jsx
+  2:8  warning  Using exported name 'TVPressable' as identifier for default import  import/no-named-as-default
+
+D:\Projeler\ReactNative\StreamPulse\src\components\MovieDetailComponents\CastSection.jsx
+  4:33  error  Unable to resolve path to module '@context/ThemeContext'  import/no-unresolved
+
+D:\Projeler\ReactNative\StreamPulse\src\components\MovieDetailComponents\CrewSection.jsx
+  4:33  error  Unable to resolve path to module '@context/ThemeContext'  import/no-unresolved
+
+D:\Projeler\ReactNative\StreamPulse\src\components\MovieDetailComponents\ErrorState.jsx
+  3:8   warning  Using exported name 'TVPressable' as identifier for default import  import/no-named-as-default
+  5:33  error    Unable to resolve path to module '@context/ThemeContext'            import/no-unresolved
+
+D:\Projeler\ReactNative\StreamPulse\src\components\MovieDetailComponents\HeroSection.jsx
+  2:33  error  Unable to resolve path to module '@context/ThemeContext'  import/no-unresolved
+
+D:\Projeler\ReactNative\StreamPulse\src\components\MovieDetailComponents\MetadataSection.jsx
+  1:33  error  Unable to resolve path to module '@context/ThemeContext'  import/no-unresolved
+
+D:\Projeler\ReactNative\StreamPulse\src\components\MovieDetailComponents\OverviewSection.jsx
+  4:33  error  Unable to resolve path to module '@context/ThemeContext'  import/no-unresolved
+
+D:\Projeler\ReactNative\StreamPulse\src\components\MovieDetailComponents\RelatedContent.jsx
+   2:33  error  Unable to resolve path to module '@context/ThemeContext'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        import/no-unresolved
+  36:4   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  34 | 		// E─şer eklentiden gelen benzer i├ğerikler varsa harici API ├ğa─şr─▒s─▒ yapma
+  35 | 		if (hasPluginRelated) {
+> 36 | 			setLoading(false);
+     | 			^^^^^^^^^^ Avoid calling setState() directly within an effect
+  37 | 			return;
+  38 | 		}
+  39 |  react-hooks/set-state-in-effect
+
+D:\Projeler\ReactNative\StreamPulse\src\components\modal\Bottomsheetmodal.jsx
+  115:2   error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  113 |
+  114 | 	const sheetHeightRef = useRef(sheetHeight);
+> 115 | 	sheetHeightRef.current = sheetHeight;
+      | 	^^^^^^^^^^^^^^^^^^^^^^ Cannot update ref during render
+  116 |
+  117 | 	const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  118 | 	const backdropOpacity = useRef(new Animated.Value(0)).current;                                                                                                                                                                                                                                                                                                                       react-hooks/refs
+  117:21  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  115 | 	sheetHeightRef.current = sheetHeight;
+  116 |
+> 117 | 	const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+      | 	                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  118 | 	const backdropOpacity = useRef(new Animated.Value(0)).current;
+  119 | 	const isClosingByGesture = useRef(false);
+  120 | 	const hasOpened = useRef(false);                                                                                                                                                                                                                                   react-hooks/refs
+  117:21  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  115 | 	sheetHeightRef.current = sheetHeight;
+  116 |
+> 117 | 	const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+      | 	                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  118 | 	const backdropOpacity = useRef(new Animated.Value(0)).current;
+  119 | 	const isClosingByGesture = useRef(false);
+  120 | 	const hasOpened = useRef(false);                                                                                                                                                                                                                                   react-hooks/refs
+  117:21  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  115 | 	sheetHeightRef.current = sheetHeight;
+  116 |
+> 117 | 	const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+      | 	                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  118 | 	const backdropOpacity = useRef(new Animated.Value(0)).current;
+  119 | 	const isClosingByGesture = useRef(false);
+  120 | 	const hasOpened = useRef(false);                                                                                                                                                                                                                                   react-hooks/refs
+  117:21  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  115 | 	sheetHeightRef.current = sheetHeight;
+  116 |
+> 117 | 	const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+      | 	                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  118 | 	const backdropOpacity = useRef(new Animated.Value(0)).current;
+  119 | 	const isClosingByGesture = useRef(false);
+  120 | 	const hasOpened = useRef(false);                                                                                                                                                                                                                                   react-hooks/refs
+  117:21  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  115 | 	sheetHeightRef.current = sheetHeight;
+  116 |
+> 117 | 	const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+      | 	                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  118 | 	const backdropOpacity = useRef(new Animated.Value(0)).current;
+  119 | 	const isClosingByGesture = useRef(false);
+  120 | 	const hasOpened = useRef(false);                                                                                                                                                                                                                                   react-hooks/refs
+  229:23  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  227 | 	// yanl─▒┼şl─▒kla devreye girebilirdi.
+  228 | 	const panResponder = useRef(
+> 229 | 		PanResponder.create({
+      | 		                    ^
+> 230 | 			onStartShouldSetPanResponder: () => swipeable && !isTV,
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 231 | 			onMoveShouldSetPanResponder: (_, gs) =>
+      ÔÇĞ
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 287 | 			},
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 288 | 		}),
+      | ^^^^ Passing a ref to a function may read its value during render
+  289 | 	).current;
+  290 |
+  291 | 	if (!visible) return null;  react-hooks/refs
+  305:16  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  303 | 					styles.backdrop,
+  304 | 					{
+> 305 | 						opacity: backdropOpacity.interpolate({
+      | 						         ^^^^^^^^^^^^^^^ Passing a ref to a function may read its value during render
+  306 | 							inputRange: [0, 1],
+  307 | 							outputRange: [0, opacity],
+  308 | 						}),                                                                                                                                                                                                                                                                                                                                                             react-hooks/refs
+  305:16  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  303 | 					styles.backdrop,
+  304 | 					{
+> 305 | 						opacity: backdropOpacity.interpolate({
+      | 						         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Passing a ref to a function may read its value during render
+  306 | 							inputRange: [0, 1],
+  307 | 							outputRange: [0, opacity],
+  308 | 						}),                                                                                                                                                                                                                                                                                                                                                 react-hooks/refs
+  335:10  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  333 | 						{ transform: [{ translateY }] },
+  334 | 					]}
+> 335 | 					{...panResponder.panHandlers}>
+      | 					    ^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  336 | 					{/* Drag handle ÔÇö telefonda var, TV'de anlams─▒z */}
+  337 | 					{handle && !isTV ? (
+  338 | 						<View style={styles.handleContainer}>                                                                                                                                                                                                                                                                                                                react-hooks/refs
+
+D:\Projeler\ReactNative\StreamPulse\src\components\modal\LibraryItemActionModal.jsx
+  151:46  error  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+D:\Projeler\ReactNative\StreamPulse\src\components\modal\QuickPreviewModal.jsx
+  89:4  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  87 | 	useEffect(() => {
+  88 | 		if (!visible || !movie) {
+> 89 | 			setToastInfo(null);
+     | 			^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  90 | 			setShowTrailerPreview(false);
+  91 | 			return;
+  92 | 		}  react-hooks/set-state-in-effect
+
+D:\Projeler\ReactNative\StreamPulse\src\context\AppUpdateContext.jsx
+  36:25  warning  'setCurrentVersion' is assigned a value but never used  no-unused-vars
+
+D:\Projeler\ReactNative\StreamPulse\src\hooks\useContentDetails.js
+  41:4  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  39 | 	useEffect(() => {
+  40 | 		if (contentId) {
+> 41 | 			fetchContent();
+     | 			^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  42 | 		}
+  43 | 	}, [contentId, fetchContent]);
+  44 |  react-hooks/set-state-in-effect
+
+D:\Projeler\ReactNative\StreamPulse\src\hooks\useTVRemote.js
+  14:2  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  12 | export function useTVRemote(handler, enabled = true) {
+  13 | 	const handlerRef = useRef(handler);
+> 14 | 	handlerRef.current = handler;
+     | 	^^^^^^^^^^^^^^^^^^ Cannot update ref during render
+  15 |
+  16 | 	useEffect(() => {
+  17 | 		// Yaln─▒zca TV ortam─▒nda ve aktifken ├ğal─▒┼ş  react-hooks/refs
+
+D:\Projeler\ReactNative\StreamPulse\src\utils\storage.js
+  1893:8   error  'plugin' is not defined  no-undef
+  1893:51  error  'plugin' is not defined  no-undef
+
+Ô£û 39 problems (35 errors, 4 warnings)
+

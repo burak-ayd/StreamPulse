@@ -1,0 +1,4 @@
+modules/screen-control/src/index.ts(28,37): error TS7006: Parameter 'permission' implicitly has an 'any' type.
+modules/screen-control/src/index.ts(38,36): error TS7006: Parameter 'value' implicitly has an 'any' type.
+modules/screen-control/src/index.ts(52,38): error TS7006: Parameter 'value' implicitly has an 'any' type.
+modules/screen-control/src/index.ts(96,39): error TS7006: Parameter 'enabled' implicitly has an 'any' type.
