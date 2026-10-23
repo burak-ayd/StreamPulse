@@ -336,7 +336,11 @@ function parseMediaPlaylist(text, baseUrl) {
 			isFmp4 = true;
 			const uriM = line.match(/URI="([^"]+)"/);
 			if (uriM) {
-				segments.push({ url: resolveUrl(baseUrl, uriM[1]), init: true, duration: 0 });
+				segments.push({
+					url: resolveUrl(baseUrl, uriM[1]),
+					init: true,
+					duration: 0,
+				});
 			}
 		} else if (line.startsWith("#EXTINF")) {
 			currentDur = parseFloat(
@@ -416,11 +420,22 @@ function normalizeHeaders(headers) {
 	return h;
 }
 
-/** Media playlist metnini, segment URI'lerini yerel dosya adlarına çevirerek üretir. */
-function buildLocalMediaPlaylist({ segments, localNames, headerTags }) {
+/**
+ * Media playlist metnini, segment URI'lerini yerel dosya adlarına çevirerek üretir.
+ */
+function buildLocalMediaPlaylist({
+	segments,
+	localNames,
+	headerTags,
+	initName = "init.mp4",
+}) {
 	const out = ["#EXTM3U", ...headerTags];
+	// fMP4 akışları: init segmenti (EXT-X-MAP) yerelde "init.mp4" olarak durur.
+	if (segments.some((s) => s.init)) {
+		out.push(`#EXT-X-MAP:URI="${initName}"`);
+	}
 	segments.forEach((seg, idx) => {
-		if (seg.init) return; // init segment ayrıca ele alınır
+		if (seg.init) return; // init segment playlist'te URI olarak geçmez
 		out.push(`#EXTINF:${seg.duration.toFixed(3)},`);
 		out.push(localNames[idx]);
 	});
@@ -513,16 +528,29 @@ async function runHlsDownload(item) {
 		void e;
 	}
 
-	// 4) İndirilecek işler: video segmentleri + ses segmentleri
+	// 4) İndirilecek işler: init (fMP4) + video segmentleri + ses segmentleri
 	const videoJobs = videoPlaylist.segments
 		.filter((s) => !s.init)
 		.map((seg, idx) => ({ seg, name: `v${String(idx + 1).padStart(5, "0")}.ts` }));
+	const videoInitJobs = videoPlaylist.segments
+		.filter((s) => s.init)
+		.map((seg) => ({ seg, name: "init.mp4" }));
 	const audioJobs = audioPlaylist
 		? audioPlaylist.segments
 				.filter((s) => !s.init)
 				.map((seg, idx) => ({ seg, name: `a${String(idx + 1).padStart(5, "0")}.ts` }))
 		: [];
-	const allJobs = [...videoJobs, ...audioJobs];
+	const audioInitJobs = audioPlaylist
+		? audioPlaylist.segments
+				.filter((s) => s.init)
+				.map((seg) => ({ seg, name: "init-a.mp4" }))
+		: [];
+	const allJobs = [
+		...videoInitJobs,
+		...videoJobs,
+		...audioInitJobs,
+		...audioJobs,
+	];
 
 	// Duraklat/devam: var olan segment dosyaları atlanır (kendini onaran resume)
 	let done = 0;
@@ -605,6 +633,7 @@ async function runHlsDownload(item) {
 			segments: audioPlaylist.segments,
 			localNames: audioNames,
 			headerTags: playlistHeaderTags(audioPlaylistText),
+			initName: "init-a.mp4",
 		});
 		writeTextFile(`${dirUri}audio.m3u8`, audioLocal);
 		masterLines.push(
