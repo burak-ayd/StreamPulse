@@ -1,6 +1,9 @@
 import TVPressable from "@/components/common/TVPressable";
 import DownloadConfigModal from "@/components/download/DownloadConfigModal";
 import { useThemeContext } from "@/context/ThemeContext";
+import { useDownload } from "@/context/DownloadContext";
+import { extractVideoSources } from "@/services/api";
+import { getPluginDownloadPref } from "@/utils/storage";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import * as WebBrowser from "expo-web-browser";
@@ -43,10 +46,14 @@ export default function ActionButtons({
 }) {
 	const { colors, theme } = useThemeContext();
 	const router = useRouter();
+	const { enqueueDownload, shouldAskBeforeDownload } = useDownload();
 
 	// İndirme modalı (Faz 2): hedef içerik + bölüm (dizide) burada tutulur.
 	const [downloadModalVisible, setDownloadModalVisible] = useState(false);
 	const [downloadTarget, setDownloadTarget] = useState(null);
+	// "Her seferinde sor" kapalıysa hızlı yolda kısa bir "kuyruğa eklendi"
+	// çalışması döner; çift tetiklemeyi de keser.
+	const [downloadStarting, setDownloadStarting] = useState(false);
 
 	// TV: punto, yükseklik ve odak ölçeği büyür (bkz. utils/tvMetrics.js).
 	const { sp, isTV, focusScale } = useTvMetrics();
@@ -224,69 +231,131 @@ export default function ActionButtons({
 		}
 	};
 
-	const handleDownload = () => {
-		// İndirme akışı (download_feature_plan.md Faz 2):
-		// dizi olsa da olmasa DownloadConfigModal açılır. Dizide hangi
-		// bölümün indirileceği:
-		//   1) izleme sürüyorsa (in_progress) o bölüm,
-		//   2) değilse ilk sezonun ilk bölümü.
-		// URL'si bulunamayan içerikte bilgi mesajı gösterilir.
-		if (isSeries) {
-			let targetEpisode = null;
-
-			if (isInProgress && watchProgress?.url) {
-				targetEpisode = {
-					season: watchProgress.season || 1,
-					episode: watchProgress.episode || 1,
-					episodeTitle: watchProgress.episodeTitle || null,
-					url: watchProgress.url,
-				};
-			}
-
-			if (!targetEpisode && content?.seasons) {
-				const seasonKeys = Object.keys(content.seasons).sort(
-					(a, b) => Number(a) - Number(b),
-				);
-				for (const sKey of seasonKeys) {
-					const epList = content.seasons[sKey];
-					if (Array.isArray(epList) && epList.length > 0) {
-						const first = epList.find((e) => e?.url) || epList[0];
-						if (first?.url) {
-							targetEpisode = {
-								season: Number(sKey),
-								episode: Number(first.episode || first.episode_number || 1),
-								episodeTitle: first.title || null,
-								url: first.url,
-							};
-							break;
-						}
-					}
+	/**
+	 * İndirme hedef bölümünü seçer (dizi): izleme sürüyorsa o bölüm,
+	 * değilse ilk sezonun ilk URL'li bölümü. URL yoksa null.
+	 */
+	const resolveDownloadEpisode = () => {
+		if (isInProgress && watchProgress?.url) {
+			return {
+				season: watchProgress.season || 1,
+				episode: watchProgress.episode || 1,
+				episodeTitle: watchProgress.episodeTitle || null,
+				url: watchProgress.url,
+			};
+		}
+		if (!content?.seasons) return null;
+		const seasonKeys = Object.keys(content.seasons).sort(
+			(a, b) => Number(a) - Number(b),
+		);
+		for (const sKey of seasonKeys) {
+			const epList = content.seasons[sKey];
+			if (Array.isArray(epList) && epList.length > 0) {
+				const first = epList.find((e) => e?.url) || epList[0];
+				if (first?.url) {
+					return {
+						season: Number(sKey),
+						episode: Number(first.episode || first.episode_number || 1),
+						episodeTitle: first.title || null,
+						url: first.url,
+					};
 				}
 			}
+		}
+		return null;
+	};
 
-			if (!targetEpisode?.url) {
+	/** Kayıtlı eklenti tercihiyle modalı açmadan kuyruğa ekler (plan §5, C). */
+	const enqueueWithSavedPref = async (pluginName, targetEpisode) => {
+		const targetUrl = (targetEpisode?.url || content?.url) || "";
+		if (!targetUrl) return false;
+		const [pref, sources] = await Promise.all([
+			getPluginDownloadPref(pluginName),
+			extractVideoSources(targetUrl),
+		]);
+		const usable = (Array.isArray(sources) ? sources : []).filter(
+			(s) => s?.result?.url && s?.result?.is_hls !== true,
+		);
+		const chosen =
+			(pref?.preferredSource &&
+				usable.find((s) => s.extractor === pref.preferredSource)) ||
+			usable[0];
+		if (!chosen) return false;
+
+		const isSeries = Boolean(targetEpisode);
+		const subList = chosen?.result?.subtitles || [];
+		const wantSub = pref?.downloadSubtitle !== false && pref?.preferredSubtitle;
+		const chosenSub = wantSub
+			? subList.find((s) =>
+					String(s?.name || "")
+						.toLowerCase()
+						.includes(String(pref.preferredSubtitle).toLowerCase()),
+				)
+			: null;
+
+		await enqueueDownload({
+			contentId: content?.id || content?.url,
+			seriesId: isSeries ? content?.id || content?.url : null,
+			contentTitle: content?.title || "İçerik",
+			pluginName,
+			type: isSeries ? "series" : "movie",
+			seriesTitle: isSeries ? content?.title : null,
+			seasonNumber: isSeries ? Number(targetEpisode.season) : null,
+			episodeNumber: isSeries ? Number(targetEpisode.episode) : null,
+			episodeTitle: isSeries ? targetEpisode.episodeTitle || null : null,
+			sourceUrl: chosen.result.url,
+			sourceName: chosen.extractor,
+			sourceHeaders: chosen.result.headers || {},
+			subtitleUrl: chosenSub?.url || null,
+			subtitleLang: chosenSub?.name || null,
+			downloadSubtitle: Boolean(chosenSub),
+			posterUrl: content?.poster_url || content?.backdrop_url || null,
+		});
+		return true;
+	};
+
+	const handleDownload = async () => {
+		if (downloadStarting) return;
+		setDownloadStarting(true);
+		try {
+			const pluginName = content?.plugin || "";
+			const targetEpisode = isSeries ? resolveDownloadEpisode() : null;
+			if (isSeries && !targetEpisode?.url) {
 				Alert.alert(
 					"Bilgi",
 					"İndirme için oynatılabilir bölüm bağlantısı bulunamadı.",
 				);
 				return;
 			}
+			if (!isSeries && !content?.url) {
+				Alert.alert("Bilgi", "İndirme için video bağlantısı bulunamadı.");
+				return;
+			}
 
-			setDownloadTarget({
-				content,
-				episode: targetEpisode,
-			});
+			// Plan §5 akışı: eklenti tercihi kayıtlıysa VE "her seferinde sor"
+			// KAPALI ise modal atlanır, kayıtlı ayarlarla direkt kuyruğa eklenir.
+			try {
+				const ask = await shouldAskBeforeDownload(pluginName);
+				if (!ask) {
+					const enqueued = await enqueueWithSavedPref(pluginName, targetEpisode);
+					if (enqueued) {
+						Alert.alert(
+							"İndirme",
+							`"${content?.title}" kuyruğa eklendi (İndirilenler ekranından izleyebilirsin).`,
+						);
+						return;
+					}
+					// Kaynak bulunamadıysa modal'a düş: kullanıcı seçsin.
+				}
+			} catch (e) {
+				console.warn("Hızlı indirme yolu hatası:", e?.message);
+			}
+
+			setDownloadTarget({ content, episode: targetEpisode });
 			setDownloadModalVisible(true);
-			return;
+		} finally {
+			setDownloadStarting(false);
 		}
-
-		// Film: içerik adresi yeterli.
-		if (!content?.url) {
-			Alert.alert("Bilgi", "İndirme için video bağlantısı bulunamadı.");
-			return;
-		}
-		setDownloadTarget({ content, episode: null });
-		setDownloadModalVisible(true);
 	};
 
 	// Determine watchlist display config based on watchlistStatus or inWatchlist

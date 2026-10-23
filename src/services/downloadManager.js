@@ -20,6 +20,7 @@
 
 import * as FileSystem from "expo-file-system/legacy";
 import {
+	deleteDownloadItem,
 	getDownloadSettings,
 	getDownloads,
 	getPluginDownloadPref,
@@ -294,6 +295,15 @@ async function runDownload(item) {
 		}
 		resumables.set(item.id, resumable);
 
+		// ⚠️ Yarış koruması: resumable haritaya girilecek ile downloadAsync
+		// başlayacak arasında pause/cancel tetiklendi ise indirmeyi HİÇ
+		// başlatma — "hayalet indirme" bırakırdı (UI duraklatılmış gösterirken
+		// dosya arka planda büyürdü).
+		if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) {
+			resumables.delete(item.id);
+			return;
+		}
+
 		const result = await resumable.downloadAsync();
 		if (!result?.uri) {
 			throw new Error("İndirme sonucu alınamadı (boş uri)");
@@ -488,8 +498,13 @@ function getItem(downloadId) {
 }
 
 /**
- * Belirli bir indirmeyi duraklatır. Sunucu HTTP Range desteklemiyorsa
- * indirme zaten tamamlanmış/tamamlanamamış olabilir; durum koronur.
+ * Belirli bir indirmeyi duraklatır.
+ *
+ * ⚠️ SIRA ÖNEMLİDİR (expo-file-system sözleşmesi): `resumeData` yalnızca
+ * `pauseAsync()` resolve OLDUĞUNDA `savable()` içine yazılır. Önce
+ * `savable()` çağırmak daima boş resumeData üretir → devam sıfırdan
+ * indirme olurdu. Bu yüzden: 1) pauseAsync bekle → 2) dönen savable
+ * durumunu öğeye yaz → 3) o zaman PAUSED'a geç.
  */
 async function pause(downloadId) {
 	const item = items.get(downloadId);
@@ -497,19 +512,23 @@ async function pause(downloadId) {
 	if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) return;
 
 	const resumable = resumables.get(downloadId);
-	setStatus(item, DOWNLOAD_STATUS.PAUSED);
+	let savableState = null;
 	try {
 		if (resumable) {
-			const savable = resumable.savable();
-			item._resumableState = savable || null;
-		}
-		if (resumable) {
-			await resumable.pauseAsync();
+			// pauseAsync, savable() biçimli nesneyi döndürür (resumeData dahil).
+			savableState = (await resumable.pauseAsync()) || null;
 		}
 	} catch (e) {
-		// pauseAsync bazı platformlarda sessizce hata verebilir; durum "paused".
+		// pauseAsync bazı platformlarda sessizce hata verebilir; "paused"
+		// durumu korunur ama resumeData eksik olabilir → resume baştan başlar.
 		console.warn("pauseAsync hatası:", e?.message);
 	}
+	// pauseAsync beklerken indirme kendiliğinden bitti/iptal edildiyse
+	// öğeyi "paused"e döndürme (yarış koruması).
+	if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) return;
+	setStatus(item, DOWNLOAD_STATUS.PAUSED, {
+		_resumableState: savableState || item._resumableState || null,
+	});
 	await persist(item, { force: true });
 	pump();
 }
@@ -588,7 +607,11 @@ function onStatusChange(callback) {
 	return () => statusListeners.delete(callback);
 }
 
-/** Tamamlanmış/başarısız/iptal edilmiş öğeyi listeden tamamen kaldırır. */
+/**
+ * Öğeyi kuyruktan tamamen kaldırır: aktif indirmeyi keser, kısmi dosyayı
+ * siler ve AsyncStorage'daki (DOWNLOADS) kaydı da düşürür — yoksa "silinen"
+ * indirme uygulama yeniden açıldığında geri dönerdi.
+ */
 async function remove(downloadId) {
 	const item = items.get(downloadId);
 	if (!item) return;
@@ -597,6 +620,15 @@ async function remove(downloadId) {
 	}
 	items.delete(downloadId);
 	runtime.delete(downloadId);
+	try {
+		const base = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+		await FileSystem.deleteAsync(`${base}${TEMP_DIR_NAME}/${item.id}.part`, {
+			idempotent: true,
+		});
+	} catch (_e) {
+		/* dosya yoksa sorun değil */
+	}
+	await deleteDownloadItem(downloadId).catch(() => {});
 }
 
 /**

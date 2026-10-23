@@ -1214,26 +1214,28 @@ export const DEFAULT_DOWNLOAD_SETTINGS = {
 };
 
 /**
- * Genel indirme ayarlarını okur; ilk okumada varsayılanları diske yazar
- * (kalıbı: `getPlayerSettings` — push/collect'in key'i bulabilmesi için).
+ * Genel indirme ayarlarını okur; ilk okumada varsayılanları diske yazar.
+ *
+ * ⚠️ `mutate` İÇİNDE OKUMA YAPMAZ: `saveDownloadSettings`/`resetDownloadSettings`
+ * aynı anahtarda mutate açıp bu okumayı çağırır — mutate per-key sıralı
+ * kuyruk olduğu için iç içe çağrı DÖNGÜSEL BEKLEME (deadlock) üretir.
+ * (Kalıp: `getPlayerSettings` — bkz. o dosyanın okuma fonksiyonu.)
  */
 export async function getDownloadSettings() {
-	return mutate(STORAGE_KEYS.DOWNLOAD_SETTINGS, async () => {
-		try {
-			const data = await AsyncStorage.getItem(STORAGE_KEYS.DOWNLOAD_SETTINGS);
-			if (data) {
-				return { ...DEFAULT_DOWNLOAD_SETTINGS, ...JSON.parse(data) };
-			}
-			await AsyncStorage.setItem(
-				STORAGE_KEYS.DOWNLOAD_SETTINGS,
-				JSON.stringify(DEFAULT_DOWNLOAD_SETTINGS),
-			);
-			return DEFAULT_DOWNLOAD_SETTINGS;
-		} catch (error) {
-			console.error("İndirme ayarları okunurken hata:", error);
-			return DEFAULT_DOWNLOAD_SETTINGS;
+	try {
+		const data = await AsyncStorage.getItem(STORAGE_KEYS.DOWNLOAD_SETTINGS);
+		if (data) {
+			return { ...DEFAULT_DOWNLOAD_SETTINGS, ...JSON.parse(data) };
 		}
-	});
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.DOWNLOAD_SETTINGS,
+			JSON.stringify(DEFAULT_DOWNLOAD_SETTINGS),
+		);
+		return DEFAULT_DOWNLOAD_SETTINGS;
+	} catch (error) {
+		console.error("İndirme ayarları okunurken hata:", error);
+		return DEFAULT_DOWNLOAD_SETTINGS;
+	}
 }
 
 /**
@@ -1298,18 +1300,20 @@ function clampRange(target, key, min, max) {
  *
  * Depo biçimi: `{ [pluginName]: { preferredSource, preferredAudioTrack,
  * preferredSubtitle, downloadSubtitle, alwaysAsk } }`
+ *
+ * ⚠️ `savePluginDownloadPref`/`deletePluginDownloadPref` aynı anahtar üzerinde
+ * mutate açıp bunu çağırır — mutate'sız okuma ZORUNLUDUR (bkz.
+ * `getDownloadSettings` başındaki deadlock notu).
  */
 export async function getPluginDownloadPrefs() {
-	return mutate(STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS, async () => {
-		try {
-			const data = await AsyncStorage.getItem(STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS);
-			const parsed = data ? JSON.parse(data) : {};
-			return parsed && typeof parsed === "object" ? parsed : {};
-		} catch (error) {
-			console.error("Eklenti indirme tercihleri okunurken hata:", error);
-			return {};
-		}
-	});
+	try {
+		const data = await AsyncStorage.getItem(STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS);
+		const parsed = data ? JSON.parse(data) : {};
+		return parsed && typeof parsed === "object" ? parsed : {};
+	} catch (error) {
+		console.error("Eklenti indirme tercihleri okunurken hata:", error);
+		return {};
+	}
 }
 
 /**
