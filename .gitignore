@@ -50,3 +50,6 @@ google-services.json
 # local-expo-build
 keystore.properties
 credentials.json
+.superpowers/
+.openchamber/
+.playwright-mcp/
