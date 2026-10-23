@@ -255,6 +255,75 @@ export async function tercihSil({ tmdbId } = {}) {
 	}
 }
 
+// ─── Ziyaret bağlar + tohum (sunucu 1.14.9+) ──────────────────
+
+/**
+ * Denetim çifti BAĞLAR (ziyaret-bağlar): dizi sayfasının açık olduğu
+ * (kaynak, adres) ikilisini sunucuya sessiz yazar. Tercih YOKSA bile
+ * çift yazılır — sonra takip açıldığında kaynak zaten hazır bekler.
+ * Idempotent; ucu boş alan 400, oturumsuz 401'in hepsi false'a iner.
+ *
+ * @param {{tmdbId: string|number, diziUrl: string, provider: string}} girdiler
+ * @returns {Promise<boolean>}
+ */
+export async function auditCiftiBagla({ tmdbId, diziUrl, provider } = {}) {
+	const anahtar = mediaKimligi(tmdbId);
+	if (!anahtar || !diziUrl || !provider) return false;
+	if (!(await hasSession())) return false;
+	try {
+		const res = await authFetch(`${API_PREFIX}/settings/audit`, {
+			method: "POST",
+			body: JSON.stringify({
+				tmdb_id: anahtar,
+				dizi_url: diziUrl,
+				watched_provider: provider,
+			}),
+		});
+		if (!res.ok) {
+			console.warn("Denetim çifti bağlama başarısız:", res.status);
+			return false;
+		}
+		return true;
+	} catch (e) {
+		console.warn("Denetim çifti bağlama hatası:", e?.message);
+		return false;
+	}
+}
+
+/**
+ * TÜM KAYNAKLAR TOHUMU (sunucu 1.14.9+): tercihi TÜM KAYNAKLAR'a
+ * yazdıktan SONRA çağır. Sunucu adresi bilinen kaynakları atlar,
+ * devredeki kalan eklentilerde başlığı BİR kez arar; eşleşen adresleri
+ * bağlar (önce tmdb id eşitliği; başlık ölçüsü yedek). Kısmi
+ * başarı NORMALDİR: çöken eklenti diğerlerini bozmaz, `hata` listesi
+ * toplanır.
+ *
+ * @param {{tmdbId: string|number, diziBasligi: string}} girdiler
+ * @returns {Promise<{baglanan: string[], atlanan: string[], hata: string[]} | null>}
+ */
+export async function tumuTohumla({ tmdbId, diziBasligi } = {}) {
+	const anahtar = mediaKimligi(tmdbId);
+	if (!anahtar || !(diziBasligi || "").trim()) return null;
+	if (!(await hasSession())) return null;
+	try {
+		const res = await authFetch(`${API_PREFIX}/settings/tohum`, {
+			method: "POST",
+			body: JSON.stringify({
+				tmdb_id: anahtar,
+				dizi_basligi: diziBasligi,
+			}),
+		});
+		if (!res.ok) {
+			console.warn("Kaynak tohumu başarısız:", res.status);
+			return null;
+		}
+		return await res.json();
+	} catch (e) {
+		console.warn("Kaynak tohumu hatası:", e?.message);
+		return null;
+	}
+}
+
 // ─── Gelen kutusu ─────────────────────────────────────────────
 
 /**
@@ -645,6 +714,8 @@ export default {
 	tercihOku,
 	tercihYaz,
 	tercihSil,
+	auditCiftiBagla,
+	tumuTohumla,
 	bildirimTercihListesi,
 	gelenKutusuGetir,
 	okunmamisSayisiGetir,

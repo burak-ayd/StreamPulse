@@ -14,6 +14,13 @@
  *   - `diziDurumu` (TMDB `status`) "Ended"/"Canceled" ise alt yazı
  *     vaat yerine bilgi verir: dizi bitti — yeni bölüm beklenmiyor
  *     (Faz 6.3); kart ve anahtar normal çalışmayı sürdürür.
+ *   - ZİYARET BAĞLAR (1.0.44): kart her kuruluşta (kaynak, adres)
+ *     çiftini sunucuya sessiz yazar — tercih ezilmez; paylaşımlı
+ *     çift tablosu diziyi TÜM KAYNAKLAR modunda izleyen herkesi
+ *     besler.
+ *   - TÜM KAYNAKLAR yazımından hemen sonra TOHUM: adresi bilinen
+ *     kaynaklar atlanır; kalan devredeki eklentilerde başlık
+ *     aramasıyla adresler bağlanır (tmdb id önce, ad ölçüsü yedek).
  *
  * Kart YALNIZCA dizi + `tmdb_id` + `dizi_url` üçü birden varken çizilir;
  * zenginleştirici tmdb eşleşmemişse (ya da içerik filmse) kart sessizce
@@ -23,10 +30,12 @@
 import TVPressable from "@/components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
 import {
+	auditCiftiBagla,
 	baslikHatirla,
 	mediaKimligi,
 	tercihOku,
 	tercihYaz,
+	tumuTohumla,
 } from "@/services/bildirimApi";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -134,10 +143,35 @@ export default function NotificationPreferenceCard({
 				return;
 			}
 			setTercih(cevap.data);
+			// TÜM KAYNAKLAR TOHUMU (1.0.44): tüm kaynaklar moduna her yazımda
+			// adresi bilinmeyenleri aratabilir — zaten bağlı olanlar
+			// atlanır, çıktığı kaynak için de bir kez koşar. Sonuç iletiyi değiştirmez;
+			// arızada sessizlik (bir sonraki yazımda yeniden denenir).
+			const sonMod = degisiklikler.mode || tercih?.mode || "watched_source";
+			if (sonMod === "all_sources" && diziBasligi) {
+				void tumuTohumla({ tmdbId: anahtar, diziBasligi });
+			}
 		} finally {
 			setIslemVar(false);
 		}
 	};
+
+	/**
+	 * ZİYARET BAĞLAR (1.0.44): bu sayfanın açık olduğu (kaynak, adres)
+	 * çiftini sunucuya sessiz yazar — tercihi EZMEZ. Tercih kapalıyken de
+	 * bağlanır: çift tablosu paylaşımdır; sonra takip açıldığında bu
+	 * kaynak denetim adına hazır olur (Tek kullanıcılı sistemde başka
+	 * kimse bağlamayacağı için bilinçli).
+	 */
+	useEffect(() => {
+		if (anahtar && diziUrl && kaynakAdi) {
+			void auditCiftiBagla({
+				tmdbId: anahtar,
+				diziUrl,
+				provider: kaynakAdi,
+			});
+		}
+	}, [anahtar, diziUrl, kaynakAdi]);
 
 	if (!anahtar || !diziUrl) {
 		// Dizi değil ya da tmdb eşleşmemiş — kart tamamen sessiz.
