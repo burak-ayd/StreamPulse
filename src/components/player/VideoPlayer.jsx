@@ -26,6 +26,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Video from "react-native-video";
+import {
+	classifyPlaybackError,
+	describePlaybackError,
+} from "../../utils/playbackError";
 import BrightnessVolumeHud from "./BrightnessVolumeHud";
 import {
 	MAX_PLAYBACK_RATE,
@@ -46,10 +50,6 @@ import usePlayerGestures from "./usePlayerGestures";
 import useSubtitles from "./useSubtitles";
 import useVideoSource from "./useVideoSource";
 import useWatchProgress from "./useWatchProgress";
-import {
-	classifyPlaybackError,
-	describePlaybackError,
-} from "../../utils/playbackError";
 
 /**
  * Geçici ağ hatasından sonra AYNI kaynağı tekrar denemeden önce beklenecek
@@ -1183,7 +1183,7 @@ export default function VideoPlayer({
 			// Yukarı/aşağı: HUD'u gizlemek yerine üst/alt bardaki
 			// düğmelere odak taşır (odak yöneticisi bunu kendisi yapar;
 			// burada yalnızca otomatik gizleme sayacı yenilenir).
-		};
+		}
 	}, true);
 
 	// ── Donanım geri tuşu hiyerarşisi ───────────────────────
@@ -1228,7 +1228,11 @@ export default function VideoPlayer({
 
 	const handleScrubEnd = useCallback(
 		(ratio) => {
-			if (typeof ratio === "number" && Number.isFinite(ratio) && duration > 0) {
+			if (
+				typeof ratio === "number" &&
+				Number.isFinite(ratio) &&
+				duration > 0
+			) {
 				seekTo(ratio * duration);
 			}
 			startHideTimerRef.current?.();
@@ -1462,9 +1466,9 @@ export default function VideoPlayer({
 											size={30}
 											color="#FFFFFF"
 										/>
-										<Text style={styles.roundLabel}>
+										{/* <Text style={styles.roundLabel}>
 											{seekDuration}
-										</Text>
+										</Text> */}
 									</View>
 								</TVPressable>
 							) : (
@@ -1600,14 +1604,14 @@ export default function VideoPlayer({
 									// Sonraki bölüm (yalnızca dizi + sonraki bölüm biliniyorsa)
 									nextEpisode && onNextEpisode
 										? {
-											key: "next",
-											icon: "play-skip-forward-outline",
-											label: "Sonraki bölüm",
-											onPress: () => {
-												startHideTimerRef.current?.();
-												goNextEpisode();
-											},
-										}
+												key: "next",
+												icon: "play-skip-forward-outline",
+												label: "Sonraki bölüm",
+												onPress: () => {
+													startHideTimerRef.current?.();
+													goNextEpisode();
+												},
+											}
 										: null,
 								]}
 							/>
@@ -1711,7 +1715,9 @@ export default function VideoPlayer({
 								// `handleError` "bu kaynak zaten öldü" deyip
 								// sıradakine atlar ve kullanıcının denemesi
 								// hiç gerçekleşmez.
-								switchSourceTo(activeSourceIndex, { resetErrors: true });
+								switchSourceTo(activeSourceIndex, {
+									resetErrors: true,
+								});
 							}}>
 							<Ionicons
 								name="refresh"
