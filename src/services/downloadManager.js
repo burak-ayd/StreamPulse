@@ -415,7 +415,34 @@ function writeTextFile(uri, text) {
 	} catch (e) {
 		void e;
 	}
-	f.write(text);
+	try {
+		f.write(text);
+	} catch (e) {
+		throw new Error(`Oynatma listesi yazılamadı (${uri}): ${e?.message || e}`);
+	}
+}
+
+/**
+ * SAF hedefinin gerçekten yazılabilir olduğunu dener. Bazı cihazlarda
+ * seçilen ağaç URI'sine yazma reddedilebilir; bu durumda indirme sessizce
+ * bozulmak yerine uygulama deposuna düşer (görünür uyarı ile).
+ */
+function safYazilabilirMi(dirUri) {
+	try {
+		const probe = new ExpoFile(`${dirUri}.probe`);
+		probe.create({ intermediates: true, overwrite: true });
+		probe.write("ok");
+		const ok = Boolean(probe.exists) && (probe.size || 0) > 0;
+		try {
+			probe.delete();
+		} catch (_e) {
+			/* silinemese de yazma kanıtlandı */
+		}
+		return ok;
+	} catch (e) {
+		console.warn("SAF hedefi yazılamıyor:", e?.message);
+		return false;
+	}
 }
 
 /** Header'ları native katmanın beklediği düz biçime getirir. */
@@ -544,7 +571,16 @@ async function runHlsDownload(item) {
 		} catch (e) {
 			void e;
 		}
-		dirUri = `${icerikKlasoru.uri}/`;
+		const safUri = `${icerikKlasoru.uri}/`;
+		if (safYazilabilirMi(safUri)) {
+			dirUri = safUri;
+		} else {
+			// Seçili klasöre yazılamıyorsa uygulama deposuna düş; kullanıcıya
+			// kartta uyarı gösterilir (sessiz bozulma yok).
+			item.safFallback = true;
+			const base = resolveBaseDirectory(settings.downloadPath);
+			dirUri = `${base.full}${folderName}/`;
+		}
 	} else {
 		const base = resolveBaseDirectory(settings.downloadPath);
 		dirUri = `${base.full}${folderName}/`;

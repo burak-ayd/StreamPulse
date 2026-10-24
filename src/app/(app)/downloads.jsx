@@ -305,6 +305,13 @@ export default function DownloadsScreen() {
 					</Text>
 				) : null}
 
+				{/* SAF hedefi yazılamadıysa görünür uyarı (#1) */}
+				{item.safFallback ? (
+					<Text style={[styles.progressText, { color: "#f59e0b" }]} numberOfLines={2}>
+						Seçili klasöre yazılamadı; dosyalar uygulama deposunda.
+					</Text>
+				) : null}
+
 				<View style={styles.actionRow}>
 					{actionButtonsFor(item).map((btn) => (
 						<TVPressable
