@@ -1210,9 +1210,26 @@ async function cancel(downloadId) {
 	}
 	try {
 		const base = FileSystem.documentDirectory || FileSystem.cacheDirectory;
-		await FileSystem.deleteAsync(`${base}${TEMP_DIR_NAME}/${item.id}.part`, {
+		const tempKok = `${base}${TEMP_DIR_NAME}/`;
+		await FileSystem.deleteAsync(`${tempKok}${item.id}.part`, {
 			idempotent: true,
 		});
+		// HLS indirmesinde her segment için ayrı geçici dosya vardır
+		// (`{id}-v00001.ts` gibi); iptalde hepsi temizlenir.
+		try {
+			const dosyalar = await FileSystem.readDirectoryAsync(tempKok);
+			await Promise.all(
+				dosyalar
+					.filter((ad) => ad.startsWith(`${item.id}-`))
+					.map((ad) =>
+						FileSystem.deleteAsync(`${tempKok}${ad}`, { idempotent: true }).catch(
+							() => {},
+						),
+					),
+			);
+		} catch (_e) {
+			/* temp klasör yoksa sorun değil */
+		}
 	} catch (_e) {
 		/* dosya yoksa sorun değil */
 	}
