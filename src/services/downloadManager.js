@@ -525,11 +525,30 @@ async function runHlsDownload(item) {
 		}
 	}
 
-	// 3) Hedef klasör — içerik başına tek klasör
+	// 3) Hedef klasör — kullanıcı SAF klasörü seçtiyse dosyalar DOĞRUDAN
+	// oraya yazılır: {seçim}/StreamPulse/{DiziAdı}/ ; seçmemişse app deposu.
 	const settings = await getDownloadSettings();
-	const base = resolveBaseDirectory(settings.downloadPath);
 	const folderName = sanitizeFileName(item.seriesTitle || item.contentTitle);
-	const dirUri = `${base.full}${folderName}/`;
+	let dirUri;
+	if (settings.downloadDirUri) {
+		const kok = new Directory(settings.downloadDirUri);
+		const sistemKlasoru = new Directory(kok, "StreamPulse");
+		try {
+			sistemKlasoru.create({ intermediates: true, idempotent: true });
+		} catch (e) {
+			void e;
+		}
+		const icerikKlasoru = new Directory(sistemKlasoru, folderName);
+		try {
+			icerikKlasoru.create({ intermediates: true, idempotent: true });
+		} catch (e) {
+			void e;
+		}
+		dirUri = `${icerikKlasoru.uri}/`;
+	} else {
+		const base = resolveBaseDirectory(settings.downloadPath);
+		dirUri = `${base.full}${folderName}/`;
+	}
 	const dir = new Directory(dirUri);
 	try {
 		dir.create({ intermediates: true, idempotent: true });
@@ -583,71 +602,110 @@ async function runHlsDownload(item) {
 	const tempoDir = `${FileSystem.documentDirectory || FileSystem.cacheDirectory}${TEMP_DIR_NAME}/`;
 	await FileSystem.makeDirectoryAsync(tempoDir, { intermediates: true }).catch(() => {});
 
-	for (const job of allJobs) {
-		if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) {
-			await persist(item, { force: true });
-			return;
-		}
-		const destUri = `${dirUri}${job.name}`;
-		const target = new ExpoFile(destUri);
-		if (target.exists) continue; // bu turda zaten indirildi
-		// Önce geçici dosyaya indir, sonra hedefe taşı: yarım kalan segment
-		// "var" sayılıp bozuk içerikle oynatılmasın.
-		const tempUri = `${tempoDir}${item.id}-${job.name}`;
-		const indirilen = await fetchSegmentWithRetry(job.seg, headers, tempUri, 3);
-		try {
-			const hedef = new ExpoFile(destUri);
-			if (hedef.exists) hedef.delete();
-			await indirilen.move(hedef);
-		} catch (moveErr) {
-			console.warn("Segment taşınamadı, yerinde kullanılacak:", moveErr?.message);
-			// taşınamazsa geçici dosya zaten indirildi; hedef adıyla kopyala
+	// Paralel indirme: tek bağlantı yerine N worker. Kullanıcı raporu: indirme
+	// ilerledikçe hız düşüyordu; tek uzun ömürlü bağlantı CDN tarafında
+	// yavaşlıyor. CloudStream da segmentleri paralel indirir (3 worker).
+	// `maxConnectionsPerDownload` ayarı böylece gerçekten kullanılır.
+	const PARALEL = Math.min(
+		6,
+		Math.max(1, Number(settings.maxConnectionsPerDownload) || 4),
+	);
+	const toplamIs = allJobs.length;
+	let sonrakiIs = 0;
+	let yeniBitti = 0;
+	let yeniBayt = 0;
+	let sonEmitYuzde = item.progress || 0;
+
+	const isci = async () => {
+		while (item.status === DOWNLOAD_STATUS.DOWNLOADING) {
+			const sira = sonrakiIs++;
+			if (sira >= toplamIs) return;
+			const job = allJobs[sira];
+			const destUri = `${dirUri}${job.name}`;
+			if (new ExpoFile(destUri).exists) continue; // resume: zaten var
+			// Önce geçici dosyaya indir, sonra hedefe taşı: yarım kalan segment
+			// "var" sayılıp bozuk içerikle oynatılmasın.
+			const tempUri = `${tempoDir}${item.id}-${job.name}`;
+			const indirilen = await fetchSegmentWithRetry(job.seg, headers, tempUri, 3);
 			try {
-				await FileSystem.moveAsync({ from: tempUri, to: destUri });
+				const hedef = new ExpoFile(destUri);
+				if (hedef.exists) hedef.delete();
+				await indirilen.move(hedef);
+			} catch (moveErr) {
+				console.warn("Segment taşınamadı, legacy yol:", moveErr?.message);
+				try {
+					await FileSystem.moveAsync({ from: tempUri, to: destUri });
+				} catch (_e) {
+					/* sonraki turda yeniden denenecek */
+				}
+			}
+			yeniBitti += 1;
+			try {
+				yeniBayt += new ExpoFile(destUri).size || 0;
 			} catch (_e) {
-				/* bir sonraki turda yeniden denenecek */
+				/* boyut okunamazsa sayaç değişmez */
+			}
+			const oran = Math.min(0.99, (done + yeniBitti) / toplamIs);
+			item.downloadedBytes = written + yeniBayt;
+			item.progress = oran;
+			item.resumable = true;
+			item.lastResumeOffset = done + yeniBitti;
+			// UI/AsyncStorage yükünü dengele: ~%2'de bir bildir/kaydet
+			if (oran - sonEmitYuzde >= 0.02) {
+				sonEmitYuzde = oran;
+				emitProgress(item);
+				await persist(item);
 			}
 		}
-		done += 1;
-		try {
-			written += new ExpoFile(destUri).size || 0;
-		} catch (_e) {
-			/* boyut okunamazsa sayaç değişmez */
-		}
-		item.downloadedBytes = written;
-		item.progress = Math.min(0.99, done / allJobs.length);
-		item.resumable = true;
-		item.lastResumeOffset = done;
-		emitProgress(item);
-		await persist(item);
-		await new Promise((r) => setTimeout(r, 15));
+	};
+
+	await Promise.all(Array.from({ length: PARALEL }, () => isci()));
+	if (item.status !== DOWNLOAD_STATUS.DOWNLOADING) {
+		await persist(item, { force: true });
+		return;
 	}
+	item.downloadedBytes = written + yeniBayt;
+	item.progress = Math.min(0.99, (done + yeniBitti) / toplamIs);
+	emitProgress(item);
 
 	// 5) Yerelleştirilmiş playlist'ler
+	// ⚠️ Tüm segment/playlist adresleri MUTLAK yazılır: hedef SAF ise
+	// (content:// ağacı) ExoPlayer göreli URI'yi content:// tabanında
+	// çözemez; mutlak content:// adreslerini ContentDataSource doğrudan açar.
+	const mutlak = (name) => `${dirUri}${name}`;
 	const videNames = videoPlaylist.segments.map((s, idx) =>
-		s.init ? "init.mp4" : videoJobs.find((j) => j.seg === s)?.name || `v${idx + 1}.ts`,
+		mutlak(
+			s.init
+				? "init.mp4"
+				: videoJobs.find((j) => j.seg === s)?.name || `v${idx + 1}.ts`,
+		),
 	);
 	const videoLocal = buildLocalMediaPlaylist({
 		segments: videoPlaylist.segments,
 		localNames: videNames,
 		headerTags: playlistHeaderTags(videoText),
+		initName: mutlak("init.mp4"),
 	});
-	writeTextFile(`${dirUri}video.m3u8`, videoLocal);
+	writeTextFile(mutlak("video.m3u8"), videoLocal);
 
-	let masterLines = ["#EXTM3U", "#EXT-X-VERSION:3"];
+	const masterLines = ["#EXTM3U", "#EXT-X-VERSION:3"];
 	if (audioPlaylist) {
-		const audioNames = audioPlaylist.segments.map(
-			(s, idx) => audioJobs.find((j) => j.seg === s)?.name || `a${idx + 1}.ts`,
+		const audioNames = audioPlaylist.segments.map((s, idx) =>
+			mutlak(
+				s.init
+					? "init-a.mp4"
+					: audioJobs.find((j) => j.seg === s)?.name || `a${idx + 1}.ts`,
+			),
 		);
 		const audioLocal = buildLocalMediaPlaylist({
 			segments: audioPlaylist.segments,
 			localNames: audioNames,
 			headerTags: playlistHeaderTags(audioPlaylistText),
-			initName: "init-a.mp4",
+			initName: mutlak("init-a.mp4"),
 		});
-		writeTextFile(`${dirUri}audio.m3u8`, audioLocal);
+		writeTextFile(mutlak("audio.m3u8"), audioLocal);
 		masterLines.push(
-			`#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio0",NAME="${audioTrack.name}",LANGUAGE="${audioTrack.language || "und"}",DEFAULT=YES,AUTOSELECT=YES,CHANNELS="2",URI="audio.m3u8"`,
+			`#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio0",NAME="${audioTrack.name}",LANGUAGE="${audioTrack.language || "und"}",DEFAULT=YES,AUTOSELECT=YES,CHANNELS="2",URI="${mutlak("audio.m3u8")}"`,
 		);
 	}
 	const bandwidth = bestVariant?.bandwidth || 2000000;
@@ -658,9 +716,9 @@ async function runHlsDownload(item) {
 	const audioAttr = audioPlaylist ? ',AUDIO="audio0"' : "";
 	masterLines.push(
 		`#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth}${resolutionAttr}${codecsAttr}${audioAttr}`,
-		"video.m3u8",
+		mutlak("video.m3u8"),
 	);
-	const masterUri = `${dirUri}master.m3u8`;
+	const masterUri = mutlak("master.m3u8");
 	writeTextFile(masterUri, masterLines.join("\n"));
 
 	// 6) Gerçek toplam boyut: segment dosyalarının toplamı
@@ -810,7 +868,19 @@ async function runDownload(item) {
 					);
 					item.subtitlePath = subResult?.uri || subPath;
 				} catch (subErr) {
-					console.warn("Altyazı indirilemedi:", subErr?.message);
+					// SAF hedefte legacy downloadAsync desteklenmez: geçici
+					// dosyaya indirip File API ile taşı.
+					console.warn("Altyazı doğrudan yazılamadı, taşınıyor:", subErr?.message);
+					try {
+						const gecici = `${FileSystem.cacheDirectory}sub-${item.id}.vtt`;
+						await FileSystem.downloadAsync(item.subtitleUrl, gecici);
+						const hedef = new ExpoFile(subPath);
+						if (hedef.exists) hedef.delete();
+						await new ExpoFile(gecici).move(hedef);
+						item.subtitlePath = hedef.uri;
+					} catch (subErr2) {
+						console.warn("Altyazı indirilemedi:", subErr2?.message);
+					}
 				}
 			}
 		} else {

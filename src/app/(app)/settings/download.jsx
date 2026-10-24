@@ -245,7 +245,7 @@ export default function DownloadSettingsScreen() {
 							onPress={() => openOption("connections")}
 						/>
 						{/* İndirme konumu: kullanıcı SAF ile bir klasör seçer; tamamlanan
-						    indirmeler oraya kopyalanır (oynatma dahili kopyadan). */}
+						    indirmeler doğrudan oraya yazılır: StreamPulse/{içerik}/ */}
 		<TVPressable
 			style={styles.valueRow}
 			focusedStyle={styles.rowFocused}
@@ -300,7 +300,7 @@ export default function DownloadSettingsScreen() {
 						Tamamlanınca Dışa Aktar
 					</Text>
 					<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
-						İndirme bitince seçili klasöre otomatik kopyalanır
+						Kapalıysa indirmeler yalnızca uygulama deposunda kalır
 					</Text>
 				</View>
 				<Switch

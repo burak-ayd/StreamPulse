@@ -2,6 +2,7 @@ import TVPressable, {
 	isTVPressSuppressed,
 } from "@/components/common/TVPressable";
 import ListSelectModal from "@/components/modal/ListSelectModal";
+import { useDownload } from "@/context/DownloadContext";
 import { fetchPluginDetail } from "@/services/api";
 import { isSeriesContent, typeLabel } from "@/utils/mediaType";
 import {
@@ -54,6 +55,7 @@ export default function QuickPreviewModal({
 	 * tablette davranış ve ölçüler BİREBİR aynı kalır (`isTV ? … : …`).
 	 */
 	const { isTV, sp, focusScale, height, width: windowWidth } = useTvMetrics();
+	const { requestDownload } = useDownload();
 
 	const [enrichedMovie, setEnrichedMovie] = useState(movie || null);
 	const [isFav, setIsFav] = useState(false);
@@ -290,6 +292,47 @@ export default function QuickPreviewModal({
 		}
 	};
 
+
+	/**
+	 * İndirme: merkezi akış (DownloadContext.requestDownload).
+	 * Dizide ilk oynatılabilir bölüm hedeflenir; film doğrudan içerik.
+	 */
+	const handleDownload = () => {
+		const content = {
+			id: currentItem.id || currentItem.url || movieId,
+			url: currentItem.url,
+			title,
+			plugin: currentItem.plugin || platformName,
+			poster_url: currentItem.poster || currentItem.poster_url,
+			seasons: currentItem.seasons,
+		};
+
+		let episode = null;
+		if (isSeries && currentItem.seasons) {
+			const seasonKey = Object.keys(currentItem.seasons).sort((a, b) => Number(a) - Number(b))[0];
+			const epList = currentItem.seasons[seasonKey] || [];
+			const first = epList.find((e) => e?.url) || epList[0];
+			if (first?.url) {
+				episode = {
+					season: Number(seasonKey),
+					episode: Number(first.episode || first.episode_number || 1),
+					episodeTitle: first.title || null,
+					url: first.url,
+				};
+			}
+		}
+
+		if (isSeries && !episode) {
+			Alert.alert("Bilgi", "İndirme için oynatılabilir bölüm bağlantısı bulunamadı.");
+			return;
+		}
+		if (!content.url) {
+			Alert.alert("Bilgi", "İndirme için video bağlantısı bulunamadı.");
+			return;
+		}
+
+		requestDownload({ content, episode });
+	};
 	// Oynatıcıyı Başlat
 	const handlePlay = () => {
 		onClose();
@@ -624,11 +667,7 @@ export default function QuickPreviewModal({
 				key: "download",
 				icon: "download-outline",
 				label: "İndir",
-				onPress: () =>
-					Alert.alert(
-						"İndirme",
-						`"${title}" indirme kuyruğuna ekleniyor...`,
-					),
+				onPress: handleDownload,
 			},
 			{
 				key: "share",
