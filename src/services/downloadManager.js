@@ -326,6 +326,7 @@ function parseMediaPlaylist(text, baseUrl) {
 	let totalDuration = 0;
 	let pendingByterange = null;
 	let currentDur = 0;
+	let nextIsDiscontinuity = false;
 	for (const raw of text.split(/\r?\n/)) {
 		const line = raw.trim();
 		if (!line) continue;
@@ -342,6 +343,9 @@ function parseMediaPlaylist(text, baseUrl) {
 					duration: 0,
 				});
 			}
+		} else if (line.startsWith("#EXT-X-DISCONTINUITY") && !line.startsWith("#EXT-X-DISCONTINUITY-SEQUENCE")) {
+			// sonraki segmentte işaretlenir
+			nextIsDiscontinuity = true;
 		} else if (line.startsWith("#EXTINF")) {
 			currentDur = parseFloat(
 				(line.match(/#EXTINF:([\d.]+)/) || [])[1] || "0",
@@ -355,8 +359,13 @@ function parseMediaPlaylist(text, baseUrl) {
 				};
 			}
 		} else if (!line.startsWith("#")) {
-			const seg = { url: resolveUrl(baseUrl, line), duration: currentDur };
+			const seg = {
+				url: resolveUrl(baseUrl, line),
+				duration: currentDur,
+				discontinuity: nextIsDiscontinuity,
+			};
 			currentDur = 0;
+			nextIsDiscontinuity = false;
 			totalDuration += seg.duration;
 			if (pendingByterange) {
 				seg.byterange = pendingByterange;
@@ -436,6 +445,7 @@ function buildLocalMediaPlaylist({
 	}
 	segments.forEach((seg, idx) => {
 		if (seg.init) return; // init segment playlist'te URI olarak geçmez
+		if (seg.discontinuity) out.push("#EXT-X-DISCONTINUITY");
 		out.push(`#EXTINF:${seg.duration.toFixed(3)},`);
 		out.push(localNames[idx]);
 	});
@@ -916,6 +926,8 @@ async function initialize() {
 		// yazılan kayıtlar) kuyruğa alınmaz — aksi halde "Hata" kartı olarak
 		// görünürlerdi.
 		if (raw.status === "pending") continue;
+		// Durumu bilinmeyen kayıtlar (eski DL formatı) da alınmaz.
+		if (!Object.values(DOWNLOAD_STATUS).includes(raw.status)) continue;
 		const item = { ...raw };
 		if (item.status === DOWNLOAD_STATUS.DOWNLOADING) {
 			item.status = DOWNLOAD_STATUS.PAUSED;
