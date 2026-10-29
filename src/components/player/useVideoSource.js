@@ -21,6 +21,8 @@ export default function useVideoSource({
 	activeSourceIndex,
 	currentSourceData,
 	onFormatOverride,
+	// Sabit kalite seçimi: seçilen varyant için yazılan yerel master URI'si.
+	urlOverride = null,
 }) {
 	const [overrideType, setOverrideType] = useState(null);
 	const [formatRetryRef, setFormatRetryRef] = useState(false);
@@ -28,7 +30,8 @@ export default function useVideoSource({
 	const videoSource = useMemo(() => {
 		if (!currentSourceData?.result?.url) return null;
 
-		const streamUrl = currentSourceData.result.url;
+		// Kalite seçimi aktifse yerel master oynatılır (tek varyant → sabit kalite).
+		const streamUrl = urlOverride || currentSourceData.result.url;
 		const headers = { ...(currentSourceData.result.headers || {}) };
 
 		if (currentSourceData.result.referer && !headers.Referer) {
@@ -47,7 +50,6 @@ export default function useVideoSource({
 
 		// `overrideType` öncegelir: hata kurtarma bu değeri yazar.
 		if (overrideType !== null) return { uri: streamUrl, headers, type: overrideType };
-
 		const isExplicitProgressive =
 			/\.(mp4|mkv|webm|avi|flv|mov)(\?.*)?$/i.test(streamUrl) ||
 			streamUrl.includes("googlevideo.com") ||
@@ -90,7 +92,7 @@ export default function useVideoSource({
 
 		// Harici altyazılar buraya verilmiyor — bkz. `useSubtitles` başlığı.
 		return { uri: streamUrl, headers, type };
-	}, [currentSourceData, overrideType]);
+	}, [currentSourceData, overrideType, urlOverride]);
 
 	/** Biçim hatası sonrası ters türle tekrar dene. */
 	const toggleOverrideType = useCallback(() => {

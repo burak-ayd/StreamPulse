@@ -234,6 +234,130 @@ export default function VideoPlayer({
 		() => sources[activeSourceIndex] || null,
 		[sources, activeSourceIndex],
 	);
+
+	// ── Kalite (video varyantı) seçimi ────────────────────────
+	/*
+	 * react-native-video v6'da HLS video kalitesi seçim API'si yok → ExoPlayer
+	 * otomatik (ABR) seçiyor: önce düşük, sonra yüksek. Kullanıcı sabit kalite
+	 * seçebilsin diye: seçilen varyant + ses rendition'ı içeren YEREL master
+	 * yazılır ve o oynatılır (tek varyant → kalite sabit, ses korunur).
+	 */
+	const [videoVariants, setVideoVariants] = useState([]);
+	const [selectedVariantId, setSelectedVariantId] = useState(null);
+	const [variantMasterUri, setVariantMasterUri] = useState(null);
+
+	// Kaynak değişince kalite listesi yenilenir, seçim sıfırlanır.
+	useEffect(() => {
+		let cancelled = false;
+		const url = currentSourceData?.result?.url;
+		(async () => {
+			if (!url || !url.includes(".m3u8")) {
+				if (cancelled) return;
+				setVideoVariants([]);
+				setSelectedVariantId(null);
+				setVariantMasterUri(null);
+				return;
+			}
+			try {
+				const { DownloadManager } = await import("@/services/downloadManager");
+				const { writeLocalMaster } = await import("@/utils/localHlsMaster");
+				const list = await DownloadManager.listHlsVariants(
+					url,
+					currentSourceData?.result?.headers || {},
+				);
+				if (cancelled) return;
+				const kaliteler = Array.isArray(list) ? list : [];
+				setVideoVariants(kaliteler);
+				setSelectedVariantId(null);
+				/*
+				 * "Otomatik" = EN YÜKSEK kalite (indirme modalıyla aynı mantık).
+				 * ExoPlayer'ın ABR'ı ağ yavaşken düşük kalitede takılı kalıyordu
+				 * ("kalite düşük kalıyor, yükseğe geçmiyor") → tek varyantlı yerel
+				 * master ile kalite baştan sabitlenir.
+				 */
+				const enYuksek = [...kaliteler].sort(
+					(a, b) => (b.bandwidth || 0) - (a.bandwidth || 0),
+				)[0];
+				if (!enYuksek) {
+					setVariantMasterUri(null);
+					return;
+				}
+				const sesler = enYuksek.audioTracks || [];
+				const varsayilanSes =
+					sesler.find((t) => t.isDefault) || sesler[0] || null;
+				const uri = await writeLocalMaster(
+					enYuksek,
+					sesler,
+					varsayilanSes,
+					"spd-quality-auto.m3u8",
+				);
+				if (cancelled) return;
+				// Kalite-master rewrite AYNI İÇERİĞİ yeniden montaj eder:
+				// pendingSeekTimeRef EZİLEMEZ — erken rewrite tamamlanırsa
+				// (onLoad sonrası 300ms'lik seek timer'ından önce) max'siz
+				// yazım ilk yüklemede resume hedefini 0'a indirirdi.
+				pendingSeekTimeRef.current = Math.max(
+					currentTimeRef.current || 0,
+					pendingSeekTimeRef.current,
+				);
+				setVariantMasterUri(uri);
+			} catch (e) {
+				console.warn("Kalite listesi alınamadı:", e?.message);
+				if (!cancelled) setVideoVariants([]);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [currentSourceData]);
+
+	// Seçilen varyant için yerel master yaz → oynatıcı kaynağı değişir.
+	const selectVariant = useCallback(
+		(variantId) => {
+			// Konum koruma: kalite değişiminde video baştan başlamasın.
+			// max() (RC 2026-10-28): sürvari rewrite'lar arasında bekleyen
+			// bir resume hedefi varsa ezmek yerine koru.
+			pendingSeekTimeRef.current = Math.max(
+				currentTimeRef.current || 0,
+				pendingSeekTimeRef.current,
+			);
+			const hedefVaryant =
+				variantId === null
+					? // "Otomatik" = en yüksek kalite
+						[...videoVariants].sort(
+							(a, b) => (b.bandwidth || 0) - (a.bandwidth || 0),
+						)[0]
+					: videoVariants.find((v) => v.id === variantId);
+			if (!hedefVaryant) {
+				// Varyant yok → kaynağın kendi master'ına dön.
+				setSelectedVariantId(null);
+				setVariantMasterUri(null);
+				return;
+			}
+			const sesListesi = hedefVaryant.audioTracks || [];
+			const seciliSes =
+				sesListesi.find((t) => t.index === selectedAudioTrackIndex) ||
+				sesListesi.find((t) => t.isDefault) ||
+				sesListesi[0] ||
+				null;
+			(async () => {
+				try {
+					const { writeLocalMaster } = await import("@/utils/localHlsMaster");
+					const uri = await writeLocalMaster(
+						hedefVaryant,
+						sesListesi,
+						seciliSes,
+						`spd-quality-${hedefVaryant.id}.m3u8`,
+					);
+					setSelectedVariantId(variantId);
+					setVariantMasterUri(uri);
+				} catch (e) {
+					console.warn("Kalite değiştirilemedi:", e?.message);
+				}
+			})();
+		},
+		[videoVariants, selectedAudioTrackIndex],
+	);
 	const resolvedUrl = currentSourceData?.result?.url || null;
 
 	/*
@@ -272,6 +396,7 @@ export default function VideoPlayer({
 		sources,
 		activeSourceIndex,
 		currentSourceData,
+		urlOverride: variantMasterUri,
 		onFormatOverride: () => {
 			setHasError(false);
 			setIsLoading(true);
@@ -825,6 +950,9 @@ export default function VideoPlayer({
 
 		setCurrentTime(curTime);
 		currentTimeRef.current = curTime;
+		// `onLoad` gecikirse (yerel büyük dosya) ses çoktan başlamış olur;
+		// gösterge gerçek oynatma ilerlediğinde kalksın.
+		if (isLoading && curTime > 0) setIsLoading(false);
 		setPlayableDuration(data.playableDuration || 0);
 		trackProgress(curTime, durationRef.current);
 	};
@@ -862,9 +990,14 @@ export default function VideoPlayer({
 	 */
 	const switchSourceTo = (index, secenekler = {}) => {
 		// Canlıda "doğru konum" diye bir şey yok; eski konuma atlamak
-		// yayını kaçırır → 0 yazılır.
-		const keepPosition =
-			!isLive && settings?.autoResume !== false && canSeek;
+		// yayını kaçırır → konum taşınmaz.
+		//
+		// ⚠️ RC 2026-10-28: `canSeek` BU KOŞULDA OLMAMALI — erken kaynak
+		// ölümünde (kaynak hiç yüklemeden hata verdi) duration=0 →
+		// canSeek=false → konum taşınmıyor → resume hedefi sıfırlanıp
+		// SIRADAKİ KAYNAK BAŞTAN BAŞLIYORDU. Aranılan güvenlik handleLoad'da
+		// zaten var: seek hedefi gerçek `dur` ile kırpılır (bkz. onLoad).
+		const keepPosition = !isLive && settings?.autoResume !== false;
 
 		// Bekleyen geçici-hata tekrarını iptal et: kullanıcı başka kaynağa
 		// geçtiyse, eski kaynağın kuyruğa alınmış tekrarı çalışmamalı.
@@ -882,7 +1015,15 @@ export default function VideoPlayer({
 			retryCountRef.current.delete(index);
 		}
 
-		pendingSeekTimeRef.current = keepPosition ? currentTimeRef.current : 0;
+		// ⚠️ NULL-KAYNAK DÜŞÜŞÜNDE RESUME KORUR (RC 2026-10-28):
+		// kaynak oynatma BAŞLAMADAN öldüyse (örn. backend result:null sızmış
+		// öge) currentTimeRef 0'dır; onu yazmak pendingSeekTimeRef'teki
+		// resume hedefini SİLİYORDU ve ikinci kaynak baştan açılıyordu.
+		// max(): oynatma başladıysa anlık konum kazanır, hiç başlamadıysa
+		// bekleyen resume hedefi korunur.
+		pendingSeekTimeRef.current = keepPosition
+			? Math.max(currentTimeRef.current || 0, pendingSeekTimeRef.current)
+			: 0;
 		resetOverride();
 		setIsLoading(true);
 		setHasError(false);
@@ -1765,6 +1906,9 @@ export default function VideoPlayer({
 					// Ses değişti → altyazı otomatik seçimi (Türkçe ses → Forced) yeniden değerlendirilsin.
 					subtitles.resetUserChoice();
 				}}
+				videoVariants={videoVariants}
+				selectedVariantId={selectedVariantId}
+				onSelectVariant={selectVariant}
 			/>
 		</View>
 	);

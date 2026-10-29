@@ -6,6 +6,8 @@ import {
 	oynatilabilirAkislaraCevir,
 } from "@/services/liveApi";
 import { DownloadManager } from "@/services/downloadManager";
+import { matchesResumeEntry } from "@/utils/resumeMatch";
+import { resolvePluginName } from "@/utils/pluginName";
 import { addToWatchHistory, getContinueWatching } from "@/utils/storage";
 import { resetBrightness } from "@/utils/deviceControls";
 import {
@@ -160,7 +162,9 @@ export default function PlayerScreen() {
 			(targetUrl && String(targetUrl).includes("/dizi/")
 				? targetUrl.replace(/\/sezon-\d+\/bolum-\d+.*$/, "")
 				: null);
-		const pName = params.plugin;
+		// Madde 5: yansı alan adı kayıtlıysa gerçek eklenti adına düzeltilir.
+		const pName =
+			resolvePluginName({ plugin: params.plugin, url: sUrl }) || params.plugin;
 		const currSeason = params.season ? Number(params.season) : 1;
 		const currEpisode = params.episode ? Number(params.episode) : 1;
 		if (sUrl && pName) {
@@ -228,7 +232,16 @@ export default function PlayerScreen() {
 	const [initialTime, setInitialTime] = useState(
 		params.currentTime ? Number(params.currentTime) : 0,
 	);
-	const [sources, setSources] = useState([]);
+	/**
+ * CehennemPass progressive MP4 kaynağı mı? Bu kaynak YALNIZ indirme
+ * modalında gösterilir; oynatıcıda HLS kaynakları kalır.
+ */
+function isCehennemPassSource(source) {
+	const name = String(source?.result?.name || "").toLowerCase();
+	const url = String(source?.result?.url || "").toLowerCase();
+	return name.includes("cehennempass") || url.includes("gelsistirire.top");
+}
+const [sources, setSources] = useState([]);
 	// Canlı TV'de `targetUrl` yoktur; yalnız `loading`'in bu yüzden `false`
 	// başlaması ekranı "bağlantı bulunamadı" hatasında açardı.
 	const [loading, setLoading] = useState(Boolean(targetUrl || liveKanalId));
@@ -253,10 +266,14 @@ export default function PlayerScreen() {
 			}
 			try {
 				const continueData = await getContinueWatching();
-				const match = continueData.find(
-					(item) =>
-						item.id === (contentId || targetUrl) ||
-						(targetUrl && item.url === targetUrl),
+				const match = continueData.find((item) =>
+					matchesResumeEntry(item, {
+						contentId,
+						url: targetUrl,
+						seriesTitle: seriesInfo?.seriesTitle || title,
+						season: seriesInfo?.season,
+						episode: seriesInfo?.episode,
+					}),
 				);
 				if (match && match.currentTime > 10) {
 					setInitialTime(match.currentTime);
@@ -266,7 +283,9 @@ export default function PlayerScreen() {
 			}
 		}
 		checkResumePosition();
-	}, [contentId, targetUrl, params.currentTime, isCanli]);
+		// `seriesInfo` referansı her useMemo ile yenilendiği için JSON özeti kullanılır.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [contentId, targetUrl, params.currentTime, JSON.stringify(seriesInfo), isCanli]);
 	/**
 	 * Kaynakları getirir: film/dizi → extractor, canlı TV → M3U akışları.
 	 *
@@ -306,6 +325,33 @@ export default function PlayerScreen() {
 	 */
 	const kaynaklariGetir = useCallback(async () => {
 		if (!isCanli) {
+			// Yerel dosya (İndirilenler ekranından açılan kayıt): ALAÇI değil
+			// `file://` ya da cihaz içeriği URI'si; HİÇBİR ağ turu yapılmaz.
+			const yerelYol =
+				targetUrl && !/^https?:/i.test(targetUrl) ? targetUrl : null;
+			if (yerelYol) {
+				const yerelAlt = params.localSubtitle || null;
+				const isHlsMaster = yerelYol.endsWith(".m3u8");
+				const isTs = yerelYol.endsWith(".ts");
+				return {
+					kaynaklar: [
+						{
+							extractor: "Yerel İndirme",
+							result: {
+								name: "Yerel Dosya",
+								url: yerelYol,
+								type: isHlsMaster ? "m3u8" : isTs ? undefined : "mp4",
+								is_hls: isHlsMaster,
+								subtitles: yerelAlt
+									? [{ name: "Yerel Altyazı", url: yerelAlt }]
+									: [],
+							},
+						},
+					],
+					hata: null,
+					elenen: 0,
+				};
+			}
 			/*
 			 * ── Çevrimdışı oynatma (Faz 5, madde 14) ──────────────────
 			 *
@@ -354,7 +400,13 @@ export default function PlayerScreen() {
 				};
 			}
 			const extracted = await extractVideoSources(targetUrl);
-			return { kaynaklar: extracted, hata: null, elenen: 0 };
+			/*
+			 * CehennemPass progressive MP4 YALNIZ indirme modalında sunulur
+			 * (tek dosya indirme için ideal); oynatıcıda HLS kaynakları kalır
+			 * (kullanıcı isteği — oynatıcıda kalite/ses seçimi çalışsın).
+			 */
+			const oynatilabilir = extracted.filter((s) => !isCehennemPassSource(s));
+			return { kaynaklar: oynatilabilir, hata: null, elenen: 0 };
 		}
 		const sonuc = await fetchLiveStreams(liveKanalId);
 		if (!sonuc?.ok) {
@@ -362,7 +414,7 @@ export default function PlayerScreen() {
 		}
 		const { kaynaklar, elenen } = oynatilabilirAkislaraCevir(sonuc.streams);
 		return { kaynaklar, hata: null, elenen };
-	}, [isCanli, liveKanalId, targetUrl, contentId, seriesInfo, title]);
+	}, [isCanli, liveKanalId, targetUrl, contentId, seriesInfo, title, params.localSubtitle]);
 	/** Makine tarafı hata sınıfını kullanıcı metnine çevirir. */
 	const canliHataMesaji = useCallback(
 		(reason) =>

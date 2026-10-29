@@ -17,11 +17,12 @@ import TVPressable from "../common/TVPressable";
  * - Video Sources (Close, Rapidrame, VidMoly, etc.)
  * - Subtitles (External VTT/SRT or stream subtitles)
  * - Audio Tracks (Dubbing / Multi-audio)
+ * - Video quality (HLS variants) — "Video ve Ses Parçaları" ekranında sol sütun
  */
 export default function TrackSelectionModal({
 	visible,
 	onClose,
-	type = "sources", // 'sources' | 'subtitles' | 'audio'
+	type = "sources", // 'sources' | 'subtitles' | 'audio' | 'tracks'
 	sources = [],
 	selectedSourceIndex = 0,
 	onSelectSource,
@@ -33,6 +34,10 @@ export default function TrackSelectionModal({
 	audioTracks = [],
 	selectedAudioTrack = null, // null = auto/default, or index
 	onSelectAudioTrack,
+	// Video kalitesi (HLS varyantları)
+	videoVariants = [],
+	selectedVariantId = null,
+	onSelectVariant,
 }) {
 	const insets = useSafeAreaInsets();
 
@@ -67,6 +72,182 @@ export default function TrackSelectionModal({
 				return "options-outline";
 		}
 	};
+
+	/** Ses parçaları listesi (tek ekranda "audio" ve "tracks" için ortak). */
+	const renderAudioOptions = () => (
+		<View>
+			{audioTracks.length === 0 ? (
+				<View style={styles.emptyContainer}>
+					<Ionicons
+						name="information-circle-outline"
+						size={28}
+						color="#8E8E93"
+					/>
+					<Text style={styles.emptyText}>
+						Bu video kaynağında ek ses parçası bulunamadı.
+						Varsayılan ses oynatılıyor.
+					</Text>
+				</View>
+			) : (
+				audioTracks.map((track, index) => {
+					const trackId =
+						typeof track.index === "number" ? track.index : index;
+					const isSelected =
+						selectedAudioTrack === trackId ||
+						(selectedAudioTrack === null && track.selected);
+
+					let title =
+						track.title ||
+						(track.language
+							? `Ses (${track.language.toUpperCase()})`
+							: `Ses Parçası ${index + 1}`);
+
+					return (
+						<TVPressable
+							key={`audio-${index}`}
+							autoFocus={isSelected}
+							style={[
+								styles.optionItem,
+								isSelected && styles.optionItemSelected,
+							]}
+							focusedStyle={styles.optionItemFocused}
+							onPress={() => {
+								onSelectAudioTrack(trackId);
+								onClose();
+							}}>
+							<View style={styles.optionLeft}>
+								<View
+									style={[
+										styles.radioCircle,
+										isSelected && styles.radioCircleSelected,
+									]}>
+									{isSelected && <View style={styles.radioDot} />}
+								</View>
+								<View style={styles.optionTextContainer}>
+									<Text
+										style={[
+											styles.optionTitle,
+											isSelected && styles.optionTitleSelected,
+										]}>
+										{title}
+									</Text>
+									{track.bitrate && (
+										<Text style={styles.optionSubtitle}>
+											{Math.round(track.bitrate / 1000)} kbps
+										</Text>
+									)}
+								</View>
+							</View>
+							{isSelected && (
+								<Ionicons
+									name="checkmark-circle"
+									size={20}
+									color="#FF3B30"
+								/>
+							)}
+						</TVPressable>
+					);
+				})
+			)}
+		</View>
+	);
+
+	/** Video kalitesi (HLS varyantı) listesi + "Otomatik" seçeneği. */
+	const renderVideoOptions = () => (
+		<View>
+			{/* Otomatik (ABR): cihaz bağlantısına göre kalite seçer. */}
+			<TVPressable
+				autoFocus={selectedVariantId === null}
+				style={[
+					styles.optionItem,
+					selectedVariantId === null && styles.optionItemSelected,
+				]}
+				focusedStyle={styles.optionItemFocused}
+				onPress={() => {
+					onSelectVariant?.(null);
+					onClose();
+				}}>
+				<View style={styles.optionLeft}>
+					<View
+						style={[
+							styles.radioCircle,
+							selectedVariantId === null && styles.radioCircleSelected,
+						]}>
+						{selectedVariantId === null && <View style={styles.radioDot} />}
+					</View>
+					<View style={styles.optionTextContainer}>
+						<Text
+							style={[
+								styles.optionTitle,
+								selectedVariantId === null && styles.optionTitleSelected,
+							]}>
+							Otomatik
+						</Text>
+						<Text style={styles.optionSubtitle}>
+							En yüksek kalite (bağlantı hızına göre değişmez)
+						</Text>
+					</View>
+				</View>
+				{selectedVariantId === null && (
+					<Ionicons name="checkmark-circle" size={20} color="#FF3B30" />
+				)}
+			</TVPressable>
+
+			{videoVariants.length === 0 ? (
+				<Text style={styles.emptyText}>
+					Bu kaynakta kalite seçeneği bulunamadı.
+				</Text>
+			) : (
+				videoVariants.map((variant) => {
+					const isSelected = selectedVariantId === variant.id;
+					return (
+						<TVPressable
+							key={`variant-${variant.id}`}
+							style={[
+								styles.optionItem,
+								isSelected && styles.optionItemSelected,
+							]}
+							focusedStyle={styles.optionItemFocused}
+							onPress={() => {
+								onSelectVariant?.(variant.id);
+								onClose();
+							}}>
+							<View style={styles.optionLeft}>
+								<View
+									style={[
+										styles.radioCircle,
+										isSelected && styles.radioCircleSelected,
+									]}>
+									{isSelected && <View style={styles.radioDot} />}
+								</View>
+								<View style={styles.optionTextContainer}>
+									<Text
+										style={[
+											styles.optionTitle,
+											isSelected && styles.optionTitleSelected,
+										]}>
+										{variant.resolution || "Kalite"}
+									</Text>
+									{variant.bandwidth ? (
+										<Text style={styles.optionSubtitle}>
+											{Math.round(variant.bandwidth / 1000)} kbps
+										</Text>
+									) : null}
+								</View>
+							</View>
+							{isSelected && (
+								<Ionicons
+									name="checkmark-circle"
+									size={20}
+									color="#FF3B30"
+								/>
+							)}
+						</TVPressable>
+					);
+				})
+			)}
+		</View>
+	);
 
 	return (
 		<Modal
@@ -106,26 +287,27 @@ export default function TrackSelectionModal({
 						style={styles.contentList}
 						showsVerticalScrollIndicator={false}>
 						{/*
-						 * ⭐ "tracks" GÖRÜNÜMÜ (kullanıcı isteği, sorun 6).
-						 *
-						 * Referans uygulamada video ve ses parçaları TEK ekranda,
-						 * İKİ SÜTUN hâlinde gösterilir: sol "Video parçaları",
-						 * sağ "Ses parçaları". Ayrı ayrı modal açmak kullanıcıyı
-						 * 2-3 ekran arasında gezdiriyordu.
-						 *
-						 * Bu blok yalnızca DÜZEN sağlar; ses listesi aşağıdaki
-						 * mevcut bloğun KENDİSİ render edilir, ikinci kez
-						 * render edilmez (aksi hâlde aynı `onSelectAudioTrack`
-						 * iki kez tetiklenirdi).
+						 * "tracks": video (kalite) ve ses listesi TEK ekranda,
+						 * İKİ SÜTUN hâlinde. Kalite seçimi sabit kaliteyi
+						 * başlatır (ExoPlayer ABR'si devre dışı).
 						 */}
-						{type === "tracks" && (
-							<View style={styles.tracksHeaderRow}>
-								<Text style={styles.tracksColumnLabel}>
-									Video parçaları
-								</Text>
-								<Text style={styles.tracksColumnLabel}>Ses parçaları</Text>
+						{type === "tracks" ? (
+							<View style={styles.tracksColumns}>
+								<View style={styles.tracksColumn}>
+									<Text style={styles.tracksColumnLabel}>
+										Video parçaları
+									</Text>
+									{renderVideoOptions()}
+								</View>
+								<View style={styles.tracksColumn}>
+									<Text style={styles.tracksColumnLabel}>
+										Ses parçaları
+									</Text>
+									{renderAudioOptions()}
+								</View>
 							</View>
-						)}
+						) : null}
+
 						{/* 1. SOURCES SELECTION */}
 						{type === "sources" && (
 							<View>
@@ -252,18 +434,12 @@ export default function TrackSelectionModal({
 												</Text>
 											</TVPressable>
 											<TVPressable
-												style={[
-													styles.syncBtn,
-													styles.syncBtnReset,
-												]}
+												style={[styles.syncBtn, styles.syncBtnReset]}
 												focusedStyle={styles.syncBtnFocused}
 												onPress={() =>
 													onUpdateSubtitleOffset?.(0, true)
 												}>
-												<Text
-													style={
-														styles.syncBtnResetText
-													}>
+												<Text style={styles.syncBtnResetText}>
 													Sıfırla
 												</Text>
 											</TVPressable>
@@ -395,88 +571,7 @@ export default function TrackSelectionModal({
 						)}
 
 						{/* 3. AUDIO TRACKS SELECTION */}
-						{(type === "audio" || type === "tracks") && (
-							<View>
-								{audioTracks.length === 0 ? (
-									<View style={styles.emptyContainer}>
-										<Ionicons
-											name="information-circle-outline"
-											size={28}
-											color="#8E8E93"
-										/>
-										<Text style={styles.emptyText}>
-											Bu video kaynağında ek ses parçası bulunamadı.
-											Varsayılan ses oynatılıyor.
-										</Text>
-									</View>
-								) : (
-									audioTracks.map((track, index) => {
-										const trackId =
-											typeof track.index === "number"
-												? track.index
-												: index;
-										const isSelected =
-											selectedAudioTrack === trackId ||
-											(selectedAudioTrack === null && track.selected);
-
-										// Format track title
-										let title =
-											track.title ||
-											(track.language
-												? `Ses (${track.language.toUpperCase()})`
-												: `Ses Parçası ${index + 1}`);
-
-										return (
-											<TVPressable
-												key={`audio-${index}`}
-												autoFocus={isSelected}
-												style={[
-													styles.optionItem,
-													isSelected && styles.optionItemSelected,
-												]}
-												focusedStyle={styles.optionItemFocused}
-												onPress={() => {
-													onSelectAudioTrack(trackId);
-													onClose();
-												}}>
-												<View style={styles.optionLeft}>
-													<View
-														style={[
-															styles.radioCircle,
-															isSelected && styles.radioCircleSelected,
-														]}>
-														{isSelected && (
-															<View style={styles.radioDot} />
-														)}
-													</View>
-													<View style={styles.optionTextContainer}>
-														<Text
-															style={[
-																styles.optionTitle,
-																isSelected && styles.optionTitleSelected,
-															]}>
-															{title}
-														</Text>
-														{track.bitrate && (
-															<Text style={styles.optionSubtitle}>
-																{Math.round(track.bitrate / 1000)} kbps
-															</Text>
-														)}
-													</View>
-												</View>
-												{isSelected && (
-													<Ionicons
-														name="checkmark-circle"
-														size={20}
-														color="#FF3B30"
-													/>
-												)}
-											</TVPressable>
-										);
-									})
-								)}
-							</View>
-						)}
+						{type === "audio" && renderAudioOptions()}
 					</ScrollView>
 				</View>
 			</View>
@@ -539,20 +634,20 @@ const styles = StyleSheet.create({
 		marginBottom: 8,
 	},
 	/*
-	 * İki sütunlu başlık (video | ses). `flex: 1` her sütuna eşit genişlik
-	 * verir; ses listesi tam genişlikte çizilir ama başlıkla hizalanmış
-	 * görünür — kullanıcı hangi listenin hangi başlığa ait olduğunu anlar.
+	 * "Video ve Ses Parçaları": iki sütun — sol kalite, sağ ses.
 	 */
-	tracksHeaderRow: {
+	tracksColumns: {
 		flexDirection: "row",
-		gap: 24,
-		paddingBottom: 8,
+		gap: 16,
+	},
+	tracksColumn: {
+		flex: 1,
 	},
 	tracksColumnLabel: {
-		flex: 1,
 		color: "#FFFFFF",
-		fontSize: 17,
+		fontSize: 16,
 		fontWeight: "700",
+		marginBottom: 8,
 	},
 	optionItem: {
 		flexDirection: "row",
