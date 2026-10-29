@@ -1,0 +1,7 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "name": "StreamPulseStreamDownloader",
+    "modules": ["expo.modules.streamdownloader.StreamDownloaderModule"]
+  }
+}

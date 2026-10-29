@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_download_title">StreamPulse indiriyor</string>
+  <!-- İlerleme metni Notifier.kt içinde elle kuruluyor (Formatter çökmesi dersi). -->
+  <string name="download_completed">İndirildi</string>
+  <string name="download_failed">İndirilemedi</string>
+  <string name="channel_active">İndirmeler</string>
+  <string name="channel_result">İndirme sonuçları</string>
+</resources>
