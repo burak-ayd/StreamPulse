@@ -7,7 +7,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 export const SCHEMA_VERSION_KEY = "streampulse_schema_version";
 
 /**

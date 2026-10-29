@@ -4,6 +4,7 @@ import { getDeviceId } from "./deviceId";
 import { now as getHlcNow } from "./hlc";
 import { filterPayload, capList, SIZE_CAPS } from "./fieldWhitelist";
 import { canonicalType } from "./mediaType";
+import { resolvePluginName } from "./pluginName";
 import { resolveSearchDoc } from "./merge/documents";
 
 export const STORAGE_KEYS = {
@@ -1204,18 +1205,14 @@ export async function deleteDownloadItem(itemId) {
  */
 export const DEFAULT_DOWNLOAD_SETTINGS = {
 	// Eş zamanlı indirme sayısı (kuyruktan kaç tanesi aynı anda indirilir)
-	maxConcurrentDownloads: 2, // 1-5 arası
+	maxConcurrentDownloads: 2, // 1-10 arası
 	// Eş zamanlı bağlantı sayısı (tek dosya için paralel parça sayısı, ileriki fazlar)
-	maxConnectionsPerDownload: 4, // 1-8 arası
-	// İndirme konumu (iOS'ta sandbox: documentDirectory + bu yol)
-	downloadPath: "Downloads/StreamPulse",
-	// Kullanıcının seçtiği dışa aktarma klasörü (SAF tree URI). Boşsa
-	// dışa aktarma yapılmaz; indirme her zaman uygulama deposunda oynatılır.
-	downloadDirUri: null,
-	// Tamamlanınca seçili klasöre otomatik kopyala
-	autoExport: true,
+	maxConnectionsPerDownload: 6, // 1-16 arası
 	// Her indirmede onay modal'ı gösterilsin mi?
 	alwaysAskBeforeDownload: true,
+	// Son seçilen HLS kalitesi ("540x960@2800000" benzeri variantId). null =
+	// Otomatik (en yüksek). Modal kaydeder; sonraki açılışta seçili gelir.
+	lastDownloadQuality: null,
 };
 
 /**
@@ -1254,8 +1251,8 @@ export async function saveDownloadSettings(updates) {
 		try {
 			const current = await getDownloadSettings();
 			const clamped = { ...updates };
-			clampRange(clamped, "maxConcurrentDownloads", 1, 5);
-			clampRange(clamped, "maxConnectionsPerDownload", 1, 8);
+			clampRange(clamped, "maxConcurrentDownloads", 1, 10);
+			clampRange(clamped, "maxConnectionsPerDownload", 1, 16);
 			const updated = { ...current, ...clamped };
 			await AsyncStorage.setItem(
 				STORAGE_KEYS.DOWNLOAD_SETTINGS,
@@ -1326,8 +1323,11 @@ export async function getPluginDownloadPrefs() {
  */
 export async function getPluginDownloadPref(pluginName) {
 	if (!pluginName) return null;
+	// Anahtar normalize: 'HDFilmCehennemi' ve 'hdfilmcehennemi' AYNI tercihe bağlanır
+	// (aksi halde 'her seferinde sor' kapalı olsa bile modal her açılır).
+	const anahtar = String(pluginName).toLowerCase();
 	const prefs = await getPluginDownloadPrefs();
-	return prefs[pluginName] || null;
+	return prefs[anahtar] || prefs[pluginName] || null;
 }
 
 /**
@@ -1341,8 +1341,11 @@ export async function savePluginDownloadPref(pluginName, updates) {
 	return mutate(STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS, async () => {
 		try {
 			const prefs = await getPluginDownloadPrefs();
-			const merged = { ...(prefs[pluginName] || {}), ...updates };
-			const existing = prefs[pluginName];
+			// Anahtar normalize (okuma ile aynı): büyük/küçük harf farkı
+			// "her seferinde sor" tercihini kaybettiriyordu.
+			const anahtar = pluginName.toLowerCase();
+			const merged = { ...(prefs[anahtar] || prefs[pluginName] || {}), ...updates };
+			const existing = prefs[anahtar] || prefs[pluginName];
 			const isEmptyUpdate =
 				updates &&
 				!updates.preferredSource &&
@@ -1353,7 +1356,7 @@ export async function savePluginDownloadPref(pluginName, updates) {
 			if (isEmptyUpdate && !existing) {
 				return prefs;
 			}
-			const updated = { ...prefs, [pluginName]: merged };
+			const updated = { ...prefs, [anahtar]: merged };
 			await AsyncStorage.setItem(
 				STORAGE_KEYS.PLUGIN_DOWNLOAD_PREFS,
 				JSON.stringify(updated),
@@ -1676,10 +1679,14 @@ export async function markEpisodeComplete(
 				(String(currentItem.url).includes("/dizi/")
 					? currentItem.url
 					: null);
-			const pName =
+			// resolvePluginName'den geç: "S231"/"s231" yazımlı eski kayıtlar
+			// ham adla detay fetch'i 404'te sessizce düşürüyor (Tur 12).
+			const hamPName =
 				currentItem.plugin ||
 				(await getSelectedPlatform())?.name ||
 				"hdfilmcehennemi";
+			const pName =
+				resolvePluginName({ plugin: hamPName }) || hamPName;
 
 			if (sUrl && pName) {
 				try {
@@ -2081,6 +2088,7 @@ export async function unmarkEpisodesWatched(content, marks = []) {
 			if (!Array.isArray(history) || history.length === 0) return [];
 
 			const seriesId = content?.id || content?.url || content?.seriesId;
+			const plugin = content?.plugin || null;
 			const titleLower = (content?.title || content?.seriesTitle || "")
 				.toLowerCase()
 				.trim();
@@ -3030,36 +3038,5 @@ export default {
 	mutate,
 };
 
-/**
- * Bir içerik nesnesinden veya URL'sinden ait olduğu eklenti (plugin) adını belirler
- * @param {Object} item
- * @returns {string|null}
- */
-export function resolvePluginName(item) {
-	if (!item) return null;
-	if (item.plugin && typeof item.plugin === "string") return item.plugin;
-	const rawUrl =
-		item.url ||
-		item.seriesUrl ||
-		(typeof item.id === "string" ? item.id : "");
-	if (rawUrl) {
-		const lower = rawUrl.toLowerCase();
-		if (lower.includes("dizibox")) return "dizibox";
-		if (lower.includes("hdfilmcehennemi")) return "hdfilmcehennemi";
-		if (lower.includes("filmmodu")) return "filmmodu";
-		if (lower.includes("dizipal")) return "dizipal";
-		if (lower.includes("sezonlukdizi")) return "sezonlukdizi";
-		if (lower.includes("diziyou")) return "diziyou";
-		if (lower.includes("sinefy")) return "sinefy";
-		if (lower.includes("fullhdfilmizlesene")) return "fullhdfilmizlesene";
-		try {
-			const full = lower.startsWith("http") ? lower : `https://${lower}`;
-			const host = new URL(full).hostname.replace(/^www\./, "");
-			const parts = host.split(".");
-			if (parts.length > 0 && parts[0] && parts[0].length > 2) {
-				return parts[0];
-			}
-		} catch {}
-	}
-	return null;
-}
+export { resolvePluginName };
+

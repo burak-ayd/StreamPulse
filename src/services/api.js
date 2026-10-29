@@ -601,7 +601,16 @@ export async function extractVideoSources(url) {
 		if (response.ok) {
 			const data = await response.json();
 			if (Array.isArray(data)) {
-				const sources = data.map((item) => {
+				// 🔍 Ölü öge süzgeci (RC 2026-10-28): backend "__result:null__"
+				// sızarsa o öge oynatıcıya yarı bozuk (url:"") kaynağı
+				// oluyordu ve İLK hata anında resume hedefi sıfırlanıyordu.
+				// Geçersizler tamamen atılır.
+				const gecerli = data.filter(
+					(it) =>
+						typeof it?.result?.url === "string" &&
+						it.result.url.startsWith("http"),
+				);
+				const sources = gecerli.map((item) => {
 					const streamUrl = item?.result?.url || "";
 					const isHls =
 						item?.result?.is_hls === true ||

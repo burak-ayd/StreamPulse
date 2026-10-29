@@ -70,6 +70,50 @@ export function languageOf(item) {
 }
 
 /**
+ * Kartın bölüm bilgisi — bölüm kartıysa `{seriesName, season, episode}`.
+ *
+ * ⚠️ Backend bu alanları artık KENDİSİ dolduruyor: `MainPageResult` başlığı
+ * ("Halef S04E03", "War 4x9", "Adı - 1x02") merkezî ayrıştırıcıdan geçip
+ * `series_name` / `season` / `episode` alanlarına yazılıyor. Eskiden bu
+ * alanlar eklentiden geldiği gibi boştu; sonuç olarak ana sayfa kartında
+ * dizi adı ve "S. Sezon E. Bölüm" satırları gösterilemiyordu.
+ *
+ * @param {object} item
+ * @returns {{seriesName: string, season: number, episode: number}|null}
+ */
+export function episodeMetaOf(item) {
+	// ⚠️ `Number(null)` → 0'dır; `null` alanları "bölüm kartı" sanılırdı.
+	// Bu yüzden varlık kontrolü ÖNCE yapılır.
+	if (item?.season == null || item?.episode == null) return null;
+	const season = Number(item.season);
+	const episode = Number(item.episode);
+	if (!Number.isFinite(season) || !Number.isFinite(episode)) return null;
+	return {
+		seriesName: item?.series_name || cleanSeriesName(item?.title) || "",
+		season,
+		episode,
+	};
+}
+
+/**
+ * Başlıktan bölüm ibaresini temizler — "Halef S04E03" → "Halef".
+ *
+ * Backend `series_name`'i normalde doldurur; bu YEDEK yol eski önbellek
+ * girdileri için (alan henüz yoksa) başlığı kirletmemeyi sağlar.
+ */
+function cleanSeriesName(title) {
+	if (!title || typeof title !== "string") return null;
+	return (
+		title
+			.replace(/\s*\d+\s*\.?\s*Sezon\s+\d+\s*\.?\s*Bölüm\s*$/i, "")
+			.replace(/\s+S\d{1,2}E\d{1,2}\s*$/i, "")
+			.replace(/\s+-\s*\d+x\d+\s*$/i, "")
+			.replace(/\s+\d+x\d+\s*$/i, "")
+			.trim() || null
+	);
+}
+
+/**
  * İçeriğin eklentiden gelen KİMLİĞİ (tekilleştirme için).
  *
  * ⚠️ `contentKey`'den ayrı tutuldu çünkü ikisi farklı işe yarar:

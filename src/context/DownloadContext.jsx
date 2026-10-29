@@ -53,7 +53,14 @@ export function DownloadProvider({ children }) {
 			await DownloadManager.initialize();
 			if (disposed) return;
 			readyRef.current = true;
-			setSettings(await getDownloadSettings());
+			const ayarlar = await getDownloadSettings();
+			setSettings(ayarlar);
+			// Es zamanlı indirme limiti native motora bildirilir (ayar aktif olsun).
+			try {
+				await DownloadManager.setMaxConcurrent(ayarlar?.maxConcurrentDownloads || 2);
+			} catch (e) {
+				console.warn("Es zamanli indirme limiti gonderilemedi:", e?.message);
+			}
 			syncQueue();
 		})();
 
@@ -244,7 +251,6 @@ export function DownloadProvider({ children }) {
 			resetSettings,
 			isDownloaded,
 			downloadedKeys,
-			exportDownload: DownloadManager.exportDownload,
 			openDownloadModal: (payload) => setModal(payload),
 			shouldAskBeforeDownload: DownloadManager.shouldAskBeforeDownload,
 		}),
@@ -294,7 +300,20 @@ async function quickEnqueueWithPref({ content, episode, pluginName, pref }) {
 	const usable = (Array.isArray(sources) ? sources : []).filter((s) =>
 		Boolean(s?.result?.url),
 	);
+	/*
+	 * Kaynak seçimi — modal ile AYNI mantık:
+	 *  1) Kayıtlı tercih İSİMLE (çünkü "Rapidrame" iki kaynak üretir:
+	 *     HLS master + CehennemPass progressive MP4 → extractor adı AYNI).
+	 *  2) Tercih isimle yoksa doğrudan dosya (progressive MP4) önce gelir:
+	 *     tek dosya indirme çok daha hızlı (HLS: 0.7 MB/s vs MP4: 40+ MB/s).
+	 *  3) Eski kayıt (extractor adı) — son çare.
+	 */
+	const { preferDirectSources } = await import("@/utils/directMedia");
+	const sirali = preferDirectSources(usable);
 	const chosen =
+		(pref?.preferredSourceName &&
+			sirali.find((s) => s?.result?.name === pref.preferredSourceName)) ||
+		sirali[0] ||
 		(pref?.preferredSource &&
 			usable.find((s) => s.extractor === pref.preferredSource)) ||
 		usable[0];
@@ -311,6 +330,32 @@ async function quickEnqueueWithPref({ content, episode, pluginName, pref }) {
 			)
 		: null;
 
+	// Kayıtlı kalite (madde 4): son modal seçimi; yoksa native "Otomatik".
+	let savedQuality = null;
+	try {
+		const dlSettings = await getDownloadSettings();
+		if (dlSettings?.lastDownloadQuality && chosen?.result?.url?.includes(".m3u8")) {
+			const { listHlsVariants } = await import("@/services/downloadManager").then(
+				(m) => m.default ?? m.DownloadManager,
+			);
+			const { pickVariant, variantId: vid } = await import("@/utils/variants");
+			const kaliteler = await listHlsVariants(
+				chosen.result.url,
+				chosen.result.headers || {},
+			).catch(() => []);
+			const secilen = pickVariant(kaliteler, dlSettings.lastDownloadQuality);
+			if (secilen) {
+				savedQuality = {
+					variantId: vid(secilen),
+					variantBandwidth: secilen.bandwidth,
+					variantResolution: secilen.resolution,
+				};
+			}
+		}
+	} catch (e) {
+		console.warn("Kayıtlı kalite uygulanamadı:", e?.message);
+	}
+
 	return DownloadManager.enqueue({
 		contentId: content?.id || content?.url,
 		seriesId: isSeries ? content?.id || content?.url : null,
@@ -325,6 +370,7 @@ async function quickEnqueueWithPref({ content, episode, pluginName, pref }) {
 		sourceName: chosen.extractor,
 		sourceHeaders: chosen.result.headers || {},
 		audioLanguage: pref?.preferredAudioTrack || null,
+		...(savedQuality || {}),
 		subtitleUrl: chosenSub?.url || null,
 		subtitleLang: chosenSub?.name || null,
 		downloadSubtitle: Boolean(chosenSub),

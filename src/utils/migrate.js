@@ -10,6 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getDeviceId } from "./deviceId";
 import { now as getHlcNow } from "./hlc";
 import { filterPayload, capList, SIZE_CAPS } from "./fieldWhitelist";
+import { MIRROR_PLUGIN_PREFIXES } from "./pluginName";
 import { CURRENT_SCHEMA_VERSION, getSchemaVersion, setSchemaVersion } from "./schemaVersion";
 
 const KEYS = {
@@ -113,6 +114,51 @@ export async function runMigrationIfNeeded() {
 			} catch (e) {
 				console.warn("[Migrate] Devam et migrasyon hatası:", e);
 			}
+		}
+
+		// 5. Yansı alan adı yanlışlıklarını düzelt (v3, madde 5):
+		// `s231` gibi kaynak alan adları yanlışlıkla eklenti adı
+		// olarak kaydedilmişti; bilinen yansı önekleri gerçek adlara taşınır.
+		try {
+			const fixPlugin = (p) => {
+				if (typeof p !== "string") return p;
+				for (const [prefix, plugin] of MIRROR_PLUGIN_PREFIXES) {
+					if (p.startsWith(prefix) || p.includes(prefix)) return plugin;
+				}
+				return p;
+			};
+			for (const key of [
+				KEYS.FAVORITES,
+				KEYS.WATCHLIST,
+				KEYS.WATCH_HISTORY,
+				KEYS.CONTINUE_WATCHING,
+			]) {
+				const raw = await AsyncStorage.getItem(key);
+				if (!raw) continue;
+				const list = JSON.parse(raw);
+				if (!Array.isArray(list)) continue;
+				await AsyncStorage.setItem(
+					key,
+					JSON.stringify(list.map((it) => (it?.plugin ? { ...it, plugin: fixPlugin(it.plugin) } : it))),
+				);
+			}
+			// Eklenti indirme tercihleri: anahtarlar eklenti adı.
+			const prefsRaw = await AsyncStorage.getItem("app_plugin_download_prefs");
+			if (prefsRaw) {
+				const prefs = JSON.parse(prefsRaw);
+				if (prefs && typeof prefs === "object") {
+					const fixed = {};
+					for (const [name, value] of Object.entries(prefs)) {
+						fixed[fixPlugin(name)] = value;
+					}
+					await AsyncStorage.setItem(
+						"app_plugin_download_prefs",
+						JSON.stringify(fixed),
+					);
+				}
+			}
+		} catch (e) {
+			console.warn("[Migrate] Yansı eklenti adı migrasyonu hatası:", e);
 		}
 
 		// Migrasyon tamamlandı, sürümü güncelle
