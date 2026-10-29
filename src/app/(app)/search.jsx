@@ -13,6 +13,7 @@ import {
 } from "@/utils/storage";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { useReactiveData } from "@/utils/storageListener";
+import { normalizePluginValue } from "@/utils/pluginName";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import {
@@ -384,7 +385,7 @@ export default function SearchScreen() {
 
 		const movieWithPlugin = {
 			...item,
-			plugin: item.plugin,
+			plugin: normalizePluginValue(item.plugin),
 		};
 		const movieId =
 			item.id ||

@@ -326,11 +326,14 @@ export default function ActionButtons({
 		{
 			key: "download",
 			// #9: indirildiyse yeşil checkmark-done; değilse indirme ikonu.
+			// Madde 2: ana "İndir" yalnızca filmlerde; dizi bölümleri
+			// bölüm listesindeki indirmeye girer.
 			icon: episodeDownloaded ? "checkmark-done-outline" : "download-outline",
 			label: episodeDownloaded ? "İndirildi" : "İndir",
 			color: episodeDownloaded ? colors.success || "#10b981" : "#38bdf8",
 			onPress: handleDownload,
 			active: episodeDownloaded,
+			hidden: isSeries,
 		},
 		{
 			key: "trailer",

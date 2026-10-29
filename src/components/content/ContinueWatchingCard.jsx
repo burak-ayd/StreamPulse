@@ -54,6 +54,18 @@ export default function ContinueWatchingCard({
 	const isEpisode =
 		item.type === "episode" || Boolean(item.season || item.episode);
 
+	/**
+	 * Başlık satırı: dizi adı. Alt satır: "S. Sezon E. Bölüm".
+	 *
+	 * Ana sayfa kartıyla AYNI biçim — bölüm adı burada gösterilmez
+	 * (bölüm adları sadece detay sayfasında; Netflix/Prime'daki gibi).
+	 */
+	const seriesTitle = item.seriesTitle || item.title || "İçerik";
+	const episodeLabel =
+		item.season && item.episode
+			? `${item.season}. Sezon ${item.episode}. Bölüm`
+			: "";
+
 	const movieRawLang =
 		item.language ||
 		item.languages ||
@@ -151,14 +163,12 @@ export default function ContinueWatchingCard({
 			{/* Info Block */}
 			<View style={styles.infoContainer}>
 				<Text style={styles.title} numberOfLines={1}>
-					{item.title}
+					{seriesTitle}
 				</Text>
 
 				{isEpisode && (
 					<Text style={styles.episodeInfo} numberOfLines={1}>
-						{item.season ? `S${item.season}` : ""}
-						{item.episode ? ` Bölüm ${item.episode}` : ""}
-						{item.episodeTitle ? ` • ${item.episodeTitle}` : ""}
+						{episodeLabel}
 					</Text>
 				)}
 			</View>

@@ -30,7 +30,11 @@ import { useNavLayout } from "@/hooks/useNavLayout";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
-import { contentIdentity, contentKey } from "@/utils/contentMeta";
+import {
+	contentIdentity,
+	contentKey,
+	episodeMetaOf,
+} from "@/utils/contentMeta";
 import { canonicalType } from "@/utils/mediaType";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import {
@@ -403,14 +407,26 @@ export default function CategoryScreen() {
 				withPlugin.is_series = true;
 			}
 
-			// "Dizi 2. Sezon 3. Bölüm" gibi başlıklardan sezon/bölüm çıkar
+			/*
+			 * Bölüm kartı mı? Önce BACKEND'in doldurduğu yapılandırılmış
+			 * alanlara bak (`series_name` / `season` / `episode`) — başlık
+			 * regex'i yalnız "1.Sezon 2.Bölüm" biçimini yakalıyor; "S04E03"
+			 * ve "4x9" gibi biçimler kaçıyordu. Regex artık YEDEK.
+			 */
+			const epMeta = episodeMetaOf(item);
 			const epMatch = (item.title || "").match(
 				/^(.+?)\s+(\d+)\.\s*Sezon\s+(\d+)\.\s*Bölüm/i,
 			);
-			if (epMatch) {
-				withPlugin.seriesTitle = epMatch[1].trim();
-				withPlugin.initialSeason = String(epMatch[2]);
-				withPlugin.initialEpisode = String(epMatch[3]);
+			if (epMeta || epMatch) {
+				withPlugin.seriesTitle = epMeta
+					? epMeta.seriesName
+					: epMatch[1].trim();
+				withPlugin.initialSeason = String(
+					epMeta ? epMeta.season : epMatch[2],
+				);
+				withPlugin.initialEpisode = String(
+					epMeta ? epMeta.episode : epMatch[3],
+				);
 			}
 
 			const id =

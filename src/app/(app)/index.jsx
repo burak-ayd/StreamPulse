@@ -9,6 +9,7 @@ import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
 import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
 import ListSelectModal from "@/components/modal/ListSelectModal";
 import { useAuth } from "@/context/AuthContext";
+import { episodeMetaOf } from "@/utils/contentMeta";
 import {
 	clearPluginCache,
 	fetchPlatformCategories,
@@ -30,6 +31,7 @@ import {
 	saveSelectedPlatform,
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
+import { normalizePluginValue } from "@/utils/pluginName";
 import BottomNavigation from "@components/BottomNavigation";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { useNavLayout } from "@/hooks/useNavLayout";
@@ -197,7 +199,7 @@ export default function Index() {
 				return {
 					...item,
 					backdrop_url: backdrop,
-					plugin: item.plugin || platformName,
+					plugin: normalizePluginValue(item.plugin || platformName),
 				};
 			} catch (error) {
 				// Detay alınamazsa poster ile devam et – hero boş kalmaz.
@@ -415,16 +417,29 @@ export default function Index() {
 				plugin: movie.plugin || selectedPlatform?.name,
 			};
 
+			/*
+			 * Bölüm kartı mı? Önce BACKEND'in doldurduğu yapılandırılmış
+			 * alanlara bak (`series_name` / `season` / `episode`) — başlık
+			 * regex'i yalnız "1.Sezon 2.Bölüm" biçimini yakalıyor; "S04E03"
+			 * ve "4x9" gibi biçimler kaçıyordu. Regex artık YEDEK.
+			 */
+			const epMeta = episodeMetaOf(movieWithPlugin);
 			const epTitleMatch = (movieWithPlugin.title || "").match(
 				/^(.+?)\s+(\d+)\.\s*Sezon\s+(\d+)\.\s*Bölüm/i,
 			);
 
-			if (epTitleMatch) {
+			if (epMeta || epTitleMatch) {
 				movieWithPlugin = {
 					...movieWithPlugin,
-					seriesTitle: epTitleMatch[1].trim(),
-					initialSeason: String(epTitleMatch[2]),
-					initialEpisode: String(epTitleMatch[3]),
+					seriesTitle: epMeta
+						? epMeta.seriesName
+						: epTitleMatch[1].trim(),
+					initialSeason: String(
+						epMeta ? epMeta.season : epTitleMatch[2],
+					),
+					initialEpisode: String(
+						epMeta ? epMeta.episode : epTitleMatch[3],
+					),
 					is_series: true,
 					content_type: "series",
 				};
@@ -463,8 +478,28 @@ export default function Index() {
 	);
 
 	const handleContinueWatchingPress = useCallback(
-		(item) => {
+		async (item) => {
 			if (item.url) {
+				/*
+				 * Yerel indirme kaydı: dosya test için silinmişse oynatma
+				 * başarısız olur — çevrimiçi kaynağa (detay sayfası) düş.
+				 */
+				if (!/^https?:/i.test(item.url)) {
+					try {
+						const { File } = await import("expo-file-system");
+						const dosya = new File(item.url);
+						// v57'de `exists` yok; üst dizini listeleyerek kontrol ediyoruz.
+						const varMi = dosya.parentDirectory
+							.list()
+							.some((e) => e.name === dosya.name);
+						if (!varMi) {
+							handleMoviePress(item);
+							return;
+						}
+					} catch (_e) {
+						// kontrol edilemiyorsa mevcut davranışa devam
+					}
+				}
 				router.push({
 					pathname: "/player",
 					params: {

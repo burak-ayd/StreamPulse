@@ -24,6 +24,7 @@ import { pushTepkisiBagla } from "@/services/pushApi";
  * çizer çizmez native splash'ı KENDİSİ gizler.
  */
 import { hideNativeSplash, waitForStartupGate } from "@/utils/splashScreen";
+import MissingPermissionsGate from "@/components/permissions/MissingPermissionsGate";
 
 export default function RootLayout() {
 	const [splashVisible, setSplashVisible] = useState(true);
@@ -170,6 +171,8 @@ export default function RootLayout() {
 									{/* absolute banner + modal: düzen akışına dokunmaz. */}
 									<UpdateBanner />
 									<UpdateSheet />
+									{/* Açılışta zorunlu izin kontrolü (madde 3). */}
+									<MissingPermissionsGate />
 									{/*
 									 * Son çocuk = en üstte. Native splash'ın
 									 * hemen altında bekler, kapı açılınca

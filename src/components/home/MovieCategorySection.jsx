@@ -1,5 +1,7 @@
 import CategoryCard, {
 	CARD_POSTER_RATIO,
+	CARD_SUBTITLE_HEIGHT,
+	CARD_SUBTITLE_MARGIN_TOP,
 	CARD_TITLE_HEIGHT,
 	CARD_TITLE_MARGIN_TOP,
 	ROW_CARD_GAP,
@@ -37,8 +39,8 @@ import {
 const CARD_STRIDE = ROW_CARD_WIDTH + ROW_CARD_GAP;
 
 /**
- * Bir "row" kartının gerçek yüksekliği: 2:3 poster + başlık satırı
- * (yıl satırı "row" varyantında çizilmez).
+ * Bir "row" kartının gerçek yüksekliği: 2:3 poster + başlık satırı +
+ * alt satır (sezon/bölüm ya da yıl).
  *
  * Satır sonu kutusu bu yüksekliğe BİREBİR eşit olmalı; aksi hâlde
  * `getItemLayout` (sabit adım) son öğeye doğru kayar.
@@ -46,7 +48,9 @@ const CARD_STRIDE = ROW_CARD_WIDTH + ROW_CARD_GAP;
 const ROW_CARD_HEIGHT =
 	ROW_CARD_WIDTH / CARD_POSTER_RATIO +
 	CARD_TITLE_MARGIN_TOP +
-	CARD_TITLE_HEIGHT;
+	CARD_TITLE_HEIGHT +
+	CARD_SUBTITLE_MARGIN_TOP +
+	CARD_SUBTITLE_HEIGHT;
 
 /**
  * SORUN 1 — "Tümünü göster" düğmesine ulaşmak zor.

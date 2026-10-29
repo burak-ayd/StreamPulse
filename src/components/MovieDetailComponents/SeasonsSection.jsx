@@ -977,20 +977,18 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 					const epNumber = ep.episode || ep.episode_number || index + 1;
 					const rawTitle = ep.title ? ep.title.trim() : "";
 				/*
-				 * Başlık biçimi: '<sezon>. <bölüm>. Bölüm' veya
-				 * '<bölüm>. <bölüm adı>'.
+				 * Başlık biçimi: Netflix/Prime tarzı '<bölüm>. <bölüm adı>'
+				 * ("1. Kral Yolu", "2. Kuzey Rüzgârı").
 				 *
-				 * ⚠️ İlk sayı SEZON numarasıdır, bölüm numarası DEĞİL.
-				 * Eskiden `${epNumber}. ${epNumber}. Bölüm` yazıyordu ve
-				 * sezon 1'de iki sayı aynı olduğu için ("1. 1. Bölüm")
-				 * hata fark edilmiyordu; sezon 1 bölüm 2 ekranda
-				 * "2. 2. Bölüm" olarak görünüyordu — yani "2. sezon,
-				 * 2. bölüm" yanlış izlenimi veriyordu. `selectedSeason`
-				 * zaten bu satırda indirme kimliği için kullanılıyordu.
+				 * Bölüm adı backend'den TMDB'den gelir. Ad yoksa bile
+				 * YEDEK bölüm-önce biçim korunur: "3. Bölüm". Eskiden
+				 * sezon-önce yazılıyordu ("1. 3. Bölüm") ve kullanıcı
+				 * bunu "sezon 1, bölüm 3" yerine "bölüm 1, sezon 3"
+				 * sanıyordu — Netflix/Prime'da bölüm sayısı ÖNDE gelir.
 				 */
 				const epDisplayTitle = rawTitle
 					? `${epNumber}. ${rawTitle}`
-					: `${selectedSeason}. ${epNumber}. Bölüm`;
+					: `${epNumber}. Bölüm`;
 
 
 					const epIndirildi = isDownloaded({

@@ -20,6 +20,7 @@ import {
 } from "@/services/pushApi";
 import { hasSession } from "@/services/token";
 import { openLogin } from "@/utils/authRoutes";
+import { buildPermissionRows, getPermissionStatuses } from "@/utils/permissions";
 import {
 	clearAllUserData,
 	getPluginVisibilitySettings,
@@ -34,6 +35,7 @@ import {
 	BackHandler,
 	Linking,
 	Modal,
+	Platform,
 	ScrollView,
 	StatusBar,
 	StyleSheet,
@@ -189,6 +191,33 @@ export default function SettingsScreen() {
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
 	const [activePluginsCount, setActivePluginsCount] = useState(0);
 	const [totalPluginsCount, setTotalPluginsCount] = useState(0);
+	// İzinler rozeti (madde 3): eksik zorunlu izin sayısı.
+	const [permissionBadge, setPermissionBadge] = useState(null);
+	const [permissionSummary, setPermissionSummary] = useState(null);
+
+	useEffect(() => {
+		if (Platform.OS !== "android") return;
+		let isMounted = true;
+		(async () => {
+			try {
+				const { sdk, statuses } = await getPermissionStatuses();
+				if (!isMounted) return;
+				const missing = buildPermissionRows(statuses, sdk).filter(
+					(r) => r.required && r.status !== "granted" && r.status !== "not_required",
+				);
+				if (missing.length) {
+					setPermissionBadge(missing.length);
+					setPermissionSummary(`${missing.map((m) => m.label).join(", ")} eksik`);
+				}
+			} catch (e) {
+				console.warn("İzin rozeti okunamadı:", e?.message);
+			}
+		})();
+		return () => {
+			isMounted = false;
+		};
+	}, []);
+
 
 	// APK güncelleme: satır kontrolü tetiklemez, modalı açar. Kontrol
 	// uygulama açılışında zaten otomatik çalışıyor (AppUpdateProvider);
@@ -521,6 +550,21 @@ export default function SettingsScreen() {
 							onPress={() =>
 								router.push({
 									pathname: "/(app)/settings/download",
+								})
+							}
+						/>
+
+						{/* İzinler (madde 3) — eksik zorunlu izin varsa rozet kırmızı */}
+						<SettingRow
+							icon="shield-outline"
+							iconBg={permissionBadge ? "#f43f5e" : "#22C55E"}
+							label="İzinler"
+							subtitle={
+								permissionSummary || "İndirme, bildirim ve yükleme izinleri"
+							}
+							onPress={() =>
+								router.push({
+									pathname: "/(app)/settings/permissions",
 								})
 							}
 						/>

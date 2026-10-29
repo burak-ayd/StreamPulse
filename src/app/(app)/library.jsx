@@ -21,6 +21,7 @@ import {
 	toggleWatchlist,
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
+import { normalizePluginValue } from "@/utils/pluginName";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
@@ -303,7 +304,7 @@ export default function LibraryScreen() {
 						url: item.seriesUrl || item.seriesId || item.url,
 						type: "series",
 						content_type: "series",
-						plugin: item.plugin || activePlatformName,
+						plugin: normalizePluginValue(item.plugin || activePlatformName),
 						rating: item.rating,
 						genre: item.genre || item.tagline,
 						updatedAt: item.updatedAt || item.watchedAt,

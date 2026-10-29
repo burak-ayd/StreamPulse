@@ -37,7 +37,13 @@
 import { useThemeContext } from "@/context/ThemeContext";
 import TVPressable from "@/components/common/TVPressable";
 import LanguageBadge from "@/components/common/LanguageBadge";
-import { languageOf, posterOf, ratingOf, yearOf } from "@/utils/contentMeta";
+import {
+	episodeMetaOf,
+	languageOf,
+	posterOf,
+	ratingOf,
+	yearOf,
+} from "@/utils/contentMeta";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import { memo } from "react";
@@ -55,25 +61,25 @@ export const ROW_CARD_GAP = 6;
  *
  * Poster kutusu `styles.poster` içinde `aspectRatio` ile tanımlı; stil
  * nesnesinden okunamadığı için iskelet de aynı sayıyı kullanmak zorunda.
- * Kaynak: `styles.poster` / `styles.title` / `styles.year`.
+ * Kaynak: `styles.poster` / `styles.title` / `styles.subtitle`.
  */
 export const CARD_POSTER_RATIO = 2 / 3;
 export const CARD_POSTER_RADIUS = 12;
 export const CARD_TITLE_HEIGHT = 17; // lineHeight
 export const CARD_TITLE_MARGIN_TOP = 6;
-export const CARD_YEAR_HEIGHT = 15; // lineHeight
-export const CARD_YEAR_MARGIN_TOP = 1;
+export const CARD_SUBTITLE_HEIGHT = 15; // lineHeight
+export const CARD_SUBTITLE_MARGIN_TOP = 1;
 
 /**
  * Izgara (kategori sayfası) kartının metin bloğu yüksekliği — başlık +
- * yıl satırı. Yıl satırı veri yoksa bile yer ayırdığı için (sorun 2)
+ * alt satır. Alt satır veri yoksa bile yer ayırdığı için (sorun 2)
  * bu değer HER ZAMAN kartın gerçek metin yüksekliğidir.
  */
 export const CARD_GRID_TEXT_BLOCK =
 	CARD_TITLE_MARGIN_TOP +
 	CARD_TITLE_HEIGHT +
-	CARD_YEAR_MARGIN_TOP +
-	CARD_YEAR_HEIGHT;
+	CARD_SUBTITLE_MARGIN_TOP +
+	CARD_SUBTITLE_HEIGHT;
 
 /**
  * Izgara kartının bir satırdaki adım uzunluğu (px).
@@ -117,7 +123,18 @@ function CategoryCard({
 	const rating = ratingOf(item);
 	const lang = languageOf(item);
 	const year = isRow ? null : yearOf(item);
-	const title = item?.title || "İçerik";
+
+	/**
+	 * Bölüm kartı mı? (Son Bölümler kategorisi)
+	 *
+	 * Backend artık `series_name` / `season` / `episode` alanlarını dolduruyor.
+	 * Bu kartlarda başlık satırı DİZİ ADI, alt satır "S. Sezon E. Bölüm"
+	 * olur — Netflix/Prime'daki gibi. Normal film/dizi kartlarında alt satır
+	 * yıl gösterir (grid varyantı) ya da boş kalır (row varyantı).
+	 */
+	const ep = episodeMetaOf(item);
+	const title = ep ? ep.seriesName || "İçerik" : item?.title || "İçerik";
+	const subtitle = ep ? `${ep.season}. Sezon ${ep.episode}. Bölüm` : year || "";
 
 	const cardWidth = isRow ? ROW_CARD_WIDTH : width;
 
@@ -197,16 +214,14 @@ function CategoryCard({
 				 * (saydam) bir satır basılır. Görsel değişmez, yükseklik
 				 * sabitlenir.
 				 */}
-					{isRow ? null : (
-						<Text
-							style={[
-								styles.year,
-								{ color: m3.onSurfaceVariant },
-							]}
-							numberOfLines={1}>
-							{year || " "}
-						</Text>
-					)}
+					<Text
+						style={[
+							styles.subtitle,
+							{ color: m3.onSurfaceVariant },
+						]}
+						numberOfLines={1}>
+						{subtitle || " "}
+					</Text>
 				</View>
 			)}
 		</TVPressable>
@@ -282,9 +297,15 @@ const styles = StyleSheet.create({
 		marginTop: CARD_TITLE_MARGIN_TOP,
 		letterSpacing: -0.1,
 	},
-	year: {
+	/**
+	 * Alt satır: bölüm kartlarında "S. Sezon E. Bölüm", diğerlerinde yıl.
+	 *
+	 * Satır HER ZAMAN yer ayırır (veri yoksa boş) — kart yüksekliği sabit
+	 * kalmalı, yoksa `getItemLayout` ofsetleri kayar (bkz. SORUN 2).
+	 */
+	subtitle: {
 		fontSize: 11,
-		lineHeight: CARD_YEAR_HEIGHT,
-		marginTop: CARD_YEAR_MARGIN_TOP,
+		lineHeight: CARD_SUBTITLE_HEIGHT,
+		marginTop: CARD_SUBTITLE_MARGIN_TOP,
 	},
 });

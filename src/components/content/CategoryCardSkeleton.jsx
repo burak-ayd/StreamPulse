@@ -23,10 +23,10 @@
 import {
 	CARD_POSTER_RADIUS,
 	CARD_POSTER_RATIO,
+	CARD_SUBTITLE_HEIGHT,
+	CARD_SUBTITLE_MARGIN_TOP,
 	CARD_TITLE_HEIGHT,
 	CARD_TITLE_MARGIN_TOP,
-	CARD_YEAR_HEIGHT,
-	CARD_YEAR_MARGIN_TOP,
 	ROW_CARD_WIDTH,
 } from "@/components/content/CategoryCard";
 import { SkeletonBlock, SkeletonLine } from "@/components/common/Skeleton";
@@ -61,13 +61,13 @@ function CategoryCardSkeleton({
 						height={CARD_TITLE_HEIGHT - 4}
 						style={{ marginTop: CARD_TITLE_MARGIN_TOP }}
 					/>
-					{isRow ? null : (
-						<SkeletonLine
-							width="42%"
-							height={CARD_YEAR_HEIGHT - 4}
-							style={{ marginTop: CARD_YEAR_MARGIN_TOP }}
-						/>
-					)}
+					{/* Alt satır "row" varyantında da çizilir (sezon/bölüm
+					    ya da yıl) — kart yüksekliği iki varyantta da aynı. */}
+					<SkeletonLine
+						width="42%"
+						height={CARD_SUBTITLE_HEIGHT - 4}
+						style={{ marginTop: CARD_SUBTITLE_MARGIN_TOP }}
+					/>
 				</View>
 			))}
 		</View>

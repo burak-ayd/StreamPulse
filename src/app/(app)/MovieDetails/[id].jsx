@@ -1,6 +1,7 @@
 import { useThemeContext } from "@/context/ThemeContext";
 import { fetchPluginDetail } from "@/services/api";
 import { canonicalType, isSeriesContent } from "@/utils/mediaType";
+import { resolvePluginName } from "@/utils/pluginName";
 import {
 	getContentLibraryStatus,
 	getContentWatchProgress,
@@ -144,7 +145,11 @@ export default function MovieDetailsScreen() {
 	}, [passedMovie, params.url, id]);
 
 	const pluginName =
-		passedMovie?.plugin || params.plugin || selectedPlatformName;
+		// Madde 5: yansı alan adı kayıtlıysa gerçek eklenti adına düzeltilir.
+		resolvePluginName({
+			plugin: passedMovie?.plugin || params.plugin,
+			url: movieUrl,
+		}) || selectedPlatformName;
 
 	const [pluginDetail, setPluginDetail] = useState(null);
 	const [pluginLoading, setPluginLoading] = useState(Boolean(movieUrl));
@@ -169,33 +174,48 @@ export default function MovieDetailsScreen() {
 	} = useContentDetails(isPureStaticContent ? id : null);
 
 	// Plugin içerik detayını backend'den çek (/api/plugins/{name}/detail?url=...)
+	// Madde 5: hata artık sessizce yutulmaz — "Detay yüklenemedi" + Yeniden dene.
+	const [pluginError, setPluginError] = useState(null);
+	// Yeniden dene: cleanup-safe yükleme fonksiyonu.
+	const isMountedRef = useRef(true);
 	useEffect(() => {
-		let isMounted = true;
-		if (movieUrl && pluginName) {
-			queueMicrotask(() => {
-				if (isMounted) setPluginLoading(true);
+		isMountedRef.current = true;
+		return () => {
+			isMountedRef.current = false;
+		};
+	}, []);
+
+	const loadPluginDetail = useCallback(() => {
+		if (!(movieUrl && pluginName)) return;
+		setPluginLoading(true);
+		setPluginError(null);
+		fetchPluginDetail(pluginName, movieUrl)
+			.then((res) => {
+				if (isMountedRef.current && res) {
+					setPluginDetail(res);
+				}
+			})
+			.catch((err) => {
+				console.error("Plugin detay çekme hatası:", err);
+				if (isMountedRef.current) {
+					setPluginError(err?.message || "Detay yüklenemedi");
+				}
+			})
+			.finally(() => {
+				if (isMountedRef.current) setPluginLoading(false);
 			});
-			fetchPluginDetail(pluginName, movieUrl)
-				.then((res) => {
-					if (isMounted && res) {
-						setPluginDetail(res);
-					}
-				})
-				.catch((err) => {
-					console.error("Plugin detay çekme hatası:", err);
-				})
-				.finally(() => {
-					if (isMounted) setPluginLoading(false);
-				});
+	}, [pluginName, movieUrl]);
+
+	useEffect(() => {
+		if (movieUrl && pluginName) {
+			// Effect gövdesinden senkron setState akışı: defer (lint kuralı).
+			queueMicrotask(loadPluginDetail);
 		} else if (!movieUrl) {
 			queueMicrotask(() => {
-				if (isMounted) setPluginLoading(false);
+				setPluginLoading(false);
 			});
 		}
-		return () => {
-			isMounted = false;
-		};
-	}, [pluginName, movieUrl]);
+	}, [pluginName, movieUrl, loadPluginDetail]);
 
 	// Tüm verileri birleştir: pluginDetail > apiContent > passedMovie
 	const content = useMemo(() => {
@@ -392,7 +412,13 @@ export default function MovieDetailsScreen() {
 	const loading = isPureStaticContent
 		? apiLoading
 		: pluginLoading && !content && !passedMovie;
-	const error = isPureStaticContent ? apiError : null;
+	// Yedek dal yalnız veri yoksa: plugin hatası ama eski veri varsa gösterilmez.
+	const error = isPureStaticContent
+		? apiError
+		: !content && !passedMovie
+			? pluginError
+			: null;
+	const retryDetail = isPureStaticContent ? apiRefetch : loadPluginDetail;
 
 	// ⚠️ Tek kaynak: `utils/mediaType.js`. Eskiden burada `content_type`,
 	// `seasons`, `episodes`, `passedMovie.is_series`, `category` ve başlıkta
@@ -899,7 +925,7 @@ export default function MovieDetailsScreen() {
 
 	// Error state
 	if (error && !content) {
-		return <ErrorState error={error} onRetry={apiRefetch} />;
+		return <ErrorState error={error} onRetry={retryDetail} />;
 	}
 
 	// Content not found
