@@ -23,9 +23,13 @@ import { useThemeContext } from "@/context/ThemeContext";
 import { extractVideoSources } from "@/services/api";
 import { DownloadManager } from "@/services/downloadManager";
 import {
+	getDownloadSettings,
 	getPluginDownloadPref,
+	saveDownloadSettings,
 	savePluginDownloadPref,
 } from "@/utils/storage";
+import { variantId, variantLabel } from "@/utils/variants";
+import { preferDirectSources } from "@/utils/directMedia";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -46,6 +50,7 @@ function sourceLabel(source) {
 	const quality = source?.result?.name || "";
 	return quality ? `${extractor} (${quality})` : extractor;
 }
+
 
 export default function DownloadConfigModal({
 	visible,
@@ -72,6 +77,9 @@ export default function DownloadConfigModal({
 	// "Türkçe/Français" seçenekleri buradan gelir.
 	const [audioTracks, setAudioTracks] = useState([]);
 	const [selectedAudioIdx, setSelectedAudioIdx] = useState(0);
+	// HLS kalite varyantları: 0 = "Otomatik (en yüksek)", satırlar +1 kaydırılır.
+	const [variants, setVariants] = useState([]);
+	const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
 
 	const pluginName = content?.plugin || "";
 	const targetUrl = (episode?.url || content?.url) || "";
@@ -89,8 +97,18 @@ export default function DownloadConfigModal({
 		setSelectedSubtitleIdx(-1);
 		try {
 			const extracted = await extractVideoSources(targetUrl);
-			setSources(Array.isArray(extracted) ? extracted : []);
-			if (!extracted || extracted.length === 0) {
+			const list = Array.isArray(extracted) ? extracted : [];
+			// Doğrudan dosya (progressive MP4) tercih edilir: tek dosya, ~8 istek,
+			// HLS'in 1150 segment isteği/429 kuyruğu/ses fazı yok — en stabil
+			// ve en hızlı yol (IDM'in yakaladığı bağlantı).
+			const sirali = preferDirectSources(list);
+			setSources(sirali);
+			// ⚠️ İlk kaynak geçersiz olabilir (result.url yok — ör. "Close"
+			// kaynağı açılmamış). Seçimi İLK GEÇERLİ kaynağa ver; aksi halde
+			// "İndirmeyi Başlat" sessizce hiçbir şey yapmaz (Task 16 bulgusu).
+			const ilkGecerli = sirali.findIndex((s) => Boolean(s?.result?.url));
+			setSelectedSourceIdx(ilkGecerli >= 0 ? ilkGecerli : 0);
+			if (list.length === 0) {
 				setLoadError("Bu içerik için indirilebilir kaynak bulunamadı.");
 			}
 		} catch (e) {
@@ -171,14 +189,50 @@ export default function DownloadConfigModal({
 	const sesSecenekleri = selectedSource?.result?.url?.includes(".m3u8")
 		? audioTracks
 		: [];
+
+	/** Kalite: master playlist'ten varyantlar + son seçilen kaliteyi önişle. */
+	useEffect(() => {
+		let cancelled = false;
+		const url = selectedSource?.result?.url;
+		if (!visible || !url || !url.includes(".m3u8")) return;
+		(async () => {
+			try {
+				const list = await DownloadManager.listHlsVariants(
+					url,
+					selectedSource?.result?.headers || {},
+				);
+				if (cancelled) return;
+				setVariants(list);
+				// Varsayılan HER ZAMAN "Otomatik (en yüksek)": kayıtlı kalite
+				// yalnız hızlı-yol (modal dışı) için saklanır; modalda ön seçim
+				// yapılmaz — "hep 480p iniyor" şikayetinin kökü buydu.
+				setSelectedVariantIdx(0);
+			} catch (e) {
+				console.warn("Kalite listesi alınamadı:", e?.message);
+				if (!cancelled) setVariants([]);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [visible, selectedSource]);
 	const startDownload = async () => {
-		if (!selectedSource?.result?.url || starting) return;
+		if (starting) return;
+		// Seçili kaynak geçersizse (result.url yok) ilk geçerli kaynağa düş —
+		// buton dokunuşu sessizce kaybolmasın.
+		const aktifKaynak = selectedSource?.result?.url
+			? selectedSource
+			: sources.find((s) => Boolean(s?.result?.url));
+		if (!aktifKaynak?.result?.url) return;
 		setStarting(true);
 		try {
 			if (remember && pluginName) {
 				const secilenSesPref = sesSecenekleri[selectedAudioIdx] || null;
 				await savePluginDownloadPref(pluginName, {
-					preferredSource: selectedSource.extractor,
+					preferredSource: aktifKaynak.extractor,
+					// Aynı extractor iki kaynak üretebilir (Rapidrame: HLS +
+					// CehennemPass MP4) → isimle de saklanır.
+					preferredSourceName: aktifKaynak.result?.name || null,
 					preferredAudioTrack: secilenSesPref?.language || null,
 					preferredSubtitle:
 						selectedSubtitleIdx >= 0
@@ -190,6 +244,18 @@ export default function DownloadConfigModal({
 			}
 			const isSeries = Boolean(episode && episode.season && episode.episode);
 			const secilenSes = sesSecenekleri[selectedAudioIdx] || null;
+			const secilenKalite =
+				selectedVariantIdx > 0 ? variants[selectedVariantIdx - 1] : null;
+			// Son kalite seçimi kaydedilsin: bir sonraki modalda seçili gelir.
+			let dlAyar = null;
+			try {
+				dlAyar = await getDownloadSettings();
+				await saveDownloadSettings({
+					lastDownloadQuality: secilenKalite ? variantId(secilenKalite) : null,
+				});
+			} catch (e) {
+				console.warn("lastDownloadQuality kaydedilemedi:", e);
+			}
 			await enqueueDownload({
 				contentId: content?.id || content?.url,
 				seriesId: isSeries ? content?.id || content?.url : null,
@@ -200,13 +266,22 @@ export default function DownloadConfigModal({
 				seasonNumber: isSeries ? Number(episode.season) : null,
 				episodeNumber: isSeries ? Number(episode.episode) : null,
 				episodeTitle: isSeries ? episode.episodeTitle || null : null,
-				sourceUrl: selectedSource.result.url,
-				sourceName: selectedSource.extractor,
-				sourceHeaders: selectedSource.result.headers || {},
+				sourceUrl: aktifKaynak.result.url,
+				sourceName: aktifKaynak.extractor,
+				sourceHeaders: aktifKaynak.result.headers || {},
 				// Ses rendition seçimi: HLS indirme bu dili ayrı playlist
 				// olarak indirir; oynatıcı yerel HLS'te parçayı seçebilir.
 				audioLanguage: secilenSes?.language || null,
 				audioTrackName: secilenSes?.name || null,
+				// Kalite seçimi (madde 4): seçilen varyant native'e id + bant
+				// genişliği + çözünürlük olarak geçer; native aynı id'yi bulur
+				// ya da en yakın bant genişliğine düşer.
+				variantId: secilenKalite ? variantId(secilenKalite) : null,
+				variantBandwidth: secilenKalite?.bandwidth || null,
+				variantResolution: secilenKalite?.resolution || null,
+				// Paralel segment sayısı: ayardaki "Eş Zamanlı Bağlantı"
+				// (1-8). Native motor bu değerle indirir (hız kaldıracı).
+				workers: dlAyar?.maxConnectionsPerDownload || null,
 				subtitleUrl:
 					selectedSubtitleIdx >= 0 && downloadSubtitle
 						? subtitleList[selectedSubtitleIdx]?.url || null
@@ -349,7 +424,32 @@ export default function DownloadConfigModal({
 									</>
 								) : null}
 
-								{/* 3. Altyazı */}
+								{/* 3. Kalite — HLS master'daki varyantlar (madde 4) */}
+								{selectedSource?.result?.url?.includes(".m3u8") &&
+								variants.length ? (
+									<>
+										{renderSectionTitle(
+											"speedometer-outline",
+											"Kalite",
+										)}
+										{renderOptionRow({
+											key: "quality-auto",
+											label: "Otomatik (en yüksek)",
+											selected: selectedVariantIdx === 0,
+											onPress: () => setSelectedVariantIdx(0),
+										})}
+										{variants.map((v, idx) =>
+											renderOptionRow({
+												key: `quality-${idx}`,
+												label: variantLabel(v),
+												selected: selectedVariantIdx === idx + 1,
+												onPress: () => setSelectedVariantIdx(idx + 1),
+											}),
+										)}
+									</>
+								) : null}
+
+								{/* 4. Altyazı */}
 								{renderSectionTitle("document-text-outline", "Altyazı")}
 								{renderOptionRow({
 									key: "sub-none",

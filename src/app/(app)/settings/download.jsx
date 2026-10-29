@@ -11,10 +11,10 @@
  * BackHandler, TV'de ortalanmış maksimum içerik genişliği.
  */
 
+import Slider from "@/components/common/Slider";
 import TVPressable from "@/components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
-import { Directory } from "expo-file-system";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -40,8 +40,7 @@ import {
 	savePluginDownloadPref,
 } from "@/utils/storage";
 
-const CONCURRENT_DOWNLOAD_OPTIONS = [1, 2, 3, 4, 5];
-const CONNECTION_OPTIONS = [1, 2, 3, 4, 6, 8];
+const CONCURRENT_DOWNLOAD_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const AUDIO_OPTIONS = [
 	{ label: "Orijinal", value: null },
 	{ label: "Türkçe (tr)", value: "tr" },
@@ -124,8 +123,21 @@ export default function DownloadSettingsScreen() {
 		setOptionModal(null);
 		if (which === "concurrent") {
 			setSettings(await saveDownloadSettings({ maxConcurrentDownloads: value }));
-		} else if (which === "connections") {
+		}
+	};
+
+	/** Ayar değişimi: kaydet + native motora es zamanlı indirme limitini bildir. */
+	const setAyar = async (which, value) => {
+		if (which === "connections") {
 			setSettings(await saveDownloadSettings({ maxConnectionsPerDownload: value }));
+		} else if (which === "concurrent") {
+			setSettings(await saveDownloadSettings({ maxConcurrentDownloads: value }));
+			try {
+				const { DownloadManager } = await import("@/services/downloadManager");
+				await DownloadManager.setMaxConcurrent(value);
+			} catch (e) {
+				console.warn("Es zamanli indirme limiti gonderilemedi:", e?.message);
+			}
 		}
 	};
 
@@ -183,9 +195,7 @@ export default function DownloadSettingsScreen() {
 	const optionModalOptions =
 		optionModal === "concurrent"
 			? CONCURRENT_DOWNLOAD_OPTIONS.map((v) => ({ label: `${v} indirme`, value: v }))
-			: optionModal === "connections"
-				? CONNECTION_OPTIONS.map((v) => ({ label: `${v} bağlantı`, value: v }))
-				: [];
+			: [];
 
 	return (
 		<>
@@ -235,81 +245,31 @@ export default function DownloadSettingsScreen() {
 							valueText={`${settings.maxConcurrentDownloads} indirme`}
 							onPress={() => openOption("concurrent")}
 						/>
-						<ValueRow
-							colors={colors}
-							icon="link-outline"
-							iconBg="#8B5CF6"
-							title="Eş Zamanlı Bağlantı"
-							subtitle="Dosya başına paralel parça indirme — ileriki fazda etkinleşecek"
-							valueText={`${settings.maxConnectionsPerDownload} bağlantı`}
-							onPress={() => openOption("connections")}
-						/>
-						{/* İndirme konumu: kullanıcı SAF ile bir klasör seçer; tamamlanan
-						    indirmeler doğrudan oraya yazılır: StreamPulse/{içerik}/ */}
-		<TVPressable
-			style={styles.valueRow}
-			focusedStyle={styles.rowFocused}
-			onPress={async () => {
-				try {
-					const secilen = await Directory.pickDirectoryAsync(
-						settings.downloadDirUri || undefined,
-					);
-					if (!secilen?.uri) return;
-					setSettings(
-						await saveDownloadSettings({ downloadDirUri: secilen.uri }),
-					);
-				} catch (e) {
-					console.warn("Klasör seçilemedi:", e?.message);
-				}
-			}}>
-			<View style={[styles.valueIcon, { backgroundColor: "#0EA5E9" }]}>
-				<Ionicons name="folder-open-outline" size={16} color="#ffffff" />
-			</View>
-			<View style={styles.valueRowText}>
-				<Text style={[styles.valueRowTitle, { color: colors.text }]}>
-					İndirme Konumu
-				</Text>
-				<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
-					{settings.downloadDirUri
-						? "Seçili klasör — tamamlanan indirmeler buraya kopyalanır"
-						: "Klasör seç (İndirilenler gibi) — dokun"}
-				</Text>
-			</View>
-			<Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-		</TVPressable>
-
-		{/* Otomatik dışa aktarma: yalnızca klasör seçiliyken anlamlı */}
-		{settings.downloadDirUri ? (
-			<TVPressable
-				style={styles.toggleRow}
-				focusedStyle={styles.rowFocused}
-				onPress={async () =>
-					setSettings(
-						await saveDownloadSettings({
-							autoExport: settings.autoExport === false,
-						}),
-					)
-				}
-				accessibilityRole="switch"
-				accessibilityState={{ checked: settings.autoExport !== false }}>
-				<View style={[styles.valueIcon, { backgroundColor: "#10B981" }]}>
-					<Ionicons name="share-outline" size={16} color="#ffffff" />
-				</View>
-				<View style={styles.valueRowText}>
-					<Text style={[styles.valueRowTitle, { color: colors.text }]}>
-						Tamamlanınca Dışa Aktar
-					</Text>
-					<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
-						Kapalıysa indirmeler yalnızca uygulama deposunda kalır
-					</Text>
-				</View>
-				<Switch
-					value={settings.autoExport !== false}
-					trackColor={{ false: colors.border, true: colors.primary }}
-					thumbColor="#ffffff"
-				/>
-			</TVPressable>
-		) : null}
+						{/* Eş bağlantı: dropdown yerine SLIDER (1-16) */}
+						<View style={styles.sliderRow}>
+							<View style={styles.sliderHeader}>
+								<View style={[styles.valueIcon, { backgroundColor: "#8B5CF6" }]}>
+									<Ionicons name="link-outline" size={16} color="#ffffff" />
+								</View>
+								<View style={styles.valueRowText}>
+									<Text style={[styles.valueRowTitle, { color: colors.text }]}>
+										Eş Zamanlı Bağlantı
+									</Text>
+									<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
+										Dosya başına paralel parça indirme
+									</Text>
+								</View>
+							</View>
+							<Slider
+								value={settings.maxConnectionsPerDownload || 6}
+								min={1}
+								max={16}
+								step={1}
+								onChange={(v) => setAyar("connections", v)}
+								valueText={`${settings.maxConnectionsPerDownload || 6} bağlantı`}
+								colors={colors}
+							/>
+						</View>
 						{/* Her defasında sor */}
 						<TVPressable
 							style={styles.toggleRow}
@@ -582,7 +542,16 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		overflow: "hidden",
 	},
-	valueRow: {
+	sliderRow: {
+		paddingVertical: 14,
+		paddingHorizontal: 16,
+		gap: 12,
+	},
+	sliderHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 12,
+	},	valueRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 10,
