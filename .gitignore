@@ -53,3 +53,5 @@ credentials.json
 .superpowers/
 .openchamber/
 .playwright-mcp/
+# superpowers plan/spec dokumanlari
+/docs/superpowers/

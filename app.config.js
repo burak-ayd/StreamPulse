@@ -100,6 +100,7 @@ export default ({ config }) => {
 		.toLowerCase();
 	const dir = VARIANT_DIR[APP_VARIANT] ?? VARIANT_DIR.release;
 	const p = iconPaths(dir);
+	const isDev = dir === "dev";
 
 	/*
 	 * TEK KARAR NOKTASI (⚠️ kritik).
@@ -166,16 +167,21 @@ export default ({ config }) => {
 		 * sertifikaların EŞLEŞMESİ gerekir. disableCodeSigning bilgisi:
 		 * DISABLE_CODE_SIGNING=1 ile test amaçlı kapatılabilir.
 		 */
-		runtimeVersion: "1",
+		// Native modül (stream-downloader) eklendi: eski APK'lar (runtime "1")
+		// bu modülü içermez, OTA ile yeni JS gelirse çökerdi. Belgelenen
+		// appVersion politikası ile eski APK'lar OTA almaz.
+		runtimeVersion: "2",
 		...{
 			updates: {
 				url: "https://ota.burakaydogan.net.tr/manifest",
-				codeSigningMetadata: process.env.DISABLE_CODE_SIGNING
-					? undefined
-					: { keyid: "main", alg: "rsa-v1_5-sha256" },
-				codeSigningCertificate: process.env.DISABLE_CODE_SIGNING
-					? undefined
-					: "./certs/certificate.pem",
+				codeSigningMetadata:
+					isDev || process.env.DISABLE_CODE_SIGNING
+						? undefined
+						: { keyid: "main", alg: "rsa-v1_5-sha256" },
+				codeSigningCertificate:
+					isDev || process.env.DISABLE_CODE_SIGNING
+						? undefined
+						: "./certs/certificate.pem",
 				enabled: true,
 				checkAutomatically: "ON_ERROR_RECOVERY",
 				fallbackToCacheTimeout: 0,
