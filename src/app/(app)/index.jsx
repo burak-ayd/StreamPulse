@@ -487,12 +487,14 @@ export default function Index() {
 				if (!/^https?:/i.test(item.url)) {
 					try {
 						const { File } = await import("expo-file-system");
-						const dosya = new File(item.url);
-						// v57'de `exists` yok; üst dizini listeleyerek kontrol ediyoruz.
-						const varMi = dosya.parentDirectory
-							.list()
-							.some((e) => e.name === dosya.name);
-						if (!varMi) {
+						/*
+						 * `parentDirectory.list()` yalnızca `file:` yollarında
+						 * çalışır; dışa aktarılmış indirmeler `content://`
+						 * (MediaStore) adresi taşır ve liste hep boş dönerdi —
+						 * kayıt oynatıcıya değil detay sayfasına gidiyordu.
+						 * `exists` her iki şemada da doğru cevabı verir.
+						 */
+						if (!new File(item.url).exists) {
 							handleMoviePress(item);
 							return;
 						}
