@@ -1,9 +1,15 @@
 import BottomNavigation from "@components/BottomNavigation";
-import { useNavLayout } from "@/hooks/useNavLayout";
 import TVPressable from "@components/common/TVPressable";
+import Image from "@/components/common/SmartImage";
+import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
 import { SkeletonBlock, SkeletonLine } from "@components/common/Skeleton";
-import { useThemeContext } from "@context/ThemeContext";
-import { searchContent, searchPluginContent } from "@/services/api";
+import { FontFamily, Palette } from "@/constants/theme";
+import { useNavLayout } from "@/hooks/useNavLayout";
+import {
+	fetchPlatforms,
+	searchContent,
+	searchPluginContent,
+} from "@/services/api";
 import {
 	addToSearchHistory,
 	clearSearchHistory,
@@ -11,11 +17,10 @@ import {
 	getSelectedPlatform,
 	removeFromSearchHistory,
 } from "@/utils/storage";
-import { useTvMetrics } from "@/utils/tvMetrics";
 import { useReactiveData } from "@/utils/storageListener";
+import { useTvMetrics } from "@/utils/tvMetrics";
 import { normalizePluginValue } from "@/utils/pluginName";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import Image from "@/components/common/SmartImage";
 import {
 	Stack,
 	useFocusEffect,
@@ -130,16 +135,241 @@ function durumGorunum(durum) {
 	};
 }
 
+/** Dizi mi? (`media_type` backend'de "Film" / "Dizi" / "Mini Dizi"…) */
+const isSeriesItem = (item) =>
+	String(item?.media_type || "").toLowerCase().includes("dizi");
+
+/* ── Kapsam hapı: "Bu platform" / "Tüm platformlar" ─────────────── */
+function ScopePill({ label, active, onPress }) {
+	const { sp } = useTvMetrics();
+	return (
+		<TVPressable
+			onPress={onPress}
+			activeOpacity={0.75}
+			style={({ focused }) => [
+				styles.scopePill,
+				{
+					height: sp(34),
+					borderRadius: sp(17),
+					paddingHorizontal: sp(14),
+					gap: sp(8),
+				},
+				active ? styles.scopePillActive : styles.scopePillIdle,
+				focused && styles.focusRing,
+			]}>
+			<View
+				style={[
+					styles.scopeDot,
+					{
+						width: sp(6),
+						height: sp(6),
+						borderRadius: sp(3),
+						backgroundColor: active
+							? Palette.secondary
+							: Palette.outline,
+					},
+				]}
+			/>
+			<Text
+				numberOfLines={1}
+				style={[
+					styles.scopeText,
+					{
+						fontSize: sp(13),
+						color: active
+							? Palette.secondary
+							: Palette.onSurfaceVariant,
+					},
+				]}>
+				{label}
+			</Text>
+		</TVPressable>
+	);
+}
+
+/* ── Tür filtresi hapı: Tümü / Filmler / Diziler ────────────────── */
+function TypeChip({ label, count, active, onPress }) {
+	const { sp } = useTvMetrics();
+	return (
+		<TVPressable
+			onPress={onPress}
+			activeOpacity={0.75}
+			style={({ focused }) => [
+				styles.typeChip,
+				{
+					height: sp(34),
+					borderRadius: sp(17),
+					paddingHorizontal: sp(14),
+				},
+				active ? styles.typeChipActive : styles.typeChipIdle,
+				focused && styles.focusRing,
+			]}>
+			<Text
+				numberOfLines={1}
+				style={[
+					styles.typeChipText,
+					{
+						fontSize: sp(13),
+						color: active ? Palette.onPrimary : Palette.onSurfaceVariant,
+					},
+				]}>
+				{count == null ? label : `${label} (${count})`}
+			</Text>
+		</TVPressable>
+	);
+}
+
+/* ── Sonuç satırı: poster + ad + yıl/tür + puan ─────────────────── */
+function ResultRow({ item, onPress }) {
+	const { sp } = useTvMetrics();
+	const posterUri =
+		item.poster || item.poster_url || item.image || item.backdrop_url;
+	const rating = Number.parseFloat(item.rating);
+	const hasRating = Number.isFinite(rating) && rating > 0;
+	const meta = [item.year, item.media_type].filter(Boolean).join(" · ");
+
+	return (
+		<TVPressable
+			onPress={onPress}
+			activeOpacity={0.75}
+			style={({ focused }) => [
+				styles.resultCard,
+				{
+					borderRadius: sp(12),
+					padding: sp(8),
+					gap: sp(12),
+				},
+				focused && styles.focusRing,
+			]}>
+			{posterUri ? (
+				<Image
+					source={{ uri: posterUri }}
+					style={[
+						styles.posterImage,
+						{
+							width: sp(56),
+							height: sp(84),
+							borderRadius: sp(8),
+						},
+					]}
+					contentFit="cover"
+					contentPosition="center"
+					transition={0}
+					recyclingKey={posterUri}
+					cachePolicy="memory-disk"
+				/>
+			) : (
+				<View
+					style={[
+						styles.posterPlaceholder,
+						{
+							width: sp(56),
+							height: sp(84),
+							borderRadius: sp(8),
+						},
+					]}>
+					<Ionicons
+						name="film-outline"
+						size={sp(22)}
+						color={Palette.outline}
+					/>
+				</View>
+			)}
+
+			<View style={[styles.cardDetails, { gap: sp(6) }]}>
+				<Text
+					numberOfLines={2}
+					style={[styles.itemTitle, { fontSize: sp(14) }]}>
+					{item.title}
+				</Text>
+				<View style={[styles.metaRow, { gap: sp(10) }]}>
+					{meta ? (
+						<Text
+							numberOfLines={1}
+							style={[styles.metaText, { fontSize: sp(12) }]}>
+							{meta}
+						</Text>
+					) : null}
+					{hasRating ? (
+						<View style={[styles.ratingRow, { gap: sp(3) }]}>
+							<Ionicons
+								name="star"
+								size={sp(12)}
+								color={Palette.tertiary}
+							/>
+							<Text
+								style={[
+									styles.ratingText,
+									{ fontSize: sp(12) },
+								]}>
+								{rating.toFixed(1)}
+							</Text>
+						</View>
+					) : null}
+				</View>
+			</View>
+
+			<Ionicons
+				name="chevron-forward"
+				size={sp(16)}
+				color={Palette.outline}
+			/>
+		</TVPressable>
+	);
+}
+
+/* ── Filtre panelindeki kaynak satırı ───────────────────────────── */
+function PluginFilterRow({ name, checked, onPress, autoFocus }) {
+	const { sp } = useTvMetrics();
+	return (
+		<TVPressable
+			onPress={onPress}
+			activeOpacity={0.75}
+			autoFocus={autoFocus}
+			accessibilityLabel={name}
+			style={({ focused }) => [
+				styles.filterRow,
+				{
+					height: sp(48),
+					borderRadius: sp(12),
+					paddingHorizontal: sp(12),
+					gap: sp(12),
+				},
+				checked && styles.filterRowChecked,
+				focused && styles.focusRing,
+			]}>
+			<View
+				style={[
+					styles.checkbox,
+					{
+						width: sp(20),
+						height: sp(20),
+						borderRadius: sp(6),
+					},
+					checked && styles.checkboxChecked,
+				]}>
+				{checked ? (
+					<Ionicons
+						name="checkmark"
+						size={sp(14)}
+						color={Palette.onPrimary}
+					/>
+				) : null}
+			</View>
+			<Text
+				numberOfLines={1}
+				style={[styles.filterRowText, { fontSize: sp(14) }]}>
+				{name}
+			</Text>
+		</TVPressable>
+	);
+}
+
 export default function SearchScreen() {
-	const { theme, colors } = useThemeContext();
 	const router = useRouter();
 	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
-	const { contentPaddingLeft } = useNavLayout();
-	// TV: arama kutusu, kapsam hapları ve sonuç ızgarası ekranı
-	// kenardan kenara dolduruyordu. `contentMaxWidth` hepsini ortalanmış
-	// bir sütuna toplar; telefon/tablette değer `undefined`, yerleşim aynen
-	// korunur.
-	const { contentMaxWidth, gutter } = useTvMetrics();
+	const { contentPaddingLeft, isSideRail } = useNavLayout();
+	const { sp, isTV, gutter, contentMaxWidth } = useTvMetrics();
 	const params = useLocalSearchParams();
 	const scrollViewRef = useRef(null);
 
@@ -169,6 +399,29 @@ export default function SearchScreen() {
 	 * kullanımda tamamen değişmemiş kalmasını sağlar.
 	 */
 	const [sourceStatus, setSourceStatus] = useState(null);
+
+	/* Yeni tasarım: tür filtresi + kaynak (eklenti) filtresi. */
+	const [typeFilter, setTypeFilter] = useState("all");
+	const [pluginFilter, setPluginFilter] = useState(null); // null = tümü
+	const [isFilterOpen, setIsFilterOpen] = useState(false);
+	const [platformNames, setPlatformNames] = useState([]);
+
+	// Filtre paneli kaynak listesi: backend'in eklenti listesi (bir kez).
+	useEffect(() => {
+		let alive = true;
+		fetchPlatforms()
+			.then((list) => {
+				if (!alive) return;
+				const names = (Array.isArray(list) ? list : [])
+					.map((p) => p?.name)
+					.filter(Boolean);
+				setPlatformNames(names);
+			})
+			.catch(() => {});
+		return () => {
+			alive = false;
+		};
+	}, []);
 
 	// `durum` nesnesini ekran metnine çevirir. useMemo: aynı `durum`
 	// nesnesi için yeniden hesaplanmaz.
@@ -262,6 +515,9 @@ export default function SearchScreen() {
 		setLoading(true);
 		setHasSearched(true);
 		setLastSearchedQuery(target);
+		// Yeni sorgu → kaynak filtresi sıfırlanır (eski kaynaklar bu
+		// sonuçlarda olmayabilir). Tür filtresi kullanıcının seçimidir, kalır.
+		setPluginFilter(null);
 
 		// Arama geçmişine ekle ve listeyi güncelle
 		addToSearchHistory(target).then((updated) => {
@@ -378,6 +634,61 @@ export default function SearchScreen() {
 		[groupedResults],
 	);
 
+	/* Tür sayıları — filtre hapındaki parantezler. */
+	const diziCount = useMemo(
+		() => results.filter(isSeriesItem).length,
+		[results],
+	);
+	const filmCount = results.length - diziCount;
+
+	/* Filtre panelindeki kaynak listesi: eklentiler + sonuçlarda geçenler. */
+	const availablePlugins = useMemo(() => {
+		const names = new Set(platformNames);
+		pluginKeys.forEach((name) => names.add(name));
+		return Array.from(names);
+	}, [platformNames, pluginKeys]);
+
+	/* Görünen gruplar: tür + kaynak filtresi uygulanmış hâli. */
+	const visibleGroups = useMemo(() => {
+		return pluginKeys
+			.filter((name) => !pluginFilter || pluginFilter.has(name))
+			.map((name) => ({
+				plugin: name,
+				items: groupedResults[name].filter((item) =>
+					typeFilter === "all"
+						? true
+						: typeFilter === "dizi"
+							? isSeriesItem(item)
+							: !isSeriesItem(item),
+				),
+			}))
+			.filter((group) => group.items.length > 0);
+	}, [pluginKeys, groupedResults, pluginFilter, typeFilter]);
+
+	const visibleCount = visibleGroups.reduce(
+		(acc, group) => acc + group.items.length,
+		0,
+	);
+
+	/* Filtre paneli: açık kaynak sayısı. */
+	const activeFilterCount = pluginFilter
+		? pluginFilter.size
+		: availablePlugins.length;
+
+	const togglePlugin = (name) => {
+		const next = pluginFilter
+			? new Set(pluginFilter)
+			: new Set(availablePlugins);
+		if (next.has(name)) next.delete(name);
+		else next.add(name);
+		setPluginFilter(next.size === availablePlugins.length ? null : next);
+	};
+
+	const resetFilters = () => {
+		setPluginFilter(null);
+		setTypeFilter("all");
+	};
+
 	// Arama listesindeki bir içeriğin detayına yönlendir:
 	// Bu geçişte aramanın ve scroll konumunun korunması için bayrak işaretlenir.
 	const handleItemPress = (item) => {
@@ -400,213 +711,21 @@ export default function SearchScreen() {
 		});
 	};
 
+	const showResults = !loading && hasSearched && results.length > 0;
+
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right", "bottom"]}
-				style={[styles.safeArea, { backgroundColor: colors.bg, paddingLeft: contentPaddingLeft }]}>
+				style={[
+					styles.safeArea,
+					{ paddingLeft: contentPaddingLeft },
+				]}>
 				<StatusBar
-					barStyle={
-						theme === "dark" ? "light-content" : "dark-content"
-					}
-					backgroundColor={colors.bg}
+					barStyle="light-content"
+					backgroundColor={Palette.background}
 				/>
-
-				{/* Header */}
-				<View
-					style={[
-						styles.header,
-						{
-							borderBottomColor: colors.border,
-							backgroundColor: colors.bg,
-						},
-						// TV: başlık da ortalanmış sütunla hizalansın ki
-						// "Arama" yazısı sonuçların üstünde ortada dursun.
-						contentMaxWidth
-							? { width: "100%", maxWidth: contentMaxWidth, alignSelf: "center" }
-							: null,
-					]}>
-					<Text style={[styles.headerTitle, { color: colors.text }]}>
-						Arama
-					</Text>
-				</View>
-
-				{/* Search Input & Button Row */}
-				<View
-					style={[
-						styles.searchContainer,
-						contentMaxWidth
-							? { width: "100%", maxWidth: contentMaxWidth, alignSelf: "center" }
-							: null,
-					]}>
-					<View style={styles.searchRow}>
-						<View
-							style={[
-								styles.searchInputWrapper,
-								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
-								},
-							]}>
-							<Ionicons
-								name="search"
-								size={20}
-								color={colors.textSecondary}
-							/>
-							<TextInput
-								style={[
-									styles.searchInput,
-									{ color: colors.text },
-								]}
-								placeholder={
-									searchScope === "plugin" && activePlugin
-										? `${activePlugin} içinde ara...`
-										: "Tüm eklentilerde ara..."
-								}
-								placeholderTextColor={colors.textSecondary}
-								value={searchQuery}
-								onChangeText={(text) => {
-									setSearchQuery(text);
-									searchMemoryCache.searchQuery = text;
-								}}
-								onSubmitEditing={() => handleSearch()}
-								returnKeyType="search"
-								autoCorrect={false}
-								autoCapitalize="none"
-							/>
-							{searchQuery.length > 0 && (
-								<TVPressable
-									onPress={clearSearch}
-									style={({ focused }) => [
-										focused && styles.iconButtonFocused,
-									]}
-									hitSlop={{
-										top: 10,
-										bottom: 10,
-										left: 10,
-										right: 10,
-									}}>
-									<Ionicons
-										name="close-circle"
-										size={18}
-										color={colors.textSecondary}
-									/>
-								</TVPressable>
-							)}
-						</View>
-
-						{/* Arama Butonu */}
-						<TVPressable
-							style={({ focused }) => [
-								styles.searchButton,
-								{
-									backgroundColor: colors.primary,
-									opacity:
-										searchQuery.trim().length === 0 || loading
-											? 0.6
-											: 1,
-								},
-								focused && styles.searchButtonFocused,
-							]}
-							onPress={() => handleSearch()}
-							disabled={searchQuery.trim().length === 0 || loading}
-							activeOpacity={0.8}>
-							{loading ? (
-								<ActivityIndicator size="small" color="#fff" />
-							) : (
-								<>
-									<Ionicons name="search" size={16} color="#fff" />
-									<Text style={styles.searchButtonText}>Ara</Text>
-								</>
-							)}
-						</TVPressable>
-					</View>
-
-					{/* Arama Kapsamı (Genel vs Eklenti İçi) */}
-					<View style={styles.scopeRow}>
-						<TVPressable
-							style={({ focused }) => [
-								styles.scopePill,
-								searchScope === "all"
-									? styles.scopePillActive
-									: {
-											backgroundColor: colors.cardBg,
-											borderColor: colors.border,
-										},
-								focused && styles.scopePillFocused,
-							]}
-							onPress={() => handleScopeChange("all")}
-							activeOpacity={0.7}>
-							<Ionicons
-								name="globe-outline"
-								size={13}
-								color={
-									searchScope === "all"
-										? "#ffffff"
-										: colors.textSecondary
-								}
-							/>
-							<Text
-								style={[
-									styles.scopeText,
-									{
-										color:
-											searchScope === "all"
-												? "#ffffff"
-												: colors.textSecondary,
-										fontWeight:
-											searchScope === "all" ? "700" : "500",
-									},
-								]}>
-								Genel Arama
-							</Text>
-						</TVPressable>
-
-						{activePlugin ? (
-							<TVPressable
-								style={({ focused }) => [
-									styles.scopePill,
-									searchScope === "plugin"
-										? styles.scopePillActive
-										: {
-												backgroundColor: colors.cardBg,
-												borderColor: colors.border,
-											},
-									focused && styles.scopePillFocused,
-								]}
-								onPress={() => handleScopeChange("plugin")}
-								activeOpacity={0.7}>
-								<Ionicons
-									name="film-outline"
-									size={13}
-									color={
-										searchScope === "plugin"
-											? "#ffffff"
-											: colors.textSecondary
-									}
-								/>
-								<Text
-									style={[
-										styles.scopeText,
-										{
-											color:
-												searchScope === "plugin"
-													? "#ffffff"
-													: colors.textSecondary,
-											fontWeight:
-												searchScope === "plugin"
-													? "700"
-													: "500",
-										},
-									]}
-									numberOfLines={1}>
-									{activePlugin}
-								</Text>
-							</TVPressable>
-						) : null}
-					</View>
-				</View>
 
 				<ScrollView
 					ref={scrollViewRef}
@@ -619,506 +738,671 @@ export default function SearchScreen() {
 					onContentSizeChange={handleContentSizeChange}
 					showsVerticalScrollIndicator={false}
 					keyboardShouldPersistTaps="handled"
-					contentContainerStyle={[
-						styles.scrollContainer,
-						contentMaxWidth
-							? {
-								// TV: sonuçlar ortalanmış sütunda kalsın.
-								alignSelf: "center",
-								width: "100%",
-								maxWidth: contentMaxWidth,
-								paddingHorizontal: gutter,
-							}
-							: null,
-					]}>
-					{/*
-					 * Kaynak Durumu Banner'ı
-					 *
-					 * Backend `durum` alanını sorun yoksa GÖNDERMEZ, bu yüzden
-					 * normal aramalarda bu blok hiç render edilmez ve ekran
-					 * yerleşimi değişmez.
-					 *
-					 * Metin `durumGorunum()` tarafından üretilir; orada
-					 * "devreye girmiş kaynak" ile "yalnızca bu aramayı
-					 * karşılamayan kaynak" ayrımı yapılır.
-					 */}
-					{!loading && sourceStatusView ? (
-						<View style={styles.sourceStatusBanner}>
-							<Ionicons
-								name="warning"
-								size={16}
-								color="#f59e0b"
-								style={styles.sourceStatusIcon}
-							/>
-							<View style={styles.sourceStatusBody}>
-								<Text style={styles.sourceStatusTitle}>
-									{sourceStatusView.baslik}
+					contentContainerStyle={styles.scrollContainer}>
+					<View
+						style={{
+							width: "100%",
+							maxWidth: contentMaxWidth,
+							alignSelf: "center",
+							paddingHorizontal: 16 + gutter,
+						}}>
+						{/* Marka satırı. Profil düğmesi yalnızca alt bar
+						    düzeninde (telefon) burada; ray düzeninde rayın
+						    alt ucunda yaşıyor. */}
+						<View
+							style={[
+								styles.topBar,
+								{
+									paddingTop: sp(10),
+									marginBottom: sp(14),
+									gap: sp(10),
+								},
+							]}>
+							<View style={[styles.wordmark, { gap: sp(8) }]}>
+								<View
+									style={[
+										styles.wordmarkMark,
+										{
+											width: sp(26),
+											height: sp(26),
+											borderRadius: sp(8),
+										},
+									]}>
+									<Ionicons
+										name="play"
+										size={sp(14)}
+										color={Palette.onPrimary}
+									/>
+								</View>
+								<Text
+									style={[
+										styles.wordmarkText,
+										{ fontSize: sp(16) },
+									]}>
+									{isSideRail ? "STREAM PULSE" : "StreamPulse"}
 								</Text>
-								{sourceStatusView.satirlar.map((s, i) => (
-									<Text
-										key={i}
-										style={styles.sourceStatusDetail}
-										numberOfLines={2}>
-										• {s}
-									</Text>
-								))}
-								{sourceStatusView.not ? (
-									<Text style={styles.sourceStatusNote}>
-										{sourceStatusView.not}
-									</Text>
-								) : null}
 							</View>
-						</View>
-					) : null}
 
-					{/* Yükleniyor Durumu */}
-					{/*
-					 * Sonuç kartı iskeleti. Gerçek sonuç satırının
-					 * geometrisi (58×86 poster + 12px yarıçap + 12px satır
-					 * yüksekliği) birebir taklit ediliyor; arama bitince
-					 * sonuçlar yerine oturuyor, sayfa zıplamıyor.
-					 */}
-					{loading && (
-						<View style={styles.resultsContainer} pointerEvents="none">
-							<SkeletonLine
-								width={180}
-								height={13}
-								color={colors.border}
-								style={{ marginBottom: 12 }}
+							{!isSideRail ? (
+								<TVPressable
+									onPress={() => router.push("/(app)/profile")}
+									accessibilityLabel="Profil"
+									style={({ focused }) => [
+										styles.profileButton,
+										{
+											width: sp(32),
+											height: sp(32),
+											borderRadius: sp(16),
+										},
+										focused && styles.focusRing,
+									]}>
+									<Ionicons
+										name="person"
+										size={sp(17)}
+										color={Palette.onPrimary}
+									/>
+								</TVPressable>
+							) : null}
+						</View>
+
+						{/* Arama alanı */}
+						{isTV ? (
+							<Text
+								style={[
+									styles.fieldLabel,
+									{ fontSize: sp(11), marginBottom: sp(8) },
+								]}>
+								Arama Sorgusu
+							</Text>
+						) : null}
+
+						<View
+							style={[
+								styles.searchPill,
+								{
+									height: sp(52),
+									borderRadius: sp(26),
+									paddingHorizontal: sp(16),
+									gap: sp(10),
+								},
+							]}>
+							<Ionicons
+								name="search"
+								size={sp(20)}
+								color={Palette.onSurfaceVariant}
 							/>
-							<View style={styles.cardsList}>
-								{Array.from({ length: 6 }).map((_, index) => (
+							<TextInput
+								style={[
+									styles.searchInput,
+									{ fontSize: sp(16) },
+								]}
+								placeholder={
+									searchScope === "plugin" && activePlugin
+										? `${activePlugin} içinde ara...`
+										: "Film, dizi, oyuncu veya tür ara..."
+								}
+								placeholderTextColor={Palette.outline}
+								value={searchQuery}
+								onChangeText={(text) => {
+									setSearchQuery(text);
+									searchMemoryCache.searchQuery = text;
+								}}
+								onSubmitEditing={() => handleSearch()}
+								returnKeyType="search"
+								autoCorrect={false}
+								autoCapitalize="none"
+							/>
+							{loading ? (
+								<ActivityIndicator
+									size="small"
+									color={Palette.primary}
+								/>
+							) : searchQuery.length > 0 ? (
+								<TVPressable
+									onPress={clearSearch}
+									accessibilityLabel="Aramayı temizle"
+									style={({ focused }) => [
+										styles.clearButton,
+										{
+											width: sp(28),
+											height: sp(28),
+											borderRadius: sp(14),
+										},
+										focused && styles.focusRing,
+									]}>
+									<Ionicons
+										name="close"
+										size={sp(15)}
+										color={Palette.onSurfaceVariant}
+									/>
+								</TVPressable>
+							) : null}
+						</View>
+
+						{/* Kapsam: bu platform / tüm platformlar */}
+						<View
+							style={[
+								styles.chipRow,
+								{ marginTop: sp(12), gap: sp(8) },
+							]}>
+							{activePlugin ? (
+								<ScopePill
+									label={`Bu Platform: ${activePlugin}`}
+									active={searchScope === "plugin"}
+									onPress={() => handleScopeChange("plugin")}
+								/>
+							) : null}
+							<ScopePill
+								label="Tüm Platformlar"
+								active={searchScope === "all"}
+								onPress={() => handleScopeChange("all")}
+							/>
+						</View>
+
+						{/*
+						 * Kaynak Durumu Banner'ı
+						 *
+						 * Backend `durum` alanını sorun yoksa GÖNDERMEZ, bu yüzden
+						 * normal aramalarda bu blok hiç render edilmez ve ekran
+						 * yerleşimi değişmez.
+						 */}
+						{!loading && sourceStatusView ? (
+							<View
+								style={[
+									styles.sourceStatusBanner,
+									{
+										borderRadius: sp(12),
+										padding: sp(12),
+										marginTop: sp(12),
+										gap: sp(9),
+									},
+								]}>
+								<Ionicons
+									name="warning"
+									size={sp(16)}
+									color={Palette.tertiary}
+									style={{ marginTop: sp(1) }}
+								/>
+								<View style={{ flex: 1, gap: sp(3) }}>
+									<Text
+										style={[
+											styles.sourceStatusTitle,
+											{ fontSize: sp(12) },
+										]}>
+										{sourceStatusView.baslik}
+									</Text>
+									{sourceStatusView.satirlar.map((s, i) => (
+										<Text
+											key={i}
+											numberOfLines={2}
+											style={[
+												styles.sourceStatusDetail,
+												{ fontSize: sp(11) },
+											]}>
+											• {s}
+										</Text>
+									))}
+									{sourceStatusView.not ? (
+										<Text
+											style={[
+												styles.sourceStatusNote,
+												{ fontSize: sp(10) },
+											]}>
+											{sourceStatusView.not}
+										</Text>
+									) : null}
+								</View>
+							</View>
+						) : null}
+
+						{/* Sonuç başlığı + filtre hapı şeridi */}
+						{showResults ? (
+							<View style={{ marginTop: sp(20) }}>
+								<Text
+									numberOfLines={2}
+									style={[
+										styles.resultsTitle,
+										{ fontSize: sp(isTV ? 22 : 18) },
+									]}>
+									{`"${lastSearchedQuery}" için sonuçlar`}
+								</Text>
+								<View
+									style={[
+										styles.chipRow,
+										{ marginTop: sp(10), gap: sp(8) },
+									]}>
+									<TypeChip
+										label="Tümü"
+										count={results.length}
+										active={typeFilter === "all"}
+										onPress={() => setTypeFilter("all")}
+									/>
+									<TypeChip
+										label="Filmler"
+										count={filmCount}
+										active={typeFilter === "film"}
+										onPress={() => setTypeFilter("film")}
+									/>
+									<TypeChip
+										label="Diziler"
+										count={diziCount}
+										active={typeFilter === "dizi"}
+										onPress={() => setTypeFilter("dizi")}
+									/>
+									<TVPressable
+										onPress={() => setIsFilterOpen(true)}
+										activeOpacity={0.75}
+										accessibilityLabel="Filtreler"
+										style={({ focused }) => [
+											styles.typeChip,
+											styles.filterButton,
+											{
+												height: sp(34),
+												borderRadius: sp(17),
+												paddingHorizontal: sp(14),
+												gap: sp(6),
+											},
+											focused && styles.focusRing,
+										]}>
+										<Ionicons
+											name="options-outline"
+											size={sp(14)}
+											color={
+												pluginFilter
+													? Palette.primary
+													: Palette.onSurfaceVariant
+											}
+										/>
+										<Text
+											style={[
+												styles.typeChipText,
+												{
+													fontSize: sp(13),
+													color: pluginFilter
+														? Palette.primary
+														: Palette.onSurfaceVariant,
+												},
+											]}>
+											{pluginFilter
+												? `Filtreler (${activeFilterCount})`
+												: "Filtreler"}
+										</Text>
+									</TVPressable>
+								</View>
+							</View>
+						) : null}
+
+						{/* Yükleniyor Durumu */}
+						{loading ? (
+							<View
+								style={{ marginTop: sp(20), gap: sp(10) }}
+								pointerEvents="none">
+								<SkeletonLine
+									width={sp(180)}
+									height={sp(13)}
+									color={Palette.surfaceHigh}
+									style={{ marginBottom: sp(4) }}
+								/>
+								{Array.from({ length: 5 }).map((_, index) => (
 									<View
 										key={`sk-sonuc-${index}`}
 										style={[
 											styles.resultCard,
 											{
-												backgroundColor: colors.cardBg,
-												borderColor: colors.border,
+												borderRadius: sp(12),
+												padding: sp(8),
+												gap: sp(12),
 											},
 										]}>
 										<SkeletonBlock
-											width={58}
-											height={86}
-											radius={8}
-											color={colors.border}
+											width={sp(56)}
+											height={sp(84)}
+											radius={sp(8)}
+											color={Palette.surfaceHigh}
 										/>
-										<View style={styles.cardDetails}>
+										<View
+											style={{
+												flex: 1,
+												justifyContent: "center",
+												gap: sp(8),
+											}}>
 											<SkeletonLine
 												width="82%"
-												height={14}
-												color={colors.border}
+												height={sp(14)}
+												color={Palette.surfaceHigh}
 											/>
 											<SkeletonLine
-												width="52%"
-												height={12}
-												color={colors.border}
+												width="45%"
+												height={sp(11)}
+												color={Palette.surfaceHigh}
 											/>
-											<View style={styles.badgesRow}>
-												<SkeletonBlock
-													width={54}
-													height={20}
-													radius={6}
-													color={colors.border}
-												/>
-												<SkeletonBlock
-													width={40}
-													height={20}
-													radius={6}
-													color={colors.border}
-												/>
-											</View>
 										</View>
 									</View>
 								))}
 							</View>
-						</View>
-					)}
+						) : null}
 
-					{/* Arama Yapılmamışsa veya Arama Kutusu Boşsa Arama Geçmişi & Başlangıç Bilgisi */}
-					{!loading && (!hasSearched || searchQuery.trim().length === 0) && (
-						<View style={styles.historyContainer}>
-							{/* Arama Geçmişi Bölümü */}
-							{searchHistory.length > 0 && (
-								<View style={styles.historySection}>
-									<View style={styles.historyHeader}>
-										<View style={styles.historyTitleRow}>
+						{/* Son Aramalar (arama yapılmamışken) */}
+						{!loading &&
+						(!hasSearched || searchQuery.trim().length === 0) &&
+						searchHistory.length > 0 ? (
+							<View style={{ marginTop: sp(24) }}>
+								<View
+									style={[
+										styles.historyHeader,
+										{ marginBottom: sp(12), gap: sp(6) },
+									]}>
+									<Ionicons
+										name="time-outline"
+										size={sp(15)}
+										color={Palette.onSurfaceVariant}
+									/>
+									<Text
+										style={[
+											styles.historyTitle,
+											{ fontSize: sp(12) },
+										]}>
+										Son Aramalar
+									</Text>
+									<View style={{ flex: 1 }} />
+									<TVPressable
+										onPress={handleClearAllHistory}
+										accessibilityLabel="Aramaları temizle"
+										style={({ focused }) => [
+											styles.textButton,
+											{
+												paddingHorizontal: sp(6),
+												paddingVertical: sp(4),
+												borderRadius: sp(8),
+											},
+											focused && styles.focusRing,
+										]}>
+										<Text
+											style={[
+												styles.clearHistoryText,
+												{ fontSize: sp(13) },
+											]}>
+											Temizle
+										</Text>
+									</TVPressable>
+								</View>
+
+								<View style={[styles.chipRow, { gap: sp(8) }]}>
+									{searchHistory.map((item, index) => (
+										<TVPressable
+											key={`${item.q}-${index}`}
+											activeOpacity={0.75}
+											onPress={() => handleSearch(item.q)}
+											style={({ focused }) => [
+												styles.historyChip,
+												{
+													height: sp(34),
+													borderRadius: sp(17),
+													paddingHorizontal: sp(12),
+													gap: sp(6),
+												},
+												focused && styles.focusRing,
+											]}>
 											<Ionicons
-												name="time-outline"
-												size={18}
-												color={colors.text}
+												name="search-outline"
+												size={sp(13)}
+												color={Palette.onSurfaceVariant}
 											/>
 											<Text
+												numberOfLines={1}
 												style={[
-													styles.historyTitle,
-													{ color: colors.text },
+													styles.historyChipText,
+													{ fontSize: sp(13) },
 												]}>
-												Son Aramalar
+												{item.q}
 											</Text>
-										</View>
-										<TVPressable
-											onPress={handleClearAllHistory}
-											style={({ focused }) => [
-												focused && styles.textButtonFocused,
-											]}
-											hitSlop={{
-												top: 8,
-												bottom: 8,
-												left: 8,
-												right: 8,
-											}}>
-											<Text
-												style={[
-													styles.clearHistoryText,
-													{ color: colors.primary },
-												]}>
-												Tümünü Temizle
-											</Text>
-										</TVPressable>
-									</View>
-
-									{/* Geçmiş Öğeleri Listesi */}
-									<View style={styles.historyList}>
-										{searchHistory.map((item, index) => (
 											<TVPressable
-												key={`${item.q}-${index}`}
+												onPress={() =>
+													handleDeleteHistoryItem(item.q)
+												}
+												accessibilityLabel={`${item.q} aramasını sil`}
+												hitSlop={{
+													top: 10,
+													bottom: 10,
+													left: 10,
+													right: 10,
+												}}
 												style={({ focused }) => [
-													styles.historyItem,
 													{
-														backgroundColor:
-															colors.cardBg,
-														borderColor:
-															colors.border,
+														width: sp(18),
+														height: sp(18),
+														alignItems: "center",
+														justifyContent: "center",
+														borderRadius: sp(9),
 													},
-													focused && styles.historyItemFocused,
-												]}
-												activeOpacity={0.7}
-												onPress={() => handleSearch(item.q)}>
-												<View style={styles.historyItemContent}>
-													<Ionicons
-														name="search-outline"
-														size={16}
-														color={
-															colors.textSecondary
-														}
-													/>
-													<Text
-														style={[
-															styles.historyItemText,
-															{ color: colors.text },
-														]}
-														numberOfLines={1}>
-														{item.q}
-													</Text>
-												</View>
-												<TVPressable
-													onPress={() =>
-														handleDeleteHistoryItem(
-															item.q,
-														)
-													}
-													style={({ focused }) => [
-														focused && styles.iconButtonFocused,
-													]}
-													hitSlop={{
-														top: 10,
-														bottom: 10,
-														left: 10,
-														right: 10,
-													}}>
-													<Ionicons
-														name="close"
-														size={16}
-														color={
-															colors.textSecondary
-														}
-													/>
-												</TVPressable>
+													focused && styles.focusRing,
+												]}>
+												<Ionicons
+													name="close"
+													size={sp(13)}
+													color={Palette.outline}
+												/>
 											</TVPressable>
-										))}
-									</View>
+										</TVPressable>
+									))}
 								</View>
-							)}
+							</View>
+						) : null}
 
-							{/* Bilgi Kartı */}
-							<View style={styles.centerState}>
+						{/* Sonuç Bulunamadı Durumu */}
+						{!loading &&
+						hasSearched &&
+						results.length === 0 &&
+						searchQuery.trim().length > 0 ? (
+							<View
+								style={[
+									styles.emptyState,
+									{
+										paddingVertical: sp(60),
+										gap: sp(12),
+									},
+								]}>
 								<Ionicons
-									name="film-outline"
-									size={52}
-									color={colors.textSecondary}
+									name="alert-circle-outline"
+									size={sp(48)}
+									color={Palette.outline}
 								/>
 								<Text
 									style={[
 										styles.stateTitle,
-										{ color: colors.text },
+										{ fontSize: sp(17) },
 									]}>
-									Favori İçeriklerinizi Arayın
+									Sonuç Bulunamadı
 								</Text>
 								<Text
 									style={[
 										styles.stateSubText,
-										{ color: colors.textSecondary },
+										{ fontSize: sp(14) },
 									]}>
-									Dizibox, HDFilmCehennemi ve diğer tüm kaynaklarda
-									hızlıca arama yapabilirsiniz.
+									"{lastSearchedQuery}" için hiçbir kaynakta
+									içerik bulunamadı.
 								</Text>
 							</View>
-						</View>
-					)}
+						) : null}
 
-					{/* Sonuç Bulunamadı Durumu */}
-					{!loading && hasSearched && results.length === 0 && searchQuery.trim().length > 0 && (
-						<View style={styles.centerState}>
-							<Ionicons
-								name="alert-circle-outline"
-								size={56}
-								color={colors.textSecondary}
-							/>
-							<Text
+						{/* Filtre sonrası boş liste */}
+						{showResults && visibleCount === 0 ? (
+							<View
 								style={[
-									styles.stateTitle,
-									{ color: colors.text },
+									styles.emptyState,
+									{
+										paddingVertical: sp(48),
+										gap: sp(12),
+									},
 								]}>
-								Sonuç Bulunamadı
-							</Text>
-							<Text
-								style={[
-									styles.stateSubText,
-									{ color: colors.textSecondary },
-								]}>
-								"{lastSearchedQuery}" için hiçbir kaynakta içerik
-								bulunamadı.
-							</Text>
-						</View>
-					)}
+								<Ionicons
+									name="filter-outline"
+									size={sp(44)}
+									color={Palette.outline}
+								/>
+								<Text
+									style={[
+										styles.stateTitle,
+										{ fontSize: sp(16) },
+									]}>
+									Filtreye uyan sonuç yok
+								</Text>
+								<TVPressable
+									onPress={resetFilters}
+									activeOpacity={0.75}
+									style={({ focused }) => [
+										styles.typeChip,
+										styles.typeChipIdle,
+										{
+											height: sp(34),
+											borderRadius: sp(17),
+											paddingHorizontal: sp(14),
+											marginTop: sp(4),
+										},
+										focused && styles.focusRing,
+									]}>
+									<Text
+										style={[
+											styles.typeChipText,
+											{
+												fontSize: sp(13),
+												color: Palette.primary,
+											},
+										]}>
+										Filtreleri sıfırla
+									</Text>
+								</TVPressable>
+							</View>
+						) : null}
 
-					{/* Gruplandırılmış Sonuçlar */}
-					{!loading && hasSearched && pluginKeys.length > 0 && searchQuery.trim().length > 0 && (
-						<View style={styles.resultsContainer}>
-							<Text
-								style={[
-									styles.totalCountText,
-									{ color: colors.textSecondary },
-								]}>
-								"{lastSearchedQuery}" için toplam {results.length}{" "}
-								sonuç bulundu
-							</Text>
-
-							{pluginKeys.map((pluginName) => {
-								const items = groupedResults[pluginName] || [];
-								return (
+						{/* Gruplandırılmış Sonuçlar */}
+						{showResults && visibleCount > 0 ? (
+							<View style={{ marginTop: sp(18) }}>
+								{visibleGroups.map((group) => (
 									<View
-										key={pluginName}
-										style={styles.pluginSection}>
-										{/* Plugin Başlığı */}
-										<View style={styles.pluginHeader}>
-											<View style={styles.pluginHeaderTitleRow}>
-												<Ionicons
-													name="server-outline"
-													size={16}
-													color={colors.primary}
-												/>
-												<Text
-													style={[
-														styles.pluginTitle,
-														{ color: colors.text },
-													]}>
-													{pluginName}
-												</Text>
-											</View>
+										key={group.plugin}
+										style={{ marginBottom: sp(22) }}>
+										{/* Kaynak başlığı */}
+										<View
+											style={[
+												styles.pluginHeader,
+												{
+													marginBottom: sp(10),
+													gap: sp(8),
+												},
+											]}>
+											<Text
+												numberOfLines={1}
+												style={[
+													styles.pluginTitle,
+													{ fontSize: sp(12) },
+												]}>
+												{group.plugin}
+											</Text>
 											<View
 												style={[
 													styles.countBadge,
 													{
-														backgroundColor:
-															colors.primary + "1A",
+														borderRadius: sp(8),
+														paddingHorizontal: sp(8),
+														paddingVertical: sp(2),
 													},
 												]}>
 												<Text
 													style={[
 														styles.countBadgeText,
-														{
-															color: colors.primary,
-														},
+														{ fontSize: sp(11) },
 													]}>
-													{items.length} sonuç
+													{group.items.length}
 												</Text>
 											</View>
 										</View>
 
-										{/* Plugin İçerikleri */}
-										<View style={styles.cardsList}>
-											{items.map((item, index) => {
-												const posterUri =
-													item.poster ||
-													item.poster_url ||
-													item.image ||
-													item.backdrop_url;
-
-												return (
-													<TVPressable
-														key={
-															item.url ||
-															`${pluginName}-${index}`
-														}
-														style={({ focused }) => [
-															styles.resultCard,
-															{
-																backgroundColor:
-																	colors.cardBg,
-																borderColor:
-																	focused ? colors.primary : colors.border,
-															},
-															focused && styles.resultCardFocused,
-														]}
-														activeOpacity={0.75}
-														onPress={() =>
-															handleItemPress(item)
-														}>
-														{/* Poster Görseli */}
-														{posterUri ? (
-															<Image
-																source={{
-																	uri: posterUri,
-																}}
-																style={
-																	styles.posterImage
-																}
-																contentFit="cover"
-																contentPosition="center"
-																transition={0}
-																recyclingKey={posterUri}
-																cachePolicy="memory-disk"
-															/>
-														) : (
-															<View
-																style={[
-																	styles.posterPlaceholder,
-																	{
-																		backgroundColor:
-																			colors.border,
-																	},
-																]}>
-																<Ionicons
-																	name="film-outline"
-																	size={24}
-																	color={
-																		colors.textSecondary
-																	}
-																/>
-															</View>
-														)}
-
-														{/* İçerik Bilgileri */}
-														<View
-															style={
-																styles.cardDetails
-															}>
-															<Text
-																style={[
-																	styles.itemTitle,
-																	{
-																		color: colors.text,
-																	},
-																]}
-																numberOfLines={2}>
-																{item.title}
-															</Text>
-
-															<View
-																style={
-																	styles.badgesRow
-																}>
-																{/* Medya Türü (Film / Dizi) */}
-																{item.media_type && (
-																	<View
-																		style={[
-																			styles.typeBadge,
-																			{
-																				backgroundColor:
-																					item.media_type
-																						?.toLowerCase()
-																						?.includes(
-																							"dizi",
-																						)
-																						? "#6366f120"
-																						: "#ec489920",
-																			},
-																		]}>
-																		<Text
-																			style={[
-																				styles.typeBadgeText,
-																				{
-																					color: item.media_type
-																						?.toLowerCase()
-																						?.includes(
-																							"dizi",
-																						)
-																						? "#6366f1"
-																						: "#ec4899",
-																				},
-																			]}>
-																			{item.media_type}
-																		</Text>
-																	</View>
-																)}
-
-																{/* Yıl */}
-																{item.year && (
-																	<Text
-																		style={[
-																			styles.metaText,
-																			{
-																				color: colors.textSecondary,
-																			},
-																		]}>
-																		{item.year}
-																	</Text>
-																)}
-
-																{/* Rating */}
-																{item.rating && (
-																	<View
-																		style={
-																			styles.ratingRow
-																		}>
-																		<Ionicons
-																			name="star"
-																			size={12}
-																			color="#F5C518"
-																		/>
-																		<Text
-																			style={
-																				styles.ratingText
-																			}>
-																			{item.rating}
-																		</Text>
-																	</View>
-																)}
-															</View>
-														</View>
-
-														{/* Sağ Ok */}
-														<Ionicons
-															name="chevron-forward"
-															size={18}
-															color={
-																colors.textSecondary
-															}
-															style={styles.chevron}
-														/>
-													</TVPressable>
-												);
-											})}
+										<View style={{ gap: sp(10) }}>
+											{group.items.map((item, index) => (
+												<ResultRow
+													key={
+														item.url ||
+														`${group.plugin}-${index}`
+													}
+													item={item}
+													onPress={() =>
+														handleItemPress(item)
+													}
+												/>
+											))}
 										</View>
 									</View>
-								);
-							})}
-						</View>
-					)}
+								))}
+							</View>
+						) : null}
+					</View>
 				</ScrollView>
 
 				<BottomNavigation activeRoute="/(app)/search" />
+
+				{/* Kaynak (eklenti) filtresi — tüm cihazlarda modal */}
+				<BottomSheetModal
+					visible={isFilterOpen}
+					onClose={() => setIsFilterOpen(false)}
+					snapToHeight={0.72}
+					fitContent={false}
+					title="Filtreler"
+					opacity={0.7}
+					handle={true}
+					closeOnBackdrop={true}
+					swipeable={true}>
+					<Text
+						style={[
+							styles.filterSummary,
+							{ fontSize: sp(12), marginBottom: sp(12) },
+						]}>
+						{`${activeFilterCount} / ${availablePlugins.length} kaynak açık`}
+					</Text>
+
+					<ScrollView
+						showsVerticalScrollIndicator={false}
+						contentContainerStyle={{ gap: sp(8), paddingBottom: sp(12) }}>
+						{availablePlugins.map((name, index) => (
+							<PluginFilterRow
+								key={name}
+								name={name}
+								autoFocus={index === 0}
+								checked={
+									pluginFilter ? pluginFilter.has(name) : true
+								}
+								onPress={() => togglePlugin(name)}
+							/>
+						))}
+					</ScrollView>
+
+					<TVPressable
+						onPress={resetFilters}
+						activeOpacity={0.75}
+						accessibilityLabel="Filtreleri sıfırla"
+						style={({ focused }) => [
+							styles.resetButton,
+							{
+								height: sp(46),
+								borderRadius: sp(23),
+								marginTop: sp(12),
+							},
+							focused && styles.focusRing,
+						]}>
+						<Ionicons
+							name="refresh"
+							size={sp(16)}
+							color={Palette.onSurface}
+						/>
+						<Text
+							style={[
+								styles.resetButtonText,
+								{ fontSize: sp(14) },
+							]}>
+							Tüm Filtreleri Temizle
+						</Text>
+					</TVPressable>
+				</BottomSheetModal>
 			</SafeAreaView>
 		</>
 	);
@@ -1127,312 +1411,268 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
-	},
-	header: {
-		height: 56,
-		justifyContent: "center",
-		alignItems: "center",
-		borderBottomWidth: 1,
-	},
-	headerTitle: {
-		fontSize: 18,
-		fontWeight: "bold",
-		letterSpacing: -0.015,
+		backgroundColor: Palette.background,
 	},
 	scrollContainer: {
-		paddingBottom: 80,
+		paddingBottom: 96,
+	},
+	/* ── Marka satırı ── */
+	topBar: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+	},
+	wordmark: {
+		flexDirection: "row",
+		alignItems: "center",
+		flexShrink: 1,
+	},
+	wordmarkMark: {
+		backgroundColor: Palette.primary,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	wordmarkText: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		letterSpacing: 0.6,
+	},
+	profileButton: {
+		backgroundColor: Palette.primary,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	/* ── Arama alanı ── */
+	fieldLabel: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.bold,
+		letterSpacing: 1.2,
+		textTransform: "uppercase",
+	},
+	searchPill: {
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: Palette.surfaceHigh,
+	},
+	searchInput: {
+		flex: 1,
+		paddingVertical: 0,
+		color: Palette.onSurface,
+		fontFamily: FontFamily.medium,
+	},
+	clearButton: {
+		backgroundColor: Palette.surfaceHighest,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	/* ── Hap şeritleri ── */
+	chipRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		flexWrap: "wrap",
+	},
+	scopePill: {
+		flexDirection: "row",
+		alignItems: "center",
+		maxWidth: "100%",
+	},
+	scopePillIdle: {
+		backgroundColor: Palette.surfaceLow,
+	},
+	scopePillActive: {
+		backgroundColor: "rgba(76, 215, 246, 0.12)",
+	},
+	scopeDot: {},
+	scopeText: {
+		fontFamily: FontFamily.semiBold,
+		flexShrink: 1,
+	},
+	typeChip: {
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	typeChipIdle: {
+		backgroundColor: Palette.surfaceLow,
+	},
+	typeChipActive: {
+		backgroundColor: Palette.primary,
+	},
+	typeChipText: {
+		fontFamily: FontFamily.semiBold,
+	},
+	filterButton: {
+		flexDirection: "row",
+		backgroundColor: Palette.surfaceLow,
 	},
 	/* ── Kaynak durumu banner'ı ── */
 	sourceStatusBanner: {
 		flexDirection: "row",
 		alignItems: "flex-start",
-		backgroundColor: "rgba(245, 158, 11, 0.12)",
+		backgroundColor: "rgba(251, 188, 46, 0.10)",
 		borderWidth: 1,
-		borderColor: "rgba(245, 158, 11, 0.35)",
-		borderRadius: 10,
-		padding: 12,
-		marginHorizontal: 16,
-		marginBottom: 10,
-		gap: 9,
-	},
-	sourceStatusIcon: {
-		marginTop: 1,
-	},
-	sourceStatusBody: {
-		flex: 1,
-		gap: 3,
+		borderColor: "rgba(251, 188, 46, 0.30)",
 	},
 	sourceStatusTitle: {
-		color: "#fbbf24",
-		fontSize: 12,
-		fontWeight: "700",
+		color: Palette.tertiary,
+		fontFamily: FontFamily.bold,
 	},
 	sourceStatusDetail: {
-		color: "#fcd34d",
-		fontSize: 11,
-		lineHeight: 15,
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
 	},
 	sourceStatusNote: {
-		color: "#9ca3af",
-		fontSize: 10,
+		color: Palette.outline,
+		fontFamily: FontFamily.regular,
 		fontStyle: "italic",
-		marginTop: 1,
 	},
-	searchContainer: {
-		paddingHorizontal: 16,
-		paddingTop: 12,
-		paddingBottom: 8,
+	/* ── Sonuç başlığı ── */
+	resultsTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
 	},
-	searchRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 10,
-	},
-	searchInputWrapper: {
-		flex: 1,
-		flexDirection: "row",
-		alignItems: "center",
-		paddingHorizontal: 12,
-		borderRadius: 12,
-		height: 48,
-		borderWidth: 1,
-		gap: 8,
-	},
-	searchInput: {
-		flex: 1,
-		fontSize: 15,
-		paddingVertical: 0,
-	},
-	searchButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		height: 48,
-		paddingHorizontal: 16,
-		borderRadius: 12,
-		gap: 6,
-	},
-	searchButtonText: {
-		color: "#ffffff",
-		fontSize: 14,
-		fontWeight: "600",
-	},
-	historyContainer: {
-		paddingHorizontal: 16,
-		paddingTop: 8,
-	},
-	historySection: {
-		marginBottom: 20,
-	},
+	/* ── Son Aramalar ── */
 	historyHeader: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "space-between",
-		marginBottom: 12,
-	},
-	historyTitleRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 6,
 	},
 	historyTitle: {
-		fontSize: 15,
-		fontWeight: "700",
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.bold,
+		letterSpacing: 1.2,
+		textTransform: "uppercase",
 	},
+	textButton: {},
 	clearHistoryText: {
-		fontSize: 13,
-		fontWeight: "600",
+		color: Palette.secondary,
+		fontFamily: FontFamily.semiBold,
 	},
-	historyList: {
-		gap: 8,
-	},
-	historyItem: {
+	historyChip: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "space-between",
-		paddingHorizontal: 14,
-		paddingVertical: 12,
-		borderRadius: 10,
-		borderWidth: 1,
+		backgroundColor: Palette.surfaceLow,
+		maxWidth: "100%",
 	},
-	historyItemContent: {
-		flex: 1,
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 10,
-		marginRight: 8,
+	historyChipText: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.medium,
+		flexShrink: 1,
 	},
-	historyItemText: {
-		fontSize: 14,
-		fontWeight: "500",
-	},
-	centerState: {
-		alignItems: "center",
-		justifyContent: "center",
-		paddingVertical: 60,
-		paddingHorizontal: 32,
-		gap: 12,
-	},
-	stateTitle: {
-		fontSize: 17,
-		fontWeight: "700",
-		textAlign: "center",
-	},
-	stateSubText: {
-		fontSize: 14,
-		textAlign: "center",
-		lineHeight: 20,
-	},
-	resultsContainer: {
-		paddingHorizontal: 16,
-		paddingTop: 8,
-	},
-	totalCountText: {
-		fontSize: 13,
-		fontWeight: "500",
-		marginBottom: 12,
-	},
-	pluginSection: {
-		marginBottom: 24,
-	},
-	pluginHeader: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		marginBottom: 10,
-	},
-	pluginHeaderTitleRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 6,
-	},
-	pluginTitle: {
-		fontSize: 16,
-		fontWeight: "700",
-	},
-	countBadge: {
-		paddingHorizontal: 8,
-		paddingVertical: 3,
-		borderRadius: 12,
-	},
-	countBadgeText: {
-		fontSize: 12,
-		fontWeight: "600",
-	},
-	cardsList: {
-		gap: 10,
-	},
+	/* ── Sonuç satırı ── */
 	resultCard: {
 		flexDirection: "row",
 		alignItems: "center",
-		borderRadius: 12,
-		borderWidth: 1,
-		padding: 8,
-		gap: 12,
+		backgroundColor: Palette.surfaceLow,
 	},
 	posterImage: {
-		width: 58,
-		height: 86,
-		borderRadius: 8,
 		overflow: "hidden",
 	},
 	posterPlaceholder: {
-		width: 58,
-		height: 86,
-		borderRadius: 8,
-		overflow: "hidden",
-		justifyContent: "center",
+		backgroundColor: Palette.surfaceHigh,
 		alignItems: "center",
+		justifyContent: "center",
 	},
 	cardDetails: {
 		flex: 1,
 		justifyContent: "center",
-		gap: 6,
 	},
 	itemTitle: {
-		fontSize: 14,
-		fontWeight: "600",
-		lineHeight: 18,
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
 	},
-	badgesRow: {
+	metaRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 8,
 		flexWrap: "wrap",
 	},
-	typeBadge: {
-		paddingHorizontal: 6,
-		paddingVertical: 2,
-		borderRadius: 6,
-	},
-	typeBadgeText: {
-		fontSize: 11,
-		fontWeight: "600",
-	},
 	metaText: {
-		fontSize: 12,
-		fontWeight: "500",
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
 	},
 	ratingRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 3,
 	},
 	ratingText: {
-		fontSize: 12,
-		fontWeight: "700",
-		color: "#F5C518",
+		color: Palette.tertiary,
+		fontFamily: FontFamily.bold,
 	},
-	chevron: {
-		paddingRight: 4,
-	},
-	scopeRow: {
-		flexDirection: "row",
-		gap: 8,
-		marginTop: 10,
-	},
-	scopePill: {
+	/* ── Kaynak grubu ── */
+	pluginHeader: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: 12,
-		paddingVertical: 6,
-		borderRadius: 16,
-		borderWidth: 1,
-		borderColor: "transparent",
-		gap: 5,
 	},
-	scopePillActive: {
-		backgroundColor: "#2563EB",
-		borderColor: "#2563EB",
+	pluginTitle: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.bold,
+		letterSpacing: 1.2,
+		textTransform: "uppercase",
+		flexShrink: 1,
 	},
-	scopeText: {
-		fontSize: 12,
+	countBadge: {
+		backgroundColor: "rgba(192, 193, 255, 0.14)",
 	},
-	searchButtonFocused: {
+	countBadgeText: {
+		color: Palette.primary,
+		fontFamily: FontFamily.semiBold,
+	},
+	/* ── Boş durumlar ── */
+	emptyState: {
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	stateTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		textAlign: "center",
+	},
+	stateSubText: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
+		textAlign: "center",
+		lineHeight: 20,
+	},
+	/* ── Filtre paneli ── */
+	filterSummary: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
+	},
+	filterRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: Palette.surfaceLow,
+	},
+	filterRowChecked: {
+		backgroundColor: Palette.surface,
+	},
+	filterRowText: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.medium,
+		flex: 1,
+	},
+	checkbox: {
+		borderWidth: 1.5,
+		borderColor: Palette.outline,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	checkboxChecked: {
+		backgroundColor: Palette.primary,
+		borderColor: Palette.primary,
+	},
+	resetButton: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.surfaceHigh,
+		gap: 8,
+	},
+	resetButtonText: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+	},
+	/* ── Odak: yalnızca halka ── */
+	focusRing: {
+		borderColor: Palette.primary,
 		borderWidth: 2,
-		borderColor: "#FFFFFF",
-		transform: [{ scale: 1.05 }],
-	},
-	scopePillFocused: {
-		borderWidth: 2,
-		borderColor: "#FFFFFF",
-		transform: [{ scale: 1.06 }],
-	},
-	historyItemFocused: {
-		borderWidth: 2,
-		borderColor: "#E50914",
-		transform: [{ scale: 1.02 }],
-	},
-	resultCardFocused: {
-		borderWidth: 2,
-		borderColor: "#E50914",
-		transform: [{ scale: 1.02 }],
-	},
-	iconButtonFocused: {
-		transform: [{ scale: 1.2 }],
-	},
-	textButtonFocused: {
-		borderBottomWidth: 1,
-		borderBottomColor: "#E50914",
 	},
 });
