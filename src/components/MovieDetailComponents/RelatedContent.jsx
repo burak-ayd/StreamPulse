@@ -1,30 +1,24 @@
 import TVPressable from "@components/common/TVPressable";
-import { useThemeContext } from "@context/ThemeContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { fetchRelatedContent as getRelatedApiContent } from "@/services/api";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import {
-	ScrollView,
-	StyleSheet,
-	Text,
-	View,
-} from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 /**
- * RelatedContent – Benzer İçerikler bölümü.
- * Mockup tasarımındaki kırmızı accent çizgisi ve modern kart stiliyle.
+ * RelatedContent – "Benzer İçerikler" şeridi.
+ * Eklentiden gelen `related` listesi varsa API çağrısı yapılmaz.
  */
 export default function RelatedContent({
 	contentType,
 	currentId,
 	pluginRelated,
 }) {
-	const { colors, theme } = useThemeContext();
 	const router = useRouter();
-	const { sp, gutter, focusScale } = useTvMetrics();
+	const { sp, gutter } = useTvMetrics();
 
 	const hasPluginRelated = Array.isArray(pluginRelated) && pluginRelated.length > 0;
 	const [apiRelated, setApiRelated] = useState([]);
@@ -81,27 +75,13 @@ export default function RelatedContent({
 		}
 	};
 
-	const surfaceBorder = theme === "dark" ? "#232A36" : "#E2E8F0";
+	const cardWidth = sp(140);
 
 	return (
-		<View style={[styles.container, { marginBottom: sp(28) }]}>
-			{/* Section Title with red accent bar */}
-			<View
-				style={[styles.titleRow, { gap: sp(12), marginBottom: sp(16) }]}>
-				<View
-					style={[
-						styles.accentBar,
-						{ width: sp(5), height: sp(26), borderRadius: sp(3) },
-					]}
-				/>
-				<Text
-					style={[
-						styles.sectionTitle,
-						{ color: colors.text, fontSize: sp(21) },
-					]}>
-					Benzer İçerikler
-				</Text>
-			</View>
+		<View style={[styles.container, { marginBottom: sp(28), gap: sp(12) }]}>
+			<Text style={[styles.sectionTitle, { fontSize: sp(18) }]}>
+				Benzer İçerikler
+			</Text>
 
 			<ScrollView
 				horizontal
@@ -109,104 +89,82 @@ export default function RelatedContent({
 				removeClippedSubviews={false}
 				contentContainerStyle={[
 					styles.scrollContent,
-					{ gap: sp(14), paddingRight: 20 + gutter },
+					{ gap: sp(14), paddingRight: gutter },
 				]}>
 				{displayList.map((item, index) => {
-					const posterUri =
-						item.poster_url || item.poster || item.image;
+					const posterUri = item.poster_url || item.poster || item.image;
+					const rating = Number(item.rating);
+					const meta = [item.year || item.release_date, item.category]
+						.filter(Boolean)
+						.join(" · ");
 
 					return (
 						<TVPressable
 							key={item.id || item.url || index}
-							style={({ focused }) => [
-								styles.contentCard,
-								{ width: sp(140) },
-								focused && {
-									transform: [{ scale: focusScale }],
-								},
-							]}
+							style={[styles.contentCard, { width: cardWidth }]}
+							focusedStyle={styles.focusRing}
 							onPress={() => handleContentPress(item)}
 							activeOpacity={0.8}>
-							{({ focused }) => (
-								<>
-									<View
-										style={[
-											styles.posterContainer,
-											{
-												borderColor: surfaceBorder,
-												width: sp(140),
-												height: sp(204),
-												borderRadius: sp(16),
-												marginBottom: sp(10),
-											},
-											focused && styles.posterContainerFocused,
-										]}>
-										{posterUri ? (
-											<Image
-												source={{ uri: posterUri }}
-												style={styles.poster}
-												contentFit="cover"
-												contentPosition="center"
-												transition={0}
-												recyclingKey={posterUri}
-												cachePolicy="memory-disk"
-											/>
-										) : (
-											<View
-												style={[
-													styles.posterPlaceholder,
-													{ backgroundColor: colors.cardBg },
-												]}>
-												<Ionicons
-													name="film-outline"
-													size={sp(36)}
-													color={colors.textSecondary}
-												/>
-											</View>
-										)}
-
-										{item.rating && (
-											<View
-												style={[
-													styles.ratingBadge,
-													{
-														top: sp(7),
-														left: sp(7),
-														paddingHorizontal: sp(7),
-														paddingVertical: sp(3),
-														borderRadius: sp(8),
-													},
-												]}>
-												<Ionicons
-													name="star"
-													size={sp(12)}
-													color="#FBBF24"
-												/>
-												<Text
-													style={[
-														styles.ratingText,
-														{ fontSize: sp(13) },
-													]}>
-													{Number(item.rating).toFixed(1)}
-												</Text>
-											</View>
-										)}
+							<View
+								style={[
+									styles.posterContainer,
+									{
+										width: cardWidth,
+										height: Math.round(cardWidth * 1.5),
+										borderRadius: sp(12),
+										marginBottom: sp(8),
+									},
+								]}>
+								{posterUri ? (
+									<Image
+										source={{ uri: posterUri }}
+										style={styles.poster}
+										contentFit="cover"
+										contentPosition="center"
+										transition={0}
+										recyclingKey={posterUri}
+										cachePolicy="memory-disk"
+									/>
+								) : (
+									<View style={styles.posterPlaceholder}>
+										<Ionicons
+											name="film-outline"
+											size={sp(32)}
+											color={Palette.onSurfaceVariant}
+										/>
 									</View>
+								)}
 
-									<Text
-										style={[
-											styles.contentTitle,
-											{
-												color: colors.text,
-												fontSize: sp(15),
-												lineHeight: sp(20),
-											},
-										]}
-										numberOfLines={2}>
-										{item.title || item.name}
-									</Text>
-								</>
-							)}
+								{Number.isFinite(rating) && rating > 0 ? (
+									<View style={styles.ratingBadge}>
+										<Ionicons
+											name="star"
+											size={sp(11)}
+											color={Palette.tertiary}
+										/>
+										<Text
+											style={[
+												styles.ratingText,
+												{ fontSize: sp(11) },
+											]}>
+											{rating.toFixed(1)}
+										</Text>
+									</View>
+								) : null}
+							</View>
+
+							<Text
+								style={[styles.contentTitle, { fontSize: sp(13.5) }]}
+								numberOfLines={1}>
+								{item.title || item.name}
+							</Text>
+							{meta ? (
+								<Text
+									style={[styles.contentMeta, { fontSize: sp(12) }]}
+									numberOfLines={1}>
+									{meta}
+								</Text>
+							) : null}
 						</TVPressable>
 					);
 				})}
@@ -217,23 +175,17 @@ export default function RelatedContent({
 
 const styles = StyleSheet.create({
 	container: {},
-	titleRow: {
-		flexDirection: "row",
-		alignItems: "center",
-	},
-	accentBar: {
-		backgroundColor: "#E50914",
-	},
 	sectionTitle: {
-		fontWeight: "700",
-		letterSpacing: -0.2,
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
 	},
-	scrollContent: {},
+	scrollContent: {
+		flexDirection: "row",
+	},
 	contentCard: {},
 	posterContainer: {
 		overflow: "hidden",
-		borderWidth: 1,
-		backgroundColor: "rgba(0,0,0,0.2)",
+		backgroundColor: Palette.surfaceHigh,
 	},
 	poster: {
 		width: "100%",
@@ -242,25 +194,37 @@ const styles = StyleSheet.create({
 	posterPlaceholder: {
 		width: "100%",
 		height: "100%",
-		justifyContent: "center",
 		alignItems: "center",
+		justifyContent: "center",
 	},
 	ratingBadge: {
 		position: "absolute",
+		top: 6,
+		right: 6,
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 3,
-		backgroundColor: "rgba(0, 0, 0, 0.75)",
+		paddingHorizontal: 6,
+		paddingVertical: 2,
+		borderRadius: 999,
+		backgroundColor: "rgba(14,14,16,0.9)",
 	},
 	ratingText: {
-		color: "#FBBF24",
-		fontWeight: "700",
+		color: Palette.tertiary,
+		fontFamily: FontFamily.bold,
 	},
 	contentTitle: {
-		fontWeight: "600",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.medium,
 	},
-	posterContainerFocused: {
-		borderColor: "#E50914",
+	contentMeta: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
+		marginTop: 2,
+	},
+	focusRing: {
 		borderWidth: 2,
+		borderColor: Palette.primary,
+		borderRadius: 12,
 	},
 });

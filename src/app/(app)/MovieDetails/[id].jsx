@@ -1,4 +1,4 @@
-import { useThemeContext } from "@/context/ThemeContext";
+import { Palette } from "@/constants/theme";
 import { fetchPluginDetail } from "@/services/api";
 import { canonicalType, isSeriesContent } from "@/utils/mediaType";
 import { resolvePluginName } from "@/utils/pluginName";
@@ -14,10 +14,8 @@ import {
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
 import { useTvMetrics } from "@/utils/tvMetrics";
-import TVPressable from "@components/common/TVPressable";
 import ListSelectModal from "@components/modal/ListSelectModal";
 import { useContentDetails } from "@hooks/useContentDetails";
-import { Ionicons } from "@react-native-vector-icons/ionicons";
 import {
 	Stack,
 	useFocusEffect,
@@ -38,18 +36,18 @@ import {
 } from "react-native";
 
 // Components
+import { tercihFavoriIleHizala } from "@/services/bildirimApi";
 import ActionButtons from "@components/MovieDetailComponents/ActionButtons";
-import NotificationPreferenceCard from "@components/MovieDetailComponents/NotificationPreferenceCard";
 import CastSection from "@components/MovieDetailComponents/CastSection";
 import CrewSection from "@components/MovieDetailComponents/CrewSection";
 import ErrorState from "@components/MovieDetailComponents/ErrorState";
 import HeroSection from "@components/MovieDetailComponents/HeroSection";
 import LoadingState from "@components/MovieDetailComponents/LoadingState";
 import MetadataSection from "@components/MovieDetailComponents/MetadataSection";
+import NotificationPreferenceCard from "@components/MovieDetailComponents/NotificationPreferenceCard";
 import OverviewSection from "@components/MovieDetailComponents/OverviewSection";
 import RelatedContent from "@components/MovieDetailComponents/RelatedContent";
 import SeasonsSection from "@components/MovieDetailComponents/SeasonsSection";
-import { tercihFavoriIleHizala } from "@/services/bildirimApi";
 
 /**
  * Detay Sayfası Bölüm / Bileşen Aktiflik Ayarları
@@ -64,7 +62,6 @@ export const DETAIL_SECTIONS_CONFIG = {
 	showMetadata: true, // Film detay meta bilgileri (süre, puan, çıkış yılı vb.)
 	showRelated: true, // Benzer içerikler bölümü
 	showActionButtons: true, // Eylem butonları (Hemen İzle, Listem, Fragman, Favori, İndir)
-	showFloatingBookmark: true, // Sağ altta kayan hızlı Liste/Kitaplık butonu
 };
 
 /**
@@ -97,7 +94,6 @@ export default function MovieDetailsScreen() {
 		return { sezon, bolum };
 	}, [params.otomatikSezon, params.otomatikBolum]);
 
-	const { colors, theme } = useThemeContext();
 	const router = useRouter();
 
 	/**
@@ -109,8 +105,7 @@ export default function MovieDetailsScreen() {
 	 * yapışıyordu. `contentMaxWidth` içeriği ortalanmış bir sütuna
 	 * topluyor, `sp` punto/boşlukları büyütüyor.
 	 */
-	const { isTV, sp, gutter, contentMaxWidth, textMaxWidth, focusScale } =
-		useTvMetrics();
+	const { sp, gutter, contentMaxWidth, isTV } = useTvMetrics();
 
 	const [selectedPlatformName, setSelectedPlatformName] = useState(null);
 
@@ -153,7 +148,6 @@ export default function MovieDetailsScreen() {
 
 	const [pluginDetail, setPluginDetail] = useState(null);
 	const [pluginLoading, setPluginLoading] = useState(Boolean(movieUrl));
-	const [activeTab, setActiveTab] = useState("overview"); // 'overview' | 'episodes' | 'related'
 
 	// Sadece ve sadece statik mock kimlikler için useContentDetails çağrılır
 	const isPureStaticContent = Boolean(
@@ -321,6 +315,9 @@ export default function MovieDetailsScreen() {
 						: pluginDetail.actors
 							? pluginDetail.actors.split(", ")
 							: []),
+				// TMDB portre eşlemesi (ad → görsel URL) — oyuncu
+				// şeridinde kullanılır; yoksa kişi ikonu kalır.
+				cast_images: pluginDetail.cast_images || null,
 				trailer_url:
 					pluginDetail.fragman_url || pluginDetail.trailer_url,
 				url: pluginDetail.url || movieUrl,
@@ -472,7 +469,11 @@ export default function MovieDetailsScreen() {
 			);
 
 		if (isSeries) {
-			getSeriesEpisodesProgress(content.id || content.url, content.title, content.plugin || pluginName)
+			getSeriesEpisodesProgress(
+				content.id || content.url,
+				content.title,
+				content.plugin || pluginName,
+			)
 				.then((res) => {
 					if (isMounted) setEpisodesProgress(res || {});
 				})
@@ -523,6 +524,19 @@ export default function MovieDetailsScreen() {
 		}
 		return [];
 	}, [pluginDetail, passedMovie, content?.tagline]);
+
+	// Sezon sayısı — künye satırında ("2024 · 2 Sezon · ...") kullanılır.
+	const seasonCount = useMemo(() => {
+		if (!content?.seasons) return 0;
+		if (
+			typeof content.seasons === "object" &&
+			!Array.isArray(content.seasons)
+		) {
+			return Object.keys(content.seasons).length;
+		}
+		if (Array.isArray(content.seasons)) return content.seasons.length;
+		return 0;
+	}, [content]);
 
 	// Toplam bölüm sayısı hesaplama
 	const totalEpisodesCount = useMemo(() => {
@@ -727,9 +741,7 @@ export default function MovieDetailsScreen() {
 						ep.season || ep.season_number || seasonKey,
 					);
 					flat.push({
-						season: Number.isFinite(sNum)
-							? sNum
-							: seasonKey,
+						season: Number.isFinite(sNum) ? sNum : seasonKey,
 						episode: Number(epNumber) || epNumber,
 						title: ep.title || null,
 						url: ep.url || null,
@@ -751,9 +763,7 @@ export default function MovieDetailsScreen() {
 				content.seasons.forEach((seasonObj, sIdx) => {
 					if (!seasonObj || typeof seasonObj !== "object") return;
 					const sKey =
-						seasonObj.season ||
-						seasonObj.season_number ||
-						sIdx + 1;
+						seasonObj.season || seasonObj.season_number || sIdx + 1;
 					pushEpisodes(
 						Array.isArray(seasonObj.episodes)
 							? seasonObj.episodes
@@ -788,9 +798,7 @@ export default function MovieDetailsScreen() {
 			for (let i = lastMarkedIndex + 1; i < flat.length; i++) {
 				const candidate = flat[i];
 				if (
-					!markedSet.has(
-						`s${candidate.season}_e${candidate.episode}`,
-					)
+					!markedSet.has(`s${candidate.season}_e${candidate.episode}`)
 				) {
 					return candidate;
 				}
@@ -844,7 +852,13 @@ export default function MovieDetailsScreen() {
 			loadWatchProgress();
 			return count;
 		},
-		[content, movieUrl, pluginName, loadWatchProgress, findNextEpisodeAfterMarks],
+		[
+			content,
+			movieUrl,
+			pluginName,
+			loadWatchProgress,
+			findNextEpisodeAfterMarks,
+		],
 	);
 
 	const handleToggleFavorite = async () => {
@@ -933,582 +947,289 @@ export default function MovieDetailsScreen() {
 		return <ErrorState error="İçerik bulunamadı" onRetry={apiRefetch} />;
 	}
 
-	const surfaceBg = theme === "dark" ? "#161B24" : "#ffffff";
-	const surfaceBorder = theme === "dark" ? "#232A36" : "#E2E8F0";
+	/*
+	 * Eylem butonları iki yerde kullanılır: telefon/tablette hero'nun
+	 * altında, TV'de hero'nun içinde (10-feet referansı). Tek düğüm,
+	 * tek render.
+	 */
+	const actionButtonsNode = DETAIL_SECTIONS_CONFIG.showActionButtons ? (
+		<ActionButtons
+			content={content}
+			inWatchlist={inWatchlist}
+			watchlistStatus={watchlistStatus}
+			isFav={isFav}
+			watchProgress={watchProgress}
+			totalEpisodesCount={totalEpisodesCount}
+			onToggleWatchlist={handleToggleWatchlist}
+			onToggleFavorite={handleToggleFavorite}
+			onOpenTrailer={handleOpenTrailer}
+		/>
+	) : null;
+
+	/*
+	 * Bildirim kartı: TV'de bölüm şeridinin ALTINDA durur — üstte kalınca
+	 * ilk ekranda bölümlerin görünmesini engelliyordu (Prime düzeni).
+	 */
+	const notificationCardNode =
+		isSeries && content?.tmdb_id && (content?.url || movieUrl) ? (
+			<NotificationPreferenceCard
+				key={String(content.tmdb_id)}
+				tmdbId={content.tmdb_id}
+				diziUrl={content?.url || movieUrl}
+				kaynakAdi={content?.plugin || pluginName || null}
+				diziBasligi={content?.title || passedMovie?.seriesTitle || null}
+				// Faz 6.3: TMDB dizi durumu — bitmiş dizide kart
+				// vaat yerine "yeni bölüm beklenmiyor" der.
+				diziDurumu={content?.status || null}
+			/>
+		) : null;
 
 	return (
-		<View style={[styles.rootContainer, { backgroundColor: colors.bg }]}>
+		<View
+			style={[
+				styles.rootContainer,
+				{ backgroundColor: Palette.background },
+			]}>
 			<Stack.Screen options={{ headerShown: false }} />
 
 			<ScrollView
-				style={[styles.container, { backgroundColor: colors.bg }]}
+				style={[
+					styles.container,
+					{ backgroundColor: Palette.background },
+				]}
 				contentInsetAdjustmentBehavior="automatic"
 				showsVerticalScrollIndicator={false}>
-				{/* 1. HERO SECTION - Backdrop, başlık, rozetler, geri & paylaş */}
+				{/* 1. HERO — backdrop; başlık/künye görselin üzerinde.
+				    TV'de eylem butonları da hero'nun içinde (10-feet düzeni). */}
 				<HeroSection
 					content={content}
 					onShare={handleShare}
-					genreList={genreList}
+					genres={genreList}
+					seasonCount={seasonCount}
+					actions={isTV ? actionButtonsNode : null}
 				/>
 
-				{/* 2. ANA İÇERİK ALANI */}
+				{/* 2. İÇERİK SÜTUNU — tek akış, sekme yok */}
 				<View
 					style={[
 						styles.contentWrapper,
 						{
-							paddingHorizontal: 20 + gutter,
-							paddingTop: sp(10),
+							paddingHorizontal: 16 + gutter,
+							/* TV: eylem hapları hero'nun içinde; ses/altyazı
+							   satırıyla arasında boşluk kalmasın. */
+							paddingTop: isTV ? sp(2) : sp(16),
 							paddingBottom: sp(80),
-							// TV'de her bölüm 1920px'e yayılıyordu; ortalanmış
-							// bir sütun hem okunur hem de "tek ekran" hissi verir.
 							width: "100%",
 							maxWidth: contentMaxWidth,
 							alignSelf: "center",
 						},
 					]}>
-					{/* Meta Hapları (Süre, Yıl, Yaş Sınırı, Kalite, Durum) */}
 					{DETAIL_SECTIONS_CONFIG.showMetadata && (
-						<MetadataSection content={content} />
-					)}
-
-					{/* Eylem Butonları (Kaldığın Yerden Devam Et Kartı / Hemen Şimdi İzle + Listem, Favori, İndir, Fragman) */}
-					{DETAIL_SECTIONS_CONFIG.showActionButtons && (
-						<ActionButtons
+						<MetadataSection
 							content={content}
-							inWatchlist={inWatchlist}
-							watchlistStatus={watchlistStatus}
-							isFav={isFav}
-							watchProgress={watchProgress}
-							totalEpisodesCount={totalEpisodesCount}
-							onToggleWatchlist={handleToggleWatchlist}
-							onToggleFavorite={handleToggleFavorite}
-							onOpenTrailer={handleOpenTrailer}
+							audioOptions={audioSubtitleOptions}
 						/>
 					)}
 
-					{/* Yeni Bölüm Bildirimi Kartı — yalnızca dizi + tmdb eşleşmesi varken */}
-					{isSeries &&
-						content?.tmdb_id &&
-						(content?.url || movieUrl) && (
-							<NotificationPreferenceCard
-								key={String(content.tmdb_id)}
-								tmdbId={content.tmdb_id}
-								diziUrl={content?.url || movieUrl}
-								kaynakAdi={content?.plugin || pluginName || null}
-								diziBasligi={
-									content?.title || passedMovie?.seriesTitle || null
-								}
-								// Faz 6.3: TMDB dizi durumu — bitmiş dizide kart
-								// vaat yerine "yeni bölüm beklenmiyor" der.
-								diziDurumu={content?.status || null}
+					{/* Oynat / Devam Et · Listem · Favori · İndir · Fragman
+					    TV'de hero'nun içinde render edilir. */}
+					{!isTV && actionButtonsNode}
+
+					{/* Bildirim kartı — yalnızca dizi + tmdb eşleşmesi varken
+					    (TV'de bölümlerin altında). */}
+					{!isTV && notificationCardNode}
+
+					{/* Özet: TV'de hero zaten 2 satır özet gösterir (referansta
+					    ayrı özet bloğu yok), tekrar edilmez. */}
+					{!isTV && DETAIL_SECTIONS_CONFIG.showOverview && (
+						<OverviewSection content={content} />
+					)}
+
+					{isSeries && DETAIL_SECTIONS_CONFIG.showSeasons && (
+						<SeasonsSection
+							seasons={content.seasons}
+							episodes={content.episodes}
+							loading={pluginLoading && !content.seasons}
+							initialSeason={
+								otomatikBolum?.sezon ??
+								passedMovie?.initialSeason
+							}
+							selectedSeason={selectedSeason}
+							onSeasonChange={setSelectedSeason}
+							otomatikBolum={otomatikBolum}
+							seriesTitle={content.title}
+							posterUrl={
+								content.poster_url || content.backdrop_url
+							}
+							content={content}
+							episodesProgress={episodesProgress}
+							totalEpisodes={totalEpisodesCount}
+							ref={seasonsRef}
+							onSetWatched={handleSetWatchedEpisodes}
+						/>
+					)}
+
+					{isTV && notificationCardNode}
+
+					{DETAIL_SECTIONS_CONFIG.showCast &&
+						content.cast_members?.length > 0 && (
+							<CastSection
+								cast={content.cast_members}
+								images={content.cast_images}
 							/>
 						)}
 
-					{/* Ses & Altyazı Bilgi Çubuğu (Yalnızca backend sonucunda varsa gösterilir) */}
-					{audioSubtitleOptions.length > 0 && (
-						<View
-							style={[
-								styles.audioSubtitleRow,
-								{
-									backgroundColor: surfaceBg,
-									borderColor: surfaceBorder,
-									// Etiket + rozetler tek satırda, aralarında
-									// SABİT boşluk. `space-between` olsaydı
-									// rozetler sağ uca savrulup telefon ekranını
-									// boydan boya kaplayan bir boşluk bırakıyordu
-									// (bkz. `styles.audioSubtitleRow` notu).
-									flexDirection: "row",
-									alignItems: "center",
-									gap: sp(12),
-									paddingHorizontal: sp(14),
-									paddingVertical: sp(11),
-									borderRadius: sp(14),
-									marginBottom: sp(16),
-								},
-							]}>
-							<View style={[styles.audioLeft, { gap: sp(7) }]}>
-								<Ionicons
-									name="chatbubbles-outline"
-									size={sp(16)}
-									color="#E50914"
-								/>
-								<Text
-									style={[
-										styles.audioLabel,
-										{
-											color: colors.textSecondary,
-											fontSize: sp(12.5),
-										},
-									]}>
-									Ses & Altyazı:
-								</Text>
-							</View>
-							<View style={[styles.audioChips, { gap: sp(7) }]}>
-								{audioSubtitleOptions.map((optionText, idx) => (
-									<View
-										key={idx}
-										style={[
-											styles.audioChip,
-											{
-												backgroundColor:
-													theme === "dark"
-														? "#0B0E14"
-														: "#f1f5f9",
-												borderColor: surfaceBorder,
-												paddingHorizontal: sp(10),
-												paddingVertical: sp(5),
-												borderRadius: sp(9),
-											},
-										]}>
-										<Text
-											style={[
-												styles.audioChipText,
-												{
-													color: colors.text,
-													fontSize: sp(12),
-												},
-											]}>
-											{optionText}
-										</Text>
-									</View>
-								))}
-							</View>
-						</View>
+					{DETAIL_SECTIONS_CONFIG.showCrew && (
+						<CrewSection content={content} />
 					)}
 
-					{/* 3. SEKME GEÇİŞİ (TABS SWITCHER) */}
-					<View
-						style={[
-							styles.tabBar,
-							{
-								borderBottomColor: surfaceBorder,
-								marginBottom: sp(24),
-								gap: sp(isTV ? 10 : 24),
-							},
-						]}>
-						{/* Tab 1: Genel Bakış */}
-						<TVPressable
-							style={({ focused }) => [
-								styles.tabItem,
+					{/* Detay bilgileri (Yönetmen, Orijinal Dil, Yayıncı Ağ) */}
+					{Boolean(
+						content.director ||
+						content.language ||
+						content.production_co,
+					) && (
+						<View
+							style={[
+								styles.detailsTableCard,
 								{
-									paddingVertical: sp(8),
-									paddingHorizontal: sp(13),
-									borderRadius: sp(12),
+									backgroundColor: Palette.surfaceLow,
+									borderColor: Palette.outlineVariant,
+									paddingHorizontal: sp(16),
+									paddingVertical: sp(11),
+									borderRadius: sp(16),
+									width: "100%",
+									alignSelf: "flex-start",
+									marginBottom: sp(20),
 								},
-								activeTab === "overview" &&
-									styles.tabItemActive,
-								focused && {
-									backgroundColor: "rgba(229, 9, 20, 0.22)",
-									borderWidth: 2,
-									borderColor: "#E50914",
-									transform: [{ scale: focusScale }],
-								},
-							]}
-							onPress={() => setActiveTab("overview")}
-							activeOpacity={0.7}>
-							<Text
-								style={[
-									styles.tabText,
-									{
-										color:
-											activeTab === "overview"
-												? "#E50914"
-												: colors.textSecondary,
-										fontWeight:
-											activeTab === "overview"
-												? "800"
-												: "600",
-										fontSize: sp(15),
-									},
-								]}>
-								Genel Bakış
-							</Text>
-							{activeTab === "overview" && (
-								<View style={styles.tabIndicator} />
-							)}
-						</TVPressable>
-
-						{isSeries && (
-							<TVPressable
-								style={({ focused }) => [
-									styles.tabItem,
-									{
-										paddingVertical: sp(8),
-									paddingHorizontal: sp(13),
-										borderRadius: sp(12),
-									},
-									activeTab === "episodes" &&
-										styles.tabItemActive,
-									focused && {
-										backgroundColor:
-											"rgba(229, 9, 20, 0.22)",
-										borderWidth: 2,
-										borderColor: "#E50914",
-										transform: [{ scale: focusScale }],
-									},
-								]}
-								onPress={() => setActiveTab("episodes")}
-								activeOpacity={0.7}>
+							]}>
+							{Boolean(content.director) && (
 								<View
 									style={[
-										styles.tabWithBadge,
-										{ gap: sp(8) },
+										styles.detailsRow,
+										{ paddingVertical: sp(10) },
 									]}>
 									<Text
 										style={[
-											styles.tabText,
+											styles.detailsLabel,
 											{
-												color:
-													activeTab === "episodes"
-														? "#E50914"
-														: colors.textSecondary,
-												fontWeight:
-													activeTab === "episodes"
-														? "800"
-														: "600",
-												fontSize: sp(15),
+												color: Palette.onSurfaceVariant,
+												fontSize: sp(13.5),
 											},
 										]}>
-										Bölümler
+										Yönetmen
 									</Text>
-									{totalEpisodesCount > 0 && (
-										<View
-											style={[
-												styles.tabCountBadge,
-												{
-													paddingHorizontal: sp(8),
-													paddingVertical: sp(2),
-													borderRadius: sp(12),
-												},
-											]}>
-											<Text
-												style={[
-													styles.tabCountText,
-													{ fontSize: sp(13) },
-												]}>
-												{totalEpisodesCount}
-											</Text>
-										</View>
-									)}
+									<Text
+										style={[
+											styles.detailsValue,
+											{
+												color: Palette.onSurface,
+												fontSize: sp(13.5),
+											},
+										]}>
+										{content.director}
+									</Text>
 								</View>
-								{activeTab === "episodes" && (
-									<View style={styles.tabIndicator} />
-								)}
-							</TVPressable>
-						)}
-
-						{/* Tab 3: Benzerler */}
-						<TVPressable
-							style={({ focused }) => [
-								styles.tabItem,
-								{
-									paddingVertical: sp(8),
-									paddingHorizontal: sp(13),
-									borderRadius: sp(12),
-								},
-								activeTab === "related" && styles.tabItemActive,
-								focused && {
-									backgroundColor: "rgba(229, 9, 20, 0.22)",
-									borderWidth: 2,
-									borderColor: "#E50914",
-									transform: [{ scale: focusScale }],
-								},
-							]}
-							onPress={() => setActiveTab("related")}
-							activeOpacity={0.7}>
-							<Text
-								style={[
-									styles.tabText,
-									{
-										color:
-											activeTab === "related"
-												? "#E50914"
-												: colors.textSecondary,
-										fontWeight:
-											activeTab === "related"
-												? "800"
-												: "600",
-										fontSize: sp(15),
-									},
-								]}>
-								Benzerler
-							</Text>
-							{activeTab === "related" && (
-								<View style={styles.tabIndicator} />
-							)}
-						</TVPressable>
-					</View>
-
-					{/* 4. SEKMELERE GÖRE İÇERİK GÖSTERİMİ */}
-
-					{/* --- GENEL BAKIŞ SEKMESİ --- */}
-					{activeTab === "overview" && (
-						<>
-							{/* Özet Bölümü */}
-							{DETAIL_SECTIONS_CONFIG.showOverview && (
-								<OverviewSection content={content} />
 							)}
 
-							{/* Dizi ise Sezon ve Bölümler Bölümü */}
-							{isSeries && DETAIL_SECTIONS_CONFIG.showSeasons && (
-								<SeasonsSection
-									seasons={content.seasons}
-									episodes={content.episodes}
-									loading={pluginLoading && !content.seasons}
-									initialSeason={passedMovie?.initialSeason}
-									selectedSeason={selectedSeason}
-									onSeasonChange={setSelectedSeason}
-									seriesTitle={content.title}
-									posterUrl={
-										content.poster_url ||
-										content.backdrop_url
-									}
-									content={content}
-									episodesProgress={episodesProgress}
-									totalEpisodes={totalEpisodesCount}
-									ref={seasonsRef}
-									onSetWatched={handleSetWatchedEpisodes}
-								/>
-							)}
-
-							{/* Oyuncular Bölümü */}
-							{DETAIL_SECTIONS_CONFIG.showCast &&
-								content.cast_members &&
-								content.cast_members.length > 0 && (
-									<CastSection cast={content.cast_members} />
-								)}
-
-							{/* Ekip Bilgisi (Gerektiğinde açılabilir) */}
-							{DETAIL_SECTIONS_CONFIG.showCrew && (
-								<CrewSection content={content} />
-							)}
-
-							{/* Detay Bilgileri Tablosu (Yönetmen, Orijinal Dil, Yayıncı Ağ - Yalnızca varsa gösterilir) */}
 							{Boolean(
-								content.director ||
-								content.language ||
-								content.production_co,
+								content.director &&
+								(content.language || content.production_co),
 							) && (
 								<View
 									style={[
-										styles.detailsTableCard,
+										styles.detailsDivider,
 										{
-											backgroundColor: surfaceBg,
-											borderColor: surfaceBorder,
-											paddingHorizontal: sp(16),
-											paddingVertical: sp(11),
-											borderRadius: sp(14),
-														// Etiket ile değer arası 1300px'e yayılıyordu
-											// ("Orijinal Dil" … "Dublaj & Altyazılı");
-											// ikisi de kısa metin, aralarındaki boşluk
-											// anlamsız. Metin sütununun genişliğine sabitleniyor.
-											width: "100%",
-											maxWidth: textMaxWidth,
-											alignSelf: "flex-start",
-											marginBottom: sp(18),
+											backgroundColor:
+												Palette.outlineVariant,
 										},
+									]}
+								/>
+							)}
+
+							{Boolean(content.language) && (
+								<View
+									style={[
+										styles.detailsRow,
+										{ paddingVertical: sp(10) },
 									]}>
-									{Boolean(content.director) && (
-										<View
-											style={[
-												styles.detailsRow,
-												{ paddingVertical: sp(10) },
-											]}>
-											<Text
-												style={[
-													styles.detailsLabel,
-													{
-														color: colors.textSecondary,
-														fontSize: sp(13.5),
-													},
-												]}>
-												Yönetmen
-											</Text>
-											<Text
-												style={[
-													styles.detailsValue,
-													{
-														color: colors.text,
-														fontSize: sp(13.5),
-													},
-												]}>
-												{content.director}
-											</Text>
-										</View>
-									)}
-
-									{Boolean(
-										content.director &&
-										(content.language ||
-											content.production_co),
-									) && (
-										<View
-											style={[
-												styles.detailsDivider,
-												{
-													backgroundColor:
-														surfaceBorder,
-												},
-											]}
-										/>
-									)}
-
-									{Boolean(content.language) && (
-										<View
-											style={[
-												styles.detailsRow,
-												{ paddingVertical: sp(10) },
-											]}>
-											<Text
-												style={[
-													styles.detailsLabel,
-													{
-														color: colors.textSecondary,
-														fontSize: sp(13.5),
-													},
-												]}>
-												Orijinal Dil
-											</Text>
-											<Text
-												style={[
-													styles.detailsValue,
-													{
-														color: colors.text,
-														fontSize: sp(13.5),
-													},
-												]}>
-												{content.language}
-											</Text>
-										</View>
-									)}
-
-									{Boolean(
-										content.language &&
-										content.production_co,
-									) && (
-										<View
-											style={[
-												styles.detailsDivider,
-												{
-													backgroundColor:
-														surfaceBorder,
-												},
-											]}
-										/>
-									)}
-
-									{Boolean(content.production_co) && (
-										<View
-											style={[
-												styles.detailsRow,
-												{ paddingVertical: sp(10) },
-											]}>
-											<Text
-												style={[
-													styles.detailsLabel,
-													{
-														color: colors.textSecondary,
-														fontSize: sp(13.5),
-													},
-												]}>
-												Yayıncı Ağ
-											</Text>
-											<Text
-												style={[
-													styles.detailsValue,
-													{
-														color: colors.text,
-														fontSize: sp(13.5),
-													},
-												]}>
-												{content.production_co}
-											</Text>
-										</View>
-									)}
+									<Text
+										style={[
+											styles.detailsLabel,
+											{
+												color: Palette.onSurfaceVariant,
+												fontSize: sp(13.5),
+											},
+										]}>
+										Orijinal Dil
+									</Text>
+									<Text
+										style={[
+											styles.detailsValue,
+											{
+												color: Palette.onSurface,
+												fontSize: sp(13.5),
+											},
+										]}>
+										{content.language}
+									</Text>
 								</View>
 							)}
 
-							{/* Film ise veya benzer içerikler varsa göster */}
-							{!isSeries &&
-								DETAIL_SECTIONS_CONFIG.showRelated && (
-									<RelatedContent
-										contentType={content.content_type}
-										currentId={content.id}
-										pluginRelated={content.related}
-									/>
-								)}
-						</>
-					)}
+							{Boolean(
+								content.language && content.production_co,
+							) && (
+								<View
+									style={[
+										styles.detailsDivider,
+										{
+											backgroundColor:
+												Palette.outlineVariant,
+										},
+									]}
+								/>
+							)}
 
-					{/* --- BÖLÜMLER SEKMESİ --- */}
-					{activeTab === "episodes" && isSeries && (
-						<View style={styles.episodesTabContainer}>
-							<SeasonsSection
-								seasons={content.seasons}
-								episodes={content.episodes}
-								loading={pluginLoading && !content.seasons}
-								initialSeason={otomatikBolum?.sezon ?? passedMovie?.initialSeason}
-								selectedSeason={selectedSeason}
-								onSeasonChange={setSelectedSeason}
-								otomatikBolum={otomatikBolum}
-								seriesTitle={content.title}
-								posterUrl={
-									content.poster_url || content.backdrop_url
-								}
-								content={content}
-								episodesProgress={episodesProgress}
-								ref={seasonsRef}
-								onSetWatched={handleSetWatchedEpisodes}
-							/>
+							{Boolean(content.production_co) && (
+								<View
+									style={[
+										styles.detailsRow,
+										{ paddingVertical: sp(10) },
+									]}>
+									<Text
+										style={[
+											styles.detailsLabel,
+											{
+												color: Palette.onSurfaceVariant,
+												fontSize: sp(13.5),
+											},
+										]}>
+										Yayıncı Ağ
+									</Text>
+									<Text
+										style={[
+											styles.detailsValue,
+											{
+												color: Palette.onSurface,
+												fontSize: sp(13.5),
+											},
+										]}>
+										{content.production_co}
+									</Text>
+								</View>
+							)}
 						</View>
 					)}
 
-					{/* --- BENZERLER SEKMESİ --- */}
-					{activeTab === "related" && (
-						<View style={styles.relatedTabContainer}>
-							<RelatedContent
-								contentType={content.content_type}
-								currentId={content.id}
-								pluginRelated={content.related}
-							/>
-						</View>
+					{DETAIL_SECTIONS_CONFIG.showRelated && (
+						<RelatedContent
+							contentType={content.content_type}
+							currentId={content.id}
+							pluginRelated={content.related}
+						/>
 					)}
 				</View>
 			</ScrollView>
-
-			{/* 5. SAĞ ALTTA KAYAN HIZLI KİTAPLIK / LİSTEM BUTONU (FAB) */}
-			{/* {DETAIL_SECTIONS_CONFIG.showFloatingBookmark && (
-				<TouchableOpacity
-					style={[
-						styles.floatingBookmark,
-						{
-							backgroundColor: inWatchlist
-								? (watchlistStatus === "completed" ? "#10b981" : watchlistStatus === "planned" ? "#0284c7" : "#E50914")
-								: surfaceBg,
-							borderColor: inWatchlist
-								? (watchlistStatus === "completed" ? "#10b981" : watchlistStatus === "planned" ? "#0284c7" : "#E50914")
-								: surfaceBorder,
-						},
-					]}
-					onPress={handleToggleWatchlist}
-					activeOpacity={0.8}
-					hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-					<Ionicons
-						name={
-							watchlistStatus === "watching"
-								? "play-circle"
-								: watchlistStatus === "completed"
-									? "checkmark-circle"
-									: inWatchlist
-										? "bookmark"
-										: "bookmark-outline"
-						}
-						size={22}
-						color={inWatchlist ? "#ffffff" : "#E50914"}
-					/>
-				</TouchableOpacity>
-			)} */}
-
 			{/* List Selection Modal */}
 			<ListSelectModal
 				visible={isListSelectModalVisible}
@@ -1529,88 +1250,6 @@ const styles = StyleSheet.create({
 	},
 	contentWrapper: {},
 
-	/* Ses & Altyazı Bilgi Çubuğu */
-	/**
-	 * ⚠️ `justifyContent: "space-between"` BURADA OLMAMALI.
-	 *
-	 * Bu değer, satır yorumunun çözdüğü sorunun ta kendisi: "Ses & Altyazı:"
-	 * etiketi ekranın sol ucuna, rozetler sağ ucuna savruluyor, aralarında
-	 * telefon ekranını boydan boya kaplayan bir boşluk kalıyordu. Satıra
-	 * `gap` eklemek yetmiyor — `gap` yalnızca öğeler YAN YANA dururken
-	 * işe yarar, `space-between` onları uçlara yapıştırdığı için aradaki
-	 * mesafeyi kapatmaz.
-	 *
-	 * Çözüm: `space-between` kaldırıldı. Etiket sola yaslanır, rozetler
-	 * etiketin hemen sağında sabit `gap` ile durur; sığmayan rozetler
-	 * `flexWrap` ile alt satıra iner (taşma yok).
-	 */
-	audioSubtitleRow: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		borderWidth: 1,
-	},
-	audioLeft: {
-		flexDirection: "row",
-		alignItems: "center",
-		/** Etiket ezilmesin, fazla rozetler alt satıra insin. */
-		flexShrink: 0,
-	},
-	audioLabel: {
-		fontWeight: "600",
-	},
-	audioChips: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		/** Tek satıra sığdığında sağa yaslı, sığmazsa kendi içinde sarar. */
-		justifyContent: "flex-end",
-		flexShrink: 1,
-	},
-	audioChip: {
-		borderWidth: 1,
-	},
-	audioChipText: {
-		fontWeight: "600",
-	},
-
-	/* Sekmeler (Tab Bar) */
-	tabBar: {
-		flexDirection: "row",
-		borderBottomWidth: 1,
-	},
-	tabItem: {
-		position: "relative",
-	},
-	tabItemActive: {},
-	tabWithBadge: {
-		flexDirection: "row",
-		alignItems: "center",
-	},
-	tabText: {},
-	tabCountBadge: {
-		backgroundColor: "rgba(100, 116, 139, 0.25)",
-	},
-	tabCountText: {
-		fontWeight: "700",
-		color: "#94a3b8",
-	},
-	tabIndicator: {
-		position: "absolute",
-		bottom: -1,
-		left: 0,
-		right: 0,
-		height: 3,
-		borderRadius: 2,
-		backgroundColor: "#E50914",
-	},
-
-	/* Sekme İçi Özel Alanlar */
-	episodesTabContainer: {
-		paddingTop: 4,
-	},
-	relatedTabContainer: {
-		paddingTop: 4,
-	},
-
 	/* Detay Bilgileri Tablosu */
 	detailsTableCard: {
 		borderWidth: 1,
@@ -1629,24 +1268,5 @@ const styles = StyleSheet.create({
 	detailsDivider: {
 		height: 1,
 		width: "100%",
-	},
-
-	/* Kayan Liste/Kitaplık Butonu (FAB) */
-	floatingBookmark: {
-		position: "absolute",
-		bottom: 24,
-		right: 20,
-		width: 48,
-		height: 48,
-		borderRadius: 24,
-		borderWidth: 1,
-		justifyContent: "center",
-		alignItems: "center",
-		shadowColor: "#E50914",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.35,
-		shadowRadius: 8,
-		elevation: 8,
-		zIndex: 99,
 	},
 });

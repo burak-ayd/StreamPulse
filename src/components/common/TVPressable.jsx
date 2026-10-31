@@ -1,6 +1,8 @@
 import React, { forwardRef, useEffect, useRef, useState } from "react";
 import { DeviceEventEmitter, Platform, Pressable, StyleSheet } from "react-native";
 
+import { Palette } from "@/constants/theme";
+
 /**
  * Android TV'de DPAD_CENTER (OK) tuşu, dokunmatik dokunmanın tersine
  * Pressability'nin uzun basma zamanlayıcısını hiç başlatmaz — Pressability
@@ -28,12 +30,28 @@ const SUPPRESS_AFTER_KEYUP_MS = 200;
 let suppressPressUntil = 0;
 
 /**
+ * Uzun basmanın ARDINDAN gelen ilk OK basışını tümden yutmak için
+ * tek-seferlik bayrak.
+ *
+ * ⚠️ Neden gerekli: bölüm kartında OK'a uzun basınca bağlam menüsü
+ * açılıyor, ama kumandanın tuş-bırakışı menünün o anda odaklanan İLK
+ * satırına "basıldı" olarak düşüyordu — kullanıcı yalnızca menüyü açmak
+ * isterken "Bölümü İndir" kendiliğinden başlıyordu ("Video Kaynakları
+ * Taranıyor" penceresi). Zaman penceresi (`suppressPressUntil`) bunu
+ * tutmuyor çünkü bırakış, pencere dolduktan sonra gelebiliyor.
+ */
+let suppressNextPressOnce = false;
+
+/**
  * Bir TVPressable'ın dışında (örneğin düz `Pressable` backdrop) kalan
  * onPress'lerin de, uzun basış sonrası gelen tuşu-bırakış click'ini yutması
  * için ortak kontrol kapısı.
  */
 export function isTVPressSuppressed() {
-	return Platform.isTV && Date.now() < suppressPressUntil;
+	return (
+		Platform.isTV &&
+		(suppressNextPressOnce || Date.now() < suppressPressUntil)
+	);
 }
 
 /**
@@ -148,6 +166,7 @@ const TVPressable = forwardRef(function TVPressable(
 						longPressTimerRef.current = null;
 						longPressFiredRef.current = true;
 						suppressPressUntil = Date.now() + SUPPRESS_WINDOW_MS;
+						suppressNextPressOnce = true;
 						onLongPressRef.current?.(evt);
 					}, LONG_PRESS_DELAY_MS);
 				} else if (evt.eventKeyAction === 1) {
@@ -159,6 +178,12 @@ const TVPressable = forwardRef(function TVPressable(
 							suppressPressUntil,
 							Date.now() + SUPPRESS_AFTER_KEYUP_MS,
 						);
+						// Bırakıştan kısa süre sonra hiç basış gelmezse
+						// bayrağı temizle; yoksa sıradaki ilk OK basışını
+						// haksız yere yutar.
+						setTimeout(() => {
+							suppressNextPressOnce = false;
+						}, SUPPRESS_WINDOW_MS);
 					}
 				}
 			},
@@ -167,6 +192,12 @@ const TVPressable = forwardRef(function TVPressable(
 	}, [isTV]);
 
 	const handlePress = (e) => {
+		// Uzun basmanın hemen ardından gelen tuş-bırakışı, menü açılırken
+		// menünün ilk satırına düşebiliyor (bkz. `suppressNextPressOnce`).
+		if (suppressNextPressOnce) {
+			suppressNextPressOnce = false;
+			return;
+		}
 		if (Date.now() < suppressPressUntil) {
 			return;
 		}
@@ -235,7 +266,7 @@ const styles = StyleSheet.create({
 	// biner — varsayılan odakta artık hiç büyütme yok; arayan bileşen
 	// kendi `focusedStyle` verirse kendi ölçeği uygulanır.)
 	defaultFocused: {
-		borderColor: "#E50914",
+		borderColor: Palette.primary,
 		borderWidth: 2,
 	},
 	defaultPressed: {

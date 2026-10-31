@@ -1,9 +1,12 @@
-import TVPressable from "@components/common/TVPressable";
-import { useThemeContext } from "@/context/ThemeContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useDownload } from "@/context/DownloadContext";
+import { useTvMetrics } from "@/utils/tvMetrics";
+import Image from "@components/common/SmartImage";
+import TVPressable from "@components/common/TVPressable";
+import ActionMenuModal from "@components/modal/ActionMenuModal";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
-import React, {
+import {
 	forwardRef,
 	useCallback,
 	useEffect,
@@ -16,6 +19,7 @@ import {
 	ActivityIndicator,
 	Alert,
 	BackHandler,
+	findNodeHandle,
 	Modal,
 	Pressable,
 	ScrollView,
@@ -23,8 +27,6 @@ import {
 	Text,
 	View,
 } from "react-native";
-import { formatTime } from "@/utils/formatters";
-import ActionMenuModal from "@/components/modal/ActionMenuModal";
 
 /**
  * Format episode duration to Turkish string (e.g., "2 saat 21 dakika" or "45 dakika")
@@ -63,8 +65,7 @@ function getEpisodeDurationTurkish(ep, epProgress, fallbackMinutes) {
 		if (raw.includes(":")) {
 			const parts = raw.split(":").map(Number);
 			if (parts.length === 3) {
-				const hours = parts[0];
-				const mins = parts[1];
+				const [hours, mins] = parts;
 				if (hours > 0) {
 					return `${hours} saat ${mins < 10 ? "0" : ""}${mins} dakika`;
 				}
@@ -78,6 +79,10 @@ function getEpisodeDurationTurkish(ep, epProgress, fallbackMinutes) {
 	return null;
 }
 
+/**
+ * Bölüm listesi + sezon seçici. Film ve dizi detayında ortak kullanılır;
+ * filmde `seasons`/`episodes` boş gelir ve bileşen hiçbir şey çizmez.
+ */
 const SeasonsSection = forwardRef(function SeasonsSection(
 	{
 		seasons,
@@ -99,9 +104,54 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	},
 	ref,
 ) {
-	const { colors, theme } = useThemeContext();
+	const { sp, isWide, isTV, isLandscape, width, gutter, contentMaxWidth } =
+		useTvMetrics();
 	const { requestDownload, isDownloaded } = useDownload();
 	const router = useRouter();
+
+	/*
+	 * Bölüm yerleşimi ORIENTASYONA göre seçilir, ekran GENİŞLİĞİNE göre değil:
+	 *   - Dikey (telefon + tablet): kartlar alt alta, tam genişlik.
+	 *   - Yatay ve TV: yatay SLIDER — kartlar yan yana, 3 kart görünür
+	 *     (kapak üstte, altında "S1 B1 · durum", bölüm adı, 2 satır özet).
+	 *     Kumanda ile sağa/sola kart kart gezilir.
+	 */
+	const tvEpisodes = isTV || isLandscape;
+	const sliderGap = sp(12);
+	const slideW = tvEpisodes
+		? Math.floor(
+				((contentMaxWidth ?? width) -
+					2 * (16 + gutter) -
+					2 * sliderGap) /
+					3,
+			)
+		: 0;
+
+	/*
+	 * Bölüm kapağı 16:9. Ölçüler açıkça verilir; `aspectRatio` ile
+	 * boyutlanan bir kapta mutlak konumlu katmanlar (görsel, durum
+	 * katmanı) çöküyor ve oynat dairesi dikeyde ortalanmıyordu.
+	 * Dikeyde 128dp: referans tasarımda kapak, telefon genişliğinin ~%33'ü.
+	 * Slider kartında kapak kartın içidir (iki yan boşluk düşülür).
+	 */
+	const tileW = tvEpisodes ? slideW - 2 * sp(8) : sp(isWide ? 160 : 128);
+	const tileH = Math.round(tileW * (9 / 16));
+
+	/*
+	 * TV slider'ı (tasarım: stitch_stream_pulse…): kartlar SABİT genişlikte
+	 * 16:9 karelerdir; odak değişince boyut değişmez. Üstteki başlık/özet/
+	 * süre bloğu odaklanan bölümü gösterir.
+	 */
+	const focusCardH = Math.round(slideW * (9 / 16));
+	const [tvFocusIndex, setTvFocusIndex] = useState(0);
+	/*
+	 * Slider'da kumanda sırası AÇIKÇA bağlanır: sabit genişlikte de olsa
+	 * Android'in geometrik araması satır içinde karışabiliyordu.
+	 */
+	const cardRefs = useRef([]);
+	const [focusTags, setFocusTags] = useState({});
+	const seasonPillRef = useRef(null);
+	const [headerTag, setHeaderTag] = useState(undefined);
 
 	const [isSeasonModalOpen, setIsSeasonModalOpen] = useState(false);
 	const [sortOrder, setSortOrder] = useState("asc"); // 'asc' (1->N) | 'desc' (N->1)
@@ -167,17 +217,23 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	const isControlled =
 		controlledSelectedSeason !== undefined &&
 		controlledSelectedSeason !== null;
-
 	const [internalSelectedSeason, setInternalSelectedSeason] = useState(
 		initialSeason ? String(initialSeason) : "1",
 	);
-
 	const selectedSeason = useMemo(() => {
 		if (isControlled) return String(controlledSelectedSeason);
-		if (seasonKeys.includes(internalSelectedSeason)) return internalSelectedSeason;
-		if (initialSeason && seasonKeys.includes(String(initialSeason))) return String(initialSeason);
+		if (seasonKeys.includes(internalSelectedSeason))
+			return internalSelectedSeason;
+		if (initialSeason && seasonKeys.includes(String(initialSeason)))
+			return String(initialSeason);
 		return seasonKeys[0] || "1";
-	}, [isControlled, controlledSelectedSeason, seasonKeys, internalSelectedSeason, initialSeason]);
+	}, [
+		isControlled,
+		controlledSelectedSeason,
+		seasonKeys,
+		internalSelectedSeason,
+		initialSeason,
+	]);
 
 	const handleSeasonSelect = useCallback(
 		(sKey) => {
@@ -190,15 +246,14 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 		[onSeasonChange],
 	);
 
-
 	const sortedEpisodes = useMemo(() => {
 		if (!normalizedSeasons) return [];
 		const rawList =
 			normalizedSeasons[selectedSeason] ||
 			normalizedSeasons[seasonKeys[0]] ||
 			[];
-
 		const listCopy = [...rawList];
+
 		listCopy.sort((a, b) => {
 			const numA = parseInt(a.episode || a.episode_number || 0, 10);
 			const numB = parseInt(b.episode || b.episode_number || 0, 10);
@@ -207,6 +262,65 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 
 		return listCopy;
 	}, [normalizedSeasons, selectedSeason, seasonKeys, sortOrder]);
+
+	/*
+	 * TV slider başlığı (tasarım): bölüm adı/özeti/süresi kartın üstünde
+	 * değil, section başlığında ve odaklanan bölüme göre değişir.
+	 */
+	const tvFocused = tvEpisodes ? sortedEpisodes[tvFocusIndex] || null : null;
+	const tvFocusedNo = tvFocused
+		? tvFocused.episode || tvFocused.episode_number || tvFocusIndex + 1
+		: null;
+	const tvFocusedProgress = tvFocused
+		? episodesProgress?.[tvFocused.url] ||
+			episodesProgress?.[`s${selectedSeason}_e${tvFocusedNo}`] ||
+			(tvFocused.id && episodesProgress?.[tvFocused.id])
+		: null;
+	const tvFocusedTitle =
+		tvFocused?.title && tvFocused.title.trim() !== ""
+			? tvFocused.title.trim()
+			: tvFocusedNo
+				? `${tvFocusedNo}. Bölüm`
+				: "";
+	const tvFocusedDuration = tvFocused
+		? getEpisodeDurationTurkish(
+				tvFocused,
+				tvFocusedProgress,
+				content?.runtime_minutes,
+			)
+		: null;
+	const tvFocusedStatus =
+		tvFocusedProgress?.status === "completed"
+			? "İzlendi"
+			: tvFocusedProgress?.status === "in_progress"
+				? "Kaldığın yer"
+				: "Sırada";
+
+	// Slide'ın odağı, izlenmeye devam edilen bölüme kendiliğinden gelir.
+	useEffect(() => {
+		if (!tvEpisodes || sortedEpisodes.length === 0) return;
+		const idx = sortedEpisodes.findIndex((ep, i) => {
+			const no = ep.episode || ep.episode_number || i + 1;
+			const pr =
+				episodesProgress?.[ep.url] ||
+				episodesProgress?.[`s${selectedSeason}_e${no}`] ||
+				(ep.id && episodesProgress?.[ep.id]);
+			return pr?.status === "in_progress";
+		});
+		setTvFocusIndex(idx >= 0 ? idx : 0);
+	}, [tvEpisodes, sortedEpisodes, selectedSeason, episodesProgress]);
+
+	// Kart komşularının native etiketleri (nextFocusLeft/Right için).
+	useEffect(() => {
+		if (!tvEpisodes) return;
+		const map = {};
+		sortedEpisodes.forEach((_, i) => {
+			const tag = findNodeHandle(cardRefs.current[i]);
+			if (tag) map[i] = tag;
+		});
+		setFocusTags(map);
+		setHeaderTag(findNodeHandle(seasonPillRef.current));
+	}, [tvEpisodes, sortedEpisodes, tvFocusIndex]);
 
 	// ─── Derin bağ otomatik oynatma (Faz 6 karar 2) ────────────────────
 	// Bildirim kartından gelen `otomatikBolum` ({sezon, bolum}): hedef
@@ -220,26 +334,33 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	// yeniden çalışsa bile (fonksiyon kimlikleri değişken) yeniden
 	// basmaz; oynatıcıdan geri dönüp aynı ekran örneğine dönmek dahil.
 	const otomatikOynatildiRef = useRef(false);
+
 	useEffect(() => {
 		if (!otomatikBolum || otomatikOynatildiRef.current) return;
+
 		const sezonKey =
 			otomatikBolum.sezon != null ? String(otomatikBolum.sezon) : "";
+
 		if (!normalizedSeasons) return; // listelerin gelmesini bekle
+
 		if (!sezonKey || !normalizedSeasons[sezonKey]) {
 			// Hedef bozuk ya da plugin bu sezonu vermiyor: güvenli vazgeçiş —
 			// satır okundu damgasını zaten aldı; kullanıcı elle gezinebilir.
 			otomatikOynatildiRef.current = true;
 			return;
 		}
+
 		if (String(selectedSeason) !== sezonKey) {
 			handleSeasonSelect(sezonKey);
 			return; // seçili sezon değişince etkinin yeni koşumu oynatır
 		}
+
 		const hedefNo = Number(otomatikBolum.bolum);
 		if (!Number.isFinite(hedefNo) || hedefNo < 1) {
 			otomatikOynatildiRef.current = true;
 			return;
 		}
+
 		const hedefIndex = sortedEpisodes.findIndex(
 			(ep) => Number(ep.episode || ep.episode_number) === hedefNo,
 		);
@@ -249,11 +370,13 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 			otomatikOynatildiRef.current = true;
 			return;
 		}
+
 		const hedef = sortedEpisodes[hedefIndex];
 		if (!hedef?.url) {
 			otomatikOynatildiRef.current = true;
 			return;
 		}
+
 		otomatikOynatildiRef.current = true;
 		handleEpisodeClick(hedef, hedefIndex);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -264,6 +387,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 		sortedEpisodes,
 		handleSeasonSelect,
 	]);
+
 	// ── İndirme (gerçek akış) ──────────────────────────────────────────
 	// Ortak tetikleyici: kaynak/altyazı/ses seçimi DownloadContext'te.
 	// Dizi bilgisi (`content`) burada yoksa içerik kimliği seriesTitle'dan
@@ -306,6 +430,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	// sınırı DownloadManager'da (maxConcurrentDownloads).
 	const handleDownloadSeason = () => {
 		if (sortedEpisodes.length === 0) return;
+
 		Alert.alert(
 			"Sezonu İndir",
 			`${selectedSeason}. Sezondaki ${sortedEpisodes.length} bölüm indirme kuyruğuna eklensin mi?`,
@@ -315,11 +440,13 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 					text: "Tümünü Ekle",
 					onPress: () => {
 						sortedEpisodes.forEach((ep, i) => {
-							const epNumber = ep.episode || ep.episode_number || i + 1;
+							const epNumber =
+								ep.episode || ep.episode_number || i + 1;
 							const epTitle =
 								ep.title && ep.title.trim() !== ""
 									? ep.title.trim()
 									: `${selectedSeason}. Sezon ${epNumber}. Bölüm`;
+
 							const indirildi = isDownloaded({
 								contentId: seriesContent.id,
 								seriesId: seriesContent.id,
@@ -327,6 +454,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 								episode: epNumber,
 							});
 							if (indirildi || !ep.url) return;
+
 							requestDownload({
 								content: seriesContent,
 								episode: {
@@ -366,7 +494,9 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 				params: {
 					url: ep.url,
 					title: seriesTitle || content?.title || ep.title || "Dizi",
-					subtitle: `${selectedSeason}. Sezon ${epNumber}. Bölüm${ep.title ? ` - ${ep.title}` : ""}`,
+					subtitle: `${selectedSeason}. Sezon ${epNumber}. Bölüm${
+						ep.title ? ` - ${ep.title}` : ""
+					}`,
 					poster: ep.poster || posterUrl || null,
 					type: "episode",
 					id:
@@ -406,7 +536,6 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	// Sezon ⋮ menüsü, bölüm bağlam menüsü ve çoklu seçim modunun ortak
 	// mantığı. Ağır iş (storage yazımı) çağıran ekrandadır:
 	// `onSetWatched(marks, watched)` → işaretlenen bölüm sayısını döner.
-
 	const progressForEpisode = useCallback(
 		(ep, index) => {
 			const epNumber = ep.episode || ep.episode_number || index + 1;
@@ -471,6 +600,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 		async (marks, watched) => {
 			if (!marks || marks.length === 0 || isApplyingMarks) return;
 			if (typeof onSetWatched !== "function") return;
+
 			setIsApplyingMarks(true);
 			try {
 				const count = await onSetWatched(marks, watched);
@@ -546,7 +676,13 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 
 	// Üst ekran (MovieDetails) geri tuşunda önce bunu çağırır: seçim/menü
 	// açıkken geri tuşu ekrandan çıkmaz, yalnızca seçimi kapatır.
-	useImperativeHandle(ref, () => ({ cancelSelection }), [cancelSelection]);
+	useImperativeHandle(
+		ref,
+		() => ({
+			cancelSelection,
+		}),
+		[cancelSelection],
+	);
 
 	// Seçim modu açıkken donanım geri tuşu güvencesi (bileşen tek başına
 	// kullanılırsa da çalışır; üst ekranın dinleyicisi önce davranır).
@@ -577,6 +713,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	const menuTitle = useMemo(() => {
 		if (!menuState) return "";
 		if (menuState.type === "season") return `${selectedSeason}. Sezon`;
+
 		const { ep, index } = menuState;
 		const epNumber = ep.episode || ep.episode_number || index + 1;
 		const rawTitle = ep.title ? ep.title.trim() : "";
@@ -625,11 +762,11 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 					icon: "list-outline",
 					onPress: () => enterSelectionMode(),
 				},
-
 				{
 					key: "season-download",
 					label: "Sezonu İndir",
-					description: "Seçili sezonun bölümlerini indirme kuyruğuna ekle",
+					description:
+						"Seçili sezonun bölümlerini indirme kuyruğuna ekle",
 					icon: "download-outline",
 					iconColor: "#38bdf8",
 					iconBg: "rgba(56, 189, 248, 0.15)",
@@ -652,6 +789,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 		const singleMark = buildMarksForKeyList([
 			episodeSelectionKey(ep, index),
 		]);
+
 		return [
 			{
 				key: "ep-download",
@@ -672,7 +810,9 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 						ep,
 						ep.episode || ep.episode_number || index + 1,
 						ep.title ||
-							`${selectedSeason}. Sezon ${ep.episode || ep.episode_number || index + 1}. Bölüm`,
+							`${selectedSeason}. Sezon ${
+								ep.episode || ep.episode_number || index + 1
+							}. Bölüm`,
 					);
 				},
 			},
@@ -698,7 +838,8 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 				label: "Bölüm Seç…",
 				description: "Çoklu seçim moduna geç",
 				icon: "list-outline",
-				onPress: () => enterSelectionMode(episodeSelectionKey(ep, index)),
+				onPress: () =>
+					enterSelectionMode(episodeSelectionKey(ep, index)),
 			},
 		];
 	}, [
@@ -722,20 +863,24 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 
 	if (loading && (!normalizedSeasons || seasonKeys.length === 0)) {
 		return (
-			<View style={styles.container}>
+			<View style={[styles.container, { marginBottom: sp(24) }]}>
 				<View
 					style={[
 						styles.loadingBox,
 						{
-							backgroundColor: colors.cardBg,
-							borderColor: colors.border,
+							backgroundColor: Palette.surfaceLow,
+							paddingVertical: sp(18),
+							gap: sp(10),
 						},
 					]}>
-					<ActivityIndicator size="small" color={colors.primary} />
+					<ActivityIndicator size="small" color={Palette.primary} />
 					<Text
 						style={[
 							styles.loadingText,
-							{ color: colors.textSecondary },
+							{
+								color: Palette.onSurfaceVariant,
+								fontSize: sp(13),
+							},
 						]}>
 						Bölümler yükleniyor...
 					</Text>
@@ -749,32 +894,31 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	}
 
 	return (
-		<View style={styles.container}>
+		<View style={[styles.container, { marginBottom: sp(24) }]}>
 			{isSelectionMode ? (
 				/* Seçim Modu Çubuğu — bölümleri elle seçip toplu işaretleme */
-				<View style={styles.selectionBar}>
+				<View
+					style={[
+						styles.selectionBar,
+						{ gap: sp(8), marginBottom: sp(12) },
+					]}>
 					<TVPressable
 						style={({ focused }) => [
 							styles.selectionChip,
-							{
-								backgroundColor:
-									theme === "dark" ? "#161B24" : "#ffffff",
-								borderColor:
-									theme === "dark" ? "#232A36" : "#E2E8F0",
-							},
-							focused && styles.controlsButtonFocused,
+							{ backgroundColor: Palette.surface },
+							focused && styles.focusRing,
 						]}
 						onPress={toggleSelectAll}
 						activeOpacity={0.75}>
 						<Ionicons
 							name={allSelected ? "checkbox" : "square-outline"}
-							size={15}
-							color={colors.text}
+							size={sp(15)}
+							color={Palette.onSurface}
 						/>
 						<Text
 							style={[
 								styles.selectionChipText,
-								{ color: colors.text },
+								{ color: Palette.onSurface, fontSize: sp(12) },
 							]}>
 							{allSelected ? "Seçimi Kaldır" : "Tümünü Seç"}
 						</Text>
@@ -783,7 +927,10 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 					<Text
 						style={[
 							styles.selectionCountText,
-							{ color: colors.textSecondary },
+							{
+								color: Palette.onSurfaceVariant,
+								fontSize: sp(12),
+							},
 						]}>
 						{selectedCount} bölüm
 					</Text>
@@ -793,11 +940,10 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 							styles.selectionChip,
 							styles.selectionChipPrimary,
 							selectedCount === 0 && { opacity: 0.5 },
-							focused && styles.controlsButtonFocused,
+							focused && styles.focusRing,
 						]}
 						onPress={() => {
-							if (selectedCount === 0 || isApplyingMarks)
-								return;
+							if (selectedCount === 0 || isApplyingMarks) return;
 							applyMarks(
 								buildMarksForKeyList(selectedKeys),
 								true,
@@ -805,15 +951,22 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 						}}
 						activeOpacity={0.75}>
 						{isApplyingMarks ? (
-							<ActivityIndicator size="small" color="#ffffff" />
+							<ActivityIndicator
+								size="small"
+								color={Palette.background}
+							/>
 						) : (
 							<Ionicons
 								name="checkmark-done"
-								size={15}
-								color="#ffffff"
+								size={sp(15)}
+								color={Palette.background}
 							/>
 						)}
-						<Text style={styles.selectionChipPrimaryText}>
+						<Text
+							style={[
+								styles.selectionChipPrimaryText,
+								{ fontSize: sp(12) },
+							]}>
 							İzlendi İşaretle
 						</Text>
 					</TVPressable>
@@ -823,11 +976,10 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 							styles.selectionChip,
 							styles.selectionChipDanger,
 							selectedCount === 0 && { opacity: 0.5 },
-							focused && styles.controlsButtonFocused,
+							focused && styles.focusRing,
 						]}
 						onPress={() => {
-							if (selectedCount === 0 || isApplyingMarks)
-								return;
+							if (selectedCount === 0 || isApplyingMarks) return;
 							applyMarks(
 								buildMarksForKeyList(selectedKeys),
 								false,
@@ -836,13 +988,13 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 						activeOpacity={0.75}>
 						<Ionicons
 							name="close-circle-outline"
-							size={15}
-							color="#f43f5e"
+							size={sp(15)}
+							color={Palette.error}
 						/>
 						<Text
 							style={[
 								styles.selectionChipText,
-								{ color: "#f43f5e" },
+								{ color: Palette.error, fontSize: sp(12) },
 							]}>
 							İzlenmedi Yap
 						</Text>
@@ -851,11 +1003,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 					<TVPressable
 						style={({ focused }) => [
 							styles.selectionChip,
-							{
-								borderColor:
-									theme === "dark" ? "#232A36" : "#E2E8F0",
-							},
-							focused && styles.controlsButtonFocused,
+							focused && styles.focusRing,
 						]}
 						onPress={() => {
 							setIsSelectionMode(false);
@@ -865,131 +1013,236 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 						<Text
 							style={[
 								styles.selectionChipText,
-								{ color: colors.text },
+								{ color: Palette.onSurface, fontSize: sp(12) },
 							]}>
 							Vazgeç
 						</Text>
 					</TVPressable>
 				</View>
 			) : (
-			/* Kontrol Çubuğu (Sezon Dropdown, Bölüm Sıralama, Sezon İndir) */
-			<View style={styles.controlsBar}>
-				{/* 1. Sezon Seçim Dropdown Butonu */}
-				<TVPressable
-					style={({ focused }) => [
-						styles.seasonDropdownButton,
-						{
-							backgroundColor:
-								theme === "dark" ? "#161B24" : "#ffffff",
-							borderColor:
-								theme === "dark" ? "#232A36" : "#E2E8F0",
-						},
-						focused && styles.controlsButtonFocused,
-					]}
-					onPress={() => setIsSeasonModalOpen(true)}
-					activeOpacity={0.75}>
-					<Text
+				<>
+					{/* Sezon hapı + sıralama / toplu indirme / ⋮ — solla hizalı */}
+					<View
 						style={[
-							styles.seasonDropdownText,
-							{ color: colors.text },
+							styles.headerRow,
+							{ marginBottom: sp(14), gap: sp(10) },
 						]}>
-						Sezon {selectedSeason}
-					</Text>
-					<Ionicons
-						name="chevron-down"
-						size={15}
-						color={colors.text}
-						style={styles.dropdownChevron}
-					/>
-				</TVPressable>
+						<View style={[styles.headerControls, { gap: sp(8) }]}>
+							{/* Sezon seçici */}
+							<TVPressable
+								style={({ focused }) => [
+									styles.seasonPill,
+									{
+										paddingHorizontal: sp(12),
+										paddingVertical: sp(6),
+										gap: sp(6),
+									},
+									focused && styles.focusRing,
+								]}
+								onPress={() => setIsSeasonModalOpen(true)}
+								ref={seasonPillRef}
+								nextFocusDown={
+									focusTags[tvFocusIndex] || focusTags[0]
+								}
+								activeOpacity={0.75}>
+								<Text
+									style={[
+										styles.seasonPillText,
+										{
+											color: Palette.onSurface,
+											fontSize: sp(13),
+										},
+									]}
+									numberOfLines={1}>
+									Sezon {selectedSeason}
+								</Text>
+								<Ionicons
+									name="chevron-down"
+									size={sp(16)}
+									color={Palette.onSurfaceVariant}
+								/>
+							</TVPressable>
 
-				{/* 2. Bölüm Sıralama Butonu (Bölüm ↑ / Bölüm ↓) */}
-				<TVPressable
-					style={({ focused }) => [
-						styles.sortButton,
-						{
-							backgroundColor:
-								theme === "dark" ? "#161B24" : "#ffffff",
-							borderColor:
-								theme === "dark" ? "#232A36" : "#E2E8F0",
-						},
-						focused && styles.controlsButtonFocused,
-					]}
-					onPress={() =>
-						setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
-					}
-					activeOpacity={0.75}>
-					<Text style={[styles.sortButtonText, { color: colors.text }]}>
-						Bölüm {sortOrder === "asc" ? "↑" : "↓"}
-					</Text>
-				</TVPressable>
+							{/* Sıralama (artan / azalan) */}
+							<TVPressable
+								style={({ focused }) => [
+									styles.iconButton,
+									{
+										width: sp(32),
+										height: sp(32),
+										borderRadius: sp(16),
+									},
+									focused && styles.focusRing,
+								]}
+								onPress={() =>
+									setSortOrder((prev) =>
+										prev === "asc" ? "desc" : "asc",
+									)
+								}
+								activeOpacity={0.75}
+								accessibilityLabel="Bölüm sıralaması"
+								nextFocusDown={
+									focusTags[tvFocusIndex] || focusTags[0]
+								}>
+								<Ionicons
+									name={
+										sortOrder === "asc"
+											? "arrow-up"
+											: "arrow-down"
+									}
+									size={sp(16)}
+									color={Palette.onSurfaceVariant}
+								/>
+							</TVPressable>
 
-				{/* 3. Sezon Bölüm Sayısı & Toplu İndir Butonu */}
-				<TVPressable
-					style={({ focused }) => [
-						styles.seasonDownloadButton,
-						focused && styles.controlsButtonFocused,
-					]}
-					onPress={handleDownloadSeason}
-					activeOpacity={0.7}
-					hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-					<Ionicons
-						name="download-outline"
-						size={19}
-						color={colors.primary}
-					/>
-					<Text
-						style={[
-							styles.seasonDownloadText,
-							{ color: colors.text },
-						]}>
-						{sortedEpisodes.length} Bölüm
-					</Text>
-				</TVPressable>
+							{/* Sezonun tamamını indir */}
+							<TVPressable
+								style={({ focused }) => [
+									styles.iconButton,
+									{
+										width: sp(32),
+										height: sp(32),
+										borderRadius: sp(16),
+									},
+									focused && styles.focusRing,
+								]}
+								onPress={handleDownloadSeason}
+								activeOpacity={0.7}
+								accessibilityLabel="Sezonu indir"
+								nextFocusDown={
+									focusTags[tvFocusIndex] || focusTags[0]
+								}
+								hitSlop={{
+									top: 8,
+									bottom: 8,
+									left: 8,
+									right: 8,
+								}}>
+								<Ionicons
+									name="download-outline"
+									size={sp(17)}
+									color={Palette.onSurfaceVariant}
+								/>
+							</TVPressable>
 
-				{/* 4. Daha Fazla (⋮) — sezon menüsü: izlendi işaretle / bölüm seç */}
-				<TVPressable
-					style={({ focused }) => [
-						styles.moreButton,
-						{
-							backgroundColor:
-								theme === "dark" ? "#161B24" : "#ffffff",
-							borderColor:
-								theme === "dark" ? "#232A36" : "#E2E8F0",
-						},
-						focused && styles.controlsButtonFocused,
-					]}
-					onPress={() => setMenuState({ type: "season" })}
-					activeOpacity={0.75}
-					hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-					<Ionicons
-						name="ellipsis-vertical"
-						size={16}
-						color={colors.text}
-					/>
-				</TVPressable>
-			</View>
+							{/* Sezon işlemleri */}
+							<TVPressable
+								style={({ focused }) => [
+									styles.iconButton,
+									{
+										width: sp(32),
+										height: sp(32),
+										borderRadius: sp(16),
+									},
+									focused && styles.focusRing,
+								]}
+								onPress={() => setMenuState({ type: "season" })}
+								activeOpacity={0.75}
+								accessibilityLabel="Sezon işlemleri"
+								nextFocusDown={
+									focusTags[tvFocusIndex] || focusTags[0]
+								}
+								hitSlop={{
+									top: 8,
+									bottom: 8,
+									left: 8,
+									right: 8,
+								}}>
+								<Ionicons
+									name="ellipsis-vertical"
+									size={sp(16)}
+									color={Palette.onSurfaceVariant}
+								/>
+							</TVPressable>
+						</View>
+					</View>
+					{/* TV: odaklanan bölümün adı/özeti/süresi (tasarım). */}
+					{tvEpisodes && tvFocused ? (
+						<View style={{ marginBottom: sp(12) }}>
+							<Text
+								style={[
+									styles.tvEpisodeTitle,
+									{ fontSize: sp(22) },
+								]}
+								numberOfLines={1}>
+								{`${tvFocusedNo}. ${tvFocusedTitle}`.toUpperCase()}
+							</Text>
+							{tvFocused?.overview ? (
+								<Text
+									style={[
+										styles.episodeSynopsis,
+										{ fontSize: sp(13), marginTop: sp(4) },
+									]}
+									numberOfLines={2}>
+									{tvFocused.overview}
+								</Text>
+							) : null}
+							<View
+								style={{
+									flexDirection: "row",
+									alignItems: "center",
+									gap: sp(10),
+									marginTop: sp(6),
+								}}>
+								{tvFocusedDuration ? (
+									<Text
+										style={[
+											styles.episodeDurationText,
+											{ fontSize: sp(13) },
+										]}>
+										{tvFocusedDuration}
+									</Text>
+								) : null}
+								<Text
+									style={[
+										styles.episodeStatus,
+										{
+											fontSize: sp(13),
+											color:
+												tvFocusedStatus === "İzlendi"
+													? Palette.secondary
+													: tvFocusedStatus ===
+														  "Kaldığın yer"
+														? Palette.primary
+														: Palette.outline,
+										},
+									]}>
+									{tvFocusedStatus}
+								</Text>
+							</View>
+						</View>
+					) : null}
+				</>
 			)}
 
-			{/* Bölüm Listesi */}
-			<View style={styles.episodesList}>
-{sortedEpisodes.map((ep, index) => {
-					const epNumber = ep.episode || ep.episode_number || index + 1;
+			{/* Bölüm Listesi
+			    Dikey (telefon + tablet): alt alta, tam genişlik.
+			    Yatay ve TV: 10-feet ızgarası — kapak üstte, metin altında;
+			    4 sütun (referans: i_erik_detay_tv_10_foot_aray_z).
+			    ⚠️ Kaydırmasız `ScrollView` DEĞİL düz `View`: iç içe
+			    kaydırma kabı, kumanda odağı bu bölüme geldiğinde dıştaki
+			    sayfayı yanlış konuma kaydırıyordu (odaklanan kart ekranın
+			    en üstüne taşınıyor, hero görünümden çıkıyordu). */}
+			<ScrollView
+				horizontal={tvEpisodes}
+				scrollEnabled={tvEpisodes}
+				showsHorizontalScrollIndicator={false}
+				contentContainerStyle={[
+					tvEpisodes ? styles.episodesSlider : styles.episodesList,
+					{ gap: tvEpisodes ? sliderGap : sp(10) },
+				]}>
+				{sortedEpisodes.map((ep, index) => {
+					const epNumber =
+						ep.episode || ep.episode_number || index + 1;
 					const rawTitle = ep.title ? ep.title.trim() : "";
-				/*
-				 * Başlık biçimi: Netflix/Prime tarzı '<bölüm>. <bölüm adı>'
-				 * ("1. Kral Yolu", "2. Kuzey Rüzgârı").
-				 *
-				 * Bölüm adı backend'den TMDB'den gelir. Ad yoksa bile
-				 * YEDEK bölüm-önce biçim korunur: "3. Bölüm". Eskiden
-				 * sezon-önce yazılıyordu ("1. 3. Bölüm") ve kullanıcı
-				 * bunu "sezon 1, bölüm 3" yerine "bölüm 1, sezon 3"
-				 * sanıyordu — Netflix/Prime'da bölüm sayısı ÖNDE gelir.
-				 */
-				const epDisplayTitle = rawTitle
-					? `${epNumber}. ${rawTitle}`
-					: `${epNumber}. Bölüm`;
-
+					/*
+					 * Başlık biçimi: Netflix/Prime tarzı '<bölüm>. <bölüm adı>'.
+					 * Kart içinde numara ayrı etikette durur, başlıkta yalnızca
+					 * bölüm adı kalır (referans tasarım).
+					 */
+					const epDisplayTitle = rawTitle
+						? `${epNumber}. ${rawTitle}`
+						: `${epNumber}. Bölüm`;
 
 					const epIndirildi = isDownloaded({
 						contentId: content?.id || content?.url || seriesTitle,
@@ -997,7 +1250,6 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 						season: selectedSeason,
 						episode: epNumber,
 					});
-
 
 					const epKey = `s${selectedSeason}_e${epNumber}`;
 					const epProgress =
@@ -1010,37 +1262,125 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 					const selectionKey = episodeSelectionKey(ep, index);
 					const isSelected = Boolean(selectedEpisodes[selectionKey]);
 
-					const isDark = theme === "dark";
 					const epDurationFormatted = getEpisodeDurationTurkish(
 						ep,
 						epProgress,
 						content?.runtime_minutes,
 					);
 
+					/*
+					 * Bölüm kapağı: backend çoğu bölümde `still_url`
+					 * vermiyor (null). Boş siyah kutu yerine dizinin
+					 * backdrop'u, o da yoksa afişi kullanılır.
+					 */
+					const thumbUri =
+						ep.still_url ||
+						ep.poster ||
+						ep.thumbnail ||
+						ep.image ||
+						content?.backdrop_url ||
+						content?.poster_url ||
+						posterUrl ||
+						null;
+
+					const progressPercent = Math.min(
+						100,
+						Math.max(
+							8,
+							Math.round(
+								(epProgress?.progress ||
+									(epProgress?.duration > 0
+										? epProgress.currentTime /
+											epProgress.duration
+										: 0.18)) * 100,
+							),
+						),
+					);
+
+					// "N dk kaldı" — yalnızca gerçek süre bilgisi varsa.
+					const kalanSn =
+						isInProgress && epProgress?.duration > 0
+							? Math.max(
+									0,
+									epProgress.duration -
+										(epProgress.currentTime || 0),
+								)
+							: 0;
+					const kalanDk =
+						kalanSn > 0
+							? `${Math.max(1, Math.round(kalanSn / 60))} dk kaldı`
+							: "";
+
+					/* Izgarada süre satırı: izlenen bölümde kalan süre yazar. */
+					const epMetaText =
+						tvEpisodes && isInProgress
+							? kalanDk
+							: epDurationFormatted;
+
+					const statusLabel = isCompleted
+						? "İzlendi"
+						: isInProgress
+							? "Kaldığın yer"
+							: "Sırada";
+					const statusColor = isCompleted
+						? Palette.secondary
+						: isInProgress
+							? Palette.primary
+							: Palette.outline;
+
+					/* Sabit genişlik: odak değişince kart boyutu değişmez. */
+					const isTvFocus = tvEpisodes && index === tvFocusIndex;
+
 					return (
 						<TVPressable
-							key={ep.url || `${selectedSeason}-${epNumber}-${index}`}
+							key={
+								ep.url ||
+								`${selectedSeason}-${epNumber}-${index}`
+							}
 							style={({ focused }) => [
 								styles.episodeCard,
-								{
-									backgroundColor: isDark
-										? isInProgress
-											? "#131823"
-											: "#10141D"
-										: isInProgress
-											? "#fff5f5"
-											: "#ffffff",
-									borderColor: isInProgress
-										? "rgba(229, 9, 20, 0.55)"
-										: isDark
-											? "rgba(255, 255, 255, 0.08)"
-											: "rgba(0, 0, 0, 0.08)",
-									borderWidth: isInProgress ? 1.5 : 1,
-								},
-								isInProgress && styles.episodeCardActive,
+								tvEpisodes
+									? {
+											width: slideW,
+											height: focusCardH,
+											borderRadius: sp(14),
+											backgroundColor: Palette.surfaceLow,
+											opacity: isTvFocus ? 1 : 0.6,
+										}
+									: {
+											width: "100%",
+											padding: sp(8),
+											borderRadius: sp(16),
+											gap: sp(10),
+											backgroundColor: isInProgress
+												? Palette.surfaceHigh
+												: Palette.surfaceLow,
+										},
+								!tvEpisodes &&
+									isInProgress &&
+									styles.episodeCardActive,
 								isSelected && styles.episodeCardSelected,
-								focused && styles.episodeCardFocused,
+								(focused || isTvFocus) && styles.focusRing,
 							]}
+							onFocus={
+								tvEpisodes
+									? () => setTvFocusIndex(index)
+									: undefined
+							}
+							ref={
+								tvEpisodes
+									? (node) => {
+											cardRefs.current[index] = node;
+										}
+									: undefined
+							}
+							nextFocusUp={tvEpisodes ? headerTag : undefined}
+							nextFocusLeft={
+								tvEpisodes ? focusTags[index - 1] : undefined
+							}
+							nextFocusRight={
+								tvEpisodes ? focusTags[index + 1] : undefined
+							}
 							onPress={() => {
 								if (isSelectionMode) {
 									toggleEpisodeSelection(selectionKey);
@@ -1053,185 +1393,378 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 								setMenuState({ type: "episode", ep, index });
 							}}
 							activeOpacity={0.75}>
-							{/* Sol: Seçim kutusu ya da Play / Tik İkonu */}
-							{isSelectionMode ? (
-								<View
-									style={[
-										styles.selectionCheckbox,
-										isSelected &&
-											styles.selectionCheckboxChecked,
-									]}>
-									{isSelected && (
-										<Ionicons
-											name="checkmark"
-											size={15}
-											color="#ffffff"
-										/>
-									)}
-								</View>
-							) : (
-								<View
-									style={[
-										styles.playIconContainer,
-										{
-											backgroundColor: isInProgress
-												? "#E50914"
-												: isDark
-													? "#1e293b"
-													: "#f1f5f9",
-										},
-										isInProgress &&
-											styles.playIconActiveGlow,
-									]}>
-									<Ionicons
-										name={
-											isCompleted
-												? "checkmark-circle"
-												: "play"
-										}
-										size={isCompleted ? 17 : 13}
-										color={
-											isInProgress
-												? "#ffffff"
-												: "#E50914"
-										}
-										style={
-											!isCompleted
-												? styles.playIconOffset
-												: null
-										}
-									/>
-								</View>
-							)}
-
-							{/* Orta: Bölüm Başlığı & Devam Durumu */}
-							<View style={styles.episodeTitleContainer}>
-								<View style={styles.episodeTitleRow}>
-									<Text
+							{/* Aktif bölüm hapı YALNIZCA telefonda: ızgarada aynı
+							    bilgi kapak üstünde ve süre satırında durur. */}
+							{isInProgress && !tvEpisodes ? (
+								<View style={styles.episodeActiveRow}>
+									<View
 										style={[
-											styles.episodeTitleText,
+											styles.episodeActivePill,
 											{
-												color: isDark ? "#ffffff" : "#0f172a",
-												fontWeight: isInProgress ? "700" : "600",
+												gap: sp(4),
+												paddingHorizontal: sp(8),
+												paddingVertical: sp(2),
 											},
-										]}
-										numberOfLines={1}>
-										{epDisplayTitle}
-									</Text>
-									{isCompleted && (
-										<View
+										]}>
+										<Ionicons
+											name="play-circle"
+											size={sp(13)}
+											color={Palette.onPrimary}
+										/>
+										<Text
 											style={[
-												styles.completedBadge,
+												styles.episodeActivePillText,
 												{
-													backgroundColor: isDark
-														? "rgba(56, 189, 248, 0.16)"
-														: "rgba(56, 189, 248, 0.12)",
-													borderColor: isDark
-														? "rgba(56, 189, 248, 0.3)"
-														: "rgba(56, 189, 248, 0.25)",
-													borderWidth: 0.5,
+													fontSize: sp(10),
+													color: Palette.onPrimary,
 												},
 											]}>
-											<Text
-												style={[
-													styles.completedBadgeText,
-													{
-														color: isDark
-															? "#38bdf8"
-															: "#0284c7",
-													},
-												]}>
-												TAMAMLANDI
-											</Text>
-										</View>
-									)}
-									{isInProgress && (
-										<View style={styles.inProgressBadge}>
-											<Text style={styles.inProgressBadgeText}>
-												İZLENİYOR
-											</Text>
-										</View>
-									)}
-								</View>
-
-								{/* Süre / İlerleme Satırı */}
-								{isInProgress ? (
-									<View style={styles.episodeProgressRow}>
-										<View
-											style={[
-												styles.miniProgressBarTrack,
-												{
-													backgroundColor: isDark
-														? "#334155"
-														: "#e2e8f0",
-												},
-											]}>
-											<View
-												style={[
-													styles.miniProgressBarFill,
-													{
-														width: `${Math.min(100, Math.max(8, Math.round((epProgress.progress || (epProgress.duration > 0 ? epProgress.currentTime / epProgress.duration : 0.18)) * 100)))}%`,
-													},
-												]}
-											/>
-										</View>
-										<Text style={styles.episodeProgressText}>
-											{formatTime(epProgress.currentTime)}
-											{epProgress.duration > 0
-												? ` / ${formatTime(epProgress.duration)}`
-												: ""}
+											Kaldığın Yer
 										</Text>
 									</View>
-								) : (
-									<Text
+									{kalanDk ? (
+										<Text
+											style={[
+												styles.episodeStatus,
+												{
+													fontSize: sp(12),
+													color: Palette.secondary,
+												},
+											]}
+											numberOfLines={1}>
+											{kalanDk}
+										</Text>
+									) : null}
+								</View>
+							) : null}
+
+							<View
+								style={[
+									styles.episodeCardRow,
+									{ gap: sp(12) },
+									tvEpisodes && styles.episodeCardStack,
+								]}>
+								{/* Sol: seçim kutusu ya da 16:9 küçük görsel */}
+								{isSelectionMode ? (
+									<View
 										style={[
-											styles.episodeDurationText,
-											{ color: isDark ? "#94a3b8" : "#64748b" },
-										]}
-										numberOfLines={1}>
-										{epDurationFormatted || `${selectedSeason}. Sezon ${epNumber}. Bölüm`}
-									</Text>
+											styles.selectionCheckbox,
+											isSelected &&
+												styles.selectionCheckboxChecked,
+											{
+												width: sp(28),
+												height: sp(28),
+												borderRadius: sp(14),
+											},
+										]}>
+										{isSelected && (
+											<Ionicons
+												name="checkmark"
+												size={sp(16)}
+												color={Palette.background}
+											/>
+										)}
+									</View>
+								) : (
+									<View
+										style={[
+											styles.thumbnail,
+											tvEpisodes
+												? {
+														width: "100%",
+														height: "100%",
+														borderRadius: sp(14),
+													}
+												: {
+														width: tileW,
+														height: tileH,
+														borderRadius: sp(8),
+													},
+										]}>
+										{thumbUri ? (
+											<Image
+												source={{ uri: thumbUri }}
+												style={[
+													styles.thumbnailImage,
+													tvEpisodes
+														? {
+																width: "100%",
+																height: "100%",
+															}
+														: {
+																width: tileW,
+																height: tileH,
+															},
+													!tvEpisodes &&
+														!isCompleted &&
+														!isInProgress &&
+														styles.thumbnailImageIdle,
+												]}
+												contentFit="cover"
+												contentPosition="center"
+												transition={150}
+												cachePolicy="memory-disk"
+											/>
+										) : null}
+										<View
+											style={[
+												styles.thumbnailOverlay,
+												isCompleted &&
+													styles.thumbnailOverlayDone,
+												isInProgress &&
+													styles.thumbnailOverlayActive,
+											]}>
+											{isCompleted ? (
+												<Ionicons
+													name="checkmark-circle"
+													size={sp(24)}
+													color={Palette.secondary}
+												/>
+											) : isInProgress ? (
+												<View
+													style={[
+														styles.thumbnailPlay,
+														{
+															width: sp(32),
+															height: sp(32),
+															borderRadius:
+																sp(16),
+															backgroundColor:
+																Palette.primary,
+														},
+													]}>
+													<Ionicons
+														name="play"
+														size={sp(18)}
+														color={
+															Palette.onPrimary
+														}
+														style={
+															styles.playIconOffset
+														}
+													/>
+												</View>
+											) : (
+												<View
+													style={[
+														styles.thumbnailPlay,
+														{
+															width: sp(28),
+															height: sp(28),
+															borderRadius:
+																sp(14),
+														},
+													]}>
+													<Ionicons
+														name="play"
+														size={sp(16)}
+														color={
+															Palette.onSurface
+														}
+														style={
+															styles.playIconOffset
+														}
+													/>
+												</View>
+											)}
+										</View>
+										{/* Kapak sol altı: bölüm etiketi. */}
+										{tvEpisodes ? (
+											<View
+												style={{
+													position: "absolute",
+													bottom: sp(6),
+													left: sp(6),
+													backgroundColor:
+														"rgba(0,0,0,0.72)",
+													borderRadius: sp(6),
+													paddingHorizontal: sp(6),
+													paddingVertical: sp(2),
+												}}>
+												<Text
+													style={{
+														color: "#ffffff",
+														fontFamily:
+															FontFamily.semiBold,
+														fontSize: sp(11),
+													}}
+													numberOfLines={1}>
+													S{selectedSeason} B
+													{epNumber}
+												</Text>
+											</View>
+										) : null}
+										{isInProgress && (
+											<View
+												style={
+													styles.thumbnailProgressTrack
+												}>
+												<View
+													style={[
+														styles.thumbnailProgressFill,
+														{
+															width: `${progressPercent}%`,
+														},
+													]}
+												/>
+											</View>
+										)}
+									</View>
+								)}
+								{tvEpisodes ? null : (
+									<View
+										style={{
+											flex: 1,
+											flexDirection: "row",
+											alignItems: "center",
+											gap: sp(8),
+										}}>
+										<View
+											style={
+												styles.episodeTitleContainer
+											}>
+											{/* Durum satırı: TV'de "S1 B1 · Sırada", telefonda "N. BÖLÜM · Sırada". */}
+											<View
+												style={[
+													styles.episodeTitleRow,
+													{ gap: sp(8) },
+												]}>
+												<Text
+													style={[
+														styles.episodeLabel,
+														{
+															fontSize: sp(10),
+															color: isInProgress
+																? Palette.primary
+																: Palette.onSurfaceVariant,
+														},
+													]}
+													numberOfLines={1}>
+													{tvEpisodes
+														? `S${selectedSeason} B${epNumber}`
+														: `${epNumber}. BÖLÜM`}
+												</Text>
+												{isInProgress ? null : (
+													<Text
+														style={[
+															styles.episodeStatus,
+															{
+																fontSize:
+																	sp(12),
+																color: statusColor,
+															},
+														]}
+														numberOfLines={1}>
+														{statusLabel}
+													</Text>
+												)}
+											</View>
+											{/* Izgarada numara başlığın içinde durur
+										    (referans: "4. Boya ve Kan"). */}
+											<Text
+												style={[
+													styles.episodeTitleText,
+													{
+														fontSize: sp(16),
+														color: Palette.onSurface,
+													},
+												]}
+												numberOfLines={1}>
+												{tvEpisodes
+													? `${epNumber}. ${rawTitle || "Bölüm"}`
+													: rawTitle}
+											</Text>
+
+											{epMetaText ? (
+												<Text
+													style={[
+														styles.episodeDurationText,
+														{
+															fontSize: sp(12),
+															color:
+																tvEpisodes &&
+																isInProgress
+																	? Palette.secondary
+																	: Palette.onSurfaceVariant,
+															marginTop: sp(2),
+														},
+													]}
+													numberOfLines={1}>
+													{epMetaText}
+												</Text>
+											) : null}
+
+											{/* Prime: bölüm özeti (backend `overview`) 2 satır. */}
+											{ep.overview ? (
+												<Text
+													style={[
+														styles.episodeSynopsis,
+														{
+															fontSize: sp(11.5),
+															marginTop: sp(2),
+														},
+													]}
+													numberOfLines={2}>
+													{ep.overview}
+												</Text>
+											) : null}
+										</View>
+
+										{/* Telefon: sağda indirme dairesi. Izgarada bu
+									    eylem kapağın sağ üstünde. */}
+										{tvEpisodes ? null : (
+											<TVPressable
+												style={({ focused }) => [
+													styles.downloadButton,
+													{
+														width: sp(36),
+														height: sp(36),
+														borderRadius: sp(18),
+														backgroundColor:
+															isInProgress
+																? Palette.secondary
+																: Palette.surfaceHigh,
+													},
+													focused && styles.focusRing,
+												]}
+												onPress={() =>
+													handleDownloadEpisode(
+														ep,
+														epNumber,
+														epDisplayTitle,
+													)
+												}
+												activeOpacity={0.65}
+												hitSlop={{
+													top: 8,
+													bottom: 8,
+													left: 8,
+													right: 8,
+												}}>
+												<Ionicons
+													name={
+														epIndirildi
+															? "checkmark-done-outline"
+															: "download-outline"
+													}
+													size={sp(18)}
+													color={
+														isInProgress
+															? Palette.background
+															: epIndirildi
+																? Palette.secondary
+																: Palette.onSurfaceVariant
+													}
+												/>
+											</TVPressable>
+										)}
+									</View>
 								)}
 							</View>
-
-							{/* Sağ: İndir Butonu (w-8 h-8 rounded-full) */}
-							<TVPressable
-								style={({ focused }) => [
-									styles.downloadButton,
-									{
-										backgroundColor: isDark
-											? "#1e293b"
-											: "#f1f5f9",
-									},
-									focused && styles.controlsButtonFocused,
-								]}
-								onPress={() =>
-									handleDownloadEpisode(ep, epNumber, epDisplayTitle)
-								}
-								activeOpacity={0.65}
-								hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-								<Ionicons
-									name={
-										epIndirildi
-											? "checkmark-done-outline"
-											: "download-outline"
-									}
-									size={15}
-									color={
-										epIndirildi
-											? "#10b981"
-											: isInProgress
-												? colors.text
-												: isDark
-													? "#94a3b8"
-													: "#64748b"
-									}
-								/>
-							</TVPressable>
 						</TVPressable>
 					);
 				})}
-			</View>
+			</ScrollView>
 
 			{/* Sezon Seçici Modal (Açılır Menü / Bottom Sheet) */}
 			<Modal
@@ -1246,30 +1779,52 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 						style={[
 							styles.modalContent,
 							{
-								backgroundColor:
-									theme === "dark" ? "#141414" : "#ffffff",
-								borderColor: colors.border,
+								backgroundColor: Palette.surface,
+								borderColor: Palette.outlineVariant,
+								borderRadius: sp(20),
+								padding: sp(16),
 							},
 						]}>
 						{/* Modal Başlık */}
-						<View style={styles.modalHeader}>
+						<View
+							style={[
+								styles.modalHeader,
+								{
+									paddingBottom: sp(12),
+									marginBottom: sp(8),
+								},
+							]}>
 							<Text
 								style={[
 									styles.modalTitle,
-									{ color: colors.text },
+									{
+										color: Palette.onSurface,
+										fontSize: sp(16),
+									},
 								]}>
 								Sezon Seçin
 							</Text>
 							<TVPressable
-								onPress={() => setIsSeasonModalOpen(false)}
 								style={({ focused }) => [
-									focused && styles.controlsButtonFocused,
+									styles.iconButton,
+									{
+										width: sp(32),
+										height: sp(32),
+										borderRadius: sp(16),
+									},
+									focused && styles.focusRing,
 								]}
-								hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+								onPress={() => setIsSeasonModalOpen(false)}
+								hitSlop={{
+									top: 8,
+									bottom: 8,
+									left: 8,
+									right: 8,
+								}}>
 								<Ionicons
 									name="close"
-									size={22}
-									color={colors.textSecondary}
+									size={sp(20)}
+									color={Palette.onSurfaceVariant}
 								/>
 							</TVPressable>
 						</View>
@@ -1289,24 +1844,34 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 										autoFocus={isSelected}
 										style={({ focused }) => [
 											styles.modalSeasonItem,
-											isSelected && {
-												backgroundColor: `${colors.primary}22`,
+											{
+												paddingVertical: sp(11),
+												paddingHorizontal: sp(12),
+												borderRadius: sp(12),
 											},
-											focused && styles.modalSeasonItemFocused,
+											isSelected && {
+												backgroundColor:
+													"rgba(192,193,255,0.14)",
+											},
+											focused && styles.focusRing,
 										]}
 										onPress={() => {
 											handleSeasonSelect(sKey);
 											setIsSeasonModalOpen(false);
 										}}
 										activeOpacity={0.7}>
-										<View style={styles.modalSeasonLeft}>
+										<View
+											style={[
+												styles.modalSeasonLeft,
+												{ gap: sp(10) },
+											]}>
 											<Ionicons
 												name="albums-outline"
-												size={18}
+												size={sp(18)}
 												color={
 													isSelected
-														? colors.primary
-														: colors.textSecondary
+														? Palette.primary
+														: Palette.onSurfaceVariant
 												}
 											/>
 											<Text
@@ -1314,11 +1879,12 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 													styles.modalSeasonName,
 													{
 														color: isSelected
-															? colors.primary
-															: colors.text,
-														fontWeight: isSelected
-															? "700"
-															: "500",
+															? Palette.primary
+															: Palette.onSurface,
+														fontFamily: isSelected
+															? FontFamily.semiBold
+															: FontFamily.medium,
+														fontSize: sp(15),
 													},
 												]}>
 												Sezon {sKey}
@@ -1327,7 +1893,8 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 												style={[
 													styles.modalSeasonCount,
 													{
-														color: colors.textSecondary,
+														color: Palette.onSurfaceVariant,
+														fontSize: sp(12.5),
 													},
 												]}>
 												({count} Bölüm)
@@ -1337,8 +1904,8 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 										{isSelected && (
 											<Ionicons
 												name="checkmark"
-												size={20}
-												color={colors.primary}
+												size={sp(20)}
+												color={Palette.primary}
 											/>
 										)}
 									</TVPressable>
@@ -1360,13 +1927,27 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 
 			{/* Geçici geri bildirim balonu ("3 bölüm işaretlendi") */}
 			{Boolean(feedbackMessage) && (
-				<View style={styles.feedbackToast} pointerEvents="none">
+				<View
+					style={[
+						styles.feedbackToast,
+						{
+							backgroundColor: Palette.surfaceHighest,
+							borderColor: "rgba(76,215,246,0.5)",
+							paddingVertical: sp(8),
+							paddingHorizontal: sp(14),
+						},
+					]}
+					pointerEvents="none">
 					<Ionicons
 						name="checkmark-circle"
-						size={15}
-						color="#10b981"
+						size={sp(15)}
+						color={Palette.secondary}
 					/>
-					<Text style={styles.feedbackToastText}>
+					<Text
+						style={[
+							styles.feedbackToastText,
+							{ color: Palette.onSurface, fontSize: sp(12) },
+						]}>
 						{feedbackMessage}
 					</Text>
 				</View>
@@ -1377,171 +1958,176 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 
 // Geri tuşu işbirliği için referans (bkz. MovieDetails `seasonsRef`).
 export default SeasonsSection;
-
 const styles = StyleSheet.create({
-	container: {
-		marginBottom: 24,
+	container: {},
+	/* TV slider başlığı: odaklanan bölümün adı (tasarım: büyük, kalın). */
+	tvEpisodeTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		letterSpacing: 0.4,
 	},
-	/* Kontrol Çubuğu (Ekran görüntüsündeki gibi: Sezon 1 v | Bölüm ^ | 10 Bölüm) */
-	controlsBar: {
+	headerRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		marginBottom: 16,
-		gap: 10,
+		justifyContent: "flex-start",
+		flexWrap: "wrap",
 	},
-	seasonDropdownButton: {
+	headerControls: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: 14,
-		paddingVertical: 9,
-		borderRadius: 10,
-		borderWidth: 1,
-		gap: 6,
 	},
-	seasonDropdownText: {
-		fontSize: 13,
-		fontWeight: "700",
-		letterSpacing: -0.2,
-	},
-	dropdownChevron: {
-		marginTop: 1,
-	},
-	sortButton: {
+	seasonPill: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: 12,
-		paddingVertical: 9,
-		borderRadius: 10,
-		borderWidth: 1,
+		alignSelf: "flex-start",
+		borderRadius: 999,
+		backgroundColor: Palette.surfaceHigh,
 	},
-	sortButtonText: {
-		fontSize: 13,
-		fontWeight: "700",
-		letterSpacing: -0.2,
+	seasonPillText: {
+		fontFamily: FontFamily.semiBold,
 	},
-	seasonDownloadButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		marginLeft: "auto",
-		gap: 6,
-		paddingVertical: 6,
-		paddingHorizontal: 6,
-	},
-	seasonDownloadText: {
-		fontSize: 13,
-		fontWeight: "600",
-	},
-	/* Bölüm Listesi (Card tabanlı, stitch_unified_cinema_ui_redesigna stili) */
-	episodesList: {
-		gap: 8,
-	},
-	episodeCard: {
-		flexDirection: "row",
-		alignItems: "center",
-		paddingVertical: 12,
-		paddingHorizontal: 12,
-		borderRadius: 14,
-		justifyContent: "space-between",
-		gap: 12,
-	},
-	episodeCardActive: {
-borderWidth: 1.5,
-borderColor: "rgba(229, 9, 20, 0.55)",
-	},
-	playIconContainer: {
-		width: 28,
-		height: 28,
-		borderRadius: 14,
+	iconButton: {
 		alignItems: "center",
 		justifyContent: "center",
+		backgroundColor: Palette.surface,
+	},
+	/* Bölüm listesi (telefon/tablet dikey): alt alta, tam genişlik. */
+	episodesList: {
+		flexDirection: "column",
+	},
+	/* Bölüm slider'ı (TV + yatay tablet): yan yana kartlar. */
+	episodesSlider: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	/* Slider kartı: kapak üstte, metin altta. */
+	episodeCardStack: {
+		flexDirection: "column",
+		alignItems: "stretch",
+	},
+	episodeCard: {
+		flexDirection: "column",
+	},
+	episodeCardRow: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	episodeCardActive: {
+		elevation: 6,
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.35,
+		shadowRadius: 10,
+	},
+	episodeCardSelected: {
+		borderWidth: 1.5,
+		borderColor: Palette.secondary,
+	},
+	thumbnail: {
+		overflow: "hidden",
+		backgroundColor: Palette.surfaceHighest,
 		flexShrink: 0,
 	},
-	playIconActiveGlow: {
-borderWidth: 1.5,
-borderColor: "rgba(229, 9, 20, 0.65)",
-backgroundColor: "rgba(229, 9, 20, 0.18)",
+	thumbnailImage: {
+		position: "absolute",
+		top: 0,
+		left: 0,
+	},
+	thumbnailImageIdle: {
+		opacity: 0.8,
+	},
+	/* Kapağı kaplayan durum katmanı; akışta `flex: 1` ile doluyor. */
+	thumbnailOverlay: {
+		flex: 1,
+		width: "100%",
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	thumbnailOverlayDone: {
+		backgroundColor: "rgba(14,14,16,0.5)",
+	},
+	thumbnailOverlayActive: {
+		backgroundColor: "rgba(14,14,16,0.3)",
+	},
+	thumbnailPlay: {
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "rgba(42,42,44,0.85)",
+	},
+	/* Yuvarlatılmış köşeler çubuğun uçlarını kırpmasın diye içeriden. */
+	thumbnailProgressTrack: {
+		position: "absolute",
+		left: 5,
+		right: 5,
+		bottom: 5,
+		height: 3,
+		borderRadius: 2,
+		overflow: "hidden",
+		backgroundColor: "rgba(14,14,16,0.75)",
+	},
+	thumbnailProgressFill: {
+		height: "100%",
+		borderRadius: 2,
+		backgroundColor: Palette.secondary,
 	},
 	playIconOffset: {
-		marginLeft: 1.5,
+		marginLeft: 2,
 	},
 	episodeTitleContainer: {
 		flex: 1,
 		minWidth: 0,
 		justifyContent: "center",
 	},
+	episodeActiveRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+	},
+	episodeActivePill: {
+		flexDirection: "row",
+		alignItems: "center",
+		alignSelf: "flex-start",
+		borderRadius: 999,
+		backgroundColor: Palette.primaryContainer,
+	},
+	episodeActivePillText: {
+		fontFamily: FontFamily.bold,
+	},
 	episodeTitleRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 8,
+		justifyContent: "space-between",
 	},
-	episodeTitleText: {
-		fontSize: 12.5,
-		letterSpacing: -0.2,
+	episodeLabel: {
+		fontFamily: FontFamily.bold,
+		letterSpacing: 0.4,
 		flexShrink: 1,
 	},
-	completedBadge: {
-		paddingHorizontal: 6,
-		paddingVertical: 1.5,
-		borderRadius: 4,
+	episodeStatus: {
+		fontFamily: FontFamily.medium,
 	},
-	completedBadgeText: {
-		fontSize: 9,
-		fontWeight: "800",
-		letterSpacing: 0.4,
-		textTransform: "uppercase",
-	},
-	inProgressBadge: {
-		backgroundColor: "#E50914",
-		paddingHorizontal: 6,
-		paddingVertical: 1.5,
-		borderRadius: 4,
-	},
-	inProgressBadgeText: {
-		color: "#ffffff",
-		fontSize: 9,
-		fontWeight: "800",
-		letterSpacing: 0.4,
-		textTransform: "uppercase",
-	},
-	episodeProgressRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 8,
-		marginTop: 4,
-	},
-	miniProgressBarTrack: {
-		width: 75,
-		height: 4,
-		borderRadius: 2,
-		overflow: "hidden",
-	},
-	miniProgressBarFill: {
-		height: "100%",
-		borderRadius: 2,
-		backgroundColor: "#E50914",
-	},
-	episodeProgressText: {
-		fontSize: 10,
-		fontWeight: "700",
-		color: "#E50914",
-	},
-	episodeDurationText: {
-		fontSize: 10.5,
-		fontWeight: "500",
+	episodeTitleText: {
+		fontFamily: FontFamily.semiBold,
+		letterSpacing: -0.2,
 		marginTop: 2,
 	},
+	episodeDurationText: {
+		fontFamily: FontFamily.regular,
+	},
+	episodeSynopsis: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
+	},
 	downloadButton: {
-		width: 32,
-		height: 32,
-		borderRadius: 16,
-		justifyContent: "center",
 		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.surfaceHigh,
 		flexShrink: 0,
 	},
-	/* Modal (Dropdown Açılır Menü) */
+	/* Sezon seçici modal */
 	modalOverlay: {
 		flex: 1,
-		backgroundColor: "rgba(0, 0, 0, 0.65)",
+		backgroundColor: "rgba(0,0,0,0.65)",
 		justifyContent: "center",
 		alignItems: "center",
 		padding: 24,
@@ -1549,22 +2135,17 @@ backgroundColor: "rgba(229, 9, 20, 0.18)",
 	modalContent: {
 		width: "100%",
 		maxHeight: 380,
-		borderRadius: 16,
 		borderWidth: 1,
-		padding: 16,
 	},
 	modalHeader: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		paddingBottom: 12,
 		borderBottomWidth: StyleSheet.hairlineWidth,
-		borderBottomColor: "rgba(100, 116, 139, 0.2)",
-		marginBottom: 8,
+		borderBottomColor: Palette.outlineVariant,
 	},
 	modalTitle: {
-		fontSize: 16,
-		fontWeight: "700",
+		fontFamily: FontFamily.semiBold,
 	},
 	modalList: {
 		maxHeight: 280,
@@ -1573,42 +2154,28 @@ backgroundColor: "rgba(229, 9, 20, 0.18)",
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		paddingVertical: 12,
-		paddingHorizontal: 12,
-		borderRadius: 10,
 		marginVertical: 2,
 	},
 	modalSeasonLeft: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 10,
 	},
-	modalSeasonName: {
-		fontSize: 15,
-	},
-	modalSeasonCount: {
-		fontSize: 13,
-	},
+	modalSeasonName: {},
+	modalSeasonCount: {},
 	loadingBox: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "center",
-		paddingVertical: 18,
 		borderRadius: 12,
-		borderWidth: 1,
-		gap: 10,
 	},
 	loadingText: {
-		fontSize: 14,
-		fontWeight: "500",
+		fontFamily: FontFamily.medium,
 	},
 	/* ── İzlendi işaretleme: seçim modu, ⋮ menüsü, geri bildirim ── */
 	selectionBar: {
 		flexDirection: "row",
 		alignItems: "center",
 		flexWrap: "wrap",
-		gap: 8,
-		marginBottom: 12,
 	},
 	selectionChip: {
 		flexDirection: "row",
@@ -1616,57 +2183,39 @@ backgroundColor: "rgba(229, 9, 20, 0.18)",
 		gap: 6,
 		paddingVertical: 8,
 		paddingHorizontal: 12,
-		borderRadius: 10,
+		borderRadius: 999,
 		borderWidth: 1,
+		borderColor: "transparent",
 	},
 	selectionChipText: {
-		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.semiBold,
 	},
 	selectionChipPrimary: {
-		backgroundColor: "#10b981",
-		borderColor: "#10b981",
+		backgroundColor: Palette.secondary,
+		borderColor: Palette.secondary,
 	},
 	selectionChipPrimaryText: {
-		fontSize: 12,
-		fontWeight: "800",
-		color: "#ffffff",
+		fontFamily: FontFamily.bold,
+		color: Palette.background,
 	},
 	selectionChipDanger: {
-		backgroundColor: "rgba(244, 63, 94, 0.1)",
-		borderColor: "rgba(244, 63, 94, 0.4)",
+		backgroundColor: "rgba(255,180,171,0.12)",
+		borderColor: Palette.error,
 	},
 	selectionCountText: {
-		fontSize: 12,
-		fontWeight: "600",
+		fontFamily: FontFamily.medium,
 		paddingHorizontal: 2,
 	},
 	selectionCheckbox: {
-		width: 28,
-		height: 28,
-		borderRadius: 14,
 		borderWidth: 1.5,
-		borderColor: "rgba(148, 163, 184, 0.6)",
+		borderColor: Palette.outline,
 		alignItems: "center",
 		justifyContent: "center",
 		flexShrink: 0,
 	},
 	selectionCheckboxChecked: {
-		backgroundColor: "#10b981",
-		borderColor: "#10b981",
-	},
-	episodeCardSelected: {
-		borderWidth: 1.5,
-		borderColor: "rgba(16, 185, 129, 0.8)",
-	},
-	moreButton: {
-		width: 36,
-		height: 36,
-		borderRadius: 10,
-		borderWidth: 1,
-		alignItems: "center",
-		justifyContent: "center",
-		marginLeft: 8,
+		backgroundColor: Palette.secondary,
+		borderColor: Palette.secondary,
 	},
 	feedbackToast: {
 		position: "absolute",
@@ -1675,31 +2224,14 @@ backgroundColor: "rgba(229, 9, 20, 0.18)",
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 6,
-		backgroundColor: "rgba(15, 23, 42, 0.95)",
 		borderWidth: 1,
-		borderColor: "rgba(16, 185, 129, 0.4)",
-		paddingVertical: 8,
-		paddingHorizontal: 14,
 		borderRadius: 999,
 	},
 	feedbackToastText: {
-		color: "#f1f5f9",
-		fontSize: 12,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
-	controlsButtonFocused: {
+	focusRing: {
 		borderWidth: 2,
-		borderColor: "#E50914",
-		transform: [{ scale: 1.05 }],
-	},
-	episodeCardFocused: {
-		borderWidth: 2,
-		borderColor: "#E50914",
-		transform: [{ scale: 1.02 }],
-	},
-	modalSeasonItemFocused: {
-		borderWidth: 2,
-		borderColor: "#E50914",
-		transform: [{ scale: 1.02 }],
+		borderColor: Palette.primary,
 	},
 });

@@ -1,168 +1,121 @@
-import { useThemeContext } from "@context/ThemeContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import {
-	formatContentType,
-	formatRuntime,
-	formatStatus,
-	formatYear,
-	getCountryFlag,
-} from "@utils/formatters";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { formatRuntime, formatYear } from "@utils/formatters";
+import { StyleSheet, Text, View } from "react-native";
 
 /**
- * MetadataSection – Mockup tasarımındaki hap (pill) şeklinde meta bilgiler.
- * Süre, Yıl, Yaş sınırı, Kalite, Durum gibi bilgileri küçük kutucuklar halinde gösterir.
+ * Başlığın altındaki tek satırlık künye: "2024 · 2 Sezon · 16+ · Aksiyon / Dram".
+ * `content` bir film/dizi detay nesnesi; `genres` ekranda ayrıştırılmış tür
+ * listesi (varsa `content.tagline`'a tercih edilir).
  */
-export default function MetadataSection({ content }) {
-	const { colors, theme } = useThemeContext();
-	const { sp, gutter } = useTvMetrics();
+export function buildMetaLine({ content, genres = [], seasonCount = 0 }) {
+	const parts = [];
 
-	const pills = [
-		{
-			icon: "time-outline",
-			value: formatRuntime(content.runtime_minutes),
-			iconColor: "#E50914",
-		},
-		{
-			icon: "calendar-outline",
-			value: formatYear(content.release_date),
-			iconColor: colors.textSecondary,
-		},
-		{
-			value: content.age_rating,
-			isAgeRating: true,
-		},
-		{
-			value: content.country
-				? (() => {
-						const flag = getCountryFlag(content.country);
-						return flag ? `${flag} ${content.country}` : content.country;
-				  })()
-				: null,
-		},
-		{
-			value: formatContentType(content.content_type),
-		},
-		{
-			value: formatStatus(content.status),
-			isStatus: content.status === "Yayınlandı" || content.status === "Returning Series",
-		},
-	].filter((item) => item.value && item.value !== "N/A");
+	const year = formatYear(content?.release_date);
+	if (year !== "N/A") parts.push(year);
+
+	if (seasonCount > 0) {
+		parts.push(`${seasonCount} Sezon`);
+	} else {
+		const runtime = formatRuntime(content?.runtime_minutes);
+		if (runtime !== "N/A") parts.push(runtime);
+	}
+
+	if (content?.age_rating) parts.push(content.age_rating);
+
+	const turler = genres.length
+		? genres
+		: content?.tagline
+			? [content.tagline]
+			: [];
+	if (turler.length) parts.push(turler.join(" / "));
+
+	return parts.join(" · ");
+}
+
+/**
+ * Puan hapı — yıldız + puan. "IMDb" etiketi YOK: puan kaynağı garanti
+ * değil, yanıltıcı olurdu.
+ */
+export function RatingPill({ rating, size = 13 }) {
+	const value =
+		rating == null
+			? null
+			: typeof rating === "number"
+				? rating.toFixed(1)
+				: parseFloat(rating)
+					? parseFloat(rating).toFixed(1)
+					: null;
+
+	if (!value) return null;
 
 	return (
-		<View style={[styles.container, { marginBottom: sp(14) }]}>
-			{/*
-			 * TV'de haplar TEK SATIRDA yan yana durur.
-			 *
-			 * `flexWrap: "wrap"` telefon için doğru: dar ekranda alt alta
-			 * sarar. TV'de aynı davranış 5–6 hapı 2–3 satıra bölüyor ve
-			 * "meta bilgisi" 3 bloklu bir liste gibi görünüyordu. Oysa
-			 * bunlar kısa etiketler — hepsi tek satıra sığar.
-			 *
-			 * `overflow: "scroll"` yedek güvence: 4K dışında beklenmedik
-			 * bir eklenti 20 rozet döndürürse satır yatay kaydırılabilir,
-			 * taşma yapmaz.
-			 */}
-			<ScrollView
-				horizontal
-				showsHorizontalScrollIndicator={false}
-				style={styles.pillsScroll}
-				contentContainerStyle={[
-					styles.pillsRow,
-					{ gap: sp(8), paddingRight: gutter },
+		<View
+			style={[
+				styles.ratingPill,
+				{ paddingHorizontal: size - 3, paddingVertical: 4 },
+			]}>
+			<Ionicons name="star" size={size - 1} color={Palette.tertiary} />
+			<Text
+				style={[
+					styles.ratingText,
+					{ fontSize: size, color: Palette.tertiary },
 				]}>
-				{pills.map((item, index) => (
-					<View
-						key={index}
-						style={[
-							styles.pill,
-							{
-								backgroundColor:
-									theme === "dark"
-										? "#161B24"
-										: "#ffffff",
-								borderColor:
-									theme === "dark"
-										? "#232A36"
-										: "#E2E8F0",
-								paddingHorizontal: sp(11),
-								paddingVertical: sp(7),
-								borderRadius: sp(10),
-								gap: sp(5),
-							},
-							item.isAgeRating && styles.ageRatingPill,
-							item.isStatus && styles.statusPill,
-						]}>
-						{item.icon && (
-							<Ionicons
-								name={item.icon}
-								size={sp(15)}
-								color={item.iconColor || colors.textSecondary}
-							/>
-						)}
-						{item.isStatus && (
-							<View
-								style={[
-									styles.statusDot,
-									{
-										width: sp(7),
-										height: sp(7),
-										borderRadius: sp(4),
-									},
-								]}
-							/>
-						)}
-						<Text
-							style={[
-								styles.pillText,
-								{
-									color: item.isAgeRating
-										? "#fb7185"
-										: item.isStatus
-											? "#34d399"
-											: colors.textSecondary,
-									fontSize: sp(13),
-								},
-								item.isAgeRating && styles.ageRatingText,
-							]}>
-							{item.value}
-						</Text>
-					</View>
-				))}
-			</ScrollView>
+				{value}
+			</Text>
+		</View>
+	);
+}
+
+/**
+ * MetadataSection – başlığın altındaki ses/altyazı satırı.
+ * Başlık ve künye artık hero'nun içinde (bkz. `HeroSection`); burada
+ * tekrarlanmaz, ekranın üstünde gereksiz boşluk kalmaz.
+ */
+export default function MetadataSection({ content, audioOptions = [] }) {
+	const { sp } = useTvMetrics();
+
+	if (!content || audioOptions.length === 0) return null;
+
+	return (
+		<View style={[styles.container, { marginBottom: sp(12) }]}>
+			<View style={styles.audioRow}>
+				<Ionicons
+					name="language-outline"
+					size={sp(16)}
+					color={Palette.secondary}
+				/>
+				<Text
+					style={[styles.audioText, { fontSize: sp(12.5) }]}
+					numberOfLines={2}>
+					{audioOptions.join(" & ")} Mevcut
+				</Text>
+			</View>
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
 	container: {},
-	/** Yatay kaydırma yalnızca TV'de devreye girer (telefonda `flexWrap` yeter). */
-	pillsScroll: {
-		flexGrow: 0,
-	},
-	pillsRow: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		alignItems: "center",
-	},
-	pill: {
+	ratingPill: {
 		flexDirection: "row",
 		alignItems: "center",
-		borderWidth: 1,
+		gap: 4,
+		borderRadius: 999,
+		backgroundColor: Palette.surfaceHigh,
 	},
-	pillText: {
-		fontWeight: "600",
+	ratingText: {
+		fontFamily: FontFamily.bold,
 	},
-	ageRatingPill: {},
-	ageRatingText: {
-		fontWeight: "700",
+	audioRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
 	},
-	statusPill: {
-		backgroundColor: "rgba(52,211,153,0.1)",
-		borderColor: "rgba(52,211,153,0.2)",
-	},
-	statusDot: {
-		backgroundColor: "#34d399",
+	audioText: {
+		flexShrink: 1,
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
 	},
 });

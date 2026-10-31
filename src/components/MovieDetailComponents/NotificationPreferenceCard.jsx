@@ -28,7 +28,7 @@
  */
 
 import TVPressable from "@/components/common/TVPressable";
-import { useThemeContext } from "@/context/ThemeContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import {
 	auditCiftiBagla,
 	baslikHatirla,
@@ -87,7 +87,6 @@ export default function NotificationPreferenceCard({
 	diziBasligi,
 	diziDurumu,
 }) {
-	const { colors } = useThemeContext();
 	const { isTV, sp } = useTvMetrics();
 
 	const anahtar = useMemo(() => mediaKimligi(tmdbId), [tmdbId]);
@@ -188,18 +187,20 @@ export default function NotificationPreferenceCard({
 
 	const cipsTaban = (secili) => [
 		{
-			borderRadius: sp(10),
+			borderRadius: 999,
 			paddingHorizontal: sp(11),
 			paddingVertical: sp(6),
 			borderWidth: 1,
-			borderColor: secili ? "#E50914" : colors.border,
-			backgroundColor: secili ? "rgba(229, 9, 20, 0.13)" : "transparent",
+			borderColor: secili ? Palette.secondary : Palette.outlineVariant,
+			backgroundColor: secili
+				? "rgba(76,215,246,0.14)"
+				: "transparent",
 		},
 	];
 	const cipsYazi = (secili) => ({
-		color: secili ? "#E50914" : colors.textSecondary,
+		color: secili ? Palette.secondary : Palette.onSurfaceVariant,
 		fontSize: sp(12.5),
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	});
 
 	const buKaynakSecili = tercih?.mode !== "all_sources";
@@ -209,9 +210,9 @@ export default function NotificationPreferenceCard({
 			style={[
 				styles.kagit,
 				{
-					backgroundColor: colors.cardBg,
-					borderColor: colors.border,
-					borderRadius: sp(14),
+					backgroundColor: Palette.surfaceLow,
+					borderColor: Palette.outlineVariant,
+					borderRadius: sp(16),
 					padding: sp(13),
 					marginBottom: sp(16),
 					gap: sp(9),
@@ -232,21 +233,23 @@ export default function NotificationPreferenceCard({
 							height: sp(38),
 							borderRadius: sp(12),
 							backgroundColor: aktif
-								? "rgba(229, 9, 20, 0.13)"
-								: "rgba(142, 142, 147, 0.12)",
+								? "rgba(76,215,246,0.14)"
+								: Palette.surfaceHighest,
 						},
 					]}>
 					<Ionicons
 						name={aktif ? "notifications" : "notifications-outline"}
 						size={sp(19)}
-						color={aktif ? "#E50914" : "#8E8E93"}
+						color={
+							aktif ? Palette.secondary : Palette.onSurfaceVariant
+						}
 					/>
 				</View>
 				<View style={styles.metinler}>
 					<Text
 						style={[
 							styles.baslikText,
-							{ color: colors.text, fontSize: sp(isTV ? 15.5 : 14) },
+							{ color: Palette.onSurface, fontSize: sp(isTV ? 15.5 : 14) },
 						]}>
 						Yeni bölüm bildirimi
 					</Text>
@@ -254,7 +257,7 @@ export default function NotificationPreferenceCard({
 						style={[
 							styles.altText,
 							{
-								color: colors.textSecondary,
+								color: Palette.onSurfaceVariant,
 								fontSize: sp(isTV ? 13 : 11.5),
 							},
 						]}
@@ -268,7 +271,10 @@ export default function NotificationPreferenceCard({
 				<View pointerEvents="none">
 					<Switch
 						value={aktif}
-						trackColor={{ true: "#E50914", false: "#3A3A3C" }}
+						trackColor={{
+							true: Palette.secondary,
+							false: Palette.surfaceHighest,
+						}}
 						thumbColor="#ffffff"
 						disabled={yukleniyor || islemVar}
 					/>
@@ -310,9 +316,9 @@ export default function NotificationPreferenceCard({
 					style={styles.ipucuBtn}>
 					<Text
 						style={{
-							color: "#E50914",
+							color: Palette.primary,
 							fontSize: sp(12.5),
-							fontWeight: "600",
+							fontFamily: FontFamily.semiBold,
 						}}>
 						İzlediğin kaynağı {kaynakAdi} yap →
 					</Text>
@@ -332,7 +338,8 @@ const styles = StyleSheet.create({
 		gap: 11,
 	},
 	anaSatirOdak: {
-		backgroundColor: "rgba(229, 9, 20, 0.08)",
+		borderWidth: 1,
+		borderColor: Palette.primary,
 		borderRadius: 10,
 	},
 	simgeKutu: {
@@ -344,9 +351,11 @@ const styles = StyleSheet.create({
 		gap: 2,
 	},
 	baslikText: {
-		fontWeight: "700",
+		fontFamily: FontFamily.semiBold,
 	},
-	altText: {},
+	altText: {
+		fontFamily: FontFamily.regular,
+	},
 	cipsSatiri: {
 		flexDirection: "row",
 		alignItems: "center",
