@@ -120,6 +120,45 @@ export const ColorsM3 = {
 	},
 } as const;
 
+/**
+ * Yeni tasarım paleti — TEK KAYNAK.
+ *
+ * Referans tasarımdan (`stream_pulse/DESIGN.md` + ekran HTML'leri) birebir
+ * alınmıştır ve yalnızca koyu temadır. Yeni tasarıma geçen ekranlar
+ * `Colors` / `ColorsM3` yerine bunu okur; eski ekranlar dokunulmadan kalır.
+ */
+export const Palette = {
+	background: "#131315",
+	surfaceLowest: "#0e0e10",
+	surfaceLow: "#1c1b1d",
+	surface: "#201f21",
+	surfaceHigh: "#2a2a2c",
+	surfaceHighest: "#353437",
+	surfaceBright: "#39393b",
+	onSurface: "#e5e1e4",
+	onSurfaceVariant: "#c7c4d7",
+	outline: "#908fa0",
+	outlineVariant: "#464554",
+	primary: "#c0c1ff",
+	primaryContainer: "#8083ff",
+	onPrimary: "#1000a9",
+	onPrimaryContainer: "#0d0096",
+	secondary: "#4cd7f6",
+	tertiary: "#fbbc2e",
+	error: "#ffb4ab",
+} as const;
+
+/**
+ * Inter'in yüklü ağırlıkları. `fontWeight` yerine bunlar kullanılır: Android'de
+ * tek bir aileye `fontWeight` vermek sahte kalınlaştırma üretiyor.
+ */
+export const FontFamily = {
+	regular: "Inter_400Regular",
+	medium: "Inter_500Medium",
+	semiBold: "Inter_600SemiBold",
+	bold: "Inter_700Bold",
+} as const;
+
 /** Ekran geneli yatay boşluk (referansta `px-margin` = 1rem). */
 export const ScreenGutter = 16;
 

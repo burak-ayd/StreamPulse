@@ -1,4 +1,5 @@
 import TVPressable from "@/components/common/TVPressable";
+import { Palette } from "@/constants/theme";
 import { NAV_RAIL_WIDTH, useNavLayout } from "@/hooks/useNavLayout";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
@@ -99,12 +100,40 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 	// Sol tarafta dikey ray: TV ve tablet (yatay)
 	if (isSideRail) {
 		const edgePad = Math.max(8, Math.round(height * RAIL_EDGE_RATIO));
+		const homeActive = activeRoute === NAV_ITEMS[0].route;
 		return (
 			<View
 				style={[
 					styles.railContainer,
 					{ paddingTop: edgePad, paddingBottom: edgePad },
 				]}>
+				{/* Logo = ana sayfa. Üstteki odaklanabilir hedef, rayın üst
+				    bandını da kapsar (bkz. SORUN 3 notu). */}
+				<TVPressable
+					onPress={() => handleAction(NAV_ITEMS[0])}
+					style={styles.railEdgeItem}
+					focusedStyle={null}
+					accessibilityLabel="Ana Sayfa">
+					{({ focused }) => (
+						<View
+							style={[
+								styles.railLogo,
+								homeActive && styles.railLogoActive,
+								focused && styles.railIconBoxFocused,
+							]}>
+							<Ionicons
+								name="play"
+								size={26}
+								color={
+									homeActive
+										? Palette.primary
+										: Palette.onSurfaceVariant
+								}
+							/>
+						</View>
+					)}
+				</TVPressable>
+
 				<View style={styles.railNavList}>
 					{NAV_ITEMS.map((item) => {
 						const isActive =
@@ -120,9 +149,8 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 									<View
 										style={[
 											styles.railIconBox,
-											isActive
-												? styles.railIconBoxActive
-												: styles.railIconBoxInactive,
+											isActive &&
+												styles.railIconBoxActive,
 											focused && styles.railIconBoxFocused,
 										]}>
 										<Ionicons
@@ -131,11 +159,11 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 													? item.icon
 													: `${item.icon}-outline`
 											}
-											size={22}
+											size={24}
 											color={
 												isActive || focused
-													? "#ffffff"
-													: "#8E8E93"
+													? Palette.primary
+													: Palette.onSurfaceVariant
 											}
 										/>
 									</View>
@@ -144,6 +172,26 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 						);
 					})}
 				</View>
+
+				<TVPressable
+					onPress={() => router.push("/(app)/profile")}
+					style={styles.railEdgeItem}
+					focusedStyle={null}
+					accessibilityLabel="Profil">
+					{({ focused }) => (
+						<View
+							style={[
+								styles.railProfile,
+								focused && styles.railIconBoxFocused,
+							]}>
+							<Ionicons
+								name="person"
+								size={20}
+								color={Palette.onPrimary}
+							/>
+						</View>
+					)}
+				</TVPressable>
 			</View>
 		);
 	}
@@ -162,13 +210,8 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 						{({ focused }) => (
 							<View
 								style={[
-									isActive
-										? styles.activePill
-										: styles.inactivePill,
-									focused &&
-										(isActive
-											? styles.activePillFocused
-											: styles.inactivePillFocused),
+									styles.navIconBox,
+									isActive && styles.navIconBoxActive,
 								]}>
 								<Ionicons
 									name={
@@ -176,8 +219,12 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 											? item.icon
 											: `${item.icon}-outline`
 									}
-									size={22}
-									color={focused || isActive ? "#ffffff" : "#8E8E93"}
+									size={24}
+									color={
+										isActive || focused
+											? Palette.primary
+											: Palette.onSurfaceVariant
+									}
 								/>
 							</View>
 						)}
@@ -196,12 +243,28 @@ const styles = StyleSheet.create({
 		bottom: 0,
 		left: 0,
 		width: NAV_RAIL_WIDTH,
-		backgroundColor: "#0d0e12",
-		borderRightWidth: 1,
-		borderRightColor: "rgba(255, 255, 255, 0.08)",
+		backgroundColor: Palette.surfaceLowest,
 		alignItems: "center",
 		zIndex: 9999,
 		elevation: 24,
+	},
+	/* Logo (üst) ve profil (alt): rayın üst/alt bandını kapsayan hedefler. */
+	railEdgeItem: {
+		width: "100%",
+		height: 56,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	railLogo: {
+		width: 48,
+		height: 48,
+		borderRadius: 12,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.surfaceHigh,
+	},
+	railLogoActive: {
+		backgroundColor: Palette.surfaceHighest,
 	},
 	/*
 	 * SORUN 3: liste tüm yüksekliği kaplar, öğeler `space-evenly` ile
@@ -225,32 +288,37 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	railIconBox: {
-		width: 44,
-		height: 44,
-		borderRadius: 14,
+		width: 48,
+		height: 48,
+		borderRadius: 12,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	railIconBoxActive: {
-		backgroundColor: "#2563EB",
-	},
-	railIconBoxInactive: {
-		backgroundColor: "transparent",
+		backgroundColor: Palette.surfaceHigh,
 	},
 	// TV performans: odakta elevation DEĞİŞTİRİLMEZ, sadece kenar + zemin.
 	railIconBoxFocused: {
-		backgroundColor: "rgba(229, 9, 20, 0.25)",
-		borderColor: "#E50914",
+		backgroundColor: "rgba(192, 193, 255, 0.12)",
+		borderColor: Palette.primary,
 		borderWidth: 2,
+	},
+	railProfile: {
+		width: 40,
+		height: 40,
+		borderRadius: 20,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.primary,
 	},
 
 	// --- Alt bar: telefon + tablet (dikey) ---
 	container: {
 		flexDirection: "row",
 		borderTopWidth: 1,
-		borderTopColor: "rgba(255, 255, 255, 0.08)",
-		backgroundColor: "#0d0e12",
-		paddingVertical: 10,
+		borderTopColor: "rgba(255, 255, 255, 0.06)",
+		backgroundColor: Palette.background,
+		paddingVertical: 8,
 		paddingHorizontal: 12,
 		alignItems: "center",
 		justifyContent: "space-around",
@@ -264,29 +332,14 @@ const styles = StyleSheet.create({
 	navItemFocused: {
 		transform: [{ scale: 1.12 }],
 	},
-	activePill: {
-		backgroundColor: "#2563EB",
-		paddingHorizontal: 18,
-		paddingVertical: 7,
-		borderRadius: 12,
-		justifyContent: "center",
-		alignItems: "center",
-	},
-	activePillFocused: {
-		backgroundColor: "#FF3B30",
-		borderColor: "#FFFFFF",
-		borderWidth: 1.5,
-	},
-	inactivePill: {
-		paddingHorizontal: 14,
-		paddingVertical: 6,
-		borderRadius: 12,
+	navIconBox: {
+		width: 44,
+		height: 44,
 		alignItems: "center",
 		justifyContent: "center",
 	},
-	inactivePillFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.25)",
-		borderColor: "#FF3B30",
-		borderWidth: 1.5,
+	navIconBoxActive: {
+		backgroundColor: "rgba(192, 193, 255, 0.14)",
+		borderRadius: 12,
 	},
 });

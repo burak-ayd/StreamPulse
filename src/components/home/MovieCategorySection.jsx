@@ -10,7 +10,8 @@ import CategoryCard, {
 } from "@/components/content/CategoryCard";
 import CategoryCardSkeleton from "@/components/content/CategoryCardSkeleton";
 import TVPressable from "@/components/common/TVPressable";
-import { SkeletonBlock, SkeletonLine } from "@/components/common/Skeleton";
+import { SkeletonLine } from "@/components/common/Skeleton";
+import { FontFamily, Palette } from "@/constants/theme";
 import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
 import { contentKey } from "@/utils/contentMeta";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
@@ -87,10 +88,10 @@ function SeeAllTile({ onPress }) {
 			focusedStyle={styles.seeAllTileFocused}
 			accessibilityLabel="Kategorinin tümünü göster">
 			<View style={styles.seeAllIconWrap}>
-				<Ionicons name="grid-outline" size={26} color="#E5E7EB" />
+				<Ionicons name="arrow-forward" size={20} color={Palette.primary} />
 			</View>
 			<Text style={styles.seeAllText} numberOfLines={2}>
-				Tümünü Gör
+				Tümünü İncele
 			</Text>
 		</TVPressable>
 	);
@@ -290,15 +291,23 @@ function CategoryRowBody({
 		<View style={styles.sectionContainer}>
 			{/* Section Header */}
 			<View style={styles.sectionHeader}>
-				<Text style={styles.sectionTitle} numberOfLines={1}>
-					{category.name}
-				</Text>
+				<View style={styles.sectionTitleRow}>
+					<View style={styles.sectionDot} />
+					<Text style={styles.sectionTitle} numberOfLines={1}>
+						{category.name}
+					</Text>
+				</View>
 				<TVPressable
 					onPress={handleSeeAll}
 					style={styles.arrowButton}
 					focusedStyle={styles.arrowButtonFocused}
 					accessibilityLabel="Kategorinin tümünü göster">
-					<Ionicons name="arrow-forward" size={18} color="#ffffff" />
+					<Text style={styles.arrowText}>Tümünü Gör</Text>
+					<Ionicons
+						name="chevron-forward"
+						size={16}
+						color={Palette.primary}
+					/>
 				</TVPressable>
 			</View>
 
@@ -365,15 +374,18 @@ export function MovieCategoryRowSkeleton({ categoryName }) {
 	return (
 		<View style={styles.sectionContainer} pointerEvents="none">
 			<View style={styles.sectionHeader}>
-				{categoryName ? (
-					<Text style={styles.sectionTitle} numberOfLines={1}>
-						{categoryName}
-					</Text>
-				) : (
-					<SkeletonLine width={140} height={16} />
-				)}
-				{/* Ok yerine iskelet daire — başlıkla hizalı kalsın. */}
-				<SkeletonBlock width={18} height={18} radius={9} />
+				<View style={styles.sectionTitleRow}>
+					<View style={styles.sectionDot} />
+					{categoryName ? (
+						<Text style={styles.sectionTitle} numberOfLines={1}>
+							{categoryName}
+						</Text>
+					) : (
+						<SkeletonLine width={140} height={16} />
+					)}
+				</View>
+				{/* "Tümünü Gör" bağlantısı yerine iskelet çubuk. */}
+				<SkeletonLine width={76} height={12} />
 			</View>
 
 			<View style={styles.horizontalList}>
@@ -401,30 +413,54 @@ function getItemLayout(_data, index) {
 
 const styles = StyleSheet.create({
 	sectionContainer: {
-		marginBottom: 22,
+		marginBottom: 24,
 	},
 	sectionHeader: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		paddingHorizontal: 18,
-		marginBottom: 10,
+		paddingHorizontal: ROW_LIST_PAD_H,
+		marginBottom: 12,
 		gap: 12,
 	},
+	sectionTitleRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+		flexShrink: 1,
+	},
+	/** Referans: başlığın solundaki 8×8 vurgu noktası. */
+	sectionDot: {
+		width: 8,
+		height: 8,
+		borderRadius: 4,
+		backgroundColor: Palette.primary,
+	},
 	sectionTitle: {
-		color: "#ffffff",
-		fontSize: 16,
-		fontWeight: "700",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+		fontSize: 18,
+		lineHeight: 24,
 		letterSpacing: -0.2,
 		flexShrink: 1,
 	},
 	arrowButton: {
-		padding: 4,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 2,
+		paddingVertical: 4,
+		paddingHorizontal: 6,
+		borderRadius: 8,
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
 	arrowButtonFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.35)",
-		borderRadius: 12,
-		transform: [{ scale: Platform.isTV ? 1.02 : 1.15 }],
+		borderColor: Palette.primary,
+	},
+	arrowText: {
+		color: Palette.primary,
+		fontFamily: FontFamily.medium,
+		fontSize: 13,
 	},
 	horizontalList: {
 		paddingHorizontal: ROW_LIST_PAD_H,
@@ -432,41 +468,37 @@ const styles = StyleSheet.create({
 		paddingVertical: 6,
 	},
 
-	// ── Satır sonu "Tümünü Gör" kutusu (sorun 1) ──────────────────
+	// ── Satır sonu "Tümünü İncele" kutusu (sorun 1) ──────────────────
 	// Kartla AYNI yükseklikte ve aynı adımda; bu yüzden `getItemLayout`
 	// dokunulmadan doğru kalır.
 	seeAllTile: {
 		width: ROW_CARD_WIDTH,
 		height: ROW_CARD_HEIGHT,
 		borderRadius: 12,
-		borderWidth: 2,
-		borderStyle: "dashed",
-		borderColor: "rgba(255, 255, 255, 0.22)",
-		backgroundColor: "rgba(255, 255, 255, 0.04)",
+		borderWidth: 1,
+		borderColor: "rgba(70, 69, 84, 0.4)",
+		backgroundColor: Palette.surfaceHigh,
 		alignItems: "center",
 		justifyContent: "center",
 		gap: 8,
-		paddingHorizontal: 6,
+		paddingHorizontal: 12,
 	},
 	seeAllTileFocused: {
-		borderStyle: "solid",
-		borderColor: "#E50914",
-		backgroundColor: "rgba(229, 9, 20, 0.18)",
-		transform: [{ scale: 1.06 }],
+		borderColor: Palette.primary,
 	},
 	seeAllIconWrap: {
-		width: 46,
-		height: 46,
-		borderRadius: 23,
+		width: 40,
+		height: 40,
+		borderRadius: 20,
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "rgba(255, 255, 255, 0.08)",
+		backgroundColor: "rgba(192, 193, 255, 0.1)",
 	},
 	seeAllText: {
-		color: "#E5E7EB",
-		fontSize: 12,
-		lineHeight: 15,
-		fontWeight: "700",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.medium,
+		fontSize: 13,
+		lineHeight: 18,
 		textAlign: "center",
 	},
 });

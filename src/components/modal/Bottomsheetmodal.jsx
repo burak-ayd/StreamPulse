@@ -12,6 +12,7 @@ import {
 	View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FontFamily, Palette } from "@/constants/theme";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -377,9 +378,11 @@ const styles = StyleSheet.create({
 		bottom: 0,
 		left: 0,
 		right: 0,
-		backgroundColor: "rgba(15, 15, 15, 1)",
-		borderTopLeftRadius: 20,
-		borderTopRightRadius: 20,
+		backgroundColor: Palette.background,
+		borderTopWidth: 1,
+		borderTopColor: "rgba(229, 225, 228, 0.10)",
+		borderTopLeftRadius: 28,
+		borderTopRightRadius: 28,
 		shadowColor: "#000",
 		shadowOffset: { width: 0, height: -4 },
 		shadowOpacity: 0.12,
@@ -406,8 +409,8 @@ const styles = StyleSheet.create({
 		borderLeftWidth: 1,
 		borderRightWidth: 1,
 		borderBottomWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.14)",
-		borderBottomColor: "#000000",
+		borderColor: "rgba(70, 69, 84, 0.45)",
+		borderBottomColor: Palette.surfaceLowest,
 		shadowOffset: { width: 0, height: -6 },
 		shadowOpacity: 0.45,
 		shadowRadius: 20,
@@ -422,20 +425,19 @@ const styles = StyleSheet.create({
 		width: 40,
 		height: 4,
 		borderRadius: 2,
-		backgroundColor: "#E0E0E0",
+		backgroundColor: Palette.outlineVariant,
 	},
 	titleRow: {
 		paddingHorizontal: 20,
-		paddingTop: 8,
+		paddingTop: 4,
 		paddingBottom: 12,
 		borderBottomWidth: StyleSheet.hairlineWidth,
-		borderBottomColor: "#333333",
+		borderBottomColor: "rgba(70, 69, 84, 0.45)",
 	},
 	titleText: {
-		fontSize: 17,
-		fontWeight: "600",
-		color: "#e0e0e0ff",
-		textAlign: "center",
+		fontSize: 18,
+		fontFamily: FontFamily.bold,
+		color: Palette.onSurface,
 	},
 	content: {
 		flex: 1,

@@ -9,6 +9,7 @@ import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
 import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
 import ListSelectModal from "@/components/modal/ListSelectModal";
 import { useAuth } from "@/context/AuthContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import { episodeMetaOf } from "@/utils/contentMeta";
 import {
 	clearPluginCache,
@@ -182,8 +183,12 @@ export default function Index() {
 		async (item, platformName) => {
 			if (!item || item.id === "offline-placeholder") return item;
 			if (!platformName) return item;
-			// Zaten yatay görsel varsa tekrar istek atmaya gerek yok.
-			if (item.backdrop_url || item.backdrop) return item;
+			// Yatay görsel VE özet zaten varsa tekrar istek atmaya gerek yok.
+			const hasBackdrop = Boolean(item.backdrop_url || item.backdrop);
+			const hasDescription = Boolean(
+				item.description || item.overview || item.plot,
+			);
+			if (hasBackdrop && hasDescription) return item;
 
 			const detailUrl = item.url || item.slug;
 			if (!detailUrl) return item;
@@ -195,10 +200,17 @@ export default function Index() {
 					detail?.backdrop ||
 					detail?.background ||
 					detail?.landscape_url;
-				if (!backdrop) return item;
+				// `/random` özeti göndermeyebiliyor (ör. FilmModu); detayda
+				// varsa hero açıklaması oradan doldurulur.
+				const description =
+					detail?.description ||
+					detail?.overview ||
+					detail?.plot;
+				if (!backdrop && !description) return item;
 				return {
 					...item,
-					backdrop_url: backdrop,
+					...(backdrop ? { backdrop_url: backdrop } : null),
+					...(description ? { description } : null),
 					plugin: normalizePluginValue(item.plugin || platformName),
 				};
 			} catch (error) {
@@ -762,7 +774,7 @@ export default function Index() {
 							<RefreshControl
 								refreshing={refreshing}
 								onRefresh={onRefresh}
-								tintColor="#2563EB"
+								tintColor={Palette.primary}
 								progressViewOffset={insets.top + 20}
 							/>
 						}
@@ -783,7 +795,6 @@ export default function Index() {
 							userAvatarUrl={user?.avatar_url || userAvatarUrl}
 							onPlayPress={() => handleMoviePress(featuredMovie)}
 							onInfoPress={() => handleMoviePress(featuredMovie)}
-							onLongPress={() => handleMovieLongPress(featuredMovie)}
 							onToggleList={() => {
 								if (!featuredMovie || featuredMovie.id === "offline-placeholder") return;
 								setIsHeroListSelectVisible(true);
@@ -830,7 +841,7 @@ export default function Index() {
 												<Ionicons
 													name="arrow-forward"
 													size={18}
-													color="#ffffff"
+													color={Palette.primary}
 												/>
 											</TouchableOpacity>
 										</View>
@@ -862,7 +873,7 @@ export default function Index() {
 															<Ionicons
 																name="play-circle"
 																size={36}
-																color="#ffffff"
+																color={Palette.onSurface}
 															/>
 														</View>
 														<Text
@@ -883,7 +894,7 @@ export default function Index() {
 										<Ionicons
 											name="cloud-offline-outline"
 											size={46}
-											color="#6b7280"
+											color={Palette.outline}
 										/>
 										<Text style={styles.offlineEmptyTitle}>
 											Henüz İndirilmiş İçerik Yok
@@ -903,7 +914,7 @@ export default function Index() {
 											<Ionicons
 												name="grid-outline"
 												size={16}
-												color="#ffffff"
+												color={Palette.onPrimaryContainer}
 											/>
 											<Text
 												style={
@@ -975,6 +986,7 @@ export default function Index() {
 					swipeable={true}>
 					<PlatformList
 						onSelectPlatform={handleSelectPlatform}
+						onClose={() => setIsPlatformModalVisible(false)}
 						/* Canlı TV kartı `handlePlatformSelect`'e GİRMEZ;
 						   navigasyona çevrilir (bkz. PlatformList →
 						   `canliTvAc`). Rota burada veriliyor çünkü modal
@@ -1017,7 +1029,7 @@ export default function Index() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: "#0d0e12",
+		backgroundColor: Palette.background,
 	},
 	scrollContent: {
 		paddingBottom: 24,
@@ -1032,16 +1044,16 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		paddingHorizontal: 18,
+		paddingHorizontal: 16,
 		marginBottom: 10,
 	},
 	sectionTitle: {
-		color: "#ffffff",
+		color: Palette.onSurface,
 		fontSize: 16,
-		fontWeight: "700",
+		fontFamily: FontFamily.semiBold,
 	},
 	horizontalList: {
-		paddingHorizontal: 18,
+		paddingHorizontal: 16,
 		gap: 12,
 	},
 	downloadCard: {
@@ -1051,37 +1063,38 @@ const styles = StyleSheet.create({
 		width: 130,
 		height: 85,
 		borderRadius: 10,
-		backgroundColor: "#161b22",
+		backgroundColor: Palette.surfaceLow,
 		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.08)",
+		borderColor: "rgba(70, 69, 84, 0.45)",
 		justifyContent: "center",
 		alignItems: "center",
 	},
 	downloadCardTitle: {
-		color: "#ffffff",
+		color: Palette.onSurface,
 		fontSize: 12,
-		fontWeight: "600",
+		fontFamily: FontFamily.medium,
 		marginTop: 6,
 	},
 	offlineEmptyCard: {
-		marginHorizontal: 18,
+		marginHorizontal: 16,
 		marginVertical: 16,
 		padding: 28,
 		borderRadius: 16,
-		backgroundColor: "#161b22",
+		backgroundColor: Palette.surfaceLow,
 		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.06)",
+		borderColor: "rgba(70, 69, 84, 0.45)",
 		alignItems: "center",
 	},
 	offlineEmptyTitle: {
-		color: "#ffffff",
+		color: Palette.onSurface,
 		fontSize: 17,
-		fontWeight: "700",
+		fontFamily: FontFamily.semiBold,
 		marginTop: 12,
 	},
 	offlineEmptySubtitle: {
-		color: "#9ca3af",
+		color: Palette.onSurfaceVariant,
 		fontSize: 13,
+		fontFamily: FontFamily.regular,
 		textAlign: "center",
 		marginTop: 6,
 		marginBottom: 18,
@@ -1090,22 +1103,22 @@ const styles = StyleSheet.create({
 	selectPlatformBtn: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: "#2563EB",
+		backgroundColor: Palette.primaryContainer,
 		paddingHorizontal: 18,
 		paddingVertical: 10,
 		borderRadius: 20,
+		borderWidth: 2,
+		borderColor: "transparent",
 		gap: 6,
 	},
 	selectPlatformBtnFocused: {
-		backgroundColor: "#FF3B30",
-		borderColor: "#FFFFFF",
-		borderWidth: 2,
-		transform: [{ scale: 1.08 }],
+		backgroundColor: Palette.surfaceHigh,
+		borderColor: Palette.primary,
 	},
 	selectPlatformBtnText: {
-		color: "#ffffff",
+		color: Palette.onPrimaryContainer,
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	loadMoreContainer: {
 		paddingVertical: 16,
@@ -1115,19 +1128,17 @@ const styles = StyleSheet.create({
 		paddingVertical: 10,
 		paddingHorizontal: 22,
 		borderRadius: 20,
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.15)",
-		backgroundColor: "#161b22",
+		borderWidth: 2,
+		borderColor: "transparent",
+		backgroundColor: Palette.surfaceLow,
 	},
 	loadMoreButtonFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.35)",
-		borderColor: "#FF3B30",
-		borderWidth: 1.5,
-		transform: [{ scale: 1.08 }],
+		backgroundColor: Palette.surfaceHigh,
+		borderColor: Palette.primary,
 	},
 	loadMoreText: {
-		color: "#38bdf8",
+		color: Palette.primary,
 		fontSize: 13,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 });

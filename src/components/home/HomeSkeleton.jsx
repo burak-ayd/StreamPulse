@@ -24,7 +24,7 @@ import { useMemo } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 
 /** Bir satırın gerçek yüksekliği + aradaki boşluk (yaklaşık, dp). */
-const ROW_BLOCK_H = 236;
+const ROW_BLOCK_H = 300;
 
 export default function HomeSkeleton({
 	platform,

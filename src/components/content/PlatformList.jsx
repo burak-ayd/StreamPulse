@@ -15,6 +15,7 @@ import {
 } from "@/utils/storage";
 import { getFlagFromIso } from "@/utils/formatters";
 import { useTvMetrics } from "@/utils/tvMetrics";
+import { FontFamily, Palette } from "@/constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -100,7 +101,7 @@ function satirlaraBol(ogeler, sutun) {
 	return satirlar;
 }
 
-export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
+export default function PlatformList({ onSelectPlatform, onOpenLiveTv, onClose }) {
 	/*
 	 * Yedek yol: kart her zaman `onOpenLiveTv` çağırmak yerine önce ona
 	 * danışır. Bileşen tek başına kullanıldığında (veya çağıran bu prop'u
@@ -417,42 +418,35 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 			key: "none",
 			label: "Hiçbiri",
 			icon: (
-				<Ionicons name="cloud-offline" size={sz(17)} color="#9CA3AF" />
+				<Ionicons
+					name="cloud-offline"
+					size={sz(22)}
+					color={Palette.outline}
+				/>
 			),
-			iconBg: "rgba(107, 114, 128, 0.20)",
+			iconBg: "rgba(144, 143, 160, 0.16)",
 			onPress: () => handlePlatformSelect(NONE_PLATFORM),
 			selected: isNoneSelected,
 		},
 		{
 			key: "rastgele",
 			label: "Rastgele",
-			icon: <Ionicons name="shuffle" size={sz(17)} color="#60A5FA" />,
-			iconBg: "rgba(37, 99, 235, 0.18)",
+			icon: (
+				<Ionicons name="shuffle" size={sz(22)} color={Palette.secondary} />
+			),
+			iconBg: "rgba(76, 215, 246, 0.14)",
 			onPress: handleSelectRandom,
 			chevron: true,
 		},
 		{
 			key: "canli-tv",
 			label: LIVE_TV_PLATFORM.displayName,
-			icon: <Ionicons name="tv" size={sz(17)} color="#F87171" />,
-			iconBg: "rgba(229, 9, 20, 0.18)",
+			icon: <Ionicons name="tv" size={sz(22)} color={Palette.error} />,
+			iconBg: "rgba(255, 180, 171, 0.14)",
 			onPress: canliTvAc,
 			chevron: true,
 		},
 	];
-
-	/**
-	 * Hızlı Seçim'in sütun sayısı.
-	 *
-	 * Geniş ekranda (TV / yatay tablet) ÜÇÜ TEK SATIR — eklenti listesinin
-	 * 2 sütunlu ızgarasından bağımsız. Üç kartı 2'ye bölmek "2 + 1"
-	 * diye kırık bir satır üretiyordu.
-	 *
-	 * Dar ekranda (telefon / dikey tablet) tek sütun: 360dp'de üç kart
-	 * yan yana konunca her birine ≈95dp düşüyor, ad alanı ≈13dp'ye
-	 * kalıyordu — yani üç kart da adını kaybediyordu.
-	 */
-	const hizliSecimSutunu = sutun === 2 ? 3 : 1;
 
 	/** Alt bölüm: gerçek eklentiler. */
 	const eklentiSatirlari = filteredPlatforms.map((platform, index) => {
@@ -461,6 +455,9 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 			key: platform.id || platform.name || `p-${index}`,
 			label: platform.name,
 			kapali,
+			/* Yeşil nokta = kaynak şu an kullanılabilir (tasarımdaki çevrimiçi
+			   işareti). Kullanım dışı kaynakta nokta yok. */
+			dot: !kapali,
 			favicon: platform.favicon,
 			bayrak: getFlagFromIso(platform.language),
 			onPress: () => handlePlatformSelect(platform),
@@ -487,53 +484,40 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 	 * veriliyor; 3 metreden okunan kalın çizgi ölçekten daha güçlü.
 	 */
 	const odakStili = {
-		borderColor: "#38BDF8",
-		backgroundColor: "rgba(56, 189, 248, 0.14)",
+		borderColor: Palette.primary,
+		backgroundColor: "rgba(192, 193, 255, 0.10)",
 	};
 
-	/** Satırın sağ ucu: chevron / devre rozeti / seçim halkası. */
+	/** Satırın sağ ucu: chevron / seçim halkası. Kullanım dışı satırda hiçbiri. */
 	const satirSonu = (item) => {
 		if (item.chevron) {
 			return (
 				<Ionicons
 					name="chevron-forward"
-					size={sz(15)}
-					color="#6B7280"
-					style={{ marginLeft: sz(8) }}
+					size={sz(16)}
+					color={Palette.outline}
+					style={{ marginLeft: sz(12) }}
 				/>
 			);
 		}
-		if (item.kapali) {
-			return (
-				<View
-					style={[
-						styles.kapaliRozet,
-						{
-							paddingHorizontal: sz(6),
-							paddingVertical: sz(3),
-							borderRadius: sz(6),
-							marginLeft: sz(8),
-						},
-					]}>
-					<Text style={[styles.kapaliRozetText, { fontSize: sz(9) }]}>
-						Kullanım dışı
-					</Text>
-				</View>
-			);
-		}
+		if (item.kapali) return null;
 		if (item.selected) {
 			return (
 				<View
 					style={[
 						styles.radioDolu,
 						{
-							width: sz(17),
-							height: sz(17),
-							borderRadius: sz(9),
-							marginLeft: sz(8),
+							width: sz(24),
+							height: sz(24),
+							borderRadius: sz(12),
+							marginLeft: sz(12),
 						},
 					]}>
-					<Ionicons name="checkmark" size={sz(10)} color="#FFFFFF" />
+					<Ionicons
+						name="checkmark"
+						size={sz(15)}
+						color={Palette.onPrimaryContainer}
+					/>
 				</View>
 			);
 		}
@@ -542,24 +526,35 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 				style={[
 					styles.radioBos,
 					{
-						width: sz(17),
-						height: sz(17),
-						borderRadius: sz(9),
-						marginLeft: sz(8),
+						width: sz(20),
+						height: sz(20),
+						borderRadius: sz(10),
+						marginLeft: sz(12),
 					},
 				]}
 			/>
 		);
 	};
 
-	/** Tek satırın tamamı — hem üst hem alt bölüm aynı çizimi kullanır. */
-	const satir = (item) => {
+	/**
+	 * Tek satırın tamamı — Hızlı Seçim ve eklenti listesi aynı çizimi kullanır.
+	 *
+	 * Kart dili referans tasarımdan: 44dp ikon kutusu (favicon ya da renkli
+	 * ikon), ad + durum rozeti, sağda seçim halkası/ok. İkinci meta satırı
+	 * (profil, yapım sayısı, kalite rozetleri) YOK: bu veriler backend'de
+	 * bulunmuyor, uydurulmuyor.
+	 *
+	 * `kompakt`: Hızlı Seçim'in üçe bölünmüş kartları için dikey yerleşim
+	 * (ikon üstte, ad altta). ≈95dp'lik hücreye satır yerleşimi sığmadığı
+	 * için ad ve seçim işareti kayboluyordu.
+	 */
+	const satir = (item, kompakt = false) => {
 		/** İkon kutusunun kenar uzunluğu — bayrak da buna göre ölçeklenir. */
-		const kutuKenar = sutun === 2 ? 30 : 28;
+		const kutuKenar = 44;
 		const kutu = {
 			width: sz(kutuKenar),
 			height: sz(kutuKenar),
-			borderRadius: sz(9),
+			borderRadius: sz(12),
 		};
 
 		return (
@@ -567,10 +562,10 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 				disabled={Boolean(item.kapali)}
 				style={[
 					styles.satir,
+					kompakt && styles.satirKompakt,
 					{
-						paddingVertical: sz(7),
-						paddingHorizontal: sz(10),
-						borderRadius: sz(10),
+						padding: kompakt ? sz(12) : sz(14),
+						borderRadius: sz(16),
 					},
 					item.selected && styles.satirSecili,
 					item.kapali && styles.satirKapali,
@@ -578,66 +573,102 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 				focusedStyle={item.kapali ? null : odakStili}
 				onPress={item.onPress}
 				activeOpacity={0.7}>
-				{item.favicon && !kirikLogo[item.key] ? (
-					<Image
-						source={{ uri: item.favicon }}
+				<View style={[styles.ikonSarici, kutu]}>
+					{item.favicon && !kirikLogo[item.key] ? (
+						<Image
+							source={{ uri: item.favicon }}
+							style={[
+								styles.logo,
+								kutu,
+								item.kapali && styles.logoKapali,
+							]}
+							contentFit="contain"
+							transition={0}
+							recyclingKey={item.favicon}
+							cachePolicy="memory-disk"
+							/* Görsel gelmezse bayrağa düş — aksi hâlde 404
+							   veren bir favicon satırı bomboş kalıyor. */
+							onError={() => logoYuklenemedi(item.key)}
+						/>
+					) : (
+						<View
+							style={[
+								styles.ikonKutusu,
+								kutu,
+								item.iconBg
+									? { backgroundColor: item.iconBg }
+									: null,
+								item.kapali && styles.ikonKutusuKapali,
+							]}>
+							{item.icon ?? (
+								<Text
+									style={[
+										styles.bayrak,
+										/*
+										 * Bayrak, kutuyu doldursun diye punto
+										 * kenarın %80'i; `lineHeight` ise tam
+										 * kenar. İkisi olmadan emoji, fontun
+										 * ascent/descent boşluğuna oturup kutunun
+										 * ortasında küçük ve aşağı kayık duruyor.
+										 */
+										{
+											fontSize: sz(
+												Math.round(kutuKenar * 0.8),
+											),
+											lineHeight: sz(kutuKenar),
+										},
+										item.kapali && styles.bayrakKapali,
+									]}>
+									{item.bayrak}
+								</Text>
+							)}
+						</View>
+					)}
+
+					{/* Çevrimiçi işareti — yalnızca kullanılabilir kaynakta. */}
+					{item.dot ? <View style={styles.durumNoktasi} /> : null}
+				</View>
+
+				<View
+					style={
+						kompakt
+							? styles.adSariciKompakt
+							: [styles.adSarici, { marginLeft: sz(14) }]
+					}>
+					<Text
 						style={[
-							styles.logo,
-							kutu,
-							item.kapali && styles.logoKapali,
+							styles.satirAdi,
+							kompakt
+								? { fontSize: sz(12), textAlign: "center" }
+								: { fontSize: sz(14) },
+							item.kapali && styles.satirAdiKapali,
 						]}
-						contentFit="contain"
-						transition={0}
-						recyclingKey={item.favicon}
-						cachePolicy="memory-disk"
-						/* Görsel gelmezse bayrağa düş — aksi hâlde 404
-						   veren bir favicon satırı bomboş kalıyor. */
-						onError={() => logoYuklenemedi(item.key)}
-					/>
-				) : (
-					<View
-						style={[
-							styles.ikonKutusu,
-							kutu,
-							item.iconBg
-								? { backgroundColor: item.iconBg }
-								: null,
-							item.kapali && styles.ikonKutusuKapali,
-						]}>
-						{item.icon ?? (
+						numberOfLines={kompakt ? 2 : 1}>
+						{item.label}
+					</Text>
+					{item.kapali && !kompakt ? (
+						<View
+							style={[
+								styles.kapaliRozet,
+								{
+									paddingHorizontal: sz(6),
+									paddingVertical: sz(2),
+									borderRadius: sz(4),
+									marginLeft: sz(8),
+								},
+							]}>
 							<Text
 								style={[
-									styles.bayrak,
-									/*
-									 * Bayrak, kutuyu doldursun diye punto
-									 * kenarın %80'i; `lineHeight` ise tam
-									 * kenar. İkisi olmadan emoji, fontun
-									 * ascent/descent boşluğuna oturup kutunun
-									 * ortasında küçük ve aşağı kayık duruyor.
-									 */
-									{
-										fontSize: sz(Math.round(kutuKenar * 0.8)),
-										lineHeight: sz(kutuKenar),
-									},
-									item.kapali && styles.bayrakKapali,
+									styles.kapaliRozetText,
+									{ fontSize: sz(10) },
 								]}>
-								{item.bayrak}
+								Kullanım dışı
 							</Text>
-						)}
-					</View>
-				)}
+						</View>
+					) : null}
+				</View>
 
-				<Text
-					style={[
-						styles.satirAdi,
-						{ fontSize: sz(13), marginLeft: sz(9) },
-						item.kapali && styles.satirAdiKapali,
-					]}
-					numberOfLines={1}>
-					{item.label}
-				</Text>
-
-				{satirSonu(item)}
+				{kompakt ? null : satirSonu(item)}
 			</TVPressable>
 		);
 	};
@@ -645,19 +676,18 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 	/**
 	 * Bir diziyi sabit sütun sayısıyla, satır satır basar.
 	 *
-	 * `sutunSayisi` dışarıdan verilir çünkü iki bölüm farklı ızgara kullanır:
-	 * Hızlı Seçim geniş ekranda 3, dar ekranda 1 sütun; eklenti listesi ise
-	 * her zaman cihazın genişliğinden gelen `sutun`.
+	 * `sutunSayisi` dışarıdan verilir çünkü eklenti listesi cihazın
+	 * genişliğinden gelen `sutun` sayısını kullanır.
 	 */
-	const izgara = (ogeler, sutunSayisi) => (
-		<View style={{ gap: sz(6) }}>
+	const izgara = (ogeler, sutunSayisi, kompakt = false) => (
+		<View style={{ gap: sz(8) }}>
 			{satirlaraBol(ogeler, sutunSayisi).map((satirDizi, sIndex) => (
 				<View
 					key={`s${sIndex}`}
-					style={{ flexDirection: "row", gap: sz(7) }}>
+					style={{ flexDirection: "row", gap: sz(8) }}>
 					{satirDizi.map((item) => (
 						<View key={item.key} style={{ flex: 1 }}>
-							{satir(item)}
+							{satir(item, kompakt)}
 						</View>
 					))}
 					{/* Tek kart kalan son satırda genişlik bozulmasın diye
@@ -684,44 +714,72 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 					 * ⚠️ Alt boşluğun asıl payı artık `BottomSheetModal`'ın
 					 * kendi inset'i (`altTasma`); burada 6dp yeter.
 					 */
-					paddingHorizontal: sz(8),
+					paddingHorizontal: sz(16),
 					paddingTop: sz(2),
 					paddingBottom: sz(6),
 				},
 			]}>
-			{/* Başlık — sayaç rozeti referans tasarımdan. */}
-			<View style={[styles.baslikSatiri, { marginBottom: sz(10) }]}>
+			{/* Başlık — sayaç rozeti ve kapatma düğmesi referans tasarımdan. */}
+			<View
+				style={[
+					styles.baslikSatiri,
+					{ paddingBottom: sz(12), marginBottom: sz(12) },
+				]}>
 				<View style={styles.baslikSol}>
-					<Text
-						style={[styles.baslik, { fontSize: sz(16) }]}
-						numberOfLines={1}>
-						Kaynak / Eklenti
-					</Text>
-					<View
-						style={[
-							styles.sayacRozeti,
-							{
-								paddingHorizontal: sz(7),
-								paddingVertical: sz(2),
-								borderRadius: sz(9),
-								marginLeft: sz(7),
-							},
-						]}>
-						<Text style={[styles.sayacText, { fontSize: sz(10) }]}>
-							{platformList.length} Eklenti
+					<View style={styles.baslikUstSatiri}>
+						<Text
+							style={[styles.baslik, { fontSize: sz(19) }]}
+							numberOfLines={1}>
+							Platform Seçimi
 						</Text>
+						<View
+							style={[
+								styles.sayacRozeti,
+								{
+									paddingHorizontal: sz(8),
+									paddingVertical: sz(2),
+									borderRadius: sz(999),
+									marginLeft: sz(8),
+								},
+							]}>
+							<Text
+								style={[styles.sayacText, { fontSize: sz(11) }]}>
+								{platformList.length} Eklenti
+							</Text>
+						</View>
 					</View>
+					{!isTV && (
+						<Text
+							style={[
+								styles.baslikAlt,
+								{ fontSize: sz(12), marginTop: sz(2) },
+							]}
+							numberOfLines={2}>
+							İçeriklerin getirileceği aktif sağlayıcıyı seçin
+						</Text>
+					)}
 				</View>
-				{!isTV && (
-					<Text
+				{onClose ? (
+					<TVPressable
 						style={[
-							styles.baslikAlt,
-							{ fontSize: sz(11), marginTop: sz(2) },
+							styles.kapatDugmesi,
+							{
+								width: sz(36),
+								height: sz(36),
+								borderRadius: sz(18),
+								marginLeft: sz(8),
+							},
 						]}
-						numberOfLines={2}>
-						İçeriklerin getirileceği aktif sağlayıcıyı seçin
-					</Text>
-				)}
+						focusedStyle={{ borderColor: Palette.primary }}
+						onPress={onClose}
+						accessibilityLabel="Kapat">
+						<Ionicons
+							name="close"
+							size={sz(19)}
+							color={Palette.onSurfaceVariant}
+						/>
+					</TVPressable>
+				) : null}
 			</View>
 
 			{/* Arama — TV'de kumanda ile yazılamaz, gizlenir. */}
@@ -730,18 +788,22 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 					style={[
 						styles.aramaKutusu,
 						{
-							height: sz(32),
-							borderRadius: sz(8),
-							paddingHorizontal: sz(9),
-							gap: sz(7),
-							marginBottom: sz(8),
+							height: sz(40),
+							borderRadius: sz(12),
+							paddingHorizontal: sz(12),
+							gap: sz(8),
+							marginBottom: sz(10),
 						},
 					]}>
-					<Ionicons name="search" size={sz(13)} color="#6B7280" />
+					<Ionicons
+						name="search"
+						size={sz(18)}
+						color={Palette.onSurfaceVariant}
+					/>
 					<TextInput
-						style={[styles.aramaInput, { fontSize: sz(12) }]}
+						style={[styles.aramaInput, { fontSize: sz(13) }]}
 						placeholder="Eklenti ara (ör. HD Film, Dizi, Box)..."
-						placeholderTextColor="#5B6472"
+						placeholderTextColor={Palette.outline}
 						value={searchQuery}
 						onChangeText={setSearchQuery}
 						autoCapitalize="none"
@@ -756,8 +818,8 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 							hitSlop={6}>
 							<Ionicons
 								name="close-circle"
-								size={sz(14)}
-								color="#6B7280"
+								size={sz(16)}
+								color={Palette.outline}
 							/>
 						</TVPressable>
 					)}
@@ -769,7 +831,7 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 			<View
 				style={[
 					styles.hapSatiri,
-					{ gap: sz(6), marginBottom: sz(10) },
+					{ gap: sz(8), marginBottom: sz(12) },
 				]}>
 				{FILTERS.map((f) => (
 					<TVPressable
@@ -777,21 +839,21 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 						style={[
 							styles.hap,
 							{
-								paddingHorizontal: sz(10),
-								paddingVertical: sz(5),
-								borderRadius: sz(7),
+								paddingHorizontal: sz(12),
+								paddingVertical: sz(6),
+								borderRadius: sz(999),
 							},
 							activeFilter === f.id && styles.hapAktif,
 						]}
 						focusedStyle={{
-							borderColor: "#38BDF8",
+							borderColor: Palette.primary,
 						}}
 						onPress={() => setActiveFilter(f.id)}
 						activeOpacity={0.7}>
 						<Text
 							style={[
 								styles.hapText,
-								{ fontSize: sz(11) },
+								{ fontSize: sz(12) },
 								activeFilter === f.id && styles.hapTextAktif,
 							]}>
 							{f.label}
@@ -803,7 +865,7 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 			{/* Liste */}
 			{loading ? (
 				<View style={styles.yukleniyor}>
-					<ActivityIndicator size="small" color="#E50914" />
+					<ActivityIndicator size="small" color={Palette.primary} />
 				</View>
 			) : (
 				<ScrollView
@@ -828,7 +890,7 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv }) {
 								Hızlı Seçim
 							</Text>
 						</View>
-						{izgara(hizliSecim, hizliSecimSutunu)}
+						{izgara(hizliSecim, 3, true)}
 					</View>
 
 					{/* Eklentiler */}
@@ -884,64 +946,82 @@ const styles = StyleSheet.create({
 	},
 
 	/* ── Başlık ── */
-	baslikSatiri: {},
+	baslikSatiri: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		borderBottomWidth: 1,
+		borderBottomColor: "rgba(70, 69, 84, 0.45)",
+	},
 	baslikSol: {
+		flex: 1,
+	},
+	baslikUstSatiri: {
 		flexDirection: "row",
 		alignItems: "center",
 	},
+	kapatDugmesi: {
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "rgba(229, 225, 228, 0.06)",
+		borderWidth: 1,
+		borderColor: "rgba(229, 225, 228, 0.08)",
+	},
 	baslik: {
-		color: "#FFFFFF",
-		fontWeight: "700",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
 		letterSpacing: -0.2,
 		flexShrink: 1,
 	},
 	baslikAlt: {
-		color: "#8896AB",
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
 	},
 	sayacRozeti: {
-		backgroundColor: "#1D2026",
+		backgroundColor: Palette.surface,
 		borderWidth: 1,
-		borderColor: "#2A2E38",
+		borderColor: "rgba(70, 69, 84, 0.45)",
 	},
 	sayacText: {
-		color: "#8896AB",
-		fontWeight: "700",
+		color: Palette.secondary,
+		fontFamily: FontFamily.semiBold,
 	},
 
 	/* ── Arama ── */
 	aramaKutusu: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: "#141821",
+		backgroundColor: Palette.surfaceLowest,
 		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.07)",
+		borderColor: "rgba(70, 69, 84, 0.45)",
 	},
 	aramaInput: {
 		flex: 1,
-		color: "#FFFFFF",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.regular,
 		padding: 0,
 	},
 
 	/* ── Kategori hapları ── */
 	hapSatiri: {
 		flexDirection: "row",
+		flexWrap: "wrap",
 	},
 	hap: {
-		backgroundColor: "#1D2026",
+		backgroundColor: Palette.surface,
 		borderWidth: 1,
-		borderColor: "#2A2E38",
+		borderColor: "rgba(70, 69, 84, 0.45)",
 	},
 	hapAktif: {
-		backgroundColor: "#E50914",
-		borderColor: "#E50914",
+		backgroundColor: Palette.primaryContainer,
+		borderColor: "transparent",
 	},
 	hapText: {
-		color: "#C3CAD6",
-		fontWeight: "600",
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
 	},
 	hapTextAktif: {
-		color: "#FFFFFF",
-		fontWeight: "700",
+		color: Palette.onPrimaryContainer,
+		fontFamily: FontFamily.semiBold,
 	},
 
 	/* ── Bölüm başlıkları ── */
@@ -950,59 +1030,89 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 	},
 	bolumBasligi: {
-		color: "#8896AB",
-		fontWeight: "800",
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.semiBold,
 		letterSpacing: 0.8,
 		textTransform: "uppercase",
 	},
 	bolumIpucu: {
-		color: "#5B6472",
+		color: Palette.outline,
 		flex: 1,
 	},
 
 	/* ── Satırlar ──
 	 *
-	 * `borderWidth` HER ZAMAN 2: odak (camgöbeği) ve seçim (kırmızı) yalnız
-	 * rengi değiştirir, kalınlığı değil. Kalınlık da değişseydi odak
-	 * halkasına girildiğinde içerik 1px kayardı — kumandayla gezerken
-	 * her satırda görülen titreme tam olarak budur.
+	 * `borderWidth` HER ZAMAN 2: odak ve seçim yalnız rengi değiştirir,
+	 * kalınlığı değil. Kalınlık da değişseydi odak halkasına girildiğinde
+	 * içerik 1px kayardı — kumandayla gezerken her satırda görülen
+	 * titreme tam olarak budur.
 	 */
 	satir: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: "#161B24",
+		backgroundColor: Palette.surface,
 		borderWidth: 2,
-		borderColor: "rgba(255, 255, 255, 0.05)",
+		borderColor: "transparent",
 	},
 	satirSecili: {
-		borderColor: "#E50914",
-		backgroundColor: "rgba(229, 9, 20, 0.14)",
+		borderColor: Palette.primaryContainer,
+		backgroundColor: "rgba(128, 131, 255, 0.10)",
+	},
+	satirKompakt: {
+		flexDirection: "column",
+		alignItems: "center",
+		justifyContent: "center",
 	},
 	satirKapali: {
-		backgroundColor: "#12161D",
-		borderColor: "rgba(255, 255, 255, 0.03)",
+		backgroundColor: Palette.surfaceLow,
+		borderStyle: "dashed",
+		borderColor: "rgba(70, 69, 84, 0.55)",
+		opacity: 0.8,
 	},
 	satirAdi: {
-		flex: 1,
-		color: "#FFFFFF",
-		fontWeight: "600",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		letterSpacing: -0.2,
+		flexShrink: 1,
 	},
 	satirAdiKapali: {
-		color: "#5B6472",
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
+	},
+	adSarici: {
+		flex: 1,
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	adSariciKompakt: {
+		alignItems: "center",
+		marginTop: 8,
 	},
 
 	/* ── Satır solu ── */
+	ikonSarici: {
+		position: "relative",
+	},
+	durumNoktasi: {
+		position: "absolute",
+		right: 3,
+		bottom: 3,
+		width: 8,
+		height: 8,
+		borderRadius: 4,
+		backgroundColor: "#34d399",
+	},
 	ikonKutusu: {
 		justifyContent: "center",
 		alignItems: "center",
-		backgroundColor: "#1D2026",
+		backgroundColor: Palette.surfaceHighest,
 	},
 	ikonKutusuKapali: {
 		opacity: 0.4,
 	},
 	logo: {
 		overflow: "hidden",
-		backgroundColor: "#1D2026",
+		backgroundColor: Palette.surfaceHighest,
 	},
 	logoKapali: {
 		opacity: 0.4,
@@ -1020,22 +1130,22 @@ const styles = StyleSheet.create({
 
 	/* ── Satır sağı ── */
 	radioBos: {
-		borderWidth: 1.5,
-		borderColor: "#4B5563",
+		borderWidth: 2,
+		borderColor: Palette.outlineVariant,
 	},
 	radioDolu: {
-		backgroundColor: "#E50914",
+		backgroundColor: Palette.primaryContainer,
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	kapaliRozet: {
-		backgroundColor: "rgba(239, 68, 68, 0.14)",
+		backgroundColor: "rgba(255, 180, 171, 0.12)",
 		borderWidth: 1,
-		borderColor: "rgba(239, 68, 68, 0.38)",
+		borderColor: "rgba(255, 180, 171, 0.38)",
 	},
 	kapaliRozetText: {
-		color: "#F87171",
-		fontWeight: "700",
+		color: Palette.error,
+		fontFamily: FontFamily.semiBold,
 	},
 
 	/* ── Durumlar ── */
@@ -1051,6 +1161,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 	},
 	bosText: {
-		color: "#5B6472",
+		color: Palette.outline,
+		fontFamily: FontFamily.regular,
 	},
 });

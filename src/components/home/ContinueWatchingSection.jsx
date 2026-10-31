@@ -1,21 +1,16 @@
-import ContinueWatchingCard from "@/components/content/ContinueWatchingCard";
+import ContinueWatchingCard, {
+	CONTINUE_CARD_WIDTH,
+} from "@/components/content/ContinueWatchingCard";
 import TVPressable from "@/components/common/TVPressable";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useCallback, useEffect } from "react";
-import {
-	FlatList,
-	Platform,
-	StyleSheet,
-	Text,
-	View,
-} from "react-native";
+import { FlatList, Platform, StyleSheet, Text, View } from "react-native";
 
-/** ContinueWatchingCard kartı sabit 124dp genişliğinde (bkz. card stili). */
-const CARD_WIDTH = 124;
-const CARD_GAP = 8;
-const LIST_PAD_H = 18;
-const CARD_STRIDE = CARD_WIDTH + CARD_GAP;
+const CARD_GAP = 12;
+const LIST_PAD_H = 16;
+const CARD_STRIDE = CONTINUE_CARD_WIDTH + CARD_GAP;
 
 /** Kart yüksekliği sabit → dinamik ölçümü atla. */
 function getItemLayout(_data, index) {
@@ -66,12 +61,7 @@ export default function ContinueWatchingSection({
 		<View style={styles.container}>
 			{/* Section Header */}
 			<View style={styles.header}>
-				<View style={styles.headerLeft}>
-					<View style={styles.headerAccent} />
-					<Text style={styles.headerTitle}>
-						Kaldığın Yerden Devam Et
-					</Text>
-				</View>
+				<Text style={styles.headerTitle}>İzlemeye Devam Et</Text>
 				{onSeeAllPress && (
 					<TVPressable
 						onPress={onSeeAllPress}
@@ -81,7 +71,7 @@ export default function ContinueWatchingSection({
 						<Ionicons
 							name="chevron-forward"
 							size={16}
-							color="#9CA3AF"
+							color={Palette.primary}
 						/>
 					</TVPressable>
 				)}
@@ -121,32 +111,22 @@ export default function ContinueWatchingSection({
 
 const styles = StyleSheet.create({
 	container: {
-		marginTop: 8,
-		marginBottom: 20,
+		marginTop: 24,
+		marginBottom: 8,
 	},
 	header: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		paddingHorizontal: 18,
+		paddingHorizontal: LIST_PAD_H,
 		marginBottom: 12,
 	},
-	headerLeft: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 8,
-	},
-	headerAccent: {
-		width: 3.5,
-		height: 16,
-		borderRadius: 2,
-		backgroundColor: "#FF3B30",
-	},
 	headerTitle: {
-		color: "#FFFFFF",
-		fontSize: 17,
-		fontWeight: "700",
-		letterSpacing: -0.3,
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+		fontSize: 18,
+		lineHeight: 24,
+		letterSpacing: -0.2,
 	},
 	seeAllButton: {
 		flexDirection: "row",
@@ -155,20 +135,20 @@ const styles = StyleSheet.create({
 		paddingVertical: 4,
 		paddingHorizontal: 6,
 		borderRadius: 8,
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
 	seeAllButtonFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.35)",
-		borderColor: "#FF3B30",
-		borderWidth: 1.5,
-		transform: [{ scale: 1.08 }],
+		borderColor: Palette.primary,
 	},
 	seeAllText: {
-		color: "#9CA3AF",
+		color: Palette.primary,
+		fontFamily: FontFamily.medium,
 		fontSize: 13,
-		fontWeight: "600",
 	},
 	listContent: {
 		paddingHorizontal: LIST_PAD_H,
 		gap: CARD_GAP,
+		paddingVertical: 4,
 	},
 });

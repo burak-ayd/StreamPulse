@@ -16,7 +16,7 @@ import { Platform, useWindowDimensions } from "react-native";
 export const TABLET_MIN_SIDE = 600;
 
 /** Sol rayın genişliği (içerik bu kadar sola kaydırılır). */
-export const NAV_RAIL_WIDTH = 56;
+export const NAV_RAIL_WIDTH = 96;
 
 /**
  * Cihazı telefon/tablet olarak ayırır.

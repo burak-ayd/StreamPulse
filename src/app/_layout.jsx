@@ -10,6 +10,13 @@ import UpdateSheet from "@/components/update/UpdateSheet";
 import SplashOverlay from "@/components/splash/SplashOverlay";
 import { useOtaUpdate } from "@/hooks/useOtaUpdate";
 import * as ScreenOrientation from "expo-screen-orientation";
+import {
+	Inter_400Regular,
+	Inter_500Medium,
+	Inter_600SemiBold,
+	Inter_700Bold,
+	useFonts,
+} from "@expo-google-fonts/inter";
 import { Stack } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Platform } from "react-native";
@@ -28,6 +35,18 @@ import MissingPermissionsGate from "@/components/permissions/MissingPermissionsG
 
 export default function RootLayout() {
 	const [splashVisible, setSplashVisible] = useState(true);
+	/*
+	 * Yeni tasarımın tek fontu Inter. Font yüklenmeden içerik çizilirse
+	 * metinler bir an sistem fontuyla görünüp sonra yer değiştirir; bu
+	 * yüzden ilk kare beklemede kalır (native splash zaten ekranda).
+	 */
+	const [fontsLoaded, fontError] = useFonts({
+		Inter_400Regular,
+		Inter_500Medium,
+		Inter_600SemiBold,
+		Inter_700Bold,
+	});
+	const fontsReady = fontsLoaded || Boolean(fontError);
 
 	/*
 	 * ── Açılış kapısı ──────────────────────────────────────────────
@@ -41,6 +60,9 @@ export default function RootLayout() {
 	 * kapanınca içerik hazır olur ve geçiş bir "sıçrama" olur.
 	 */
 	useEffect(() => {
+		// Font hazır değilken kapı açılmasın: splash, ilk kare boyanana
+		// kadar ekranda kalmalı.
+		if (!fontsReady) return;
 		let cancelled = false;
 
 		async function runStartupGate() {
@@ -59,7 +81,7 @@ export default function RootLayout() {
 		return () => {
 			cancelled = true;
 		};
-	}, []);
+	}, [fontsReady]);
 
 	/*
 	 * ⚠️ UYARLANABİLİR GÖRSEL KALİTESİ (sorun 6)
@@ -120,6 +142,8 @@ export default function RootLayout() {
 	 */
 	useOtaUpdate();
 
+	if (!fontsReady) return null;
+
 	return (
 		<ThemeProvider>
 			{/*
@@ -164,7 +188,7 @@ export default function RootLayout() {
 												? "none"
 												: "slide_from_right",
 											contentStyle: {
-												backgroundColor: "#0d0e12",
+												backgroundColor: "#131315",
 											},
 										}}
 									/>

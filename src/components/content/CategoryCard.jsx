@@ -34,7 +34,7 @@
  * Border + ölçek aynı görünümü GPU'da neredeyse bedava verir.
  */
 
-import { useThemeContext } from "@/context/ThemeContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import TVPressable from "@/components/common/TVPressable";
 import LanguageBadge from "@/components/common/LanguageBadge";
 import {
@@ -50,11 +50,11 @@ import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 /** Ana sayfa yatay satırının sabit kart genişliği. */
-export const ROW_CARD_WIDTH = 124;
+export const ROW_CARD_WIDTH = 144;
 /** Liste kenar boşluğu — `getItemLayout` ile aynı değeri kullanmalı. */
-export const ROW_LIST_PAD_H = 18;
+export const ROW_LIST_PAD_H = 16;
 /** Ana sayfadaki kartlar arası boşluk. */
-export const ROW_CARD_GAP = 6;
+export const ROW_CARD_GAP = 12;
 
 /**
  * Kart geometrisinin SAYILARI — iskelet de gerçek kart da bunları okur.
@@ -65,10 +65,10 @@ export const ROW_CARD_GAP = 6;
  */
 export const CARD_POSTER_RATIO = 2 / 3;
 export const CARD_POSTER_RADIUS = 12;
-export const CARD_TITLE_HEIGHT = 17; // lineHeight
-export const CARD_TITLE_MARGIN_TOP = 6;
-export const CARD_SUBTITLE_HEIGHT = 15; // lineHeight
-export const CARD_SUBTITLE_MARGIN_TOP = 1;
+export const CARD_TITLE_HEIGHT = 20; // lineHeight
+export const CARD_TITLE_MARGIN_TOP = 8;
+export const CARD_SUBTITLE_HEIGHT = 16; // lineHeight
+export const CARD_SUBTITLE_MARGIN_TOP = 2;
 
 /**
  * Izgara (kategori sayfası) kartının metin bloğu yüksekliği — başlık +
@@ -116,8 +116,6 @@ function CategoryCard({
 	onFocus,
 	onBlur,
 }) {
-	const { m3 } = useThemeContext();
-
 	const isRow = variant === "row";
 	const posterUri = posterOf(item);
 	const rating = ratingOf(item);
@@ -152,11 +150,7 @@ function CategoryCard({
 					<View
 						style={[
 							styles.poster,
-							{ backgroundColor: m3.surfaceContainerHigh },
-							focused && {
-								borderColor: m3.primaryContainer,
-								backgroundColor: m3.surfaceContainerHighest,
-							},
+							focused && styles.posterFocused,
 						]}>
 						<Image
 							source={{ uri: posterUri }}
@@ -172,12 +166,17 @@ function CategoryCard({
 							cachePolicy="memory-disk"
 						/>
 
+						{/* Alt kenar karartması: rozetler ve metin okunur kalsın. */}
+						<View style={styles.posterScrim} pointerEvents="none" />
+
 						{rating ? (
 							<View style={styles.ratingBadge} pointerEvents="none">
-								<Ionicons name="star" size={10} color="#FFD700" />
-								<Text style={[styles.ratingText, { color: m3.onSurface }]}>
-									{rating}
-								</Text>
+								<Ionicons
+									name="star"
+									size={10}
+									color={Palette.tertiary}
+								/>
+								<Text style={styles.ratingText}>{rating}</Text>
 							</View>
 						) : null}
 
@@ -185,7 +184,8 @@ function CategoryCard({
 							<LanguageBadge
 								language={lang}
 								size="small"
-								style={isRow ? styles.langBadgeRow : styles.langBadgeGrid}
+								style={styles.langBadge}
+								textStyle={styles.langBadgeText}
 							/>
 						) : null}
 					</View>
@@ -193,8 +193,7 @@ function CategoryCard({
 					<Text
 						style={[
 							styles.title,
-							{ color: m3.onSurface },
-							focused && { color: m3.primaryContainer, fontWeight: "700" },
+							focused && styles.titleFocused,
 						]}
 						numberOfLines={1}>
 						{title}
@@ -217,7 +216,7 @@ function CategoryCard({
 					<Text
 						style={[
 							styles.subtitle,
-							{ color: m3.onSurfaceVariant },
+							ep && styles.subtitleEpisode,
 						]}
 						numberOfLines={1}>
 						{subtitle || " "}
@@ -252,50 +251,71 @@ const styles = StyleSheet.create({
 		aspectRatio: CARD_POSTER_RATIO,
 		borderRadius: CARD_POSTER_RADIUS,
 		overflow: "hidden",
-		borderWidth: 2,
-		borderColor: "transparent",
+		backgroundColor: Palette.surfaceLow,
+		// Referans: `ring-1 ring-outline-variant/30`.
+		borderWidth: 1,
+		borderColor: "rgba(70, 69, 84, 0.6)",
+	},
+	posterFocused: {
+		borderColor: Palette.primary,
 	},
 	posterImage: {
 		width: "100%",
 		height: "100%",
 	},
+	posterScrim: {
+		position: "absolute",
+		left: 0,
+		right: 0,
+		bottom: 0,
+		height: "33%",
+		backgroundColor: "rgba(19, 19, 21, 0.35)",
+	},
 	ratingBadge: {
 		position: "absolute",
-		top: 6,
-		left: 6,
+		top: 8,
+		right: 8,
 		flexDirection: "row",
 		alignItems: "center",
 		paddingHorizontal: 6,
-		paddingVertical: 3,
-		borderRadius: 12,
-		gap: 3,
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.1)",
-		backgroundColor: "rgba(0, 0, 0, 0.75)",
+		paddingVertical: 2,
+		borderRadius: 999,
+		gap: 2,
+		backgroundColor: "rgba(32, 31, 33, 0.9)",
 	},
 	ratingText: {
+		color: Palette.tertiary,
+		fontFamily: FontFamily.semiBold,
 		fontSize: 10,
 		lineHeight: 12,
-		fontWeight: "700",
 	},
-	/** Ana sayfa: dil rozeti posterin alt-sağ köşesinde. */
-	langBadgeRow: {
+	/** Dil rozeti: her iki varyantta da posterin üst-sol köşesinde. */
+	langBadge: {
 		position: "absolute",
-		bottom: 6,
-		right: 6,
+		top: 8,
+		left: 8,
+		backgroundColor: "#353437",
+		borderWidth: 0,
+		paddingHorizontal: 6,
+		paddingVertical: 2,
+		borderRadius: 4,
 	},
-	/** Kategori ızgarası: dil rozeti üst-sağda (puan rozetine komşu). */
-	langBadgeGrid: {
-		position: "absolute",
-		top: 6,
-		right: 6,
+	langBadgeText: {
+		color: Palette.secondary,
+		fontFamily: FontFamily.semiBold,
+		fontSize: 10,
+		letterSpacing: 0,
 	},
 	title: {
-		fontSize: 13,
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+		fontSize: 14,
 		lineHeight: CARD_TITLE_HEIGHT,
-		fontWeight: "600",
 		marginTop: CARD_TITLE_MARGIN_TOP,
 		letterSpacing: -0.1,
+	},
+	titleFocused: {
+		color: Palette.primary,
 	},
 	/**
 	 * Alt satır: bölüm kartlarında "S. Sezon E. Bölüm", diğerlerinde yıl.
@@ -304,8 +324,14 @@ const styles = StyleSheet.create({
 	 * kalmalı, yoksa `getItemLayout` ofsetleri kayar (bkz. SORUN 2).
 	 */
 	subtitle: {
-		fontSize: 11,
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
+		fontSize: 12,
 		lineHeight: CARD_SUBTITLE_HEIGHT,
 		marginTop: CARD_SUBTITLE_MARGIN_TOP,
+	},
+	subtitleEpisode: {
+		color: Palette.primary,
+		fontFamily: FontFamily.medium,
 	},
 });
