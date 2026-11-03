@@ -8,6 +8,7 @@ import {
 	useLanguageDisplay,
 } from "@/context/LanguageDisplayContext";
 import { useThemeContext } from "@/context/ThemeContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { fetchPlatforms } from "@/services/api";
 import { bildirimTercihListesi } from "@/services/bildirimApi";
@@ -45,10 +46,49 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+/** Geniş ekranda (TV / tablet yatay) soldaki kategori menüsü. */
+const MENU_SECTIONS = [
+	{
+		key: "content",
+		icon: "extension-puzzle-outline",
+		label: "İçerik & Kaynaklar",
+		subtitle: "Eklentiler, sağlayıcılar",
+	},
+	{
+		key: "player",
+		icon: "play-circle-outline",
+		label: "Oynatıcı & Görünüm",
+		subtitle: "Kalite, altyazı, düzen",
+	},
+	{
+		key: "app",
+		icon: "options-outline",
+		label: "Uygulama & Tercihler",
+		subtitle: "Genel, güncelleme",
+	},
+	{
+		key: "notify",
+		icon: "notifications-outline",
+		label: "Bildirimler",
+		subtitle: "Özet push, saat",
+	},
+	{
+		key: "system",
+		icon: "server-outline",
+		label: "Sistem & Veri",
+		subtitle: "Senkron, sıfırlama",
+	},
+];
+
+/** Bölüm kabı: geniş ekranda yalnız seçili kategoriyi gösterir. */
+function Pane({ index, activeIndex, children }) {
+	if (activeIndex != null && activeIndex !== index) return null;
+	return children;
+}
+
 // Modern categorized menu item component
 function SettingRow({
 	icon,
-	iconBg = "#2563EB",
 	label,
 	subtitle,
 	badgeText,
@@ -58,35 +98,38 @@ function SettingRow({
 	showChevron = true,
 	isDestructive = false,
 }) {
-	const { colors } = useThemeContext();
-
 	return (
 		<TVPressable
-			style={styles.settingRow}
-			focusedStyle={styles.settingRowFocused}
+			style={({ focused }) => [
+				styles.settingRow,
+				focused && styles.settingRowFocused,
+			]}
+			focusedStyle={null}
 			onPress={onPress}
 			disabled={!onPress && !rightComponent}
 			activeOpacity={onPress ? 0.65 : 1}>
 			<View style={styles.settingRowLeft}>
-				<View style={[styles.iconBox, { backgroundColor: iconBg }]}>
-					<Ionicons name={icon} size={20} color="#ffffff" />
+				<View style={styles.iconBox}>
+					<Ionicons
+						name={icon}
+						size={17}
+						color={
+							isDestructive ? Palette.error : Palette.onSurfaceVariant
+						}
+					/>
 				</View>
 				<View style={styles.textContainer}>
 					<Text
+						numberOfLines={1}
 						style={[
 							styles.settingLabel,
-							{
-								color: isDestructive ? "#ef4444" : colors.text,
-							},
+							isDestructive && styles.settingLabelDanger,
 						]}>
 						{label}
 					</Text>
 					{subtitle ? (
 						<Text
-							style={[
-								styles.settingSubtitle,
-								{ color: colors.textSecondary },
-							]}
+							style={styles.settingSubtitle}
 							numberOfLines={1}>
 							{subtitle}
 						</Text>
@@ -99,19 +142,13 @@ function SettingRow({
 					<View
 						style={[
 							styles.badge,
-							{
-								backgroundColor:
-									badgeColor || "rgba(37, 99, 235, 0.16)",
-							},
+							badgeColor ? { backgroundColor: badgeColor } : null,
 						]}>
 						<Text
+							numberOfLines={1}
 							style={[
 								styles.badgeText,
-								{
-									color: badgeColor
-										? "#ffffff"
-										: colors.primary,
-								},
+								badgeColor ? styles.badgeTextOnColor : null,
 							]}>
 							{badgeText}
 						</Text>
@@ -123,8 +160,8 @@ function SettingRow({
 				{showChevron && !rightComponent && (
 					<Ionicons
 						name="chevron-forward"
-						size={18}
-						color={colors.textSecondary}
+						size={15}
+						color={Palette.onSurfaceVariant}
 						style={{ opacity: 0.6 }}
 					/>
 				)}
@@ -135,40 +172,21 @@ function SettingRow({
 
 // Category Section Card with Title
 function SettingsSection({ title, children }) {
-	const { colors } = useThemeContext();
 	return (
 		<View style={styles.sectionContainer}>
 			{title ? (
-				<Text
-					style={[
-						styles.sectionHeaderTitle,
-						{ color: colors.textSecondary },
-					]}>
+				<Text style={styles.sectionHeaderTitle} numberOfLines={1}>
 					{title}
 				</Text>
 			) : null}
-			<View
-				style={[
-					styles.sectionCard,
-					{
-						backgroundColor: colors.cardBg,
-						borderColor: colors.border,
-					},
-				]}>
+			<View style={styles.sectionCard}>
 				{React.Children.map(children, (child, index) => {
 					if (!child) return null;
 					const isLast = index === React.Children.count(children) - 1;
 					return (
 						<React.Fragment key={index}>
 							{child}
-							{!isLast && (
-								<View
-									style={[
-										styles.rowDivider,
-										{ backgroundColor: colors.border },
-									]}
-								/>
-							)}
+							{!isLast && <View style={styles.rowDivider} />}
 						</React.Fragment>
 					);
 				})}
@@ -179,14 +197,17 @@ function SettingsSection({ title, children }) {
 
 export default function SettingsScreen() {
 	const { theme, toggleTheme, colors } = useThemeContext();
-	const { isLoggedIn } = useAuth();
+	const { isLoggedIn, user } = useAuth();
 	const router = useRouter();
 	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
 	const { contentPaddingLeft } = useNavLayout();
 	// TV: ayar satırları 1920px boyunca uzanıyordu; ikon solda, değer
 	// tamamen sağda kalıyor ve aradaki boşluk okunmuyordu. `contentMaxWidth`
 	// hepsini ortalanmış bir sütuna toplar.
-	const { contentMaxWidth, isTV } = useTvMetrics();
+	const { contentMaxWidth, isTV, isWide } = useTvMetrics();
+	// Geniş ekranda sol menüden seçilen kategori.
+	const [activeSection, setActiveSection] = useState(0);
+	const paneIndex = isWide ? activeSection : null;
 
 	const [selectedPlatform, setSelectedPlatform] = useState(null);
 	const [activePluginsCount, setActivePluginsCount] = useState(0);
@@ -458,6 +479,56 @@ export default function SettingsScreen() {
 		);
 	};
 
+	const displayName = user?.display_name || user?.username || "Misafir";
+	const avatarLetter = String(displayName).trim().charAt(0).toUpperCase();
+
+	const renderHeader = () => (
+		<View style={{ marginBottom: 16 }}>
+			<View style={styles.titleRow}>
+				<Text numberOfLines={1} style={styles.screenTitle}>
+					Ayarlar
+				</Text>
+			</View>
+			<Text numberOfLines={1} style={styles.headerSubtitle}>
+				StreamPulse cihaz tercihleri ve kişisel oynatma profili
+			</Text>
+
+			<View style={styles.profileCard}>
+				<View style={styles.avatar}>
+					<Text style={styles.avatarText}>{avatarLetter}</Text>
+				</View>
+				<View style={styles.flex}>
+					<Text numberOfLines={1} style={styles.profileName}>
+						{displayName}
+					</Text>
+					<Text numberOfLines={1} style={styles.profileMail}>
+						{user?.email || "Giriş yapılmadı"}
+					</Text>
+				</View>
+				<TVPressable
+					onPress={() =>
+						isLoggedIn
+							? router.push("/(app)/profile")
+							: openLogin(router)
+					}
+					focusedStyle={null}
+					style={({ focused }) => [
+						styles.profileBtn,
+						focused && styles.profileBtnFocused,
+					]}>
+					<Ionicons
+						name="person-outline"
+						size={14}
+						color={Palette.onPrimaryContainer}
+					/>
+					<Text numberOfLines={1} style={styles.profileBtnText}>
+						{isLoggedIn ? "Profil Düzenle" : "Giriş Yap"}
+					</Text>
+				</TVPressable>
+			</View>
+		</View>
+	);
+
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
@@ -466,22 +537,15 @@ export default function SettingsScreen() {
 				style={[
 					styles.safeArea,
 					{
-						backgroundColor: colors.bg,
+						backgroundColor: Palette.background,
 						paddingLeft: contentPaddingLeft,
 					},
 				]}>
-				<StatusBar
-					barStyle={
-						theme === "dark" ? "light-content" : "dark-content"
-					}
-					backgroundColor={colors.bg}
-				/>
+				<StatusBar barStyle="light-content" backgroundColor={Palette.background} />
 
-				<ScrollView
-					contentInsetAdjustmentBehavior="automatic"
-					showsVerticalScrollIndicator={false}
-					contentContainerStyle={[
-						styles.scrollContent,
+				<View
+					style={[
+						styles.twoPane,
 						contentMaxWidth
 							? {
 									alignSelf: "center",
@@ -490,12 +554,66 @@ export default function SettingsScreen() {
 								}
 							: null,
 					]}>
+					{isWide ? (
+						<View style={styles.menuColumn}>
+							<Text style={styles.menuTitle}>YAPILANDIRMA MENÜSÜ</Text>
+							{MENU_SECTIONS.map((item, index) => {
+								const active = activeSection === index;
+								return (
+									<TVPressable
+										key={item.key}
+										onPress={() => setActiveSection(index)}
+										focusedStyle={null}
+										style={({ focused }) => [
+											styles.menuItem,
+											active && styles.menuItemActive,
+											focused && styles.menuItemFocused,
+										]}>
+										<Ionicons
+											name={item.icon}
+											size={17}
+											color={
+												active
+													? Palette.primary
+													: Palette.onSurfaceVariant
+											}
+										/>
+										<View style={styles.flex}>
+											<Text
+												numberOfLines={1}
+												style={[
+													styles.menuLabel,
+													active && styles.menuLabelActive,
+												]}>
+												{item.label}
+											</Text>
+											<Text
+												numberOfLines={1}
+												style={styles.menuSub}>
+												{item.subtitle}
+											</Text>
+										</View>
+										{active ? (
+											<View style={styles.menuDot} />
+										) : null}
+									</TVPressable>
+								);
+							})}
+						</View>
+					) : null}
+
+					<ScrollView
+						contentInsetAdjustmentBehavior="automatic"
+						showsVerticalScrollIndicator={false}
+						style={styles.flex}
+						contentContainerStyle={styles.scrollContent}>
+						{renderHeader()}
 					{/* KATEGORİ 1: İÇERİK VE KAYNAKLAR */}
-					<SettingsSection title="İÇERİK VE KAYNAKLAR">
+					<Pane index={0} activeIndex={paneIndex}>
+						<SettingsSection title="İÇERİK VE KAYNAKLAR">
 						{/* Eklentiler */}
 						<SettingRow
 							icon="extension-puzzle-outline"
-							iconBg="#2563EB"
 							label="Eklentiler"
 							subtitle="Eklenti görünürlüğü ve yönetimi"
 							badgeText={
@@ -513,7 +631,6 @@ export default function SettingsScreen() {
 						{/* Sağlayıcılar */}
 						<SettingRow
 							icon="server-outline"
-							iconBg="#8B5CF6"
 							label="Sağlayıcılar"
 							subtitle="Varsayılan video ve içerik sağlayıcısı"
 							badgeText={selectedPlatform?.name || "Varsayılan"}
@@ -524,14 +641,15 @@ export default function SettingsScreen() {
 								});
 							}}
 						/>
-					</SettingsSection>
+						</SettingsSection>
+					</Pane>
 
 					{/* KATEGORİ 2: OYNATMA VE GÖRÜNÜM */}
-					<SettingsSection title="OYNATMA VE GÖRÜNÜM">
+					<Pane index={1} activeIndex={paneIndex}>
+						<SettingsSection title="OYNATMA VE GÖRÜNÜM">
 						{/* Oynatıcı */}
 						<SettingRow
 							icon="play-circle-outline"
-							iconBg="#EF4444"
 							label="Oynatıcı"
 							subtitle="Altyazı boyutu, renk, ileri/geri sarma, jestler"
 							onPress={() =>
@@ -544,7 +662,6 @@ export default function SettingsScreen() {
 						{/* İndirme (download_feature_plan.md Faz 3) */}
 						<SettingRow
 							icon="download-outline"
-							iconBg="#06B6D4"
 							label="İndirme"
 							subtitle="Eş zamanlı indirme, konum ve eklenti tercihleri"
 							onPress={() =>
@@ -557,8 +674,8 @@ export default function SettingsScreen() {
 						{/* İzinler (madde 3) — eksik zorunlu izin varsa rozet kırmızı */}
 						<SettingRow
 							icon="shield-outline"
-							iconBg={permissionBadge ? "#f43f5e" : "#22C55E"}
 							label="İzinler"
+							isDestructive={Boolean(permissionBadge)}
 							subtitle={
 								permissionSummary || "İndirme, bildirim ve yükleme izinleri"
 							}
@@ -572,7 +689,6 @@ export default function SettingsScreen() {
 						{/* Düzen */}
 						<SettingRow
 							icon="grid-outline"
-							iconBg="#EC4899"
 							label="Düzen"
 							subtitle="Ana sayfa yerleşimi ve kart boyutları"
 							onPress={() => setLayoutModalVisible(true)}
@@ -581,7 +697,6 @@ export default function SettingsScreen() {
 						{/* Dil Gösterimi */}
 						<SettingRow
 							icon="language-outline"
-							iconBg="#3B82F6"
 							label="Dil Bilgisi Gösterimi"
 							subtitle="İçeriklerde dil ve altyazı rozeti stili"
 							badgeText={
@@ -595,14 +710,15 @@ export default function SettingsScreen() {
 							}
 							onPress={() => setLanguageModalVisible(true)}
 						/>
-					</SettingsSection>
+						</SettingsSection>
+					</Pane>
 
 					{/* KATEGORİ 3: UYGULAMA VE TERCİHLER */}
-					<SettingsSection title="UYGULAMA VE TERCİHLER">
+					<Pane index={2} activeIndex={paneIndex}>
+						<SettingsSection title="UYGULAMA VE TERCİHLER">
 						{/* Genel Ayarlar */}
 						<SettingRow
 							icon="options-outline"
-							iconBg="#10B981"
 							label="Genel"
 							subtitle="Koyu mod, arayüz dili ve bildirimler"
 							onPress={() => setGeneralModalVisible(true)}
@@ -611,7 +727,6 @@ export default function SettingsScreen() {
 						{/* Hesaplar ve Güvenlik */}
 						<SettingRow
 							icon="shield-checkmark-outline"
-							iconBg="#F59E0B"
 							label="Hesaplar ve Güvenlik"
 							subtitle="Hesap tercihleri ve profil gizliliği"
 							onPress={() =>
@@ -629,7 +744,6 @@ export default function SettingsScreen() {
 						 */}
 						<SettingRow
 							icon="cloud-download-outline"
-							iconBg="#0EA5E9"
 							label="Uygulama Güncellemeleri"
 							subtitle={
 								updateDisabledReason
@@ -658,7 +772,6 @@ export default function SettingsScreen() {
 						 */}
 						<SettingRow
 							icon="sparkles-outline"
-							iconBg="#F59E0B"
 							label="Güncelleme Bildirimi"
 							subtitle={
 								otaNotifyEnabled
@@ -682,13 +795,14 @@ export default function SettingsScreen() {
 								setNotifyOnUpdate(next);
 							}}
 						/>
-					</SettingsSection>
+						</SettingsSection>
+					</Pane>
 
 					{/* KATEGORİ 3.5: BİLDİRİM AYARLARI (push + takip + sistem) */}
-					<SettingsSection title="BİLDİRİM AYARLARI">
+					<Pane index={3} activeIndex={paneIndex}>
+						<SettingsSection title="BİLDİRİM AYARLARI">
 						<SettingRow
 							icon="notifications-outline"
-							iconBg="#FF3D5E"
 							label="Günlük Özet Push"
 							subtitle={
 								!pushOturumVar
@@ -713,7 +827,6 @@ export default function SettingsScreen() {
 						/>
 						<SettingRow
 							icon="time-outline"
-							iconBg="#0EA5E9"
 							label="Özet Saati"
 							subtitle={
 								!pushOturumVar
@@ -726,7 +839,6 @@ export default function SettingsScreen() {
 						/>
 						<SettingRow
 							icon="settings-outline"
-							iconBg="#64748B"
 							label="Telefon Bildirim Ayarları"
 							subtitle="Android'in kanal ayarları — ses, titreşim, öncelik"
 							showChevron={false}
@@ -742,7 +854,6 @@ export default function SettingsScreen() {
 						{pushOturumVar && takipYuklendi ? (
 							<SettingRow
 								icon="tv-outline"
-								iconBg="#FF3D5E"
 								label="Takip Edilen Diziler"
 								subtitle={
 									takipListesi.length > 0
@@ -754,14 +865,15 @@ export default function SettingsScreen() {
 								}
 							/>
 						) : null}
-					</SettingsSection>
+						</SettingsSection>
+					</Pane>
 
 					{/* KATEGORİ 4: SİSTEM VE YEDEKLEME */}
-					<SettingsSection title="SİSTEM VE VERİ">
+					<Pane index={4} activeIndex={paneIndex}>
+						<SettingsSection title="SİSTEM VE VERİ">
 						{/* Cihazlar ve Senkronizasyon */}
 						<SettingRow
 							icon="phone-portrait-outline"
-							iconBg="#7C3AED"
 							label="Cihazlar ve Senkronizasyon"
 							subtitle={
 								isLoggedIn
@@ -782,7 +894,6 @@ export default function SettingsScreen() {
 						{!isTV ? (
 							<SettingRow
 								icon="tv-outline"
-								iconBg="#0EA5E9"
 								label="TV'de Oturum Aç"
 								subtitle="Kod ya da QR okutarak TV'nizi bağlayın"
 								onPress={() =>
@@ -803,7 +914,6 @@ export default function SettingsScreen() {
 						 */}
 						<SettingRow
 							icon="bug-outline"
-							iconBg="#EF4444"
 							label="Oturum Teşhisi"
 							subtitle="Çıkış olaylarının kaydı (hata ayıklama)"
 							onPress={() =>
@@ -814,17 +924,18 @@ export default function SettingsScreen() {
 						{/* Yerel Verileri Sıfırla */}
 						<SettingRow
 							icon="trash-outline"
-							iconBg="#DC2626"
 							label="Verileri Sıfırla"
 							subtitle="Tüm yerel verileri ve geçmişi temizle"
 							isDestructive
 							showChevron={false}
 							onPress={handleClearCache}
 						/>
-					</SettingsSection>
+						</SettingsSection>
+					</Pane>
 
 					<View style={{ height: 60 }} />
-				</ScrollView>
+					</ScrollView>
+				</View>
 
 				{/* GENEL AYARLAR MODAL */}
 				<Modal
@@ -1314,78 +1425,228 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
+		backgroundColor: Palette.background,
 	},
+	flex: {
+		flex: 1,
+	},
+	twoPane: {
+		flex: 1,
+		flexDirection: "row",
+	},
+	menuColumn: {
+		width: 250,
+		paddingTop: 20,
+		paddingHorizontal: 16,
+		gap: 4,
+	},
+	menuTitle: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.bold,
+		fontSize: 10,
+		letterSpacing: 1.1,
+		marginBottom: 8,
+		paddingHorizontal: 8,
+	},
+	menuItem: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 10,
+		paddingHorizontal: 10,
+		paddingVertical: 10,
+		borderRadius: 12,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	menuItemActive: {
+		backgroundColor: Palette.surfaceLow,
+	},
+	menuItemFocused: {
+		borderColor: Palette.primary,
+	},
+	menuLabel: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+		fontSize: 13,
+	},
+	menuLabelActive: {
+		color: Palette.primary,
+	},
+	menuSub: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
+		fontSize: 10,
+		marginTop: 1,
+	},
+	menuDot: {
+		width: 6,
+		height: 6,
+		borderRadius: 3,
+		backgroundColor: Palette.secondary,
+	},
+
+	/* Başlık + profil */
+	titleRow: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	screenTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		fontSize: 30,
+		letterSpacing: -0.4,
+	},
+	headerSubtitle: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
+		fontSize: 12,
+		marginTop: 2,
+	},
+	profileCard: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 12,
+		marginTop: 12,
+		padding: 12,
+		borderRadius: 14,
+		backgroundColor: Palette.surfaceLow,
+	},
+	avatar: {
+		width: 38,
+		height: 38,
+		borderRadius: 19,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.surfaceHigh,
+	},
+	avatarText: {
+		color: Palette.primary,
+		fontFamily: FontFamily.bold,
+		fontSize: 15,
+	},
+	profileName: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+		fontSize: 14,
+	},
+	profileMail: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
+		fontSize: 11,
+		marginTop: 1,
+	},
+	profileBtn: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+		paddingHorizontal: 12,
+		paddingVertical: 8,
+		borderRadius: 18,
+		backgroundColor: Palette.primaryContainer,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	profileBtnFocused: {
+		borderColor: Palette.onSurface,
+	},
+	profileBtnText: {
+		color: Palette.onPrimaryContainer,
+		fontFamily: FontFamily.bold,
+		fontSize: 12,
+	},
+
 	scrollContent: {
 		paddingHorizontal: 16,
-		paddingTop: 16,
+		paddingTop: 20,
 		paddingBottom: 20,
 	},
 	sectionContainer: {
-		marginBottom: 20,
+		marginBottom: 16,
 	},
 	sectionHeaderTitle: {
-		fontSize: 11,
-		fontWeight: "700",
+		fontSize: 10,
+		fontFamily: FontFamily.bold,
 		letterSpacing: 1.1,
 		textTransform: "uppercase",
+		color: Palette.onSurfaceVariant,
 		paddingHorizontal: 6,
 		marginBottom: 8,
 	},
 	sectionCard: {
-		borderRadius: 16,
-		borderWidth: 1,
+		borderRadius: 14,
+		backgroundColor: Palette.surfaceLow,
 		overflow: "hidden",
 	},
 	settingRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		paddingHorizontal: 16,
-		paddingVertical: 13,
-		minHeight: 56,
+		paddingHorizontal: 12,
+		paddingVertical: 11,
+		minHeight: 52,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	settingRowFocused: {
+		backgroundColor: "rgba(192, 193, 255, 0.06)",
+		borderColor: Palette.primary,
 	},
 	settingRowLeft: {
 		flexDirection: "row",
 		alignItems: "center",
 		flex: 1,
-		gap: 14,
+		gap: 12,
 	},
 	iconBox: {
-		width: 36,
-		height: 36,
-		borderRadius: 10,
+		width: 32,
+		height: 32,
+		borderRadius: 16,
 		alignItems: "center",
 		justifyContent: "center",
+		backgroundColor: Palette.surfaceHigh,
 	},
 	textContainer: {
 		flex: 1,
 	},
 	settingLabel: {
-		fontSize: 15,
-		fontWeight: "600",
-		letterSpacing: -0.2,
+		fontSize: 13,
+		fontFamily: FontFamily.semiBold,
+		color: Palette.onSurface,
+		letterSpacing: -0.1,
+	},
+	settingLabelDanger: {
+		color: Palette.error,
 	},
 	settingSubtitle: {
-		fontSize: 12,
-		marginTop: 2,
+		fontSize: 11,
+		fontFamily: FontFamily.regular,
+		color: Palette.onSurfaceVariant,
+		marginTop: 1,
 	},
 	settingRowRight: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 8,
+		flexShrink: 1,
 	},
 	badge: {
 		paddingHorizontal: 8,
-		paddingVertical: 3,
+		paddingVertical: 2,
 		borderRadius: 8,
+		backgroundColor: "rgba(192, 193, 255, 0.14)",
 	},
 	badgeText: {
-		fontSize: 11,
-		fontWeight: "700",
+		fontSize: 10,
+		fontFamily: FontFamily.bold,
+		color: Palette.primary,
+	},
+	badgeTextOnColor: {
+		color: Palette.onPrimaryContainer,
 	},
 	rowDivider: {
 		height: 1,
-		marginLeft: 66,
+		marginLeft: 56,
+		backgroundColor: "rgba(229, 225, 228, 0.07)",
 	},
 	modalOverlay: {
 		flex: 1,
@@ -1507,16 +1768,9 @@ const styles = StyleSheet.create({
 		height: 10,
 		borderRadius: 5,
 	},
-	settingRowFocused: {
-		backgroundColor: "rgba(229, 9, 20, 0.12)",
-		borderWidth: 1.5,
-		borderColor: "#E50914",
-		transform: [{ scale: 1.02 }],
-	},
 	modalOptionCardFocused: {
 		borderWidth: 2,
-		borderColor: "#E50914",
-		transform: [{ scale: 1.02 }],
+		borderColor: Palette.primary,
 	},
 	modalCloseButtonFocused: {
 		borderWidth: 2,
