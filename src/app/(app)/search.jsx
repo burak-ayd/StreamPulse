@@ -1,8 +1,5 @@
-import BottomNavigation from "@components/BottomNavigation";
-import TVPressable from "@components/common/TVPressable";
 import Image from "@/components/common/SmartImage";
 import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
-import { SkeletonBlock, SkeletonLine } from "@components/common/Skeleton";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import {
@@ -10,6 +7,7 @@ import {
 	searchContent,
 	searchPluginContent,
 } from "@/services/api";
+import { normalizePluginValue } from "@/utils/pluginName";
 import {
 	addToSearchHistory,
 	clearSearchHistory,
@@ -19,7 +17,9 @@ import {
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
 import { useTvMetrics } from "@/utils/tvMetrics";
-import { normalizePluginValue } from "@/utils/pluginName";
+import BottomNavigation from "@components/BottomNavigation";
+import { SkeletonBlock, SkeletonLine } from "@components/common/Skeleton";
+import TVPressable from "@components/common/TVPressable";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import {
 	Stack,
@@ -27,7 +27,7 @@ import {
 	useLocalSearchParams,
 	useRouter,
 } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	BackHandler,
@@ -99,7 +99,9 @@ function durumGorunum(durum) {
 				durum.mesaj ||
 				`${n} kaynak geçici olarak kullanım dışı: ` +
 					devreli.map((k) => k.eklenti).join(", "),
-			satirlar: devreli.map((k) => k.mesaj || `${k.eklenti} kullanım dışı`),
+			satirlar: devreli.map(
+				(k) => k.mesaj || `${k.eklenti} kullanım dışı`,
+			),
 			not:
 				n > 1 && durum.basarili > 0
 					? "Sonuçlar diğer kaynaklardan geliyor."
@@ -137,7 +139,9 @@ function durumGorunum(durum) {
 
 /** Dizi mi? (`media_type` backend'de "Film" / "Dizi" / "Mini Dizi"…) */
 const isSeriesItem = (item) =>
-	String(item?.media_type || "").toLowerCase().includes("dizi");
+	String(item?.media_type || "")
+		.toLowerCase()
+		.includes("dizi");
 
 /* ── Kapsam hapı: "Bu platform" / "Tüm platformlar" ─────────────── */
 function ScopePill({ label, active, onPress }) {
@@ -210,7 +214,9 @@ function TypeChip({ label, count, active, onPress }) {
 					styles.typeChipText,
 					{
 						fontSize: sp(13),
-						color: active ? Palette.onPrimary : Palette.onSurfaceVariant,
+						color: active
+							? Palette.onPrimary
+							: Palette.onSurfaceVariant,
 					},
 				]}>
 				{count == null ? label : `${label} (${count})`}
@@ -368,7 +374,7 @@ function PluginFilterRow({ name, checked, onPress, autoFocus }) {
 export default function SearchScreen() {
 	const router = useRouter();
 	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
-	const { contentPaddingLeft, isSideRail } = useNavLayout();
+	const { contentPaddingLeft } = useNavLayout();
 	const { sp, isTV, gutter, contentMaxWidth } = useTvMetrics();
 	const params = useLocalSearchParams();
 	const scrollViewRef = useRef(null);
@@ -599,7 +605,11 @@ export default function SearchScreen() {
 	useFocusEffect(
 		useCallback(() => {
 			const onBackPress = () => {
-				if (results.length > 0 || searchQuery.length > 0 || hasSearched) {
+				if (
+					results.length > 0 ||
+					searchQuery.length > 0 ||
+					hasSearched
+				) {
 					clearSearch();
 					return true;
 				}
@@ -699,8 +709,7 @@ export default function SearchScreen() {
 			plugin: normalizePluginValue(item.plugin),
 		};
 		const movieId =
-			item.id ||
-			encodeURIComponent(item.url || item.slug || item.title);
+			item.id || encodeURIComponent(item.url || item.slug || item.title);
 
 		router.push({
 			pathname: "/(app)/MovieDetails/[id]",
@@ -718,10 +727,7 @@ export default function SearchScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right", "bottom"]}
-				style={[
-					styles.safeArea,
-					{ paddingLeft: contentPaddingLeft },
-				]}>
+				style={[styles.safeArea, { paddingLeft: contentPaddingLeft }]}>
 				<StatusBar
 					barStyle="light-content"
 					backgroundColor={Palette.background}
@@ -746,64 +752,8 @@ export default function SearchScreen() {
 							alignSelf: "center",
 							paddingHorizontal: 16 + gutter,
 						}}>
-						{/* Marka satırı. Profil düğmesi yalnızca alt bar
-						    düzeninde (telefon) burada; ray düzeninde rayın
-						    alt ucunda yaşıyor. */}
-						<View
-							style={[
-								styles.topBar,
-								{
-									paddingTop: sp(10),
-									marginBottom: sp(14),
-									gap: sp(10),
-								},
-							]}>
-							<View style={[styles.wordmark, { gap: sp(8) }]}>
-								<View
-									style={[
-										styles.wordmarkMark,
-										{
-											width: sp(26),
-											height: sp(26),
-											borderRadius: sp(8),
-										},
-									]}>
-									<Ionicons
-										name="play"
-										size={sp(14)}
-										color={Palette.onPrimary}
-									/>
-								</View>
-								<Text
-									style={[
-										styles.wordmarkText,
-										{ fontSize: sp(16) },
-									]}>
-									{isSideRail ? "STREAM PULSE" : "StreamPulse"}
-								</Text>
-							</View>
-
-							{!isSideRail ? (
-								<TVPressable
-									onPress={() => router.push("/(app)/profile")}
-									accessibilityLabel="Profil"
-									style={({ focused }) => [
-										styles.profileButton,
-										{
-											width: sp(32),
-											height: sp(32),
-											borderRadius: sp(16),
-										},
-										focused && styles.focusRing,
-									]}>
-									<Ionicons
-										name="person"
-										size={sp(17)}
-										color={Palette.onPrimary}
-									/>
-								</TVPressable>
-							) : null}
-						</View>
+						{/* Marka satırı kaldırıldı: wordmark ve profil kısayolu
+						    burada tekrarlanmıyor (ana sayfa header'ı + Ayarlar). */}
 
 						{/* Arama alanı */}
 						{isTV ? (
@@ -1158,7 +1108,9 @@ export default function SearchScreen() {
 											</Text>
 											<TVPressable
 												onPress={() =>
-													handleDeleteHistoryItem(item.q)
+													handleDeleteHistoryItem(
+														item.q,
+													)
 												}
 												accessibilityLabel={`${item.q} aramasını sil`}
 												hitSlop={{
@@ -1172,7 +1124,8 @@ export default function SearchScreen() {
 														width: sp(18),
 														height: sp(18),
 														alignItems: "center",
-														justifyContent: "center",
+														justifyContent:
+															"center",
 														borderRadius: sp(9),
 													},
 													focused && styles.focusRing,
@@ -1219,8 +1172,9 @@ export default function SearchScreen() {
 										styles.stateSubText,
 										{ fontSize: sp(14) },
 									]}>
-									"{lastSearchedQuery}" için hiçbir kaynakta
-									içerik bulunamadı.
+									{"“"}
+									{lastSearchedQuery}
+									{"”"} için hiçbir kaynakta içerik bulunamadı.
 								</Text>
 							</View>
 						) : null}
@@ -1304,7 +1258,8 @@ export default function SearchScreen() {
 													styles.countBadge,
 													{
 														borderRadius: sp(8),
-														paddingHorizontal: sp(8),
+														paddingHorizontal:
+															sp(8),
 														paddingVertical: sp(2),
 													},
 												]}>
@@ -1362,7 +1317,10 @@ export default function SearchScreen() {
 
 					<ScrollView
 						showsVerticalScrollIndicator={false}
-						contentContainerStyle={{ gap: sp(8), paddingBottom: sp(12) }}>
+						contentContainerStyle={{
+							gap: sp(8),
+							paddingBottom: sp(12),
+						}}>
 						{availablePlugins.map((name, index) => (
 							<PluginFilterRow
 								key={name}
@@ -1414,33 +1372,8 @@ const styles = StyleSheet.create({
 		backgroundColor: Palette.background,
 	},
 	scrollContainer: {
+		paddingTop: 12,
 		paddingBottom: 96,
-	},
-	/* ── Marka satırı ── */
-	topBar: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-	},
-	wordmark: {
-		flexDirection: "row",
-		alignItems: "center",
-		flexShrink: 1,
-	},
-	wordmarkMark: {
-		backgroundColor: Palette.primary,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	wordmarkText: {
-		color: Palette.onSurface,
-		fontFamily: FontFamily.bold,
-		letterSpacing: 0.6,
-	},
-	profileButton: {
-		backgroundColor: Palette.primary,
-		alignItems: "center",
-		justifyContent: "center",
 	},
 	/* ── Arama alanı ── */
 	fieldLabel: {
