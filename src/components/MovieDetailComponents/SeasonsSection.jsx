@@ -1,3 +1,4 @@
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useDownload } from "@/context/DownloadContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
@@ -17,7 +18,6 @@ import {
 } from "react";
 import {
 	ActivityIndicator,
-	Alert,
 	BackHandler,
 	findNodeHandle,
 	Modal,
@@ -106,6 +106,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 ) {
 	const { sp, isWide, isTV, isLandscape, width, gutter, contentMaxWidth } =
 		useTvMetrics();
+	const { alert, toast } = useFeedback();
 	const { requestDownload, isDownloaded } = useDownload();
 	const router = useRouter();
 
@@ -412,7 +413,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 			episode: epNumber,
 		});
 		if (epIndirildiMi) {
-			Alert.alert("İndirme", `"${epTitle}" zaten indirildi.`);
+			toast.info(`"${epTitle}" zaten indirildi.`);
 			return;
 		}
 		requestDownload({
@@ -431,14 +432,12 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	const handleDownloadSeason = () => {
 		if (sortedEpisodes.length === 0) return;
 
-		Alert.alert(
-			"Sezonu İndir",
-			`${selectedSeason}. Sezondaki ${sortedEpisodes.length} bölüm indirme kuyruğuna eklensin mi?`,
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Tümünü Ekle",
-					onPress: () => {
+		alert({
+			title: "Sezonu İndir",
+			message: `${selectedSeason}. Sezondaki ${sortedEpisodes.length} bölüm indirme kuyruğuna eklensin mi?`,
+			confirmText: "Tümünü Ekle",
+			cancelText: "Vazgeç",
+			onConfirm: () => {
 						sortedEpisodes.forEach((ep, i) => {
 							const epNumber =
 								ep.episode || ep.episode_number || i + 1;
@@ -466,9 +465,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 							});
 						});
 					},
-				},
-			],
-		);
+		});
 	};
 
 	// Bölüme tıklanınca oynat

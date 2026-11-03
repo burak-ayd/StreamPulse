@@ -8,6 +8,7 @@
  * Faz 3 & 4 senkronizasyon motoru entegrasyonu.
  */
 
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import TVPressable from "@/components/common/TVPressable";
 import { useAuth } from "@/context/AuthContext";
 import { useSync } from "@/context/SyncContext";
@@ -20,7 +21,6 @@ import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
 	ActivityIndicator,
-	Alert,
 	BackHandler,
 	ScrollView,
 	StatusBar,
@@ -31,6 +31,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SyncSettingsScreen() {
+	const { alert, toast } = useFeedback();
 	const { theme } = useThemeContext();
 	// TV: ayar satırları ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
 	const { contentMaxWidth } = useTvMetrics();
@@ -99,66 +100,55 @@ export default function SyncSettingsScreen() {
 		try {
 			const res = await syncNow();
 			if (res.success) {
-				Alert.alert("Başarılı", "Verileriniz başarıyla senkronize edildi.");
+				toast.success("Verileriniz başarıyla senkronize edildi.");
 				refreshDevices();
 			} else if (res.error === "unauthorized") {
-				Alert.alert("Hata", "Oturumunuzun süresi dolmuş. Lütfen tekrar giriş yapın.");
+				toast.error("Oturumunuzun süresi dolmuş. Lütfen tekrar giriş yapın.");
 			} else {
-				Alert.alert(
-					"Senkronizasyon Uyarısı",
-					"Sunucuya bağlanılamadı. Yerel verileriniz korundu, internet bağlantısı sağlandığında tekrar denenecek."
-				);
+				toast.warning("Sunucuya bağlanılamadı. Yerel verileriniz korundu, internet bağlantısı sağlandığında tekrar denenecek.");
 			}
 		} catch (err) {
-			Alert.alert("Hata", err.message || "Senkronizasyon sırasında bir sorun oluştu.");
+			toast.error(err.message || "Senkronizasyon sırasında bir sorun oluştu.");
 		}
 	};
 
 	const handleRevokeDevice = (device) => {
-		Alert.alert(
-			"Cihaz Bağlantısını Kes",
-			`"${device.device_name || "Bu cihaz"}" için senkronizasyon yetkisini kaldırmak istiyor musunuz?`,
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Yetkiyi Kaldır",
-					style: "destructive",
-					onPress: async () => {
+		alert({
+			title: "Cihaz Bağlantısını Kes",
+			message: `"${device.device_name || "Bu cihaz"}" için senkronizasyon yetkisini kaldırmak istiyor musunuz?`,
+			confirmText: "Yetkiyi Kaldır",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: async () => {
 						const ok = await revokeDevice(device.device_id);
 						if (ok) {
-							Alert.alert("Başarılı", "Cihazın senkronizasyon yetkisi kaldırıldı.");
+							toast.success("Cihazın senkronizasyon yetkisi kaldırıldı.");
 						} else {
-							Alert.alert("Hata", "İşlem gerçekleştirilemedi.");
+							toast.error("İşlem gerçekleştirilemedi.");
 						}
 					},
-				},
-			]
-		);
+		});
 	};
 
 	const handleLogout = () => {
-		Alert.alert(
-			"Çıkış Yap",
-			"Hesabınızdan çıkış yapılacak. Yerel verileriniz bu cihazda korunacaktır.",
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Çıkış Yap",
-					style: "destructive",
-					onPress: async () => {
+		alert({
+			title: "Çıkış Yap",
+			message: "Hesabınızdan çıkış yapılacak. Yerel verileriniz bu cihazda korunacaktır.",
+			confirmText: "Çıkış Yap",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: async () => {
 						setIsLoggingOut(true);
 						try {
 							await logout();
 							router.back();
 						} catch {
-							Alert.alert("Hata", "Çıkış yapılırken bir sorun oluştu.");
+							toast.error("Çıkış yapılırken bir sorun oluştu.");
 						} finally {
 							setIsLoggingOut(false);
 						}
 					},
-				},
-			]
-		);
+		});
 	};
 
 	return (

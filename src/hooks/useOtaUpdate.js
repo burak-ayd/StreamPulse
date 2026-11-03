@@ -29,8 +29,8 @@
  * bloklamayan güncelleme UX'iyle (bkz. AppUpdateContext dokumantasyonu)
  * birleştirilmiş hâli. Native config: app.config.js → `updates`.
  */
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import { useEffect, useRef } from "react";
-import { Alert } from "react-native";
 import * as Updates from "expo-updates";
 import {
 	getNotifyOnUpdate,
@@ -41,6 +41,7 @@ import {
 import { MAX_SPLASH_MS } from "@/utils/splashScreen";
 
 export function useOtaUpdate() {
+	const { alert } = useFeedback();
 	/* Oturumda tek kontrol güvencesi (StrictMode çift-çalıştırmasına karşı
 	 * da korur). RootLayout bir kez mount olduğundan normalde de tektir. */
 	const hasCheckedRef = useRef(false);
@@ -87,13 +88,12 @@ export function useOtaUpdate() {
 					/* Tercih AÇIK: otomatik uygulama yerine kullanıcıya sor.
 					 * "Şimdi yenile" anında uygular; "Kapat" bir sonraki
 					 * açılışa bırakır (native zaten uygular). */
-					Alert.alert(
-						"Yeni sürüm hazır",
-						"Uygulama güncellemesi indirildi. Şimdi yenilemek ister misiniz? Reddederseniz bir sonraki açılışınızda sessizce uygulanır.",
-						[
-							{
-								text: "Şimdi yenile",
-								onPress: () => {
+					alert({
+			title: "Yeni sürüm hazır",
+			message: "Uygulama güncellemesi indirildi. Şimdi yenilemek ister misiniz? Reddederseniz bir sonraki açılışınızda sessizce uygulanır.",
+			confirmText: "Şimdi yenile",
+			cancelText: "Kapat",
+			onConfirm: () => {
 									Updates.reloadAsync().catch((reloadError) => {
 										console.warn(
 											"OTA yenileme hatası:",
@@ -101,14 +101,7 @@ export function useOtaUpdate() {
 										);
 									});
 								},
-							},
-							{
-								text: "Kapat",
-								style: "cancel",
-							},
-						],
-						{ cancelable: true },
-					);
+		});
 					return;
 				}
 
@@ -143,5 +136,5 @@ export function useOtaUpdate() {
 		}
 
 		checkAndDownload();
-	}, []);
+	}, [alert]);
 }

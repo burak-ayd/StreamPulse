@@ -11,6 +11,7 @@
  * açar. AstorTest2'deki "güncelleme varsa uygulama açılmaz" davranışı
  * kullanıcıyı offline olduğunda kilitlemesi diye özellikle seçilmedi.
  */
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import {
 	createContext,
 	useCallback,
@@ -20,7 +21,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Alert } from "react-native";
 import { appUpdateConfig, getUpdateManager } from "@/services/appUpdate";
 import * as Updates from "expo-updates";
 import Constants from "expo-constants";
@@ -28,6 +28,7 @@ import Constants from "expo-constants";
 const AppUpdateContext = createContext(null);
 
 export function AppUpdateProvider({ children }) {
+	const { alert, toast } = useFeedback();
 	const [stage, setStage] = useState("idle");
 	const [release, setRelease] = useState(null);
 	const [progress, setProgress] = useState(0);
@@ -122,18 +123,14 @@ export function AppUpdateProvider({ children }) {
 
 	// Kurulum izni akışı — Android 8+ için "bilinmeyen kaynaklar".
 	const requestPermission = useCallback(() => {
-		Alert.alert(
-			"Yükleme izni gerekli",
-			"Güncellemeyi yükleyebilmek için bu uygulamaya “bilinmeyen kaynaklardan yükleme” izni verilmelidir.",
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Ayarları aç",
-					onPress: () => managerRef.current?.requestInstallPermission(),
-				},
-			]
-		);
-	}, []);
+		alert({
+			title: "Yükleme izni gerekli",
+			message: "Güncellemeyi yükleyebilmek için bu uygulamaya “bilinmeyen kaynaklardan yükleme” izni verilmelidir.",
+			confirmText: "Ayarları aç",
+			cancelText: "Vazgeç",
+			onConfirm: () => managerRef.current?.requestInstallPermission(),
+		});
+	}, [alert]);
 
 	useEffect(() => {
 		const manager = getUpdateManager();
@@ -147,11 +144,7 @@ export function AppUpdateProvider({ children }) {
 			onProgress: (value) => setProgress(value),
 			onError: (message) => setError(message),
 			onInstallStarted: () => {
-				Alert.alert(
-					"Kurulum başlatıldı",
-					"Sistem yükleyicisi açıldı. Yeni sürümü yükledikten sonra uygulama otomatik yenilenecek.",
-					[{ text: "Tamam" }]
-				);
+				toast.info("Sistem yükleyicisi açıldı. Yeni sürümü yükledikten sonra uygulama otomatik yenilenecek.");
 			},
 			onPermissionRequired: requestPermission,
 		});
@@ -168,7 +161,7 @@ export function AppUpdateProvider({ children }) {
 		return () => {
 			manager.cleanup();
 		};
-	}, [check, requestPermission]);
+	}, [check, requestPermission, toast]);
 
 	const install = useCallback(async () => {
 		const manager = managerRef.current;

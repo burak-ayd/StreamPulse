@@ -1,3 +1,4 @@
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import TVPressable from "@/components/common/TVPressable";
 import { usePlayerSettings } from "@/context/PlayerSettingsContext";
 import { useThemeContext } from "@/context/ThemeContext";
@@ -7,7 +8,6 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback } from "react";
 import {
-	Alert,
 	BackHandler,
 	ScrollView,
 	StatusBar,
@@ -140,6 +140,7 @@ function ToggleRow({ colors, icon, title, subtitle, value, onChange }) {
 }
 
 export default function PlayerSettingsScreen() {
+	const { alert } = useFeedback();
 	const { colors } = useThemeContext();
 	const router = useRouter();
 	// TV: oynatıcı ayarları ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
@@ -162,20 +163,16 @@ export default function PlayerSettingsScreen() {
 	);
 
 	const handleReset = () => {
-		Alert.alert(
-			"Ayarları Sıfırla",
-			"Tüm oynatıcı ve altyazı ayarları varsayılan değerlere döndürülsün mü?",
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Sıfırla",
-					style: "destructive",
-					onPress: async () => {
+		alert({
+			title: "Ayarları Sıfırla",
+			message: "Tüm oynatıcı ve altyazı ayarları varsayılan değerlere döndürülsün mü?",
+			confirmText: "Sıfırla",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: async () => {
 						await resetSettings();
 					},
-				},
-			],
-		);
+		});
 	};
 
 	// Altyazı arkaplan rengi hesabı

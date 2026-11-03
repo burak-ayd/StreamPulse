@@ -26,6 +26,7 @@
  * satırı siler. Onaylı; iyimser çıkarılır, hata da geri gelir.
  */
 
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import TVPressable from "@/components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
 import { FontFamily, Palette } from "@/constants/theme";
@@ -44,7 +45,6 @@ import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
-	Alert,
 	BackHandler,
 	FlatList,
 	RefreshControl,
@@ -75,6 +75,7 @@ function kaynakEtiketi(satir) {
 }
 
 export default function TakipEdilenDizilerScreen() {
+	const { alert, toast } = useFeedback();
 	const { colors, theme } = useThemeContext();
 	const { isTV, sp, contentMaxWidth } = useTvMetrics();
 	const router = useRouter();
@@ -160,10 +161,7 @@ export default function TakipEdilenDizilerScreen() {
 							: s,
 					),
 				);
-				Alert.alert(
-					"Bildirim ayarı yazılamadı",
-					sonuc.mesaj || "Sunucuya ulaşılamadı.",
-				);
+				toast.error(sonuc.mesaj || "Sunucuya ulaşılamadı.");
 				return;
 			}
 			if (sonuc.data) {
@@ -243,15 +241,13 @@ export default function TakipEdilenDizilerScreen() {
 				satir.etiket ??
 				magaza[satir.tmdb_id] ??
 				`Dizi #${String(satir.tmdb_id).replace(/[^0-9]/g, "")}`;
-			Alert.alert(
-				"Takipten çıkar",
-				`"${etiket}" bildirim takibinden çıkar; listede görünmez ve bölüm bildirimi verilmez. Dizinin sayfasında yeniden takip kurabilirsin.`,
-				[
-					{ text: "Vazgeç", style: "cancel" },
-					{
-						text: "Çıkar",
-						style: "destructive",
-						onPress: async () => {
+			alert({
+			title: "Takipten çıkar",
+			message: `"${etiket}" bildirim takibinden çıkar; listede görünmez ve bölüm bildirimi verilmez. Dizinin sayfasında yeniden takip kurabilirsin.`,
+			confirmText: "Çıkar",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: async () => {
 							// İyimser çıkar; hata tüm satırı geri koyar.
 							setSatirlar((eski) =>
 								eski.filter((s) => s.tmdb_id !== satir.tmdb_id),
@@ -265,15 +261,10 @@ export default function TakipEdilenDizilerScreen() {
 										? eski
 										: [satir, ...eski],
 								);
-								Alert.alert(
-									"Çıkarılamadı",
-									"Sunucuya ulaşılamadı; satır listede bırakıldı.",
-								);
+								toast.info("Sunucuya ulaşılamadı; satır listede bırakıldı.");
 							}
 						},
-					},
-				],
-			);
+		});
 		},
 		[magaza],
 	);

@@ -14,6 +14,7 @@ import SmartImage from "@/components/common/SmartImage";
 import TVPressable from "@/components/common/TVPressable";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useDownload } from "@/context/DownloadContext";
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { etaLabel } from "@/utils/downloadEta";
 import { useTvMetrics } from "@/utils/tvMetrics";
@@ -23,7 +24,6 @@ import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
-	Alert,
 	BackHandler,
 	ScrollView,
 	StatusBar,
@@ -123,6 +123,7 @@ export default function DownloadsScreen() {
 	const router = useRouter();
 	const { contentPaddingLeft } = useNavLayout();
 	const { sp, contentMaxWidth, isWide } = useTvMetrics();
+	const { alert } = useFeedback();
 	const {
 		queue,
 		pauseDownload,
@@ -284,29 +285,25 @@ export default function DownloadsScreen() {
 	};
 
 	const confirmCancel = (item) => {
-		Alert.alert(
-			"İndirmeyi İptal Et",
-			`"${item.type === "series" ? episodeLabel(item) : item.contentTitle}" iptal edilsin mi?`,
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "İptal Et",
-					style: "destructive",
-					onPress: () => cancelDownload(item.id),
-				},
-			],
-		);
+		alert({
+			title: "İndirmeyi İptal Et",
+			message: `"${item.type === "series" ? episodeLabel(item) : item.contentTitle}" iptal edilsin mi?`,
+			confirmText: "İptal Et",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: () => cancelDownload(item.id),
+		});
 	};
 
 	const confirmDelete = (item) => {
-		Alert.alert("İndirmeyi Sil", "Kayıt ve indirilen dosyalar silinsin mi?", [
-			{ text: "Vazgeç", style: "cancel" },
-			{
-				text: "Sil",
-				style: "destructive",
-				onPress: () => removeDownload(item.id),
-			},
-		]);
+		alert({
+			title: "İndirmeyi Sil",
+			message: "Kayıt ve indirilen dosyalar silinsin mi?",
+			confirmText: "Sil",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: () => removeDownload(item.id),
+		});
 	};
 
 	/* ── Seçim modu ─────────────────────────────────────────────── */
@@ -359,21 +356,17 @@ export default function DownloadsScreen() {
 	const handleBulkDelete = () => {
 		const ids = [...selectedIds];
 		if (ids.length === 0) return;
-		Alert.alert(
-			"İndirmeleri Sil",
-			`${ids.length} indirme ve dosyaları silinsin mi?`,
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Sil",
-					style: "destructive",
-					onPress: async () => {
-						for (const id of ids) await removeDownload(id);
-						exitSelection();
-					},
-				},
-			],
-		);
+		alert({
+			title: "İndirmeleri Sil",
+			message: `${ids.length} indirme ve dosyaları silinsin mi?`,
+			confirmText: "Sil",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: async () => {
+				for (const id of ids) await removeDownload(id);
+				exitSelection();
+			},
+		});
 	};
 
 	/* ── Parçalar ───────────────────────────────────────────────── */

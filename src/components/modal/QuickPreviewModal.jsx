@@ -1,3 +1,4 @@
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import TVPressable, {
 	isTVPressSuppressed,
 } from "@/components/common/TVPressable";
@@ -17,7 +18,6 @@ import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import {
-	Alert,
 	BackHandler,
 	Modal,
 	Pressable,
@@ -43,6 +43,7 @@ export default function QuickPreviewModal({
 	onPlayPress,
 	onDetailsPress,
 }) {
+	const { toast } = useFeedback();
 	const router = useRouter();
 
 	/**
@@ -259,12 +260,9 @@ export default function QuickPreviewModal({
 	// Bildirim Butonu
 	const handleToggleNotification = () => {
 		setIsNotificationOn((prev) => !prev);
-		Alert.alert(
-			isNotificationOn ? "Bildirimler Kapatıldı" : "Bildirimler Açıldı",
-			isNotificationOn
+		toast.info(isNotificationOn
 				? `"${title}" için yeni bölüm bildirimleri kapatıldı.`
-				: `"${title}" için yeni bölüm bildirimleri açıldı. Yeni bölümler yayınlandığında haberdar edileceksiniz.`,
-		);
+				: `"${title}" için yeni bölüm bildirimleri açıldı. Yeni bölümler yayınlandığında haberdar edileceksiniz.`);
 	};
 
 	// Paylaşım
@@ -323,11 +321,11 @@ export default function QuickPreviewModal({
 		}
 
 		if (isSeries && !episode) {
-			Alert.alert("Bilgi", "İndirme için oynatılabilir bölüm bağlantısı bulunamadı.");
+			toast.info("İndirme için oynatılabilir bölüm bağlantısı bulunamadı.");
 			return;
 		}
 		if (!content.url) {
-			Alert.alert("Bilgi", "İndirme için video bağlantısı bulunamadı.");
+			toast.info("İndirme için video bağlantısı bulunamadı.");
 			return;
 		}
 

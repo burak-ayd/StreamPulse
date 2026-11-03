@@ -1,3 +1,4 @@
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import BottomNavigation from "@/components/BottomNavigation";
 import LanguageBadge from "@/components/common/LanguageBadge";
 import TVPressable from "@/components/common/TVPressable";
@@ -32,7 +33,6 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-	Alert,
 	BackHandler,
 	Linking,
 	Modal,
@@ -196,6 +196,7 @@ function SettingsSection({ title, children }) {
 }
 
 export default function SettingsScreen() {
+	const { alert, toast } = useFeedback();
 	const { theme, toggleTheme } = useThemeContext();
 	const { isLoggedIn, user } = useAuth();
 	const router = useRouter();
@@ -310,10 +311,7 @@ export default function SettingsScreen() {
 		const sonuc = await pushTercihYaz({ enabled: sonraki });
 		if (!sonuc.ok) {
 			setPushTercihi((eski) => ({ ...eski, enabled: !sonraki }));
-			Alert.alert(
-				"Ayar yazılamadı",
-				sonuc.mesaj || "Sunucuya ulaşılamadı.",
-			);
+			toast.error(sonuc.mesaj || "Sunucuya ulaşılamadı.");
 		} else if (sonuc.data) {
 			setPushTercihi(sonuc.data);
 		}
@@ -334,10 +332,7 @@ export default function SettingsScreen() {
 			setPushYaziyor(false);
 			if (!sonuc.ok) {
 				setPushTercihi((eski) => ({ ...eski, saat: onceki }));
-				Alert.alert(
-					"Saat yazılamadı",
-					sonuc.mesaj || "Sunucuya ulaşılamadı.",
-				);
+				toast.error(sonuc.mesaj || "Sunucuya ulaşılamadı.");
 			}
 		},
 		[pushOturumVar, pushYaziyor, pushTercihi],
@@ -452,31 +447,21 @@ export default function SettingsScreen() {
 	);
 
 	const handleClearCache = () => {
-		Alert.alert(
-			"Verileri Temizle",
-			"Tüm izleme geçmişi, yerel önbellek ve tercihler sıfırlanacaktır. Emin misiniz?",
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Sıfırla",
-					style: "destructive",
-					onPress: async () => {
+		alert({
+			title: "Verileri Temizle",
+			message: "Tüm izleme geçmişi, yerel önbellek ve tercihler sıfırlanacaktır. Emin misiniz?",
+			confirmText: "Sıfırla",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: async () => {
 						try {
 							await clearAllUserData();
-							Alert.alert(
-								"Başarılı",
-								"Tüm yerel veriler temizlendi.",
-							);
+							toast.success("Tüm yerel veriler temizlendi.");
 						} catch {
-							Alert.alert(
-								"Hata",
-								"Veriler temizlenirken bir sorun oluştu.",
-							);
+							toast.error("Veriler temizlenirken bir sorun oluştu.");
 						}
 					},
-				},
-			],
-		);
+		});
 	};
 
 	const displayName = user?.display_name || user?.username || "Misafir";
@@ -844,10 +829,7 @@ export default function SettingsScreen() {
 							showChevron={false}
 							onPress={() => {
 								Linking.openSettings().catch(() => {
-									Alert.alert(
-										"Telefon Bildirim Ayarları",
-										"Telefonun ayar sayfası açılamadı.",
-									);
+									toast.info("Telefonun ayar sayfası açılamadı.");
 								});
 							}}
 						/>
@@ -1057,10 +1039,7 @@ export default function SettingsScreen() {
 								focusedStyle={styles.settingRowFocused}
 								onPress={() => {
 									Linking.openSettings().catch(() => {
-										Alert.alert(
-											"Telefon Bildirim Ayarları",
-											"Telefonun ayar sayfası açılamadı.",
-										);
+										toast.info("Telefonun ayar sayfası açılamadı.");
 									});
 								}}>
 								<View style={styles.modalRowInfo}>

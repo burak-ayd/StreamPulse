@@ -16,6 +16,7 @@
  * - Giriş yoksa sakince bir "hesap gerekli" kartı gösterir — hata fırlatmaz.
  */
 
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import TVPressable from "@/components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
@@ -38,7 +39,6 @@ import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useRef, useState } from "react";
 import {
 	ActivityIndicator,
-	Alert,
 	BackHandler,
 	FlatList,
 	RefreshControl,
@@ -64,6 +64,7 @@ function sezonBolumEtiketi(satir) {
 }
 
 export default function BildirimlerScreen() {
+	const { alert } = useFeedback();
 	const { colors, theme } = useThemeContext();
 	const { isTV, sp, contentMaxWidth } = useTvMetrics();
 	const router = useRouter();
@@ -156,14 +157,12 @@ export default function BildirimlerScreen() {
 
 	const tumunuOkunduSay = () => {
 		if (okunmamisAdet === 0) return;
-		Alert.alert(
-			"Tümünü okundu say",
-			`${okunmamisAdet} okunmamış bildirim okundu işaretlenecek.`,
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Okundu say",
-					onPress: async () => {
+		alert({
+			title: "Tümünü okundu say",
+			message: `${okunmamisAdet} okunmamış bildirim okundu işaretlenecek.`,
+			confirmText: "Okundu say",
+			cancelText: "Vazgeç",
+			onConfirm: async () => {
 						await okunduTumunuIsaretle();
 						// Sunucu idempotent; yereli uzlaşma ile damgala.
 						setSatirlar((eski) =>
@@ -173,9 +172,7 @@ export default function BildirimlerScreen() {
 							})),
 						);
 					},
-				},
-			],
-		);
+		});
 	};
 
 	/**
@@ -197,15 +194,13 @@ export default function BildirimlerScreen() {
 
 	/** Uzun basış → satır silme onayı. İyimser çıkarır; hatada geri koyar. */
 	const satiriSil = (satir) => {
-		Alert.alert(
-			"Bildirimi sil",
-			`"${satirBasligi(satir, baslikHafizasi.current)}" listenden silinecek.`,
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Sil",
-					style: "destructive",
-					onPress: async () => {
+		alert({
+			title: "Bildirimi sil",
+			message: `"${satirBasligi(satir, baslikHafizasi.current)}" listenden silinecek.`,
+			confirmText: "Sil",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: async () => {
 						// İyimser çıkar; sunucu reddederse satır geri gelir
 						// (başka cihazda silinmiş olabilir — sonraki çekim
 						// sunucu hakikatini zaten kesinleştirir).
@@ -219,23 +214,19 @@ export default function BildirimlerScreen() {
 							);
 						}
 					},
-				},
-			],
-		);
+		});
 	};
 
 	/** Üst çubuğun toplu silmesi — gelen kutusunu tümüyle boşaltır. */
 	const tumunuSil = () => {
 		if (satirlar.length === 0) return;
-		Alert.alert(
-			"Tümünü sil",
-			"Gelen kutusundaki tüm bildirimler — okunmuşlar dahil — silinecek. Bu işlem geri alınamaz.",
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Sil",
-					style: "destructive",
-					onPress: async () => {
+		alert({
+			title: "Tümünü sil",
+			message: "Gelen kutusundaki tüm bildirimler — okunmuşlar dahil — silinecek. Bu işlem geri alınamaz.",
+			confirmText: "Sil",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: async () => {
 						// İyimser boşalt; sunucu reddederse liste gerçek
 						// hakikatinden yeniden kurulur (basiliCek).
 						setSatirlar([]);
@@ -243,9 +234,7 @@ export default function BildirimlerScreen() {
 						const adet = await bildirimleriTumunuSil();
 						if (adet === null) void basiliCek();
 					},
-				},
-			],
-		);
+		});
 	};
 
 	/** Eski sayfa: `has_more` true ise son satırın `created_at`'i imleçtir. */

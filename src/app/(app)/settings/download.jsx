@@ -11,6 +11,7 @@
  * BackHandler, TV'de ortalanmış maksimum içerik genişliği.
  */
 
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import Slider from "@/components/common/Slider";
 import TVPressable from "@/components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
@@ -20,7 +21,6 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
-	Alert,
 	BackHandler,
 	Modal,
 	ScrollView,
@@ -79,6 +79,7 @@ function ValueRow({ colors, icon, iconBg, title, subtitle, valueText, onPress })
 }
 
 export default function DownloadSettingsScreen() {
+	const { alert } = useFeedback();
 	const { colors } = useThemeContext();
 	const router = useRouter();
 	const { contentMaxWidth } = useTvMetrics();
@@ -156,41 +157,33 @@ export default function DownloadSettingsScreen() {
 	};
 
 	const resetPlugin = () => {
-		Alert.alert(
-			"Eklenti Tercihi Sıfırla",
-			`"${editPlugin}" için kayıtlı indirme tercihleri silinsin mi?`,
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Sıfırla",
-					style: "destructive",
-					onPress: async () => {
+		alert({
+			title: "Eklenti Tercihi Sıfırla",
+			message: `"${editPlugin}" için kayıtlı indirme tercihleri silinsin mi?`,
+			confirmText: "Sıfırla",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: async () => {
 						await deletePluginDownloadPref(editPlugin);
 						setPrefs(await getPluginDownloadPrefs());
 						setEditPlugin(null);
 						setEditDraft(null);
 					},
-				},
-			],
-		);
+		});
 	};
 
 	const resetAllPrefs = () => {
-		Alert.alert(
-			"Tüm Tercihleri Sıfırla",
-			"Tüm eklenti indirme tercihleri silinsin mi?",
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Sıfırla",
-					style: "destructive",
-					onPress: async () => {
+		alert({
+			title: "Tüm Tercihleri Sıfırla",
+			message: "Tüm eklenti indirme tercihleri silinsin mi?",
+			confirmText: "Sıfırla",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: async () => {
 						await resetPluginDownloadPrefs();
 						setPrefs({});
 					},
-				},
-			],
-		);
+		});
 	};
 
 	const optionModalOptions =

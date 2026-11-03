@@ -1,3 +1,4 @@
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import { FontFamily, Palette } from "@/constants/theme";
 import TVPressable from "@components/common/TVPressable";
 import { useAuth } from "@/context/AuthContext";
@@ -14,7 +15,6 @@ import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
 	ActivityIndicator,
-	Alert,
 	BackHandler,
 	KeyboardAvoidingView,
 	Platform,
@@ -29,6 +29,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function EditProfile() {
+	const { alert, toast } = useFeedback();
 	const { theme } = useThemeContext();
 	// TV: profil formu ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
 	const { contentMaxWidth } = useTvMetrics();
@@ -131,10 +132,7 @@ export default function EditProfile() {
 			await ImagePicker.requestMediaLibraryPermissionsAsync();
 
 		if (permissionResult.granted === false) {
-			Alert.alert(
-				"İzin Gerekli",
-				"Fotoğraf seçmek için galeri erişim izni gerekli.",
-			);
+			toast.warning("Fotoğraf seçmek için galeri erişim izni gerekli.");
 			return;
 		}
 
@@ -159,12 +157,12 @@ export default function EditProfile() {
 
 	const handleSave = async () => {
 		if (!username.trim()) {
-			Alert.alert("Hata", "Kullanıcı adı boş bırakılamaz.");
+			toast.error("Kullanıcı adı boş bırakılamaz.");
 			return;
 		}
 
 		if (!displayName.trim()) {
-			Alert.alert("Hata", "Görünen ad boş bırakılamaz.");
+			toast.error("Görünen ad boş bırakılamaz.");
 			return;
 		}
 
@@ -221,37 +219,23 @@ export default function EditProfile() {
 				console.warn("Profil senkronizasyonu tetiklenemedi:", e);
 			}
 
-			Alert.alert(
-				sunucuMesaji ? "Kısmen kaydedildi" : "Başarılı",
-				sunucuMesaji
+			alert({
+			title: sunucuMesaji ? "Kısmen kaydedildi" : "Başarılı",
+			message: sunucuMesaji
 					? `${sunucuMesaji}\n(Profil cihazda kaydedildi, sunucuya yazılamadı.)`
 					: "Profil kaydedildi.",
-				[
-					{
-						text: "Tamam",
-						onPress: () => router.back(),
-					},
-				],
-			);
+			confirmText: "Tamam",
+			onConfirm: () => router.back(),
+		});
 		} catch (error) {
-			Alert.alert(
-				"Hata",
-				error.message || "Profil güncellenirken hata oluştu.",
-			);
+			toast.error(error.message || "Profil güncellenirken hata oluştu.");
 		} finally {
 			setIsLoading(false);
 		}
 	};
 
 	const showLanguagePicker = () => {
-		Alert.alert(
-			"Dil Seçin",
-			"",
-			languageOptions.map((lang) => ({
-				text: lang,
-				onPress: () => setLanguage(lang),
-			})),
-		);
+		toast.info("");
 	};
 
 	const formatDate = (dateString) => {

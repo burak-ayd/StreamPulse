@@ -16,6 +16,7 @@
  * (aynı sözleşme eski ekrandan korundu): `?tab=continue|history|favorites`.
  */
 
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import {
 	AccountAction,
 	ProfileHeader,
@@ -73,6 +74,7 @@ const SORT_LABELS = {
 };
 
 export default function ProfileScreen() {
+	const { alert } = useFeedback();
 		// TV ölçüleri — bkz. utils/tvMetrics.js
 	const { isWide, isLandscape, width: winWidth } = useTvMetrics();
 	const { isLoggedIn, user, logout } = useAuth();
@@ -334,21 +336,17 @@ export default function ProfileScreen() {
 	}, []);
 
 	const confirmClearHistory = useCallback(() => {
-		Alert.alert(
-			"İzleme geçmişini temizle",
-			"Tüm cihazlarındaki izleme geçmişi silinecek. Bu işlem geri alınamaz.",
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Temizle",
-					style: "destructive",
-					onPress: async () => {
+		alert({
+			title: "İzleme geçmişini temizle",
+			message: "Tüm cihazlarındaki izleme geçmişi silinecek. Bu işlem geri alınamaz.",
+			confirmText: "Temizle",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: async () => {
 						await clearWatchHistory();
 						setHistory([]);
 					},
-				},
-			],
-		);
+		});
 	}, []);
 
 	/**
@@ -359,23 +357,19 @@ export default function ProfileScreen() {
 	 * çekiyor. Kullanıcı "yanlışlıkla çıktım" deyip veri kaybı yaşamamalı.
 	 */
 	const confirmLogout = useCallback(() => {
-		Alert.alert(
-			"Çıkış yapılsın mı?",
-			"Çıkış yaptığında bu cihazdaki senkronizasyon damgan sıfırlanır. " +
+		alert({
+			title: "Çıkış yapılsın mı?",
+			message: "Çıkış yaptığında bu cihazdaki senkronizasyon damgan sıfırlanır. " +
 				"Verilerin silinmez; tekrar girdiğinde hesabının tamamı yeniden indirilir.",
-			[
-				{ text: "Vazgeç", style: "cancel" },
-				{
-					text: "Çıkış Yap",
-					style: "destructive",
-					onPress: () => {
+			confirmText: "Çıkış Yap",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: () => {
 						logout().catch((err) =>
 							console.warn("Çıkış tamamlanamadı:", err?.message),
 						);
 					},
-				},
-			],
-		);
+		});
 	}, [logout]);
 
 	// ── Yerleşim ─────────────────────────────────────────────

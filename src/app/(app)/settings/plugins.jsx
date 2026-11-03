@@ -1,3 +1,4 @@
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { useThemeContext } from "@/context/ThemeContext";
@@ -21,7 +22,6 @@ import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
-	Alert,
 	BackHandler,
 	RefreshControl,
 	ScrollView,
@@ -35,6 +35,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PluginSettingsScreen() {
+	const { toast } = useFeedback();
 	const { theme } = useThemeContext();
 	const router = useRouter();
 	// TV: eklenti satırları ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
@@ -93,7 +94,7 @@ export default function PluginSettingsScreen() {
 			setCategoryVisibilityMap(savedCatVisibility || {});
 		} catch (error) {
 			console.error("Eklentiler yüklenirken hata:", error);
-			Alert.alert("Hata", "Eklentiler yüklenemedi.");
+			toast.error("Eklentiler yüklenemedi.");
 		} finally {
 			setLoading(false);
 			setRefreshing(false);
@@ -130,7 +131,7 @@ export default function PluginSettingsScreen() {
 			console.error("Görünürlük kaydedilemedi:", error);
 			// Rollback state on error
 			setVisibilityMap(visibilityMap);
-			Alert.alert("Hata", "Ayar kaydedilemedi.");
+			toast.error("Ayar kaydedilemedi.");
 		}
 	};
 
@@ -148,7 +149,7 @@ export default function PluginSettingsScreen() {
 			clearPluginCache();
 		} catch (error) {
 			console.error("Toplu görünürlük kaydedilemedi:", error);
-			Alert.alert("Hata", "Ayarlar kaydedilemedi.");
+			toast.error("Ayarlar kaydedilemedi.");
 		}
 	};
 
@@ -228,7 +229,7 @@ export default function PluginSettingsScreen() {
 		} catch (error) {
 			console.error("Kategori görünürlüğü kaydedilemedi:", error);
 			setCategoryVisibilityMap(categoryVisibilityMap);
-			Alert.alert("Hata", "Kategori ayarı kaydedilemedi.");
+			toast.error("Kategori ayarı kaydedilemedi.");
 		}
 	};
 
@@ -258,7 +259,7 @@ export default function PluginSettingsScreen() {
 			clearPluginCache(plugin.name);
 		} catch (error) {
 			console.error("Toplu kategori görünürlüğü kaydedilemedi:", error);
-			Alert.alert("Hata", "Kategori ayarları kaydedilemedi.");
+			toast.error("Kategori ayarları kaydedilemedi.");
 		}
 	};
 
@@ -286,7 +287,7 @@ export default function PluginSettingsScreen() {
 				`[${plugin.name}] kategorileri yenilenirken hata:`,
 				catErr,
 			);
-			Alert.alert("Hata", "Kategoriler yüklenemedi.");
+			toast.error("Kategoriler yüklenemedi.");
 		} finally {
 			setLoadingCategories((prev) => ({ ...prev, [pluginKey]: false }));
 		}

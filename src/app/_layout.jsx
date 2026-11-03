@@ -32,6 +32,7 @@ import { pushTepkisiBagla } from "@/services/pushApi";
  */
 import { hideNativeSplash, waitForStartupGate } from "@/utils/splashScreen";
 import MissingPermissionsGate from "@/components/permissions/MissingPermissionsGate";
+import { AppFeedbackProvider } from "@/components/feedback/AppFeedbackProvider";
 
 export default function RootLayout() {
 	const [splashVisible, setSplashVisible] = useState(true);
@@ -146,6 +147,9 @@ export default function RootLayout() {
 
 	return (
 		<ThemeProvider>
+			{/* Uygulama geneli onay diyaloğu + toast katmanı. En dışta:
+			    aşağıdaki tüm provider'lar `useFeedback()` kullanabilsin. */}
+			<AppFeedbackProvider>
 			{/*
 			 * AppUpdateProvider en dışta: hem banner hem ayarlar satırı
 			 * aynı güncelleme durumunu okusun diye tek doğruluk kaynağı
@@ -212,6 +216,7 @@ export default function RootLayout() {
 					</SyncProvider>
 				</AuthProvider>
 			</AppUpdateProvider>
+			</AppFeedbackProvider>
 		</ThemeProvider>
 	);
 }

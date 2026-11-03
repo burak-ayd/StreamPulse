@@ -10,6 +10,7 @@
  *   requestDownload({content, episode}) → gerekirse modalı provider açar.
  */
 
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import React, {
 	createContext,
 	useCallback,
@@ -38,6 +39,7 @@ export function buildDownloadKey({ contentId, seriesId, season, episode }) {
 }
 
 export function DownloadProvider({ children }) {
+	const { toast } = useFeedback();
 	const [queue, setQueue] = useState([]);
 	const [settings, setSettings] = useState(null);
 	const [modal, setModal] = useState(null); // { content, episode } | null
@@ -98,8 +100,7 @@ export function DownloadProvider({ children }) {
 			const pluginName = content?.plugin || "";
 			const targetUrl = episode?.url || content?.url;
 			if (!targetUrl) {
-				const { Alert } = await import("react-native");
-				Alert.alert("Bilgi", "İndirme için video bağlantısı bulunamadı.");
+				toast.info("İndirme için video bağlantısı bulunamadı.");
 				return { enqueued: false };
 			}
 
@@ -115,11 +116,7 @@ export function DownloadProvider({ children }) {
 						pref,
 					});
 					if (id) {
-						const { Alert } = await import("react-native");
-						Alert.alert(
-							"İndirme",
-							`"${content?.title}" kuyruğa eklendi.`,
-						);
+						toast.info(`"${content?.title}" kuyruğa eklendi.`);
 						syncQueue();
 						return { enqueued: true, id };
 					}
@@ -132,7 +129,7 @@ export function DownloadProvider({ children }) {
 			setModal({ content, episode });
 			return { enqueued: false };
 		},
-		[],
+		[toast],
 	);
 
 	const pauseDownload = useMemo(

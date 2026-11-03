@@ -1,3 +1,4 @@
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import { FontFamily, Palette } from "@/constants/theme";
 import { fetchPluginDetail } from "@/services/api";
 import { canonicalType, isSeriesContent } from "@/utils/mediaType";
@@ -25,7 +26,6 @@ import {
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-	Alert,
 	BackHandler,
 	Linking,
 	ScrollView,
@@ -69,6 +69,7 @@ export const DETAIL_SECTIONS_CONFIG = {
  * Dynamic route: /(app)/MovieDetails/[id]
  */
 export default function MovieDetailsScreen() {
+	const { toast } = useFeedback();
 	const params = useLocalSearchParams();
 	const id = params.id;
 	const passedMovie = useMemo(() => {
@@ -918,10 +919,7 @@ export default function MovieDetailsScreen() {
 	const handleOpenTrailer = async () => {
 		const trailerUrl = content?.trailer_url;
 		if (!trailerUrl) {
-			Alert.alert(
-				"Bilgi",
-				"Bu içerik için fragman bağlantısı bulunamadı.",
-			);
+			toast.info("Bu içerik için fragman bağlantısı bulunamadı.");
 			return;
 		}
 		try {

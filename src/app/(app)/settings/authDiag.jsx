@@ -23,6 +23,7 @@
  * kodu görünür.
  */
 
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import TVPressable from "@/components/common/TVPressable";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
@@ -31,7 +32,6 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
-	Alert,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -67,6 +67,7 @@ const OLAY_ADI = {
 };
 
 export default function AuthDiagScreen() {
+	const { alert, toast } = useFeedback();
 	const { contentMaxWidth } = useTvMetrics();
 	const router = useRouter();
 	const [kayitlar, setKayitlar] = useState([]);
@@ -88,17 +89,17 @@ export default function AuthDiagScreen() {
 	);
 
 	const temizle = () => {
-		Alert.alert("Kayıtları temizle", "Tüm oturum teşhis kaydı silinsin mi?", [
-			{ text: "Vazgeç", style: "cancel" },
-			{
-				text: "Temizle",
-				style: "destructive",
-				onPress: async () => {
+		alert({
+			title: "Kayıtları temizle",
+			message: "Tüm oturum teşhis kaydı silinsin mi?",
+			confirmText: "Temizle",
+			cancelText: "Vazgeç",
+			destructive: true,
+			onConfirm: async () => {
 					await authDiag.clear();
 					yenile();
 				},
-			},
-		]);
+		});
 	};
 
 	const metniKopyala = async () => {
@@ -109,10 +110,7 @@ export default function AuthDiagScreen() {
 		// yapıldı (aşağıdaki blok): kullanıcı uzun basıp sistem
 		// "Panoya kopyala" aracını kullanır. Bu her platformda çalışır
 		// ve sürüm kırılganlığı getirmez.
-		Alert.alert(
-			"Kopyalamak için",
-			"Kayıt metnine uzun basıp 'Panoya kopyala' seçeneğini kullan.",
-		);
+		toast.info("Kayıt metnine uzun basıp 'Panoya kopyala' seçeneğini kullan.");
 	};
 
 	return (

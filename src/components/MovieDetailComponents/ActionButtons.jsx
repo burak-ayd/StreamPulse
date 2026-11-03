@@ -1,3 +1,4 @@
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import TVPressable from "@/components/common/TVPressable";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useDownload } from "@/context/DownloadContext";
@@ -29,6 +30,7 @@ export default function ActionButtons({
 	onToggleFavorite,
 	onOpenTrailer,
 }) {
+	const { toast } = useFeedback();
 	const router = useRouter();
 	const { requestDownload, isDownloaded } = useDownload();
 
@@ -84,10 +86,7 @@ export default function ActionButtons({
 				}
 
 				if (!continueUrl) {
-					Alert.alert(
-						"Bilgi",
-						"Oynatılacak bölüm bağlantısı bulunamadı.",
-					);
+					toast.info("Oynatılacak bölüm bağlantısı bulunamadı.");
 					return;
 				}
 
@@ -177,10 +176,7 @@ export default function ActionButtons({
 		}
 
 		if (!playUrl) {
-			Alert.alert(
-				"Bilgi",
-				"Bu içerik için oynatılabilir bağlantı bulunamadı.",
-			);
+			toast.info("Bu içerik için oynatılabilir bağlantı bulunamadı.");
 			return;
 		}
 
@@ -219,10 +215,7 @@ export default function ActionButtons({
 		}
 		const trailerUrl = content?.trailer_url;
 		if (!trailerUrl) {
-			Alert.alert(
-				"Bilgi",
-				"Bu içerik için fragman bağlantısı bulunamadı.",
-			);
+			toast.info("Bu içerik için fragman bağlantısı bulunamadı.");
 			return;
 		}
 		try {
@@ -275,14 +268,11 @@ export default function ActionButtons({
 	const handleDownload = () => {
 		const targetEpisode = isSeries ? resolveDownloadEpisode() : null;
 		if (isSeries && !targetEpisode?.url) {
-			Alert.alert(
-				"Bilgi",
-				"İndirme için oynatılabilir bölüm bağlantısı bulunamadı.",
-			);
+			toast.info("İndirme için oynatılabilir bölüm bağlantısı bulunamadı.");
 			return;
 		}
 		if (!isSeries && !content?.url) {
-			Alert.alert("Bilgi", "İndirme için video bağlantısı bulunamadı.");
+			toast.info("İndirme için video bağlantısı bulunamadı.");
 			return;
 		}
 		requestDownload({ content, episode: targetEpisode });

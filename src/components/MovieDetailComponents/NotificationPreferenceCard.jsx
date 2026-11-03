@@ -27,6 +27,7 @@
  * olmamayı seçer — boş uğraş ve yanlış kimlik almaz.
  */
 
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import TVPressable from "@/components/common/TVPressable";
 import { FontFamily, Palette } from "@/constants/theme";
 import {
@@ -41,7 +42,6 @@ import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-	Alert,
 	StyleSheet,
 	Switch,
 	Text,
@@ -87,6 +87,7 @@ export default function NotificationPreferenceCard({
 	diziBasligi,
 	diziDurumu,
 }) {
+	const { toast } = useFeedback();
 	const { isTV, sp } = useTvMetrics();
 
 	const anahtar = useMemo(() => mediaKimligi(tmdbId), [tmdbId]);
@@ -135,10 +136,7 @@ export default function NotificationPreferenceCard({
 				diziUrl: diziUrl || tercih?.dizi_url || null,
 			});
 			if (!cevap.ok) {
-				Alert.alert(
-					"Bildirim ayarı alınamadı",
-					cevap.mesaj || "Sunucuya ulaşılamadı.",
-				);
+				toast.error(cevap.mesaj || "Sunucuya ulaşılamadı.");
 				return;
 			}
 			setTercih(cevap.data);
