@@ -19,6 +19,7 @@
 import {
 	AccountAction,
 	ProfileHeader,
+	ProfileQuickAccess,
 	ProfileStats,
 	ProfileTabBar,
 	ProfileTopBar,
@@ -406,6 +407,47 @@ export default function ProfileScreen() {
 		: 0;
 
 	/**
+	 * Hızlı Erişim satırları — mevcut ekranlara bağlanır (yeni sayfa açılmaz).
+	 */
+	const quickItems = useMemo(
+		() => [
+			{
+				key: "favorites",
+				icon: "heart-outline",
+				label: "Favorilerim",
+				subtitle: "Özel listelenmiş yapımlar",
+				count: favorites.length,
+				onPress: () => setActiveTab("favorites"),
+			},
+			{
+				key: "library",
+				icon: "bookmark-outline",
+				label: "Planlananlar / İzleme Listesi",
+				subtitle: "Kitaplıktaki tüm listeler",
+				onPress: () => router.push("/(app)/library"),
+			},
+			{
+				key: "history",
+				icon: "time-outline",
+				label: "İzleme Geçmişi",
+				subtitle:
+					history.length > 0
+						? `Son ${history.length} kayıt`
+						: "Henüz kayıt yok",
+				onPress: () => setActiveTab("history"),
+			},
+			{
+				key: "settings",
+				icon: "settings-outline",
+				label: "Hesap ve Ayarlar",
+				subtitle: "Oynatma, ses ve indirme tercihleri",
+				onPress: () => router.push("/(app)/settings"),
+			},
+		],
+		[favorites.length, history.length, router],
+	);
+
+	/**
 	 * Kimlik + hesap + istatistik bloğu.
 	 *
 	 * Dikeyde gövdenin doğrudan çocuklarıdır (eski yerleşim aynen);
@@ -423,17 +465,19 @@ export default function ProfileScreen() {
 				wide={twoPane}
 			/>
 
-			<AccountAction
-				isLoggedIn={isLoggedIn}
-				onLogin={() => openLogin(router)}
-				onLogout={confirmLogout}
-				wide={twoPane}
-			/>
-
 			<ProfileStats
 				stats={stats}
 				activeKey={activeTab}
 				onSelect={(key) => setActiveTab(key)}
+				wide={twoPane}
+			/>
+
+			<ProfileQuickAccess items={quickItems} />
+
+			<AccountAction
+				isLoggedIn={isLoggedIn}
+				onLogin={() => openLogin(router)}
+				onLogout={confirmLogout}
 				wide={twoPane}
 			/>
 		</>

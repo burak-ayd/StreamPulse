@@ -1,16 +1,14 @@
 /**
  * Profil Ekranı — Üst Kısım (Chrome)
  *
- * Referans: profil_sekmeli_minimal / profil_favoriler_sekmesi /
- * profil_son_i_zlenenler_sekmesi (Ortak başlık bloğu)
- *
- * Material 3 yüzey rampası; tüm renkler `useThemeContext().m3`.
- * TV desteği için `TVPressable` ve `focusedStyle` kullanılır.
+ * Yeni tasarım: profil kartı (ortalanmış avatar + ad + iletişim + düzenle),
+ * istatistik kartları, Hızlı Erişim listesi, çıkış/giriş eylemi ve sekme
+ * çubuğu. Tüm renkler `Palette` / `FontFamily` üzerinden gelir.
+ * TV desteği için `TVPressable` kullanılır.
  */
 
-import { useThemeContext } from "@/context/ThemeContext";
 import TVPressable from "@components/common/TVPressable";
-import { ScreenGutter } from "@constants/theme";
+import { FontFamily, Palette, ScreenGutter } from "@constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import { StyleSheet, Text, View } from "react-native";
@@ -18,14 +16,10 @@ import { StyleSheet, Text, View } from "react-native";
 // ─── Üst Çubuk ──────────────────────────────────────────────────
 
 /**
- * "Profilim •" başlığı + bildirim ve SENKRONİZASYON düğmeleri.
+ * "Profil" başlığı + bildirim ve SENKRONİZASYON düğmeleri.
  *
  * ⚠️ Bu düğme genel ayarları değil, doğrudan `/settings/sync` ekranını açar
- * (genel ayarlara alt navigasyondaki "Ayarlar" girilir). Bu yüzden simgesi
- * de sync ile ilgili: sağlıklıyken bulut/onay, sorunluyken bulut/kesik.
- *
- * @param {{onBack: () => void, onNotifications: () => void, onSettings: () => void,
- *          hasNotification?: boolean, syncHealthy?: boolean}} props
+ * (genel ayarlara alt navigasyondaki "Ayarlar" girilir).
  */
 export function ProfileTopBar({
 	onBack,
@@ -34,105 +28,49 @@ export function ProfileTopBar({
 	hasNotification = false,
 	syncHealthy = false,
 }) {
-	const { m3 } = useThemeContext();
-
 	return (
-		<View
-			style={[
-				styles.topBar,
-				{
-					backgroundColor: m3.surfaceLowest,
-					borderBottomColor: `${m3.surfaceContainerHigh}66`,
-				},
-			]}>
+		<View style={[styles.topBar, { paddingHorizontal: ScreenGutter }]}>
 			<TVPressable
 				onPress={onBack}
-				focusedStyle={styles.focusedRound}
-				style={styles.topBarSide}
-				accessibilityLabel="Geri">
-				<Ionicons name="arrow-back" size={22} color={m3.onSurface} />
+				accessibilityLabel="Geri"
+				focusedStyle={null}
+				style={({ focused }) => [styles.iconBtn, focused && styles.focusRing]}>
+				<Ionicons name="arrow-back" size={20} color={Palette.onSurface} />
 			</TVPressable>
 
-			<View style={styles.topBarTitleWrap}>
-				<Text style={[styles.topBarTitle, { color: m3.onSurface }]}>
-					Profilim
-				</Text>
-			</View>
+			<Text numberOfLines={1} style={styles.topTitle}>
+				Profil
+			</Text>
 
-			<View style={styles.topBarActions}>
-				<TVPressable
-					onPress={onNotifications}
-					focusedStyle={styles.focusedRound}
-					style={[
-						styles.iconBtn,
-						{ backgroundColor: `${m3.surfaceContainer}99` },
-					]}
-					accessibilityLabel="Bildirimler">
-					<Ionicons
-						name="notifications-outline"
-						size={20}
-						color={m3.onSurface}
-					/>
-					{hasNotification ? (
-						<View
-							style={[
-								styles.badgeDot,
-								{
-									backgroundColor: m3.primaryContainer,
-									borderColor: m3.surfaceLowest,
-								},
-							]}
-						/>
-					) : null}
-				</TVPressable>
-				<TVPressable
-					onPress={onSettings}
-					focusedStyle={styles.focusedRound}
-					style={[
-						styles.iconBtn,
-						{
-							backgroundColor: `${m3.surfaceContainer}99`,
-							borderWidth: 1,
-							borderColor: syncHealthy
-								? `${m3.success}55`
-								: `${m3.surfaceContainerHigh}99`,
-						},
-					]}
-					accessibilityLabel={
-						syncHealthy ? "Senkronizasyon" : "Senkronizasyon hatası"
-					}>
-					<Ionicons
-						name={syncHealthy ? "cloud-done-outline" : "cloud-offline-outline"}
-						size={20}
-						color={syncHealthy ? m3.success : m3.onSurface}
-					/>
-				</TVPressable>
-			</View>
+			<TVPressable
+				onPress={onNotifications}
+				accessibilityLabel="Bildirimler"
+				focusedStyle={null}
+				style={({ focused }) => [styles.iconBtn, focused && styles.focusRing]}>
+				<Ionicons
+					name={hasNotification ? "notifications" : "notifications-outline"}
+					size={19}
+					color={Palette.onSurface}
+				/>
+			</TVPressable>
+
+			<TVPressable
+				onPress={onSettings}
+				accessibilityLabel="Senkronizasyon ayarları"
+				focusedStyle={null}
+				style={({ focused }) => [styles.iconBtn, focused && styles.focusRing]}>
+				<Ionicons
+					name={syncHealthy ? "cloud-done-outline" : "cloud-offline-outline"}
+					size={19}
+					color={syncHealthy ? Palette.primary : Palette.onSurfaceVariant}
+				/>
+			</TVPressable>
 		</View>
 	);
 }
 
-// ─── Profil Başlığı ─────────────────────────────────────────────
+// ─── Kimlik Kartı ───────────────────────────────────────────────
 
-/**
- * Profil Başlığı.
- *
- * Çerçeve rengi senkronizasyon durumunu gösterir:
- *   • giriş yapılmış VE sync hatası yok  → YEŞİL
- *   • aksi (giriş yok / sync hatası var) → KIRMIZI
- *
- * ── `wide` (yatay + geniş ekran: TV, tablet yatay, telefon yatay) ──
- *
- * Tek sütunda kimlik satırı kenardan kenara yayılıyordu: isim solda,
- * "Düzenle" düğmesi 800dp ötede sağ uçta kalıyordu. Geniş yerleşimde
- * başlık, sol sütunun içinde ORTALANMIŞ bir kimlik kartına döner
- * (avatar üstte, isim/handle altında, düğme altta) — iki sütunlu
- * düzenin "profil kartı" görünümü. DİKEY telefon yerleşimi değişmez.
- *
- * @param {{displayName: string, handle: string, roleLabel?: string,
- *          avatarUri?: string|null, onEdit: () => void,
- *          syncHealthy?: boolean, wide?: boolean}} props
- */
 export function ProfileHeader({
 	displayName,
 	handle,
@@ -142,22 +80,15 @@ export function ProfileHeader({
 	syncHealthy = false,
 	wide = false,
 }) {
-	const { m3 } = useThemeContext();
 	const initial = (displayName || "K").trim().charAt(0).toUpperCase();
-	const ringColor = syncHealthy ? m3.success : m3.primaryContainer;
-	const avatarSize = wide ? 76 : 64;
+	const avatarSize = wide ? 76 : 72;
 
 	const avatar = avatarUri ? (
 		<Image
 			source={{ uri: avatarUri }}
 			style={[
 				styles.avatar,
-				{
-					width: avatarSize,
-					height: avatarSize,
-					borderRadius: avatarSize / 2,
-					borderColor: ringColor,
-				},
+				{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
 			]}
 			contentFit="cover"
 			transition={150}
@@ -167,274 +98,127 @@ export function ProfileHeader({
 			style={[
 				styles.avatar,
 				styles.avatarFallback,
-				{
-					width: avatarSize,
-					height: avatarSize,
-					borderRadius: avatarSize / 2,
-					backgroundColor: m3.surfaceContainerHighest,
-					borderColor: ringColor,
-				},
+				{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
 			]}>
-			<Text
-				style={[
-					styles.avatarInitial,
-					wide && styles.avatarInitialWide,
-					{ color: m3.onSurface },
-				]}>
-				{initial}
-			</Text>
+			<Text style={styles.avatarInitial}>{initial}</Text>
 		</View>
 	);
 
-	/* Durum noktası — referans tasarımda avatarın sağ altında yeşil bir
-	   "çevrimiçi" noktası var. Burada aynı yerde ama anlamı senkronizasyon
-	   sağlığını bildiriyor. */
-	const statusDot = (
-		<View
-			style={[
-				styles.statusDot,
-				wide && styles.statusDotWide,
-				{
-					backgroundColor: syncHealthy
-						? m3.success
-						: m3.primaryContainer,
-					borderColor: m3.surfaceLowest,
-				},
-			]}
-		/>
-	);
+	return (
+		<View style={[styles.card, wide && styles.cardWide]}>
+			<View>
+				{avatar}
+				<View
+					style={[
+						styles.statusDot,
+						{
+							backgroundColor: syncHealthy ? Palette.primary : Palette.outline,
+						},
+					]}
+				/>
+			</View>
 
-	const editButton = (
+			<View style={styles.nameRow}>
+				<Text numberOfLines={1} style={styles.name}>
+					{displayName}
+				</Text>
+				{roleLabel ? (
+					<View style={styles.rolePill}>
+						<Ionicons
+							name="checkmark-circle"
+							size={11}
+							color={Palette.secondary}
+						/>
+						<Text numberOfLines={1} style={styles.roleText}>
+							{roleLabel}
+						</Text>
+					</View>
+				) : null}
+			</View>
+
+			<Text numberOfLines={1} style={styles.handle}>
+				{handle}
+			</Text>
+
+			<TVPressable
+				onPress={onEdit}
+				focusedStyle={null}
+				style={({ focused }) => [styles.editBtn, focused && styles.editBtnFocused]}>
+				<Ionicons
+					name="create-outline"
+					size={15}
+					color={Palette.onPrimaryContainer}
+				/>
+				<Text style={styles.editBtnText}>Profili Düzenle</Text>
+			</TVPressable>
+		</View>
+	);
+}
+
+// ─── Hesap Eylemi ───────────────────────────────────────────────
+
+export function AccountAction({ isLoggedIn, onLogin, onLogout, wide = false }) {
+	return (
 		<TVPressable
-			onPress={onEdit}
-			focusedStyle={styles.focusedPill}
+			onPress={isLoggedIn ? onLogout : onLogin}
+			focusedStyle={null}
 			style={({ focused }) => [
-				styles.editBtn,
-				wide && styles.editBtnWide,
-				{
-					backgroundColor: m3.surfaceContainerHigh,
-					borderColor: `${m3.surfaceContainerHigh}99`,
-				},
-				focused && { borderColor: m3.onSurface },
+				styles.accountBtn,
+				wide && styles.accountBtnWide,
+				focused && styles.accountBtnFocused,
 			]}>
-			<Ionicons name="create-outline" size={15} color={m3.onSurface} />
-			<Text style={[styles.editBtnText, { color: m3.onSurface }]}>
-				Düzenle
+			<Ionicons
+				name={isLoggedIn ? "log-out-outline" : "log-in-outline"}
+				size={16}
+				color={isLoggedIn ? Palette.error : Palette.onSurface}
+			/>
+			<Text
+				numberOfLines={1}
+				style={[
+					styles.accountBtnText,
+					isLoggedIn && styles.accountBtnTextDanger,
+				]}>
+				{isLoggedIn ? "Hesaptan Çıkış Yap" : "Giriş Yap"}
 			</Text>
 		</TVPressable>
 	);
-
-	if (wide) {
-		return (
-			<View
-				style={[
-					styles.header,
-					styles.headerWide,
-					{ paddingHorizontal: ScreenGutter },
-				]}>
-				<View style={styles.identityCard}>
-					<View>
-						{avatar}
-						{statusDot}
-					</View>
-
-					<Text
-						style={[styles.name, styles.nameWide, { color: m3.onSurface }]}
-						numberOfLines={1}>
-						{displayName}
-					</Text>
-					<Text
-						style={[
-							styles.handle,
-							styles.handleWide,
-							{ color: m3.onSurfaceVariant },
-						]}
-						numberOfLines={1}>
-						{handle}
-						{roleLabel ? ` • ${roleLabel}` : ""}
-					</Text>
-
-					{editButton}
-				</View>
-			</View>
-		);
-	}
-
-	return (
-		<View style={[styles.header, { paddingHorizontal: ScreenGutter }]}>
-			<View style={styles.headerRow}>
-				<View style={styles.identity}>
-					<View>
-						{avatar}
-						{statusDot}
-					</View>
-
-					<View style={styles.identityText}>
-						<Text
-							style={[styles.name, { color: m3.onSurface }]}
-							numberOfLines={1}>
-							{displayName}
-						</Text>
-						<Text
-							style={[
-								styles.handle,
-								{ color: m3.onSurfaceVariant },
-							]}
-							numberOfLines={1}>
-							{handle}
-							{roleLabel ? ` • ${roleLabel}` : ""}
-						</Text>
-					</View>
-				</View>
-
-				{editButton}
-			</View>
-		</View>
-	);
 }
 
-// ─── Hesap Eylemi (Giriş / Çıkış) ───────────────────────────────
+// ─── İstatistikler ──────────────────────────────────────────────
 
-/**
- * Giriş yap / çıkış yap düğmesi.
- *
- * Giriş yapılmamışken ana eylem olduğu için dolgu (primaryContainer),
- * giriş yapılmışken ikincil eylem olduğu için çizgili (outline) görünür.
- * Çıkış, veri kaybı yaratabileceği için ayrıca onay ister (üst katmanda).
- *
- * @param {{isLoggedIn: boolean, onLogin: () => void, onLogout: () => void,
- *          wide?: boolean}} props
- */
-export function AccountAction({ isLoggedIn, onLogin, onLogout, wide = false }) {
-	const { m3 } = useThemeContext();
-
-	return (
-		<View
-			style={[
-				styles.accountWrap,
-				wide && styles.accountWrapWide,
-				{ paddingHorizontal: ScreenGutter },
-			]}>
-			<TVPressable
-				onPress={isLoggedIn ? onLogout : onLogin}
-				focusedStyle={styles.focusedPill}
-				style={[
-					styles.accountBtn,
-					isLoggedIn
-						? {
-								backgroundColor: "transparent",
-								borderColor: `${m3.onSurfaceVariant}66`,
-							}
-						: {
-								backgroundColor: m3.primaryContainer,
-								borderColor: m3.primaryContainer,
-							},
-				]}
-				accessibilityLabel={isLoggedIn ? "Çıkış yap" : "Giriş yap"}>
-				<Ionicons
-					name={isLoggedIn ? "log-out-outline" : "log-in-outline"}
-					size={17}
-					color={
-						isLoggedIn ? m3.onSurfaceVariant : m3.onPrimaryContainer
-					}
-				/>
-				<Text
-					style={[
-						styles.accountBtnText,
-						{
-							color: isLoggedIn
-								? m3.onSurfaceVariant
-								: m3.onPrimaryContainer,
-						},
-					]}>
-					{isLoggedIn ? "Çıkış Yap" : "Giriş Yap"}
-				</Text>
-			</TVPressable>
-
-			{!isLoggedIn ? (
-				<Text
-					style={[
-						styles.accountHint,
-						{ color: m3.onSurfaceVariant },
-					]}>
-					Giriş yaparak favorilerini ve izleme geçmişini tüm
-					cihazlarında senkronize edebilirsin.
-				</Text>
-			) : null}
-		</View>
-	);
-}
-
-// ─── İstatistik Kartları ────────────────────────────────────────
-
-/**
- * Üç tane dokunulabilir istatistik kartı.
- *
- * Görsel kural (referans fotoğraf): üç hücre ortak bir yuvarlak kart içinde,
- * ince dikey ayraçlarla bölünmüş. Aktif hücre YALNIZCA kırmızı sayıyla
- * belli olur — aktif hücreye arka plan verilmez, üst kenarlık çizilmez.
- * (Önceki sürümde hem arka plan hem üst çizgi vardı; fotoğrafta yok.)
- *
- * Karta dokunmak o sekmeye geçer.
- *
- * @param {{stats: Array<{key: string, value: number, label: string}>,
- *          activeKey: string, onSelect: (key: string) => void,
- *          wide?: boolean}} props
- */
 export function ProfileStats({ stats, activeKey, onSelect, wide = false }) {
-	const { m3 } = useThemeContext();
-
 	return (
-		<View
-			style={[
-				styles.statsWrap,
-				wide && styles.statsWrapWide,
-				{ paddingHorizontal: ScreenGutter },
-			]}>
-			<View
-				style={[
-					styles.statsRow,
-					{
-						backgroundColor: m3.surfaceContainer,
-						borderColor: `${m3.surfaceContainerHigh}80`,
-					},
-				]}>
+		<View style={[styles.statsSection, wide && styles.statsSectionWide]}>
+			<Text style={styles.sectionTitle}>İZLEME İSTATİSTİKLERİ</Text>
+			<View style={[styles.statsWrap, wide && styles.statsWrapWide]}>
 				{stats.map((stat, index) => {
-					const isActive = stat.key === activeKey;
-
+					const active = stat.key === activeKey;
 					return (
 						<TVPressable
 							key={stat.key}
-							onPress={() => onSelect(stat.key)}
-							focusedStyle={styles.focusedStat}
-							style={[
-								styles.statCell,
-								index > 0 && {
-									borderLeftWidth:
-										StyleSheet.hairlineWidth * 2,
-									borderLeftColor: `${m3.surfaceContainerHigh}CC`,
-								},
-							]}
-							accessibilityLabel={`${stat.label}: ${stat.value}`}>
-							<Text
-								style={[
-									styles.statValue,
-									{
-										color: isActive
-											? m3.primaryContainer
-											: m3.onSurface,
-									},
-								]}>
-								{stat.value}
-							</Text>
-							<Text
-								style={[
-									styles.statLabel,
-									{ color: m3.onSurfaceVariant },
-								]}
-								numberOfLines={1}>
-								{stat.label}
-							</Text>
+							onPress={() => onSelect?.(stat.key)}
+							focusedStyle={null}
+							style={({ focused }) => [
+								styles.statCard,
+								wide && styles.statCardWide,
+								active && styles.statCardActive,
+								focused && styles.focusRing,
+							]}>
+							<View style={styles.statTop}>
+								<Text numberOfLines={1} style={styles.statLabel}>
+									{stat.label}
+								</Text>
+								<View style={styles.statNumberRow}>
+									<Text style={styles.statNumber}>{stat.value}</Text>
+									{index === 0 ? (
+										<Ionicons
+											name="time-outline"
+											size={13}
+											color={Palette.tertiary}
+										/>
+									) : null}
+								</View>
+							</View>
 						</TVPressable>
 					);
 				})}
@@ -443,378 +227,376 @@ export function ProfileStats({ stats, activeKey, onSelect, wide = false }) {
 	);
 }
 
-// ─── Sekme Çubuğu ───────────────────────────────────────────────
+// ─── Hızlı Erişim ──────────────────────────────────────────────
 
 /**
- * Sekme çubuğu — ALT ÇİZGİ varyantı.
- *
- * Aktif sekme: kırmızı + kalın metin + 2px kırmızı alt çizgi.
- * Pasif sekme: soluk gri + 600 ağırlık.
- * Çubuğun tamamı ince bir ayraç çizgisiyle biter (referans `border-b`).
- *
- * @param {{tabs: Array<{key: string, label: string, dot?: boolean}>,
- *          activeKey: string, onSelect: (key: string) => void,
- *          wide?: boolean}} props
+ * Hızlı Erişim satırları. `items`: {key, icon, label, subtitle, count, onPress}
  */
-export function ProfileTabBar({ tabs, activeKey, onSelect, wide = false }) {
-	const { m3 } = useThemeContext();
-
+export function ProfileQuickAccess({ items }) {
 	return (
-		<View
-			style={[
-				styles.tabsWrap,
-				wide && styles.tabsWrapWide,
-				{ paddingHorizontal: ScreenGutter },
-			]}>
-			<View
-				style={[
-					styles.tabsRow,
-					{ borderBottomColor: `${m3.surfaceContainerHigh}99` },
-				]}>
-				{tabs.map((tab) => {
-					const isActive = tab.key === activeKey;
-
-					return (
-						<TVPressable
-							key={tab.key}
-							onPress={() => onSelect(tab.key)}
-							focusedStyle={styles.focusedTab}
-							style={[
-								wide ? styles.tabWide : styles.tab,
-								{
-									borderBottomColor: isActive
-										? m3.primaryContainer
-										: "transparent",
-								},
-							]}
-							accessibilityRole="tab"
-							accessibilityState={{ selected: isActive }}>
-							{({ focused }) => (
-								<View style={styles.tabInner}>
-									<Text
-										style={[
-											styles.tabText,
-											{
-												color: isActive
-													? m3.primaryContainer
-													: focused
-														? m3.onSurface
-														: `${m3.onSurfaceVariant}CC`,
-												fontWeight: isActive
-													? "700"
-													: "600",
-											},
-										]}
-										numberOfLines={1}>
-										{tab.label}
-									</Text>
-									{tab.dot && isActive ? (
-										<View
-											style={[
-												styles.tabDot,
-												{
-													backgroundColor:
-														m3.primaryContainer,
-												},
-											]}
-										/>
-									) : null}
-								</View>
-							)}
-						</TVPressable>
-					);
-				})}
+		<View style={styles.quickWrap}>
+			<Text style={styles.sectionTitle}>HIZLI ERİŞİM</Text>
+			<View style={styles.quickCard}>
+				{items.map((item) => (
+					<TVPressable
+						key={item.key}
+						onPress={item.onPress}
+						focusedStyle={null}
+						style={({ focused }) => [styles.quickRow, focused && styles.focusRing]}>
+						<View style={styles.quickIcon}>
+							<Ionicons name={item.icon} size={16} color={Palette.primary} />
+						</View>
+						<View style={styles.flex}>
+							<Text numberOfLines={1} style={styles.quickLabel}>
+								{item.label}
+							</Text>
+							{item.subtitle ? (
+								<Text numberOfLines={1} style={styles.quickSub}>
+									{item.subtitle}
+								</Text>
+							) : null}
+						</View>
+						{item.count != null ? (
+							<View style={styles.quickCount}>
+								<Text numberOfLines={1} style={styles.quickCountText}>
+									{`${item.count} içerik`}
+								</Text>
+							</View>
+						) : null}
+						<Ionicons
+							name="chevron-forward"
+							size={15}
+							color={Palette.onSurfaceVariant}
+							style={{ opacity: 0.6 }}
+						/>
+					</TVPressable>
+				))}
 			</View>
+		</View>
+	);
+}
+
+// ─── Sekmeler ──────────────────────────────────────────────────
+
+export function ProfileTabBar({ tabs, activeKey, onSelect, wide = false }) {
+	return (
+		<View style={[styles.tabRow, wide && styles.tabRowWide]}>
+			{tabs.map((tab) => {
+				const active = tab.key === activeKey;
+				return (
+					<TVPressable
+						key={tab.key}
+						onPress={() => onSelect(tab.key)}
+						focusedStyle={null}
+						style={({ focused }) => [
+							styles.tabPill,
+							active ? styles.tabPillActive : styles.tabPillIdle,
+							focused && styles.focusRing,
+						]}>
+						<Text
+							numberOfLines={1}
+							style={[
+								styles.tabText,
+								{ color: active ? Palette.onPrimary : Palette.onSurfaceVariant },
+							]}>
+							{tab.label}
+						</Text>
+					</TVPressable>
+				);
+			})}
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
-	// Üst çubuk
-	topBar: {
-		height: 56,
-		flexDirection: "row",
-		alignItems: "center",
-		paddingHorizontal: ScreenGutter,
-		borderBottomWidth: 1,
-	},
-	topBarSide: {
-		width: 40,
-		height: 40,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	topBarTitleWrap: {
-		flex: 1,
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		gap: 6,
-	},
-	topBarTitle: {
-		fontSize: 20,
-		lineHeight: 26,
-		fontWeight: "700",
-		letterSpacing: -0.3,
-	},
-	titleDot: {
-		width: 6,
-		height: 6,
-		borderRadius: 3,
-	},
-	topBarActions: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
-	},
-	iconBtn: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	badgeDot: {
-		position: "absolute",
-		top: 9,
-		right: 10,
-		width: 8,
-		height: 8,
-		borderRadius: 4,
+	flex: { flex: 1 },
+	focusRing: {
+		borderColor: Palette.primary,
 		borderWidth: 2,
 	},
 
-	// Başlık
-	header: {
-		paddingTop: 16,
-		paddingBottom: 8,
-	},
-	headerRow: {
+	/* Üst çubuk */
+	topBar: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "space-between",
-		gap: 12,
+		gap: 8,
+		paddingVertical: 8,
 	},
-	identity: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 14,
+	topTitle: {
 		flex: 1,
-		minWidth: 0,
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		fontSize: 20,
+		letterSpacing: -0.3,
+	},
+	iconBtn: {
+		width: 36,
+		height: 36,
+		borderRadius: 12,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.surfaceLow,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+
+	/* Kimlik kartı */
+	card: {
+		alignItems: "center",
+		backgroundColor: Palette.surfaceLow,
+		borderRadius: 16,
+		paddingVertical: 18,
+		paddingHorizontal: 16,
+		marginHorizontal: ScreenGutter,
+		gap: 6,
+	},
+	cardWide: {
+		marginHorizontal: 0,
 	},
 	avatar: {
-		width: 64,
-		height: 64,
-		borderRadius: 32,
-		borderWidth: 2,
-		// Satırda sıkışıp metnin üstüne binmesin diye boyutu sabit tutulur.
-		flexShrink: 0,
+		backgroundColor: Palette.surfaceHigh,
 	},
 	avatarFallback: {
 		alignItems: "center",
 		justifyContent: "center",
 	},
+	avatarInitial: {
+		color: Palette.primary,
+		fontFamily: FontFamily.bold,
+		fontSize: 26,
+	},
 	statusDot: {
 		position: "absolute",
-		right: -1,
-		bottom: -1,
-		width: 16,
-		height: 16,
-		borderRadius: 8,
-		borderWidth: 2.5,
+		right: 2,
+		bottom: 2,
+		width: 14,
+		height: 14,
+		borderRadius: 7,
+		borderWidth: 2,
+		borderColor: Palette.surfaceLow,
 	},
-	avatarInitial: {
-		fontSize: 26,
-		fontWeight: "700",
-	},
-	identityText: {
-		flex: 1,
-		minWidth: 0,
+	nameRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+		maxWidth: "100%",
 	},
 	name: {
-		fontSize: 18,
-		lineHeight: 22,
-		fontWeight: "700",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		fontSize: 20,
+		letterSpacing: -0.3,
+		flexShrink: 1,
+	},
+	rolePill: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 4,
+		paddingHorizontal: 7,
+		paddingVertical: 2,
+		borderRadius: 8,
+		backgroundColor: "rgba(76, 215, 246, 0.14)",
+	},
+	roleText: {
+		color: Palette.secondary,
+		fontFamily: FontFamily.bold,
+		fontSize: 9,
+		letterSpacing: 0.6,
+		textTransform: "uppercase",
 	},
 	handle: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
 		fontSize: 12,
-		lineHeight: 16,
-		fontWeight: "500",
-		marginTop: 2,
 	},
 	editBtn: {
 		flexDirection: "row",
 		alignItems: "center",
+		justifyContent: "center",
 		gap: 6,
-		paddingHorizontal: 12,
-		paddingVertical: 8,
-		borderRadius: 999,
-		borderWidth: 1,
-		flexShrink: 0,
+		marginTop: 8,
+		alignSelf: "stretch",
+		paddingVertical: 10,
+		borderRadius: 20,
+		backgroundColor: Palette.primaryContainer,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	editBtnFocused: {
+		borderColor: Palette.onSurface,
 	},
 	editBtnText: {
-		fontSize: 12,
-		lineHeight: 16,
-		fontWeight: "600",
+		color: Palette.onPrimaryContainer,
+		fontFamily: FontFamily.bold,
+		fontSize: 13,
 	},
 
-	// Başlık — geniş yerleşim (sol sütunda ortalanmış kimlik kartı;
-	// tek sütunda isim ile "Düzenle" ekranın iki ucuna savruluyordu)
-	headerWide: {
-		paddingTop: 8,
-		paddingBottom: 4,
-	},
-	identityCard: {
-		alignItems: "center",
-	},
-	avatarInitialWide: {
-		fontSize: 30,
-	},
-	statusDotWide: {
-		right: 2,
-		bottom: 2,
-		width: 18,
-		height: 18,
-		borderRadius: 9,
-		borderWidth: 3,
-	},
-	nameWide: {
-		fontSize: 19,
-		lineHeight: 24,
-		marginTop: 12,
-		textAlign: "center",
-	},
-	handleWide: {
-		textAlign: "center",
-	},
-	editBtnWide: {
-		marginTop: 12,
-		paddingHorizontal: 16,
-		paddingVertical: 9,
-	},
-
-	// Hesap eylemi
-	accountWrap: {
-		paddingTop: 12,
-		paddingBottom: 4,
-	},
-	accountWrapWide: {
-		paddingTop: 8,
-	},
+	/* Hesap eylemi */
 	accountBtn: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "center",
 		gap: 8,
-		paddingVertical: 11,
-		borderRadius: 999,
-		borderWidth: 1,
+		marginHorizontal: ScreenGutter,
+		marginTop: 12,
+		paddingVertical: 12,
+		borderRadius: 20,
+		backgroundColor: "rgba(255, 180, 171, 0.10)",
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	accountBtnWide: {
+		marginHorizontal: 0,
+	},
+	accountBtnFocused: {
+		borderColor: Palette.primary,
 	},
 	accountBtnText: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
 		fontSize: 13,
-		lineHeight: 18,
-		fontWeight: "700",
 	},
-	accountHint: {
-		fontSize: 12,
-		lineHeight: 17,
-		textAlign: "center",
-		marginTop: 8,
-		paddingHorizontal: 12,
+	accountBtnTextDanger: {
+		color: Palette.error,
 	},
 
-	// İstatistikler
+	/* İstatistikler */
+	statsSection: {
+		marginHorizontal: ScreenGutter,
+		marginTop: 16,
+	},
+	statsSectionWide: {
+		marginHorizontal: 0,
+	},
 	statsWrap: {
-		paddingTop: 12,
-		paddingBottom: 8,
+		flexDirection: "row",
+		gap: 8,
 	},
 	statsWrapWide: {
-		paddingTop: 8,
-		paddingBottom: 4,
+		flexDirection: "column",
 	},
-	statsRow: {
-		flexDirection: "row",
-		paddingVertical: 14,
-		paddingHorizontal: 4,
-		borderRadius: 12,
-		borderWidth: 1,
-	},
-	statCell: {
+	statCard: {
 		flex: 1,
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: 2,
+		minWidth: 0,
+		backgroundColor: Palette.surfaceLow,
+		borderRadius: 14,
+		paddingVertical: 10,
+		paddingHorizontal: 10,
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
-	statValue: {
-		fontSize: 22,
-		lineHeight: 28,
-		fontWeight: "700",
+	statCardWide: {
+		flex: 0,
+	},
+	statCardActive: {
+		backgroundColor: Palette.surface,
+	},
+	statTop: {
+		gap: 2,
 	},
 	statLabel: {
-		fontSize: 11,
-		lineHeight: 16,
-		fontWeight: "500",
-		marginTop: 2,
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
+		fontSize: 10,
 	},
-
-	// Sekmeler
-	tabsWrap: {
-		paddingTop: 12,
-		paddingBottom: 8,
-	},
-	tabsWrapWide: {
-		paddingTop: 2,
-		paddingBottom: 8,
-	},
-	tabsRow: {
-		flexDirection: "row",
-		borderBottomWidth: 1,
-	},
-	tab: {
-		flex: 1,
-		borderBottomWidth: 2,
-	},
-	// Geniş yerleşim: sekmeler eşit dağıtılmaz — içerikleri kadar yer
-	// kaplar. Tek sütunda 3 sekme 288dp'ye yayılıyordu (TV'de ~575px).
-	tabWide: {
-		flexGrow: 0,
-		flexShrink: 0,
-		flexBasis: "auto",
-		paddingHorizontal: 14,
-		borderBottomWidth: 2,
-	},
-	tabInner: {
+	statNumberRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "center",
 		gap: 5,
-		paddingBottom: 10,
-		paddingTop: 2,
-		paddingHorizontal: 4,
 	},
-	tabText: {
-		fontSize: 12,
-		lineHeight: 16,
-		letterSpacing: 0.1,
-	},
-	tabDot: {
-		width: 6,
-		height: 6,
-		borderRadius: 3,
+	statNumber: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		fontSize: 22,
+		letterSpacing: -0.5,
 	},
 
-	// TV odak stilleri
-	focusedRound: {
-		transform: [{ scale: 1.12 }],
+	/* Hızlı erişim */
+	quickWrap: {
+		marginHorizontal: ScreenGutter,
+		marginTop: 16,
 	},
-	focusedPill: {
-		transform: [{ scale: 1.04 }],
+	sectionTitle: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.bold,
+		fontSize: 10,
+		letterSpacing: 1.1,
+		marginBottom: 8,
+		paddingHorizontal: 4,
 	},
-	focusedStat: {
-		borderColor: "#FFFFFF",
-		borderWidth: 1,
+	quickCard: {
+		backgroundColor: Palette.surfaceLow,
+		borderRadius: 14,
+		overflow: "hidden",
 	},
-	focusedTab: {
-		transform: [{ scale: 1.04 }],
+	quickRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 12,
+		paddingHorizontal: 12,
+		paddingVertical: 12,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	quickIcon: {
+		width: 32,
+		height: 32,
+		borderRadius: 16,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.surfaceHigh,
+	},
+	quickLabel: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+		fontSize: 13,
+	},
+	quickSub: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
+		fontSize: 11,
+		marginTop: 1,
+	},
+	quickCount: {
+		paddingHorizontal: 8,
+		paddingVertical: 2,
+		borderRadius: 8,
+		backgroundColor: Palette.surfaceHigh,
+	},
+	quickCountText: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.semiBold,
+		fontSize: 10,
+	},
+
+	/* Sekmeler */
+	tabRow: {
+		flexDirection: "row",
+		gap: 8,
+		paddingHorizontal: ScreenGutter,
+		paddingVertical: 12,
+	},
+	tabRowWide: {
+		paddingHorizontal: 0,
+		paddingTop: 0,
+	},
+	tabPill: {
+		flexDirection: "row",
+		alignItems: "center",
+		paddingHorizontal: 14,
+		paddingVertical: 8,
+		borderRadius: 18,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	tabPillActive: {
+		backgroundColor: Palette.primary,
+	},
+	tabPillIdle: {
+		backgroundColor: Palette.surfaceLow,
+	},
+	tabText: {
+		fontFamily: FontFamily.semiBold,
+		fontSize: 12,
 	},
 });
