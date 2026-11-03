@@ -1,4 +1,4 @@
-import { Palette } from "@/constants/theme";
+import { FontFamily, Palette } from "@/constants/theme";
 import { fetchPluginDetail } from "@/services/api";
 import { canonicalType, isSeriesContent } from "@/utils/mediaType";
 import { resolvePluginName } from "@/utils/pluginName";
@@ -1260,10 +1260,10 @@ const styles = StyleSheet.create({
 		justifyContent: "space-between",
 	},
 	detailsLabel: {
-		fontWeight: "500",
+		fontFamily: FontFamily.medium,
 	},
 	detailsValue: {
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	detailsDivider: {
 		height: 1,

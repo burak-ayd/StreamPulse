@@ -11,7 +11,7 @@
  * sabitlemez ve açık tema otomatik çalışır.
  */
 
-import { useThemeContext } from "@/context/ThemeContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -21,8 +21,7 @@ import { StyleSheet, Text, View } from "react-native";
  * @param {{quality?: string, dub?: string, style?: object, tone?: "tertiary"|"neutral"}} props
  */
 export function QualityBadge({ quality, dub, style, tone = "tertiary" }) {
-	const { m3 } = useThemeContext();
-	const color = tone === "tertiary" ? m3.tertiary : m3.onSurfaceVariant;
+	const color = tone === "tertiary" ? Palette.tertiary : Palette.onSurfaceVariant;
 
 	return (
 		<>
@@ -30,7 +29,7 @@ export function QualityBadge({ quality, dub, style, tone = "tertiary" }) {
 				<View
 					style={[
 						styles.chip,
-						{ backgroundColor: m3.surfaceContainerHighest },
+						{ backgroundColor: Palette.surfaceHighest },
 						style,
 					]}>
 					<Text style={[styles.chipText, { color }]}>{quality}</Text>
@@ -40,7 +39,7 @@ export function QualityBadge({ quality, dub, style, tone = "tertiary" }) {
 				<View
 					style={[
 						styles.chip,
-						{ backgroundColor: m3.surfaceContainerHighest },
+						{ backgroundColor: Palette.surfaceHighest },
 						style,
 					]}>
 					<Text style={[styles.chipText, { color }]}>{dub}</Text>
@@ -59,7 +58,6 @@ export function QualityBadge({ quality, dub, style, tone = "tertiary" }) {
  * @param {{rating?: number|string, style?: object}} props
  */
 export function RatingBadge({ rating, style }) {
-	const { m3 } = useThemeContext();
 
 	if (rating === undefined || rating === null || rating === "") return null;
 
@@ -71,7 +69,7 @@ export function RatingBadge({ rating, style }) {
 				style,
 			]}>
 			<Ionicons name="star" size={13} color="#e5a916" />
-			<Text style={[styles.ratingText, { color: m3.onSurface }]}>
+			<Text style={[styles.ratingText, { color: Palette.onSurface }]}>
 				{rating}
 			</Text>
 		</View>
@@ -80,17 +78,16 @@ export function RatingBadge({ rating, style }) {
 
 /** "Yeni Bölüm" rozeti — `item.isNewEpisode` alanı yoksa render edilmez. */
 export function NewEpisodeBadge({ isNew, style }) {
-	const { m3 } = useThemeContext();
 	if (!isNew) return null;
 
 	return (
 		<View
 			style={[
 				styles.chip,
-				{ backgroundColor: m3.primaryContainer },
+				{ backgroundColor: Palette.primaryContainer },
 				style,
 			]}>
-			<Text style={[styles.chipText, { color: m3.onPrimaryContainer }]}>
+			<Text style={[styles.chipText, { color: Palette.onPrimaryContainer }]}>
 				Yeni Bölüm
 			</Text>
 		</View>
@@ -99,7 +96,6 @@ export function NewEpisodeBadge({ isNew, style }) {
 
 /** Eklenti adı rozeti — mevcut `plugin` alanından gelir. */
 export function PluginBadge({ plugin, style }) {
-	const { m3 } = useThemeContext();
 	if (!plugin) return null;
 
 	return (
@@ -109,7 +105,7 @@ export function PluginBadge({ plugin, style }) {
 				{ backgroundColor: "rgba(11,14,20,0.82)" },
 				style,
 			]}>
-			<Text style={[styles.pluginText, { color: m3.tertiary }]}>
+			<Text style={[styles.pluginText, { color: Palette.tertiary }]}>
 				{plugin}
 			</Text>
 		</View>
@@ -126,22 +122,21 @@ export function Dot({ color }) {
  * @param {{icon?: string, title: string, subtitle?: string}} props
  */
 export function EmptyState({ icon = "file-tray-outline", title, subtitle }) {
-	const { m3 } = useThemeContext();
 
 	return (
 		<View style={styles.empty}>
 			<View
 				style={[
 					styles.emptyIcon,
-					{ backgroundColor: m3.surfaceContainer },
+					{ backgroundColor: Palette.surface },
 				]}>
-				<Ionicons name={icon} size={26} color={m3.onSurfaceVariant} />
+				<Ionicons name={icon} size={26} color={Palette.onSurfaceVariant} />
 			</View>
-			<Text style={[styles.emptyTitle, { color: m3.onSurface }]}>
+			<Text style={[styles.emptyTitle, { color: Palette.onSurface }]}>
 				{title}
 			</Text>
 			{subtitle ? (
-				<Text style={[styles.emptySubtitle, { color: m3.onSurfaceVariant }]}>
+				<Text style={[styles.emptySubtitle, { color: Palette.onSurfaceVariant }]}>
 					{subtitle}
 				</Text>
 			) : null}
@@ -159,7 +154,7 @@ const styles = StyleSheet.create({
 	chipText: {
 		fontSize: 10,
 		lineHeight: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		letterSpacing: 0.2,
 	},
 	ratingPill: {
@@ -173,7 +168,7 @@ const styles = StyleSheet.create({
 	ratingText: {
 		fontSize: 10,
 		lineHeight: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	pluginPill: {
 		paddingHorizontal: 6,
@@ -184,7 +179,7 @@ const styles = StyleSheet.create({
 	pluginText: {
 		fontSize: 9,
 		lineHeight: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		letterSpacing: 0.3,
 	},
 	dot: {
@@ -208,7 +203,7 @@ const styles = StyleSheet.create({
 	emptyTitle: {
 		fontSize: 15,
 		lineHeight: 20,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		textAlign: "center",
 	},
 	emptySubtitle: {

@@ -24,7 +24,6 @@
  */
 
 import TVPressable from "@/components/common/TVPressable";
-import { useThemeContext } from "@/context/ThemeContext";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { authDiag } from "@/utils/authDiagnostics";
@@ -41,15 +40,15 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 /** `sonuc` alanına göre kaydın ciddiyet rengi. */
-function kayitRengi(olay, veri, colors) {
+function kayitRengi(olay, veri) {
 	const sonuc = veri?.sonuc ?? veri?.neden ?? "";
-	if (olay === "clearTokens" || olay === "authExpired") return colors.error;
+	if (olay === "clearTokens" || olay === "authExpired") return Palette.error;
 	if (sonuc === "terminal" || sonuc === "token_yok" || sonuc === "token_oldu")
-		return colors.error;
+		return Palette.error;
 	if (sonuc === "transient" || sonuc === "network" || sonuc === "server")
-		return colors.warning;
+		return Palette.tertiary;
 	if (sonuc === "ok" || sonuc === "dogrulandi" || sonuc === "refreshed")
-		return colors.success;
+		return Palette.secondary;
 	return Palette.onSurfaceVariant;
 }
 
@@ -68,7 +67,6 @@ const OLAY_ADI = {
 };
 
 export default function AuthDiagScreen() {
-	const { colors } = useThemeContext();
 	const { contentMaxWidth } = useTvMetrics();
 	const router = useRouter();
 	const [kayitlar, setKayitlar] = useState([]);
@@ -158,7 +156,7 @@ export default function AuthDiagScreen() {
 				<View
 					style={[
 						styles.infoCard,
-						{ backgroundColor: colors.surface, borderColor: "rgba(229, 225, 228, 0.08)" },
+						{ backgroundColor: Palette.surface, borderColor: "rgba(229, 225, 228, 0.08)" },
 					]}>
 					<Text style={[styles.infoTitle, { color: Palette.onSurface }]}>
 						Çıkış olduğunda buraya bak
@@ -176,7 +174,7 @@ export default function AuthDiagScreen() {
 					<TVPressable
 						onPress={metniKopyala}
 						focusedStyle={styles.eylemBtnFocused}
-						style={[styles.eylemBtn, { backgroundColor: colors.surface }]}
+						style={[styles.eylemBtn, { backgroundColor: Palette.surface }]}
 						accessibilityLabel="Kopyalama bilgisi">
 						<Ionicons
 							name="information-circle-outline"
@@ -190,7 +188,7 @@ export default function AuthDiagScreen() {
 					<TVPressable
 						onPress={temizle}
 						focusedStyle={styles.eylemBtnFocused}
-						style={[styles.eylemBtn, { backgroundColor: colors.surface }]}
+						style={[styles.eylemBtn, { backgroundColor: Palette.surface }]}
 						accessibilityLabel="Kayıtları temizle">
 						<Ionicons name="trash-outline" size={16} color={Palette.onSurface} />
 						<Text style={[styles.eylemBtnYazi, { color: Palette.onSurface }]}>
@@ -208,7 +206,7 @@ export default function AuthDiagScreen() {
 					<View
 						style={[
 							styles.bosKart,
-							{ backgroundColor: colors.surface, borderColor: "rgba(229, 225, 228, 0.08)" },
+							{ backgroundColor: Palette.surface, borderColor: "rgba(229, 225, 228, 0.08)" },
 						]}>
 						<Text style={[styles.bosYazi, { color: Palette.onSurfaceVariant }]}>
 							Kayıt yok. Uygulamayı kapatıp yeniden aç; sorun
@@ -219,13 +217,13 @@ export default function AuthDiagScreen() {
 					kayitlar.map((k) => {
 						const saat = new Date(k.ms);
 						const zaman = `${String(saat.getHours()).padStart(2, "0")}:${String(saat.getMinutes()).padStart(2, "0")}:${String(saat.getSeconds()).padStart(2, "0")}`;
-						const renk = kayitRengi(k.olay, k.veri, colors);
+						const renk = kayitRengi(k.olay, k.veri);
 						return (
 							<View
 								key={`${k.ms}-${k.sira}`}
 								style={[
 									styles.kayit,
-									{ backgroundColor: colors.surface, borderColor: "rgba(229, 225, 228, 0.08)" },
+									{ backgroundColor: Palette.surface, borderColor: "rgba(229, 225, 228, 0.08)" },
 								]}>
 								<View style={styles.kayitBaslik}>
 									<View
@@ -252,7 +250,7 @@ export default function AuthDiagScreen() {
 				<TVPressable
 					onPress={() => router.back()}
 					focusedStyle={styles.geriBtnFocused}
-					style={[styles.geriBtn, { backgroundColor: colors.surface }]}
+					style={[styles.geriBtn, { backgroundColor: Palette.surface }]}
 					accessibilityLabel="Geri dön">
 					<Text style={[styles.geriBtnYazi, { color: Palette.onSurface }]}>
 						Geri dön

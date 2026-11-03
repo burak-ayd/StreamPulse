@@ -31,14 +31,13 @@
  *    odağı onu yakalayamaz, ekran arka planındaki gerçek öğelere gider.
  */
 
-import { useThemeContext } from "@/context/ThemeContext";
-import { ColorsM3 } from "@/constants/theme";
+import { Palette } from "@/constants/theme";
 import { StyleSheet, View } from "react-native";
 
 /** Sabit koyu palet kullanan ekranlar için (bkz. `ChannelCard` gerekçesi). */
 export const FIXED_DARK_SKELETON = {
-	block: ColorsM3.dark.skeletonBlock,
-	line: ColorsM3.dark.skeletonLine,
+	block: Palette.surfaceHigh,
+	line: Palette.surfaceHighest,
 };
 
 /**
@@ -46,8 +45,7 @@ export const FIXED_DARK_SKELETON = {
  * @returns {{ block: string, line: string }}
  */
 export function useSkeletonColors() {
-	const { m3 } = useThemeContext();
-	return { block: m3.skeletonBlock, line: m3.skeletonLine };
+	return { block: Palette.surfaceHigh, line: Palette.surfaceHighest };
 }
 
 /**

@@ -21,11 +21,10 @@
 import { SkeletonBlock, SkeletonLine } from "@components/common/Skeleton";
 import React from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
-import { useThemeContext } from "@/context/ThemeContext";
+import { Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 
 export default function LoadingState() {
-	const { m3, theme } = useThemeContext();
 	const { width, height } = useWindowDimensions();
 	const { isTV, sp } = useTvMetrics();
 
@@ -35,13 +34,13 @@ export default function LoadingState() {
 
 	return (
 		<View
-			style={[styles.container, { backgroundColor: m3.surfaceLowest }]}
+			style={[styles.container, { backgroundColor: Palette.background }]}
 			pointerEvents="none">
 			{/* 1. Hero backdrop */}
 			<View
 				style={[
 					styles.backdrop,
-					{ height: backdropHeight, backgroundColor: m3.surfaceContainer },
+					{ height: backdropHeight, backgroundColor: Palette.surface },
 				]}
 			/>
 
@@ -55,26 +54,26 @@ export default function LoadingState() {
 					width="72%"
 					height={sp(26)}
 					radius={sp(8)}
-					color={m3.surfaceContainerHigh}
+					color={Palette.surfaceHigh}
 				/>
 				<View style={[styles.metaRow, { gap: sp(8), marginTop: sp(10) }]}>
 					<SkeletonBlock
 						width={sp(64)}
 						height={sp(22)}
 						radius={sp(8)}
-						color={m3.surfaceContainerHigh}
+						color={Palette.surfaceHigh}
 					/>
 					<SkeletonBlock
 						width={sp(52)}
 						height={sp(22)}
 						radius={sp(8)}
-						color={m3.surfaceContainerHigh}
+						color={Palette.surfaceHigh}
 					/>
 					<SkeletonBlock
 						width={sp(74)}
 						height={sp(22)}
 						radius={sp(8)}
-						color={m3.surfaceContainerHigh}
+						color={Palette.surfaceHigh}
 					/>
 				</View>
 
@@ -84,7 +83,7 @@ export default function LoadingState() {
 						width="100%"
 						height={sp(46)}
 						radius={sp(12)}
-						color={m3.surfaceContainerHigh}
+						color={Palette.surfaceHigh}
 					/>
 					<View
 						style={[styles.metaRow, { gap: sp(10), marginTop: sp(12) }]}>
@@ -94,7 +93,7 @@ export default function LoadingState() {
 								width={sp(58)}
 								height={sp(44)}
 								radius={sp(12)}
-								color={m3.surfaceContainerHigh}
+								color={Palette.surfaceHigh}
 							/>
 						))}
 					</View>
@@ -105,17 +104,17 @@ export default function LoadingState() {
 					<SkeletonLine
 						width="94%"
 						height={sp(12)}
-						color={m3.surfaceContainerHigh}
+						color={Palette.surfaceHigh}
 					/>
 					<SkeletonLine
 						width="88%"
 						height={sp(12)}
-						color={m3.surfaceContainerHigh}
+						color={Palette.surfaceHigh}
 					/>
 					<SkeletonLine
 						width="62%"
 						height={sp(12)}
-						color={m3.surfaceContainerHigh}
+						color={Palette.surfaceHigh}
 					/>
 				</View>
 
@@ -123,7 +122,7 @@ export default function LoadingState() {
 					<SkeletonLine
 						width={sp(140)}
 						height={sp(16)}
-						color={m3.surfaceContainerHigh}
+						color={Palette.surfaceHigh}
 					/>
 					<View style={[styles.posterRow, { gap: sp(10), marginTop: sp(12) }]}>
 						{Array.from({ length: 4 }).map((_, index) => (
@@ -132,7 +131,7 @@ export default function LoadingState() {
 								width={sp(84)}
 								height={sp(126)}
 								radius={sp(10)}
-								color={m3.surfaceContainerHigh}
+								color={Palette.surfaceHigh}
 							/>
 						))}
 					</View>
@@ -148,12 +147,7 @@ export default function LoadingState() {
 				pointerEvents="none"
 				style={[
 					styles.bottomFade,
-					{
-						backgroundColor:
-							theme === "dark"
-								? "rgba(11,14,20,0.35)"
-								: "rgba(248,250,252,0.35)",
-					},
+					{ backgroundColor: "rgba(11, 14, 20, 0.35)" },
 				]}
 			/>
 		</View>

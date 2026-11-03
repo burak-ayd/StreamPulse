@@ -31,7 +31,6 @@ import {
 } from "@/components/profile/ProfileContent";
 import { useAuth } from "@/context/AuthContext";
 import { useSync } from "@/context/SyncContext";
-import { useThemeContext } from "@/context/ThemeContext";
 import {
 	clearWatchHistory,
 	getContinueWatching,
@@ -44,6 +43,7 @@ import {
 	resolvePluginName,
 	toggleFavorite,
 } from "@/utils/storage";
+import { Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { openLogin } from "@/utils/authRoutes";
 import {
@@ -73,8 +73,7 @@ const SORT_LABELS = {
 };
 
 export default function ProfileScreen() {
-	const { m3, theme } = useThemeContext();
-	// TV ölçüleri — bkz. utils/tvMetrics.js
+		// TV ölçüleri — bkz. utils/tvMetrics.js
 	const { isWide, isLandscape, width: winWidth } = useTvMetrics();
 	const { isLoggedIn, user, logout } = useAuth();
 	const { status: syncStatus } = useSync();
@@ -493,10 +492,10 @@ export default function ProfileScreen() {
 			    panellerin kendi iç dolgularından (ScreenGutter) gelir. */}
 			<SafeAreaView
 				edges={["top", "left", "right"]}
-				style={[styles.safeArea, { backgroundColor: m3.surfaceLowest }]}>
+				style={[styles.safeArea, { backgroundColor: Palette.background }]}>
 				<StatusBar
-					barStyle={theme === "dark" ? "light-content" : "dark-content"}
-					backgroundColor={m3.surfaceLowest}
+					barStyle="light-content"
+					backgroundColor={Palette.background}
 				/>
 
 				<ProfileTopBar
@@ -522,7 +521,7 @@ export default function ProfileScreen() {
 								styles.side,
 								{
 									width: sideWidth,
-									borderRightColor: `${m3.surfaceContainerHigh}55`,
+									borderRightColor: "rgba(229, 225, 228, 0.10)",
 								},
 							]}
 							showsVerticalScrollIndicator={false}>

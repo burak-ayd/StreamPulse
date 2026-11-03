@@ -18,6 +18,7 @@
  * içerik dönüyor (bkz. api/routes/plugins.py:601).
  */
 
+import { FontFamily, Palette } from "@/constants/theme";
 import BottomNavigation from "@/components/BottomNavigation";
 import TVPressable from "@/components/common/TVPressable";
 import CategoryCard, {
@@ -25,7 +26,6 @@ import CategoryCard, {
 } from "@/components/content/CategoryCard";
 import CategoryCardSkeleton from "@/components/content/CategoryCardSkeleton";
 import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
-import { useThemeContext } from "@/context/ThemeContext";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
@@ -84,7 +84,6 @@ function shortenTitle(name) {
 // ════════════════════════════════════════════════════════════════
 
 export default function CategoryScreen() {
-	const { m3, theme } = useThemeContext();
 	const router = useRouter();
 	// Sol ray (TV / tablet yatay) varken içerik sola kayar — ana sayfa,
 	// arama ve ayarlarla aynı karar (bkz. hooks/useNavLayout.js).
@@ -538,12 +537,12 @@ export default function CategoryScreen() {
 				<View style={styles.footer}>
 					<ActivityIndicator
 						size="small"
-						color={m3.primaryContainer}
+						color={Palette.primaryContainer}
 					/>
 					<Text
 						style={[
 							styles.footerText,
-							{ color: m3.onSurfaceVariant },
+							{ color: Palette.onSurfaceVariant },
 						]}>
 						Daha fazla yükleniyor…
 					</Text>
@@ -556,7 +555,7 @@ export default function CategoryScreen() {
 					<Text
 						style={[
 							styles.footerText,
-							{ color: m3.onSurfaceVariant },
+							{ color: Palette.onSurfaceVariant },
 						]}>
 						`${items.length} içerik gösteriliyor`
 					</Text>
@@ -564,7 +563,7 @@ export default function CategoryScreen() {
 			);
 		}
 		return null;
-	}, [loadingMore, exhausted, items.length, m3]);
+	}, [loadingMore, exhausted, items.length]);
 
 	const isEmpty = !loading && !error && items.length === 0;
 
@@ -576,16 +575,14 @@ export default function CategoryScreen() {
 				style={[
 					styles.safeArea,
 					{
-						backgroundColor: m3.surfaceLowest,
+						backgroundColor: Palette.surfaceLowest,
 						paddingLeft: contentPaddingLeft,
 					},
 				]}
 				onLayout={onLayout}>
 				<StatusBar
-					barStyle={
-						theme === "dark" ? "light-content" : "dark-content"
-					}
-					backgroundColor={m3.surfaceLowest}
+					barStyle="light-content"
+					backgroundColor={Palette.surfaceLowest}
 				/>
 
 				{/* Üst çubuk */}
@@ -593,8 +590,8 @@ export default function CategoryScreen() {
 					style={[
 						styles.topBar,
 						{
-							backgroundColor: `${m3.surfaceLowest}D9`,
-							borderBottomColor: `${m3.surfaceContainerHigh}66`,
+							backgroundColor: `${Palette.surfaceLowest}D9`,
+							borderBottomColor: `${Palette.surfaceHigh}66`,
 						},
 					]}>
 					<TVPressable
@@ -602,13 +599,13 @@ export default function CategoryScreen() {
 						focusedStyle={styles.backFocused}
 						style={[
 							styles.backBtn,
-							{ backgroundColor: `${m3.surfaceContainerHigh}CC` },
+							{ backgroundColor: `${Palette.surfaceHigh}CC` },
 						]}
 						accessibilityLabel="Geri">
 						<Ionicons
 							name="arrow-back"
 							size={21}
-							color={m3.onSurface}
+							color={Palette.onSurface}
 						/>
 					</TVPressable>
 
@@ -616,7 +613,7 @@ export default function CategoryScreen() {
 						<Text
 							style={[
 								styles.topBarTitle,
-								{ color: m3.onSurface },
+								{ color: Palette.onSurface },
 							]}
 							numberOfLines={1}>
 							{shortenTitle(categoryName)}
@@ -627,14 +624,14 @@ export default function CategoryScreen() {
 									styles.countChip,
 									{
 										backgroundColor:
-											m3.surfaceContainerHigh,
-										borderColor: m3.outlineVariant,
+											Palette.surfaceHigh,
+										borderColor: Palette.outlineVariant,
 									},
 								]}>
 								<Text
 									style={[
 										styles.countText,
-										{ color: m3.tertiary },
+										{ color: Palette.tertiary },
 									]}>
 									{items.length} içerik
 								</Text>
@@ -681,10 +678,10 @@ export default function CategoryScreen() {
 						<Ionicons
 							name="cloud-offline-outline"
 							size={40}
-							color={m3.onSurfaceVariant}
+							color={Palette.onSurfaceVariant}
 						/>
 						<Text
-							style={[styles.errorText, { color: m3.onSurface }]}>
+							style={[styles.errorText, { color: Palette.onSurface }]}>
 							Kategori yüklenemedi
 						</Text>
 						<TVPressable
@@ -692,12 +689,12 @@ export default function CategoryScreen() {
 							focusedStyle={styles.retryFocused}
 							style={[
 								styles.retryBtn,
-								{ borderColor: m3.primaryContainer },
+								{ borderColor: Palette.primaryContainer },
 							]}>
 							<Text
 								style={[
 									styles.retryText,
-									{ color: m3.primaryContainer },
+									{ color: Palette.primaryContainer },
 								]}>
 								Tekrar Dene
 							</Text>
@@ -708,10 +705,10 @@ export default function CategoryScreen() {
 						<Ionicons
 							name="file-tray-outline"
 							size={40}
-							color={m3.onSurfaceVariant}
+							color={Palette.onSurfaceVariant}
 						/>
 						<Text
-							style={[styles.errorText, { color: m3.onSurface }]}>
+							style={[styles.errorText, { color: Palette.onSurface }]}>
 							Bu kategoride içerik bulunamadı
 						</Text>
 					</View>
@@ -830,7 +827,7 @@ const styles = StyleSheet.create({
 	topBarTitle: {
 		fontSize: 18,
 		lineHeight: 24,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		letterSpacing: -0.2,
 		flexShrink: 1,
 	},
@@ -854,7 +851,7 @@ const styles = StyleSheet.create({
 	countText: {
 		fontSize: 11,
 		lineHeight: 16,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 
 	listContent: {
@@ -875,7 +872,7 @@ const styles = StyleSheet.create({
 	errorText: {
 		fontSize: 15,
 		lineHeight: 20,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		textAlign: "center",
 	},
 	retryBtn: {
@@ -888,7 +885,7 @@ const styles = StyleSheet.create({
 	retryText: {
 		fontSize: 13,
 		lineHeight: 18,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	footer: {
 		alignItems: "center",

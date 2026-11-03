@@ -196,7 +196,7 @@ function SettingsSection({ title, children }) {
 }
 
 export default function SettingsScreen() {
-	const { theme, toggleTheme, colors } = useThemeContext();
+	const { theme, toggleTheme } = useThemeContext();
 	const { isLoggedIn, user } = useAuth();
 	const router = useRouter();
 	// Sol ray (TV / tablet yatay) varken icerik sola kayar.
@@ -756,7 +756,7 @@ export default function SettingsScreen() {
 							}
 							badgeText={pendingRelease ? "Güncelle" : undefined}
 							badgeColor={
-								pendingRelease ? colors.primary : undefined
+								pendingRelease ? Palette.primary : undefined
 							}
 							showChevron={false}
 							onPress={openUpdateSheet}
@@ -783,8 +783,8 @@ export default function SettingsScreen() {
 								<Switch
 									value={otaNotifyEnabled}
 									trackColor={{
-										false: colors.border,
-										true: colors.primary,
+										false: "rgba(229, 225, 228, 0.10)",
+										true: Palette.primary,
 									}}
 									thumbColor="#ffffff"
 								/>
@@ -816,7 +816,7 @@ export default function SettingsScreen() {
 								<Switch
 									value={Boolean(pushTercihi.enabled)}
 									trackColor={{
-										false: colors.border,
+										false: "rgba(229, 225, 228, 0.10)",
 										true: "#FF3D5E",
 									}}
 									thumbColor="#ffffff"
@@ -948,15 +948,15 @@ export default function SettingsScreen() {
 							style={[
 								styles.modalContent,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.10)",
 								},
 							]}>
 							<View style={styles.modalHeader}>
 								<Text
 									style={[
 										styles.modalTitle,
-										{ color: colors.text },
+										{ color: Palette.onSurface },
 									]}>
 									Genel Ayarlar
 								</Text>
@@ -976,7 +976,7 @@ export default function SettingsScreen() {
 									<Ionicons
 										name="close"
 										size={24}
-										color={colors.text}
+										color={Palette.onSurface}
 									/>
 								</TVPressable>
 							</View>
@@ -987,14 +987,14 @@ export default function SettingsScreen() {
 									<Text
 										style={[
 											styles.modalRowTitle,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										Koyu Mod
 									</Text>
 									<Text
 										style={[
 											styles.modalRowSubtitle,
-											{ color: colors.textSecondary },
+											{ color: Palette.onSurfaceVariant },
 										]}>
 										Gece kullanımı için koyu arayüz teması
 									</Text>
@@ -1004,7 +1004,7 @@ export default function SettingsScreen() {
 									onValueChange={toggleTheme}
 									trackColor={{
 										false: "#374151",
-										true: colors.primary,
+										true: Palette.primary,
 									}}
 									thumbColor="#ffffff"
 								/>
@@ -1013,7 +1013,7 @@ export default function SettingsScreen() {
 							<View
 								style={[
 									styles.modalDivider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.10)" },
 								]}
 							/>
 
@@ -1023,14 +1023,14 @@ export default function SettingsScreen() {
 									<Text
 										style={[
 											styles.modalRowTitle,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										Uygulama Dili
 									</Text>
 									<Text
 										style={[
 											styles.modalRowSubtitle,
-											{ color: colors.textSecondary },
+											{ color: Palette.onSurfaceVariant },
 										]}>
 										Varsayılan dil
 									</Text>
@@ -1038,7 +1038,7 @@ export default function SettingsScreen() {
 								<Text
 									style={[
 										styles.modalRowValue,
-										{ color: colors.primary },
+										{ color: Palette.primary },
 									]}>
 									Türkçe
 								</Text>
@@ -1047,7 +1047,7 @@ export default function SettingsScreen() {
 							<View
 								style={[
 									styles.modalDivider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.10)" },
 								]}
 							/>
 
@@ -1067,14 +1067,14 @@ export default function SettingsScreen() {
 									<Text
 										style={[
 											styles.modalRowTitle,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										Telefon Bildirim Ayarları
 									</Text>
 									<Text
 										style={[
 											styles.modalRowSubtitle,
-											{ color: colors.textSecondary },
+											{ color: Palette.onSurfaceVariant },
 										]}>
 										Bildirim kanalları telefonun ayarlarında yönetilir
 									</Text>
@@ -1082,14 +1082,14 @@ export default function SettingsScreen() {
 								<Ionicons
 									name="chevron-forward"
 									size={18}
-									color={colors.textSecondary}
+									color={Palette.onSurfaceVariant}
 								/>
 							</TVPressable>
 
 							<TVPressable
 								style={[
 									styles.modalCloseButton,
-									{ backgroundColor: colors.primary },
+									{ backgroundColor: Palette.primaryContainer },
 								]}
 								focusedStyle={styles.modalCloseButtonFocused}
 								onPress={() => setGeneralModalVisible(false)}>
@@ -1112,15 +1112,15 @@ export default function SettingsScreen() {
 							style={[
 								styles.modalContent,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.10)",
 								},
 							]}>
 							<View style={styles.modalHeader}>
 								<Text
 									style={[
 										styles.modalTitle,
-										{ color: colors.text },
+										{ color: Palette.onSurface },
 									]}>
 									Özet Saati
 								</Text>
@@ -1138,7 +1138,7 @@ export default function SettingsScreen() {
 									<Ionicons
 										name="close"
 										size={24}
-										color={colors.text}
+										color={Palette.onSurface}
 									/>
 								</TVPressable>
 							</View>
@@ -1160,7 +1160,7 @@ export default function SettingsScreen() {
 															saat ===
 															pushTercihi.saat
 																? "#ffffff"
-																: colors.text,
+																: Palette.onSurface,
 													},
 												]}>
 												{saatEtiketi(saat)}
@@ -1172,7 +1172,7 @@ export default function SettingsScreen() {
 							<Text
 								style={[
 									styles.pushSaatNot,
-									{ color: colors.textSecondary },
+									{ color: Palette.onSurfaceVariant },
 								]}>
 								Özet, seçtiğin saatte cihazın KENDİ saat
 								diliminde gelir ({pushTercihi.tz}).
@@ -1192,15 +1192,15 @@ export default function SettingsScreen() {
 							style={[
 								styles.modalContent,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.10)",
 								},
 							]}>
 							<View style={styles.modalHeader}>
 								<Text
 									style={[
 										styles.modalTitle,
-										{ color: colors.text },
+										{ color: Palette.onSurface },
 									]}>
 									Düzen Tercihleri
 								</Text>
@@ -1214,7 +1214,7 @@ export default function SettingsScreen() {
 									<Ionicons
 										name="close"
 										size={24}
-										color={colors.text}
+										color={Palette.onSurface}
 									/>
 								</TVPressable>
 							</View>
@@ -1224,14 +1224,14 @@ export default function SettingsScreen() {
 									<Text
 										style={[
 											styles.modalRowTitle,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										Kompakt Kart Düzeni
 									</Text>
 									<Text
 										style={[
 											styles.modalRowSubtitle,
-											{ color: colors.textSecondary },
+											{ color: Palette.onSurfaceVariant },
 										]}>
 										Daha fazla içeriği ekranda göster
 									</Text>
@@ -1241,7 +1241,7 @@ export default function SettingsScreen() {
 									onValueChange={setCompactLayout}
 									trackColor={{
 										false: "#374151",
-										true: colors.primary,
+										true: Palette.primary,
 									}}
 									thumbColor="#ffffff"
 								/>
@@ -1250,7 +1250,7 @@ export default function SettingsScreen() {
 							<TVPressable
 								style={[
 									styles.modalCloseButton,
-									{ backgroundColor: colors.primary },
+									{ backgroundColor: Palette.primaryContainer },
 								]}
 								focusedStyle={styles.modalCloseButtonFocused}
 								onPress={() => setLayoutModalVisible(false)}>
@@ -1273,15 +1273,15 @@ export default function SettingsScreen() {
 							style={[
 								styles.modalContent,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.10)",
 								},
 							]}>
 							<View style={styles.modalHeader}>
 								<Text
 									style={[
 										styles.modalTitle,
-										{ color: colors.text },
+										{ color: Palette.onSurface },
 									]}>
 									Dil Bilgisi Gösterimi
 								</Text>
@@ -1295,7 +1295,7 @@ export default function SettingsScreen() {
 									<Ionicons
 										name="close"
 										size={24}
-										color={colors.text}
+										color={Palette.onSurface}
 									/>
 								</TVPressable>
 							</View>
@@ -1334,8 +1334,8 @@ export default function SettingsScreen() {
 														? "#161b22"
 														: "#f1f5f9",
 												borderColor: isSelected
-													? colors.primary
-													: colors.border,
+													? Palette.primary
+													: "rgba(229, 225, 228, 0.10)",
 											},
 										]}
 										focusedStyle={
@@ -1355,8 +1355,8 @@ export default function SettingsScreen() {
 														styles.modalOptionTitle,
 														{
 															color: isSelected
-																? colors.primary
-																: colors.text,
+																? Palette.primary
+																: Palette.onSurface,
 														},
 													]}>
 													{opt.title}
@@ -1371,7 +1371,7 @@ export default function SettingsScreen() {
 												style={[
 													styles.modalOptionDesc,
 													{
-														color: colors.textSecondary,
+														color: Palette.onSurfaceVariant,
 													},
 												]}>
 												{opt.desc}
@@ -1381,7 +1381,7 @@ export default function SettingsScreen() {
 											style={[
 												styles.radioOuter,
 												isSelected && {
-													borderColor: colors.primary,
+													borderColor: Palette.primary,
 												},
 											]}>
 											{isSelected && (
@@ -1390,7 +1390,7 @@ export default function SettingsScreen() {
 														styles.radioInner,
 														{
 															backgroundColor:
-																colors.primary,
+																Palette.primary,
 														},
 													]}
 												/>
@@ -1403,7 +1403,7 @@ export default function SettingsScreen() {
 							<TVPressable
 								style={[
 									styles.modalCloseButton,
-									{ backgroundColor: colors.primary },
+									{ backgroundColor: Palette.primaryContainer },
 								]}
 								focusedStyle={styles.modalCloseButtonFocused}
 								onPress={() => setLanguageModalVisible(false)}>
@@ -1687,7 +1687,7 @@ const styles = StyleSheet.create({
 	},
 	modalTitle: {
 		fontSize: 18,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	modalRow: {
 		flexDirection: "row",
@@ -1701,7 +1701,7 @@ const styles = StyleSheet.create({
 	},
 	modalRowTitle: {
 		fontSize: 15,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	modalRowSubtitle: {
 		fontSize: 12,
@@ -1709,7 +1709,7 @@ const styles = StyleSheet.create({
 	},
 	modalRowValue: {
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	modalDivider: {
 		height: 1,
@@ -1725,7 +1725,7 @@ const styles = StyleSheet.create({
 	modalCloseButtonText: {
 		color: "#ffffff",
 		fontSize: 15,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	modalOptionCard: {
 		flexDirection: "row",
@@ -1748,7 +1748,7 @@ const styles = StyleSheet.create({
 	},
 	modalOptionTitle: {
 		fontSize: 15,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	modalOptionDesc: {
 		fontSize: 12,
@@ -1800,7 +1800,7 @@ const styles = StyleSheet.create({
 	},
 	pushSaatYazi: {
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	pushSaatNot: {
 		fontSize: 12,

@@ -1,3 +1,4 @@
+import { FontFamily, Palette } from "@/constants/theme";
 import TVPressable from "@components/common/TVPressable";
 import { useAuth } from "@/context/AuthContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
@@ -28,7 +29,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function EditProfile() {
-	const { theme, colors } = useThemeContext();
+	const { theme } = useThemeContext();
 	// TV: profil formu ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
 	const { contentMaxWidth } = useTvMetrics();
 	const { user, isLoggedIn, refreshUser } = useAuth();
@@ -264,12 +265,12 @@ export default function EditProfile() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right", "bottom"]}
-				style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+				style={[styles.safeArea, { backgroundColor: Palette.background }]}>
 				<StatusBar
 					barStyle={
 						theme === "dark" ? "light-content" : "dark-content"
 					}
-					backgroundColor={colors.bg}
+					backgroundColor={Palette.background}
 				/>
 
 				{/* Header */}
@@ -277,8 +278,8 @@ export default function EditProfile() {
 					style={[
 						styles.header,
 						{
-							borderBottomColor: colors.border,
-							backgroundColor: colors.cardBg,
+							borderBottomColor: "rgba(229, 225, 228, 0.10)",
+							backgroundColor: Palette.surfaceLow,
 						},
 					]}>
 					<TVPressable
@@ -290,10 +291,10 @@ export default function EditProfile() {
 						<Ionicons
 							name="arrow-back"
 							size={24}
-							color={colors.text}
+							color={Palette.onSurface}
 						/>
 					</TVPressable>
-					<Text style={[styles.headerTitle, { color: colors.text }]}>
+					<Text style={[styles.headerTitle, { color: Palette.onSurface }]}>
 						Profili Düzenle
 					</Text>
 					<TVPressable
@@ -306,13 +307,13 @@ export default function EditProfile() {
 						{isLoading ? (
 							<ActivityIndicator
 								size="small"
-								color={colors.primary}
+								color={Palette.primary}
 							/>
 						) : (
 							<Text
 								style={[
 									styles.saveButtonText,
-									{ color: colors.primary },
+									{ color: Palette.primary },
 								]}>
 								Kaydet
 							</Text>
@@ -343,14 +344,14 @@ export default function EditProfile() {
 							style={[
 								styles.profilePictureSection,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.10)",
 								},
 							]}>
 							<View
 								style={[
 									styles.avatarContainer,
-									{ backgroundColor: colors.primary + "20" },
+									{ backgroundColor: Palette.primary + "20" },
 								]}>
 								{avatarUrl ? (
 									<Image
@@ -363,26 +364,26 @@ export default function EditProfile() {
 									<Ionicons
 										name="person"
 										size={56}
-										color={colors.primary}
+										color={Palette.primary}
 									/>
 								)}
 							</View>
 							<TVPressable
 								style={({ focused }) => [
 									styles.changeAvatarButton,
-									{ borderColor: colors.primary },
+									{ borderColor: Palette.primary },
 									focused && styles.changeAvatarButtonFocused,
 								]}
 								onPress={pickImage}>
 								<Ionicons
 									name="camera"
 									size={18}
-									color={colors.primary}
+									color={Palette.primary}
 								/>
 								<Text
 									style={[
 										styles.changeAvatarText,
-										{ color: colors.primary },
+										{ color: Palette.primary },
 									]}>
 									{" "}
 									Fotoğrafı Değiştir
@@ -395,8 +396,8 @@ export default function EditProfile() {
 							style={[
 								styles.formSection,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.10)",
 								},
 							]}>
 							{/* Display Name */}
@@ -404,7 +405,7 @@ export default function EditProfile() {
 								<Text
 									style={[
 										styles.inputLabel,
-										{ color: colors.text },
+										{ color: Palette.onSurface },
 									]}>
 									Görünen Ad
 								</Text>
@@ -412,22 +413,22 @@ export default function EditProfile() {
 									style={[
 										styles.inputWrapper,
 										{
-											backgroundColor: colors.bg,
+											backgroundColor: Palette.background,
 											borderColor: isDisplayNameFocused
-												? colors.primary
-												: colors.border,
+												? Palette.primary
+												: "rgba(229, 225, 228, 0.10)",
 										},
 									]}>
 									<TextInput
 										style={[
 											styles.textInput,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}
 										value={displayName}
 										onChangeText={setDisplayName}
 										placeholder="Görünen adınız"
 										placeholderTextColor={
-											colors.textSecondary
+											Palette.onSurfaceVariant
 										}
 										onFocus={() =>
 											setIsDisplayNameFocused(true)
@@ -445,7 +446,7 @@ export default function EditProfile() {
 								<Text
 									style={[
 										styles.inputLabel,
-										{ color: colors.text },
+										{ color: Palette.onSurface },
 									]}>
 									Kullanıcı Adı
 								</Text>
@@ -453,23 +454,23 @@ export default function EditProfile() {
 									style={[
 										styles.inputWrapper,
 										{
-											backgroundColor: colors.bg,
+											backgroundColor: Palette.background,
 											borderColor: isUsernameFocused
-												? colors.primary
-												: colors.border,
+												? Palette.primary
+												: "rgba(229, 225, 228, 0.10)",
 										},
 									]}>
 									<Ionicons
 										name="at"
 										size={20}
-										color={colors.textSecondary}
+										color={Palette.onSurfaceVariant}
 										style={styles.inputIcon}
 									/>
 									<TextInput
 										style={[
 											styles.textInput,
 											{
-												color: colors.text,
+												color: Palette.onSurface,
 												paddingLeft: 0,
 											},
 										]}
@@ -477,7 +478,7 @@ export default function EditProfile() {
 										onChangeText={setUsername}
 										placeholder="kullaniciadi"
 										placeholderTextColor={
-											colors.textSecondary
+											Palette.onSurfaceVariant
 										}
 										onFocus={() =>
 											setIsUsernameFocused(true)
@@ -496,7 +497,7 @@ export default function EditProfile() {
 								<Text
 									style={[
 										styles.inputLabel,
-										{ color: colors.text },
+										{ color: Palette.onSurface },
 									]}>
 									E-posta
 								</Text>
@@ -504,22 +505,22 @@ export default function EditProfile() {
 									style={[
 										styles.inputWrapper,
 										{
-											backgroundColor: colors.bg,
-											borderColor: colors.border,
+											backgroundColor: Palette.background,
+											borderColor: "rgba(229, 225, 228, 0.10)",
 											opacity: 0.8,
 										},
 									]}>
 									<Ionicons
 										name="mail-outline"
 										size={20}
-										color={colors.textSecondary}
+										color={Palette.onSurfaceVariant}
 										style={styles.inputIcon}
 									/>
 									<TextInput
 										style={[
 											styles.textInput,
 											{
-												color: colors.textSecondary,
+												color: Palette.onSurfaceVariant,
 												paddingLeft: 0,
 											},
 										]}
@@ -534,7 +535,7 @@ export default function EditProfile() {
 								<Text
 									style={[
 										styles.inputLabel,
-										{ color: colors.text },
+										{ color: Palette.onSurface },
 									]}>
 									Biyografi
 								</Text>
@@ -542,22 +543,22 @@ export default function EditProfile() {
 									style={[
 										styles.bioInputWrapper,
 										{
-											backgroundColor: colors.bg,
+											backgroundColor: Palette.background,
 											borderColor: isBioFocused
-												? colors.primary
-												: colors.border,
+												? Palette.primary
+												: "rgba(229, 225, 228, 0.10)",
 										},
 									]}>
 									<TextInput
 										style={[
 											styles.bioTextInput,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}
 										value={bio}
 										onChangeText={setBio}
 										placeholder="Kendinizi kısaca tanıtın..."
 										placeholderTextColor={
-											colors.textSecondary
+											Palette.onSurfaceVariant
 										}
 										onFocus={() => setIsBioFocused(true)}
 										onBlur={() => setIsBioFocused(false)}
@@ -568,7 +569,7 @@ export default function EditProfile() {
 									<Text
 										style={[
 											styles.charCount,
-											{ color: colors.textSecondary },
+											{ color: Palette.onSurfaceVariant },
 										]}>
 										{bio.length}/150
 									</Text>
@@ -585,7 +586,7 @@ export default function EditProfile() {
 								<Text
 									style={[
 										styles.inputLabel,
-										{ color: colors.text },
+										{ color: Palette.onSurface },
 									]}>
 									Dil
 								</Text>
@@ -593,27 +594,27 @@ export default function EditProfile() {
 									style={[
 										styles.selectWrapper,
 										{
-											backgroundColor: colors.bg,
-											borderColor: colors.border,
+											backgroundColor: Palette.background,
+											borderColor: "rgba(229, 225, 228, 0.10)",
 										},
 									]}>
 									<Ionicons
 										name="globe-outline"
 										size={20}
-										color={colors.textSecondary}
+										color={Palette.onSurfaceVariant}
 										style={styles.inputIcon}
 									/>
 									<Text
 										style={[
 											styles.selectText,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										{language}
 									</Text>
 									<Ionicons
 										name="chevron-forward"
 										size={20}
-										color={colors.textSecondary}
+										color={Palette.onSurfaceVariant}
 									/>
 								</View>
 							</TVPressable>
@@ -630,7 +631,7 @@ export default function EditProfile() {
 								<Text
 									style={[
 										styles.inputLabel,
-										{ color: colors.text },
+										{ color: Palette.onSurface },
 									]}>
 									Doğum Tarihi
 								</Text>
@@ -638,20 +639,20 @@ export default function EditProfile() {
 									style={[
 										styles.selectWrapper,
 										{
-											backgroundColor: colors.bg,
-											borderColor: colors.border,
+											backgroundColor: Palette.background,
+											borderColor: "rgba(229, 225, 228, 0.10)",
 										},
 									]}>
 									<Ionicons
 										name="gift-outline"
 										size={20}
-										color={colors.textSecondary}
+										color={Palette.onSurfaceVariant}
 										style={styles.inputIcon}
 									/>
 									<Text
 										style={[
 											styles.selectText,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										{birthDate
 											? formatDate(birthDate)
@@ -660,7 +661,7 @@ export default function EditProfile() {
 									<Ionicons
 										name="calendar-outline"
 										size={20}
-										color={colors.textSecondary}
+										color={Palette.onSurfaceVariant}
 									/>
 								</View>
 							</TVPressable>
@@ -694,8 +695,8 @@ export default function EditProfile() {
 							style={[
 								styles.privacySection,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.10)",
 								},
 							]}>
 							<View style={styles.privacyItem}>
@@ -703,21 +704,21 @@ export default function EditProfile() {
 									<Ionicons
 										name="lock-closed-outline"
 										size={22}
-										color={colors.textSecondary}
+										color={Palette.onSurfaceVariant}
 										style={styles.privacyIcon}
 									/>
 									<View>
 										<Text
 											style={[
 												styles.privacyTitle,
-												{ color: colors.text },
+												{ color: Palette.onSurface },
 											]}>
 											Hesap Gizliliği
 										</Text>
 										<Text
 											style={[
 												styles.privacyDescription,
-												{ color: colors.textSecondary },
+												{ color: Palette.onSurfaceVariant },
 											]}>
 											Profilinizi gizli tutun
 										</Text>
@@ -727,13 +728,13 @@ export default function EditProfile() {
 									value={isPrivate}
 									onValueChange={setIsPrivate}
 									trackColor={{
-										false: colors.border,
-										true: colors.primary + "80",
+										false: "rgba(229, 225, 228, 0.10)",
+										true: Palette.primary + "80",
 									}}
 									thumbColor={
 										isPrivate
-											? colors.primary
-											: colors.textSecondary
+											? Palette.primary
+											: Palette.onSurfaceVariant
 									}
 								/>
 							</View>
@@ -764,7 +765,7 @@ const styles = StyleSheet.create({
 	headerTitle: {
 		flex: 1,
 		fontSize: 18,
-		fontWeight: "bold",
+		fontFamily: FontFamily.bold,
 		textAlign: "center",
 	},
 	saveButton: {
@@ -775,7 +776,7 @@ const styles = StyleSheet.create({
 	},
 	saveButtonText: {
 		fontSize: 16,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	keyboardAvoid: { flex: 1 },
 	scrollContainer: {
@@ -815,7 +816,7 @@ const styles = StyleSheet.create({
 	},
 	changeAvatarText: {
 		fontSize: 14,
-		fontWeight: "500",
+		fontFamily: FontFamily.medium,
 	},
 	formSection: {
 		padding: 20,
@@ -828,7 +829,7 @@ const styles = StyleSheet.create({
 	},
 	inputLabel: {
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		marginBottom: 8,
 	},
 	inputWrapper: {
@@ -898,7 +899,7 @@ const styles = StyleSheet.create({
 	},
 	privacyTitle: {
 		fontSize: 15,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	privacyDescription: {
 		fontSize: 12,

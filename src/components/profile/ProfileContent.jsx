@@ -18,8 +18,7 @@
  * iç içe scroll view Android'de performans düşürür ve kısayol jestini bozar.
  */
 
-import { useThemeContext } from "@/context/ThemeContext";
-import { ScreenGutter } from "@constants/theme";
+import { FontFamily, Palette, ScreenGutter } from "@constants/theme";
 import {
 	EmptyState,
 	PluginBadge,
@@ -73,7 +72,6 @@ function ProgressBar({ percent, color }) {
 // ════════════════════════════════════════════════════════════════
 
 function ContinueRow({ item, onPress, onRemove }) {
-	const { m3 } = useThemeContext();
 	const percent = progressPercent(item);
 	const timeLeft = formatTimeLeft(item);
 	const meta = formatSeasonEpisode(item) || formatMetaLine(item);
@@ -84,8 +82,8 @@ function ContinueRow({ item, onPress, onRemove }) {
 			style={[
 				styles.rowCard,
 				{
-					backgroundColor: m3.surfaceContainer,
-					borderColor: `${m3.surfaceContainerHigh}80`,
+					backgroundColor: Palette.surface,
+					borderColor: `${Palette.surfaceHigh}80`,
 				},
 			]}>
 			<TVPressable
@@ -96,7 +94,7 @@ function ContinueRow({ item, onPress, onRemove }) {
 				<View
 					style={[
 						styles.rowThumb,
-						{ backgroundColor: m3.surfaceContainerHighest },
+						{ backgroundColor: Palette.surfaceHighest },
 					]}>
 					<Image
 						source={{ uri: item.poster }}
@@ -104,27 +102,27 @@ function ContinueRow({ item, onPress, onRemove }) {
 						contentFit="cover"
 						transition={120}
 					/>
-					<PlayOverlay color={m3.primaryContainer} iconColor={m3.onPrimaryContainer} />
-					<ProgressBar percent={percent} color={m3.primaryContainer} />
+					<PlayOverlay color={Palette.primaryContainer} iconColor={Palette.onPrimaryContainer} />
+					<ProgressBar percent={percent} color={Palette.primaryContainer} />
 				</View>
 
 				<View style={styles.rowBody}>
 					<Text
-						style={[styles.rowTitle, { color: m3.onSurface }]}
+						style={[styles.rowTitle, { color: Palette.onSurface }]}
 						numberOfLines={1}>
 						{title}
 					</Text>
 					{meta ? (
 						<Text
-							style={[styles.rowMeta, { color: m3.onSurfaceVariant }]}
+							style={[styles.rowMeta, { color: Palette.onSurfaceVariant }]}
 							numberOfLines={1}>
 							{meta}
 						</Text>
 					) : null}
 					{timeLeft ? (
 						<View style={styles.footLine}>
-							<Ionicons name="time-outline" size={13} color={m3.tertiary} />
-							<Text style={[styles.timeLeft, { color: m3.tertiary }]}>
+							<Ionicons name="time-outline" size={13} color={Palette.tertiary} />
+							<Text style={[styles.timeLeft, { color: Palette.tertiary }]}>
 								{timeLeft}
 							</Text>
 						</View>
@@ -137,14 +135,13 @@ function ContinueRow({ item, onPress, onRemove }) {
 				focusedStyle={styles.focusedSmall}
 				style={styles.removeBtn}
 				accessibilityLabel={`${title} listesinden çıkar`}>
-				<Ionicons name="close" size={15} color={`${m3.onSurfaceVariant}99`} />
+				<Ionicons name="close" size={15} color={`${Palette.onSurfaceVariant}99`} />
 			</TVPressable>
 		</View>
 	);
 }
 
 function ContinueTile({ item, onPress, onRemove, maxWidth }) {
-	const { m3 } = useThemeContext();
 	const percent = progressPercent(item);
 	const timeLeft = formatTimeLeft(item);
 	const meta = formatSeasonEpisode(item) || formatMetaLine(item);
@@ -155,8 +152,8 @@ function ContinueTile({ item, onPress, onRemove, maxWidth }) {
 			style={[
 				styles.tile,
 				{
-					backgroundColor: m3.surfaceContainer,
-					borderColor: `${m3.surfaceContainerHigh}80`,
+					backgroundColor: Palette.surface,
+					borderColor: `${Palette.surfaceHigh}80`,
 					// ⚠️ `flex: 1` TEK BAŞINA YETMİYOR: kayıt sayısı sütunun
 					// katı değilse son satırdaki tek kart tüm satıra yayılıyordu
 					// (TV'de tek kayıtla dev bir 16:9 kart kaplıyordu).
@@ -171,7 +168,7 @@ function ContinueTile({ item, onPress, onRemove, maxWidth }) {
 				<View
 					style={[
 						styles.tileImage,
-						{ backgroundColor: m3.surfaceContainerHighest },
+						{ backgroundColor: Palette.surfaceHighest },
 					]}>
 					<Image
 						source={{ uri: item.poster }}
@@ -179,27 +176,27 @@ function ContinueTile({ item, onPress, onRemove, maxWidth }) {
 						contentFit="cover"
 						transition={120}
 					/>
-					<PlayOverlay color={m3.primaryContainer} iconColor={m3.onPrimaryContainer} />
-					<ProgressBar percent={percent} color={m3.primaryContainer} />
+					<PlayOverlay color={Palette.primaryContainer} iconColor={Palette.onPrimaryContainer} />
+					<ProgressBar percent={percent} color={Palette.primaryContainer} />
 				</View>
 
 				<View style={styles.tileBody}>
 					<Text
-						style={[styles.tileTitle, { color: m3.onSurface }]}
+						style={[styles.tileTitle, { color: Palette.onSurface }]}
 						numberOfLines={1}>
 						{title}
 					</Text>
 					{meta ? (
 						<Text
-							style={[styles.tileMeta, { color: m3.onSurfaceVariant }]}
+							style={[styles.tileMeta, { color: Palette.onSurfaceVariant }]}
 							numberOfLines={1}>
 							{meta}
 						</Text>
 					) : null}
 					{timeLeft ? (
 						<View style={styles.footLine}>
-							<Ionicons name="time-outline" size={12} color={m3.tertiary} />
-							<Text style={[styles.tileTimeLeft, { color: m3.tertiary }]}>
+							<Ionicons name="time-outline" size={12} color={Palette.tertiary} />
+							<Text style={[styles.tileTimeLeft, { color: Palette.tertiary }]}>
 								{timeLeft}
 							</Text>
 						</View>
@@ -212,7 +209,7 @@ function ContinueTile({ item, onPress, onRemove, maxWidth }) {
 				focusedStyle={styles.focusedSmall}
 				style={[styles.tileRemove, { backgroundColor: "rgba(11,14,20,0.8)" }]}
 				accessibilityLabel={`${title} listesinden çıkar`}>
-				<Ionicons name="close" size={13} color={m3.onSurface} />
+				<Ionicons name="close" size={13} color={Palette.onSurface} />
 			</TVPressable>
 		</View>
 	);
@@ -238,7 +235,6 @@ export function ContinueWatchingList({
 	onRemove,
 	fallbackWidth,
 }) {
-	const { m3 } = useThemeContext();
 
 	// Sütun sayısı sabit 2 DEĞİL: kabın ölçüsünden türetilir. Sağ pano
 	// daraldığında (iki sütunlu yerleşim) sabit 2 sütun kartları yeniden
@@ -264,8 +260,8 @@ export function ContinueWatchingList({
 					style={[
 						styles.segmented,
 						{
-							backgroundColor: m3.surfaceContainer,
-							borderColor: `${m3.surfaceContainerHigh}80`,
+							backgroundColor: Palette.surface,
+							borderColor: `${Palette.surfaceHigh}80`,
 						},
 					]}>
 					{segments.map((seg) => {
@@ -278,7 +274,7 @@ export function ContinueWatchingList({
 								style={[
 									styles.segment,
 									isActive && {
-										backgroundColor: m3.surfaceContainerHigh,
+										backgroundColor: Palette.surfaceHigh,
 									},
 								]}
 								accessibilityLabel={seg.label}>
@@ -286,7 +282,7 @@ export function ContinueWatchingList({
 									name={seg.icon}
 									size={16}
 									color={
-										isActive ? m3.primaryContainer : m3.onSurfaceVariant
+										isActive ? Palette.primaryContainer : Palette.onSurfaceVariant
 									}
 								/>
 							</TVPressable>
@@ -360,7 +356,6 @@ export function ContinueWatchingList({
 // ════════════════════════════════════════════════════════════════
 
 function FavoriteCard({ item, onPress, onRemove, cardWidth }) {
-	const { m3 } = useThemeContext();
 	const meta = formatMetaLine(item);
 	const title = item.title || "İçerik";
 
@@ -369,8 +364,8 @@ function FavoriteCard({ item, onPress, onRemove, cardWidth }) {
 			style={[
 				styles.favCard,
 				{
-					backgroundColor: m3.surfaceContainer,
-					borderColor: `${m3.surfaceContainerHigh}66`,
+					backgroundColor: Palette.surface,
+					borderColor: `${Palette.surfaceHigh}66`,
 					// ⚠️ `flex: 1` TEK BAŞINA YETERLİ DEĞİL: 3 sütunda 4 kayıt
 					// varsa son satırda tek kart kalır ve `flex: 1` onu tüm genişliğe
 					// yayıyordu (cihazda doğrulandı: 4. poster tüm ekranı kaplıyordu).
@@ -386,7 +381,7 @@ function FavoriteCard({ item, onPress, onRemove, cardWidth }) {
 				<View
 					style={[
 						styles.favPoster,
-						{ backgroundColor: m3.surfaceContainerHigh },
+						{ backgroundColor: Palette.surfaceHigh },
 					]}>
 					<Image
 						source={{ uri: item.poster }}
@@ -422,13 +417,13 @@ function FavoriteCard({ item, onPress, onRemove, cardWidth }) {
 
 				<View style={styles.favInfo}>
 					<Text
-						style={[styles.favTitle, { color: m3.onSurface }]}
+						style={[styles.favTitle, { color: Palette.onSurface }]}
 						numberOfLines={1}>
 						{title}
 					</Text>
 					{meta ? (
 						<Text
-							style={[styles.favMeta, { color: `${m3.onSurface}99` }]}
+							style={[styles.favMeta, { color: `${Palette.onSurface}99` }]}
 							numberOfLines={1}>
 							{meta}
 						</Text>
@@ -443,7 +438,7 @@ function FavoriteCard({ item, onPress, onRemove, cardWidth }) {
 				focusedStyle={styles.focusedSmall}
 				style={[styles.heartBtn, { backgroundColor: "rgba(11,14,20,0.85)" }]}
 				accessibilityLabel={`${title} favorilerden çıkar`}>
-				<Ionicons name="heart" size={16} color={m3.primaryContainer} />
+				<Ionicons name="heart" size={16} color={Palette.primaryContainer} />
 			</TVPressable>
 		</View>
 	);
@@ -473,7 +468,6 @@ export function FavoriteGrid({
 	onRemove,
 	fallbackWidth,
 }) {
-	const { m3 } = useThemeContext();
 
 	const chips = [
 		{ key: "all", label: "Tümü", count: counts.all },
@@ -511,8 +505,8 @@ export function FavoriteGrid({
 								style={[
 									styles.filterChip,
 									isActive
-										? { backgroundColor: m3.primaryContainer }
-										: { backgroundColor: m3.surfaceContainerHigh },
+										? { backgroundColor: Palette.primaryContainer }
+										: { backgroundColor: Palette.surfaceHigh },
 								]}
 								accessibilityLabel={`${chip.label} (${chip.count})`}>
 								<Text
@@ -520,8 +514,8 @@ export function FavoriteGrid({
 										styles.filterChipText,
 										{
 											color: isActive
-												? m3.onPrimaryContainer
-												: `${m3.onSurface}B3`,
+												? Palette.onPrimaryContainer
+												: `${Palette.onSurface}B3`,
 										},
 									]}>
 									{chip.label} ({chip.count})
@@ -534,22 +528,22 @@ export function FavoriteGrid({
 				<TVPressable
 					onPress={onToggleSort}
 					focusedStyle={styles.focusedSmall}
-					style={[styles.toolBtn, { backgroundColor: m3.surfaceContainer }]}
+					style={[styles.toolBtn, { backgroundColor: Palette.surface }]}
 					accessibilityLabel={`Sırala: ${sortLabel}`}>
 					<Ionicons
 						name="swap-vertical"
 						size={17}
-						color={`${m3.onSurface}CC`}
+						color={`${Palette.onSurface}CC`}
 					/>
 				</TVPressable>
 			</View>
 
 			<View style={[styles.subHeader, { paddingHorizontal: ScreenGutter }]}>
 				<View style={styles.subHeaderLeft}>
-					<Ionicons name="sparkles" size={15} color={m3.tertiary} />
-					<Text style={[styles.subHeaderText, { color: `${m3.onSurface}99` }]}>
+					<Ionicons name="sparkles" size={15} color={Palette.tertiary} />
+					<Text style={[styles.subHeaderText, { color: `${Palette.onSurface}99` }]}>
 						Sıralama:{" "}
-						<Text style={{ color: m3.onSurface, fontWeight: "600" }}>
+						<Text style={{ color: Palette.onSurface, fontFamily: FontFamily.semiBold }}>
 							{sortLabel}
 						</Text>
 					</Text>
@@ -619,7 +613,6 @@ export function FavoriteGrid({
 // ════════════════════════════════════════════════════════════════
 
 function HistoryRow({ item, onPress, onRemove }) {
-	const { m3 } = useThemeContext();
 	const duration = formatDurationShort(item.duration);
 	// ⚠️ Sezon/bölüm bilgisi gösterilmiyordu.
 	//
@@ -641,8 +634,8 @@ function HistoryRow({ item, onPress, onRemove }) {
 			style={[
 				styles.histCard,
 				{
-					backgroundColor: m3.surfaceContainerLow,
-					borderColor: `${m3.surfaceContainerHigh}66`,
+					backgroundColor: Palette.surfaceLow,
+					borderColor: `${Palette.surfaceHigh}66`,
 				},
 			]}>
 			<TVPressable
@@ -653,7 +646,7 @@ function HistoryRow({ item, onPress, onRemove }) {
 				<View
 					style={[
 						styles.histThumb,
-						{ backgroundColor: m3.surfaceContainerHighest },
+						{ backgroundColor: Palette.surfaceHighest },
 					]}>
 					<Image
 						source={{ uri: item.poster }}
@@ -667,7 +660,7 @@ function HistoryRow({ item, onPress, onRemove }) {
 								styles.durationPill,
 								{ backgroundColor: "rgba(11,14,20,0.9)" },
 							]}>
-							<Text style={[styles.durationText, { color: m3.onSurface }]}>
+							<Text style={[styles.durationText, { color: Palette.onSurface }]}>
 								{duration}
 							</Text>
 						</View>
@@ -676,7 +669,7 @@ function HistoryRow({ item, onPress, onRemove }) {
 
 				<View style={styles.histBody}>
 					<Text
-						style={[styles.histTitle, { color: m3.onSurface }]}
+						style={[styles.histTitle, { color: Palette.onSurface }]}
 						numberOfLines={1}>
 						{title}
 					</Text>
@@ -684,7 +677,7 @@ function HistoryRow({ item, onPress, onRemove }) {
 					<View style={styles.histMetaRow}>
 						{meta ? (
 							<Text
-								style={[styles.histType, { color: `${m3.onSurface}80` }]}
+								style={[styles.histType, { color: `${Palette.onSurface}80` }]}
 								numberOfLines={1}>
 								{meta}
 							</Text>
@@ -706,7 +699,7 @@ function HistoryRow({ item, onPress, onRemove }) {
 								/>
 							) : null}
 							<Text
-								style={[styles.histFootText, { color: `${m3.onSurface}99` }]}
+								style={[styles.histFootText, { color: `${Palette.onSurface}99` }]}
 								numberOfLines={1}>
 								{[watched, status].filter(Boolean).join(" • ")}
 							</Text>
@@ -718,9 +711,9 @@ function HistoryRow({ item, onPress, onRemove }) {
 			<TVPressable
 				onPress={onRemove}
 				focusedStyle={styles.focusedRound}
-				style={[styles.replayBtn, { backgroundColor: m3.surfaceContainer }]}
+				style={[styles.replayBtn, { backgroundColor: Palette.surface }]}
 				accessibilityLabel={`${title} geçmişten kaldır`}>
-				<Ionicons name="refresh" size={18} color={m3.onSurface} />
+				<Ionicons name="refresh" size={18} color={Palette.onSurface} />
 			</TVPressable>
 		</View>
 	);
@@ -743,7 +736,6 @@ export function HistoryList({
 	onPressItem,
 	onRemove,
 }) {
-	const { m3 } = useThemeContext();
 
 	return (
 		<View>
@@ -752,10 +744,10 @@ export function HistoryList({
 					<View
 						style={[
 							styles.periodChip,
-							{ backgroundColor: m3.surfaceContainer },
+							{ backgroundColor: Palette.surface },
 						]}>
-						<Ionicons name="calendar-outline" size={13} color={m3.tertiary} />
-						<Text style={[styles.periodChipText, { color: m3.onSurface }]}>
+						<Ionicons name="calendar-outline" size={13} color={Palette.tertiary} />
+						<Text style={[styles.periodChipText, { color: Palette.onSurface }]}>
 							Bu Hafta ({weekCount} içerik)
 						</Text>
 					</View>
@@ -765,10 +757,10 @@ export function HistoryList({
 						focusedStyle={styles.focusedSmall}
 						style={styles.sortTextBtn}
 						accessibilityLabel={`Sırala: ${sortLabel}`}>
-						<Text style={[styles.sortText, { color: `${m3.onSurface}99` }]}>
+						<Text style={[styles.sortText, { color: `${Palette.onSurface}99` }]}>
 							{sortLabel}
 						</Text>
-						<Ionicons name="chevron-down" size={14} color={`${m3.onSurface}99`} />
+						<Ionicons name="chevron-down" size={14} color={`${Palette.onSurface}99`} />
 					</TVPressable>
 				</View>
 
@@ -780,9 +772,9 @@ export function HistoryList({
 					<Ionicons
 						name="trash-outline"
 						size={14}
-						color={`${m3.onSurfaceVariant}B3`}
+						color={`${Palette.onSurfaceVariant}B3`}
 					/>
-					<Text style={[styles.clearText, { color: `${m3.onSurfaceVariant}B3` }]}>
+					<Text style={[styles.clearText, { color: `${Palette.onSurfaceVariant}B3` }]}>
 						Geçmişi Temizle
 					</Text>
 				</TVPressable>
@@ -944,7 +936,7 @@ const styles = StyleSheet.create({
 	rowTitle: {
 		fontSize: 14,
 		lineHeight: 18,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	rowMeta: {
 		fontSize: 12,
@@ -954,7 +946,7 @@ const styles = StyleSheet.create({
 	timeLeft: {
 		fontSize: 11,
 		lineHeight: 16,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	tile: {
 		flex: 1,
@@ -975,7 +967,7 @@ const styles = StyleSheet.create({
 	tileTitle: {
 		fontSize: 12,
 		lineHeight: 16,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	tileMeta: {
 		fontSize: 11,
@@ -985,7 +977,7 @@ const styles = StyleSheet.create({
 	tileTimeLeft: {
 		fontSize: 10,
 		lineHeight: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 
 	// ── Favoriler ──
@@ -1003,7 +995,7 @@ const styles = StyleSheet.create({
 	filterChipText: {
 		fontSize: 12,
 		lineHeight: 16,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	toolBtn: {
 		width: 34,
@@ -1056,7 +1048,7 @@ const styles = StyleSheet.create({
 	favTitle: {
 		fontSize: 13,
 		lineHeight: 17,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	favMeta: {
 		fontSize: 11,
@@ -1075,7 +1067,7 @@ const styles = StyleSheet.create({
 	periodChipText: {
 		fontSize: 10,
 		lineHeight: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	sortTextBtn: {
 		flexDirection: "row",
@@ -1086,7 +1078,7 @@ const styles = StyleSheet.create({
 	sortText: {
 		fontSize: 10,
 		lineHeight: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	clearBtn: {
 		flexDirection: "row",
@@ -1098,7 +1090,7 @@ const styles = StyleSheet.create({
 	clearText: {
 		fontSize: 10,
 		lineHeight: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	histCard: {
 		flexDirection: "row",
@@ -1131,7 +1123,7 @@ const styles = StyleSheet.create({
 	durationText: {
 		fontSize: 10,
 		lineHeight: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	histBody: {
 		flex: 1,
@@ -1140,7 +1132,7 @@ const styles = StyleSheet.create({
 	histTitle: {
 		fontSize: 15,
 		lineHeight: 20,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	histMetaRow: {
 		flexDirection: "row",
