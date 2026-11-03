@@ -1,3 +1,4 @@
+import { FontFamily, Palette } from "@/constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -51,7 +52,7 @@ export function SpeedUpIndicator({ active, rate }) {
 	return (
 		<View style={styles.speedWrap} pointerEvents="none">
 			<View style={styles.speedBubble}>
-				<Ionicons name="flash" size={22} color="#FF3B30" />
+				<Ionicons name="flash" size={22} color={Palette.primary} />
 				<Text style={styles.speedText}>{`${rate || 2}×`}</Text>
 			</View>
 		</View>
@@ -104,7 +105,7 @@ const styles = StyleSheet.create({
 	label: {
 		color: "#FFFFFF",
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		marginTop: 2,
 	},
 	speedWrap: {
@@ -125,11 +126,11 @@ const styles = StyleSheet.create({
 		paddingVertical: 8,
 		borderRadius: 20,
 		borderWidth: 1,
-		borderColor: "rgba(255, 59, 48, 0.5)",
+		borderColor: "rgba(192, 193, 255, 0.5)",
 	},
 	speedText: {
 		color: "#FFFFFF",
 		fontSize: 14,
-		fontWeight: "800",
+		fontFamily: FontFamily.bold,
 	},
 });

@@ -1,3 +1,4 @@
+import { FontFamily, Palette } from "@/constants/theme";
 import TVPressable from "@/components/common/TVPressable";
 import { usePlayerSettings } from "@/context/PlayerSettingsContext";
 import { useTVRemote } from "@/hooks/useTVRemote";
@@ -1578,7 +1579,7 @@ export default function VideoPlayer({
 										name="tablet-landscape-outline"
 										size={20}
 										color={
-											isPipActive ? "#FF3B30" : "#FFFFFF"
+											isPipActive ? Palette.primary : "#FFFFFF"
 										}
 									/>
 								</TVPressable>
@@ -1811,7 +1812,7 @@ export default function VideoPlayer({
 			{/* 6. KATMAN: Yükleme / hata */}
 			{(isLoading || isBuffering) && !hasError && (
 				<View style={styles.centerLoading} pointerEvents="none">
-					<ActivityIndicator size="large" color="#FF3B30" />
+					<ActivityIndicator size="large" color={Palette.primary} />
 					<Text style={styles.loadingText}>
 						{isLoading
 							? "Kaynak yükleniyor..."
@@ -1974,7 +1975,7 @@ const styles = StyleSheet.create({
 	movieTitle: {
 		color: "#FFFFFF",
 		fontSize: 16,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		textShadowColor: "rgba(0, 0, 0, 0.75)",
 		textShadowOffset: { width: 0, height: 1 },
 		textShadowRadius: 3,
@@ -1998,13 +1999,13 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	iconButtonActive: {
-		backgroundColor: "rgba(255, 59, 48, 0.25)",
+		backgroundColor: "rgba(192, 193, 255, 0.25)",
 		borderColor: "rgba(255, 59, 48, 0.6)",
 		borderWidth: 1,
 	},
 	iconButtonFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.35)",
-		borderColor: "#FF3B30",
+		backgroundColor: "rgba(192, 193, 255, 0.35)",
+		borderColor: Palette.primary,
 		borderWidth: 1.5,
 		transform: [{ scale: 1.15 }],
 	},
@@ -2023,14 +2024,14 @@ const styles = StyleSheet.create({
 	},
 	pillButtonFocused: {
 		backgroundColor: "rgba(0, 0, 0, 0.4)",
-		borderColor: "#FF3B30",
+		borderColor: Palette.primary,
 		borderWidth: 1.5,
 		transform: [{ scale: 1.1 }],
 	},
 	pillText: {
 		color: "#FFFFFF",
 		fontSize: 11,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		flexShrink: 1,
 	},
 	/*
@@ -2055,7 +2056,7 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(0, 0, 0, 0.25)",
 	},
 	playButtonFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.40)",
+		backgroundColor: "rgba(192, 193, 255, 0.40)",
 		transform: [{ scale: 1.12 }],
 	},
 	roundButton: {
@@ -2075,7 +2076,7 @@ const styles = StyleSheet.create({
 		position: "absolute",
 		color: "#FFFFFF",
 		fontSize: 12,
-		fontWeight: "800",
+		fontFamily: FontFamily.bold,
 		textAlign: "center",
 	},
 	/*
@@ -2097,7 +2098,7 @@ const styles = StyleSheet.create({
 	loadingText: {
 		color: "#FFFFFF",
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		marginTop: 12,
 	},
 	errorContainer: {
@@ -2111,7 +2112,7 @@ const styles = StyleSheet.create({
 	errorTitle: {
 		color: "#FFFFFF",
 		fontSize: 18,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		marginTop: 12,
 	},
 	errorDescription: {
@@ -2132,7 +2133,7 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 8,
-		backgroundColor: "#FF3B30",
+		backgroundColor: Palette.primary,
 		paddingHorizontal: 16,
 		paddingVertical: 12,
 		borderRadius: 10,
@@ -2140,7 +2141,7 @@ const styles = StyleSheet.create({
 	switchSourceButtonText: {
 		color: "#FFFFFF",
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	retryButton: {
 		flexDirection: "row",
@@ -2154,7 +2155,7 @@ const styles = StyleSheet.create({
 	retryButtonText: {
 		color: "#FFFFFF",
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	subtitleContainer: {
 		position: "absolute",
@@ -2172,7 +2173,7 @@ const styles = StyleSheet.create({
 	},
 	subtitleText: {
 		fontSize: 16,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		textAlign: "center",
 		textShadowOffset: { width: 0, height: 1 },
 		textShadowRadius: 3,

@@ -1,3 +1,4 @@
+import { FontFamily } from "@/constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -75,18 +76,18 @@ const styles = StyleSheet.create({
 	target: {
 		color: "#FFFFFF",
 		fontSize: 28,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		marginTop: 6,
 		fontVariant: ["tabular-nums"],
 	},
 	delta: {
 		fontSize: 16,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		fontVariant: ["tabular-nums"],
 	},
 	total: {
 		color: "#8E8E93",
 		fontSize: 12,
-		fontWeight: "500",
+		fontFamily: FontFamily.medium,
 	},
 });

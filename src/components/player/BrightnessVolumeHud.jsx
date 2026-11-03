@@ -1,3 +1,4 @@
+import { FontFamily } from "@/constants/theme";
 import { volumeIconLevel } from "@/utils/deviceControls";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { StyleSheet, Text, View } from "react-native";
@@ -189,7 +190,7 @@ const styles = StyleSheet.create({
 	percentText: {
 		color: "#FFFFFF",
 		fontSize: 11,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	lockHint: {
 		position: "absolute",

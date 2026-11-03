@@ -1,3 +1,4 @@
+import { FontFamily, Palette } from "@/constants/theme";
 import React from "react";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Modal, StyleSheet, Text, View } from "react-native";
@@ -47,7 +48,7 @@ export default function SpeedSheet({ visible, currentRate, onSelect, onClose }) 
 										<Ionicons
 											name="checkmark"
 											size={14}
-											color="#FF3B30"
+											color={Palette.primary}
 											style={styles.checkmark}
 										/>
 									) : null}
@@ -87,12 +88,12 @@ const styles = StyleSheet.create({
 		borderRadius: 20,
 		padding: 24,
 		borderWidth: 1,
-		borderColor: "rgba(255, 59, 48, 0.35)",
+		borderColor: "rgba(192, 193, 255, 0.35)",
 	},
 	title: {
 		color: "#FFFFFF",
 		fontSize: 18,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		marginBottom: 18,
 		textAlign: "center",
 	},
@@ -114,20 +115,20 @@ const styles = StyleSheet.create({
 		borderColor: "transparent",
 	},
 	rateButtonActive: {
-		backgroundColor: "rgba(255, 59, 48, 0.22)",
-		borderColor: "#FF3B30",
+		backgroundColor: "rgba(192, 193, 255, 0.22)",
+		borderColor: Palette.primary,
 	},
 	rateButtonFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.35)",
+		backgroundColor: "rgba(192, 193, 255, 0.35)",
 		borderColor: "#FFFFFF",
 	},
 	rateText: {
 		color: "#FFFFFF",
 		fontSize: 15,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	rateTextActive: {
-		color: "#FF6B60",
+		color: Palette.secondary,
 	},
 	checkmark: {
 		position: "absolute",
@@ -142,12 +143,12 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 	},
 	closeButtonFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.35)",
+		backgroundColor: "rgba(192, 193, 255, 0.35)",
 	},
 	closeText: {
 		color: "#FFFFFF",
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	hint: {
 		color: "#8E8E93",

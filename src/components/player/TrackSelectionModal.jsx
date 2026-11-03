@@ -1,3 +1,4 @@
+import { FontFamily, Palette } from "@/constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import React from "react";
 import {
@@ -142,7 +143,7 @@ export default function TrackSelectionModal({
 								<Ionicons
 									name="checkmark-circle"
 									size={20}
-									color="#FF3B30"
+									color={Palette.primary}
 								/>
 							)}
 						</TVPressable>
@@ -189,7 +190,7 @@ export default function TrackSelectionModal({
 					</View>
 				</View>
 				{selectedVariantId === null && (
-					<Ionicons name="checkmark-circle" size={20} color="#FF3B30" />
+					<Ionicons name="checkmark-circle" size={20} color={Palette.primary} />
 				)}
 			</TVPressable>
 
@@ -239,7 +240,7 @@ export default function TrackSelectionModal({
 								<Ionicons
 									name="checkmark-circle"
 									size={20}
-									color="#FF3B30"
+									color={Palette.primary}
 								/>
 							)}
 						</TVPressable>
@@ -268,7 +269,7 @@ export default function TrackSelectionModal({
 							<Ionicons
 								name={getIcon()}
 								size={22}
-								color="#FF3B30"
+								color={Palette.primary}
 								style={styles.headerIcon}
 							/>
 							<Text style={styles.headerTitle}>{getTitle()}</Text>
@@ -506,7 +507,7 @@ export default function TrackSelectionModal({
 										<Ionicons
 											name="checkmark-circle"
 											size={20}
-											color="#FF3B30"
+											color={Palette.primary}
 										/>
 									)}
 								</TVPressable>
@@ -561,7 +562,7 @@ export default function TrackSelectionModal({
 												<Ionicons
 													name="checkmark-circle"
 													size={20}
-													color="#FF3B30"
+													color={Palette.primary}
 												/>
 											)}
 										</TVPressable>
@@ -617,7 +618,7 @@ const styles = StyleSheet.create({
 	headerTitle: {
 		color: "#FFFFFF",
 		fontSize: 18,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	closeButton: {
 		padding: 4,
@@ -625,8 +626,8 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(255, 255, 255, 0.06)",
 	},
 	closeButtonFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.35)",
-		borderColor: "#FF3B30",
+		backgroundColor: "rgba(192, 193, 255, 0.35)",
+		borderColor: Palette.primary,
 		borderWidth: 1.5,
 		transform: [{ scale: 1.15 }],
 	},
@@ -646,7 +647,7 @@ const styles = StyleSheet.create({
 	tracksColumnLabel: {
 		color: "#FFFFFF",
 		fontSize: 16,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		marginBottom: 8,
 	},
 	optionItem: {
@@ -662,18 +663,18 @@ const styles = StyleSheet.create({
 		borderColor: "transparent",
 	},
 	optionItemFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.28)",
-		borderColor: "#FF3B30",
+		backgroundColor: "rgba(192, 193, 255, 0.28)",
+		borderColor: Palette.primary,
 		borderWidth: 1.5,
 		transform: [{ scale: 1.02 }],
 	},
 	optionItemSelected: {
-		backgroundColor: "rgba(255, 59, 48, 0.12)",
-		borderColor: "rgba(255, 59, 48, 0.35)",
+		backgroundColor: "rgba(192, 193, 255, 0.12)",
+		borderColor: "rgba(192, 193, 255, 0.35)",
 	},
 	syncBtnFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.35)",
-		borderColor: "#FF3B30",
+		backgroundColor: "rgba(192, 193, 255, 0.35)",
+		borderColor: Palette.primary,
 		borderWidth: 1.5,
 		transform: [{ scale: 1.08 }],
 	},
@@ -693,13 +694,13 @@ const styles = StyleSheet.create({
 		marginRight: 14,
 	},
 	radioCircleSelected: {
-		borderColor: "#FF3B30",
+		borderColor: Palette.primary,
 	},
 	radioDot: {
 		width: 10,
 		height: 10,
 		borderRadius: 5,
-		backgroundColor: "#FF3B30",
+		backgroundColor: Palette.primary,
 	},
 	optionTextContainer: {
 		flex: 1,
@@ -707,29 +708,29 @@ const styles = StyleSheet.create({
 	optionTitle: {
 		color: "#E5E5EA",
 		fontSize: 15,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		marginBottom: 2,
 	},
 	optionTitleSelected: {
 		color: "#FFFFFF",
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	optionSubtitle: {
 		color: "#8E8E93",
 		fontSize: 12,
 	},
 	badge: {
-		backgroundColor: "rgba(255, 59, 48, 0.2)",
+		backgroundColor: "rgba(192, 193, 255, 0.2)",
 		paddingHorizontal: 8,
 		paddingVertical: 3,
 		borderRadius: 6,
 		borderWidth: 1,
-		borderColor: "rgba(255, 59, 48, 0.4)",
+		borderColor: "rgba(192, 193, 255, 0.4)",
 	},
 	badgeText: {
 		color: "#FF453A",
 		fontSize: 11,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	syncBox: {
 		backgroundColor: "rgba(255, 149, 0, 0.08)",
@@ -753,7 +754,7 @@ const styles = StyleSheet.create({
 	syncTitle: {
 		color: "#FF9500",
 		fontSize: 13,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	syncBadge: {
 		backgroundColor: "rgba(255, 255, 255, 0.1)",
@@ -769,7 +770,7 @@ const styles = StyleSheet.create({
 	syncBadgeText: {
 		color: "#E5E5EA",
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	syncBadgeTextActive: {
 		color: "#FF9500",
@@ -793,17 +794,17 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	syncBtnReset: {
-		backgroundColor: "rgba(255, 59, 48, 0.15)",
+		backgroundColor: "rgba(192, 193, 255, 0.15)",
 	},
 	syncBtnText: {
 		color: "#FFFFFF",
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	syncBtnResetText: {
 		color: "#FF453A",
 		fontSize: 11,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	emptyContainer: {
 		alignItems: "center",

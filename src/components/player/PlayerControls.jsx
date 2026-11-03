@@ -1,4 +1,5 @@
 import TVPressable from "@/components/common/TVPressable";
+import { FontFamily, Palette } from "@/constants/theme";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	PanResponder,
@@ -263,13 +264,13 @@ const styles = StyleSheet.create({
 	time: {
 		color: "#FFFFFF",
 		fontSize: 15,
-		fontWeight: "500",
+		fontFamily: FontFamily.medium,
 		fontVariant: ["tabular-nums"],
 	},
 	timeRight: {
 		color: "#FFFFFF",
 		fontSize: 15,
-		fontWeight: "500",
+		fontFamily: FontFamily.medium,
 		fontVariant: ["tabular-nums"],
 	},
 	liveBadge: {
@@ -285,12 +286,12 @@ const styles = StyleSheet.create({
 		width: 7,
 		height: 7,
 		borderRadius: 4,
-		backgroundColor: "#FF3B30",
+		backgroundColor: Palette.primary,
 	},
 	liveText: {
-		color: "#FF6B60",
+		color: Palette.secondary,
 		fontSize: 11,
-		fontWeight: "800",
+		fontFamily: FontFamily.bold,
 		letterSpacing: 0.6,
 	},
 	trackPressable: {
@@ -299,7 +300,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 4,
 	},
 	trackPressableFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.25)",
+		backgroundColor: "rgba(192, 193, 255, 0.25)",
 	},
 	trackWrap: {
 		height: 28,
@@ -321,7 +322,7 @@ const styles = StyleSheet.create({
 	},
 	played: {
 		height: "100%",
-		backgroundColor: "#FF3B30",
+		backgroundColor: Palette.primary,
 		position: "absolute",
 		left: 0,
 		top: 0,
@@ -349,7 +350,7 @@ const styles = StyleSheet.create({
 		height: 20,
 		marginLeft: -10,
 		borderWidth: 2,
-		borderColor: "#FF3B30",
+		borderColor: Palette.primary,
 		shadowOpacity: 0.8,
 		shadowRadius: 4,
 		elevation: 6,

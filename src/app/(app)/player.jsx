@@ -1,3 +1,4 @@
+import { FontFamily, Palette } from "@/constants/theme";
 import VideoPlayer from "@/components/player/VideoPlayer";
 import { extractVideoSources, fetchPluginDetail } from "@/services/api";
 import {
@@ -668,7 +669,7 @@ const [sources, setSources] = useState([]);
 			<Stack.Screen options={{ headerShown: false }} />
 			{loading && (
 				<View style={styles.centerContainer}>
-					<ActivityIndicator size="large" color="#FF3B30" />
+					<ActivityIndicator size="large" color={Palette.primary} />
 					<Text style={styles.loadingTitle}>Video Kaynakları Taranıyor</Text>
 					<Text style={styles.loadingSubtitle}>
 						Lütfen bekleyin, en uygun yayın akışı hazırlanıyor...
@@ -757,7 +758,7 @@ const styles = StyleSheet.create({
 	loadingTitle: {
 		color: "#FFFFFF",
 		fontSize: 18,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		marginTop: 20,
 	},
 	loadingSubtitle: {
@@ -770,7 +771,7 @@ const styles = StyleSheet.create({
 	errorTitle: {
 		color: "#FFFFFF",
 		fontSize: 20,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		marginTop: 16,
 	},
 	errorDescription: {
@@ -789,7 +790,7 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 8,
-		backgroundColor: "#FF3B30",
+		backgroundColor: Palette.primary,
 		paddingHorizontal: 20,
 		paddingVertical: 12,
 		borderRadius: 12,
@@ -812,18 +813,18 @@ const styles = StyleSheet.create({
 		borderColor: "transparent",
 	},
 	backButtonFocused: {
-		borderColor: "#FF3B30",
-		backgroundColor: "rgba(255, 59, 48, 0.3)",
+		borderColor: Palette.primary,
+		backgroundColor: "rgba(192, 193, 255, 0.3)",
 		transform: [{ scale: 1.08 }],
 	},
 	buttonText: {
 		color: "#FFFFFF",
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	backButtonText: {
 		color: "#FFFFFF",
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 });
