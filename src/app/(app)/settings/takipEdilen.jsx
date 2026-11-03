@@ -28,6 +28,7 @@
 
 import TVPressable from "@/components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { openLogin } from "@/utils/authRoutes";
 import {
@@ -328,8 +329,8 @@ export default function TakipEdilenDizilerScreen() {
 				style={[
 					styles.kart,
 					{
-						backgroundColor: colors.cardBg,
-						borderColor: colors.border,
+						backgroundColor: Palette.surfaceLow,
+						borderColor: "rgba(229, 225, 228, 0.08)",
 						opacity: acik ? 1 : 0.62,
 						padding: sp(12 + (isTV ? 2 : 0)),
 						borderRadius: sp(14),
@@ -351,7 +352,7 @@ export default function TakipEdilenDizilerScreen() {
 						style={[
 							styles.kartBaslik,
 							{
-								color: acik ? colors.text : colors.textSecondary,
+								color: acik ? Palette.onSurface : Palette.onSurfaceVariant,
 								fontSize: sp(isTV ? 16 : 14),
 							},
 						]}
@@ -377,7 +378,7 @@ export default function TakipEdilenDizilerScreen() {
 								style={{
 									color: "#E50914",
 									fontSize: sp(11),
-									fontWeight: "600",
+									fontFamily: FontFamily.semiBold,
 								}}>
 								{kaynakEtiketi(item)}
 							</Text>
@@ -398,7 +399,7 @@ export default function TakipEdilenDizilerScreen() {
 				<Switch
 					value={acik}
 					trackColor={{
-						false: colors.border,
+						false: "rgba(229, 225, 228, 0.08)",
 						true: "#FF3D5E",
 					}}
 					thumbColor="#ffffff"
@@ -414,18 +415,18 @@ export default function TakipEdilenDizilerScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right", "bottom"]}
-				style={[styles.container, { backgroundColor: colors.bg }]}>
+				style={[styles.container, { backgroundColor: Palette.background }]}>
 				<StatusBar
 					barStyle={theme === "dark" ? "light-content" : "dark-content"}
-					backgroundColor={colors.bg}
+					backgroundColor={Palette.background}
 				/>
 				{/* Kendi üst çubuğumuz — bildirimler.jsx ile aynı desen */}
 				<View
 					style={[
 						styles.topBar,
 						{
-							borderBottomColor: colors.border,
-							backgroundColor: colors.bg,
+							borderBottomColor: "rgba(229, 225, 228, 0.08)",
+							backgroundColor: Palette.background,
 						},
 					]}>
 					<TVPressable
@@ -433,17 +434,17 @@ export default function TakipEdilenDizilerScreen() {
 						focusedStyle={styles.topBarBtnFocused}
 						style={styles.topBarBtn}
 						accessibilityLabel="Geri">
-						<Ionicons name="arrow-back" size={22} color={colors.text} />
+						<Ionicons name="arrow-back" size={22} color={Palette.onSurface} />
 					</TVPressable>
-					<Text style={[styles.topBarTitle, { color: colors.text }]}>
+					<Text style={[styles.topBarTitle, { color: Palette.onSurface }]}>
 						Takip Edilen Diziler
 					</Text>
 					{satirlar.length > 0 ? (
 						<Text
 							style={{
-								color: colors.textSecondary,
+								color: Palette.onSurfaceVariant,
 								fontSize: sp(13),
-								fontWeight: "600",
+								fontFamily: FontFamily.semiBold,
 							}}>
 							{satirlar.length} dizi
 						</Text>
@@ -475,7 +476,7 @@ export default function TakipEdilenDizilerScreen() {
 									: null,
 							]}>
 							<Text
-								style={{ color: colors.textSecondary, fontSize: sp(11) }}>
+								style={{ color: Palette.onSurfaceVariant, fontSize: sp(11) }}>
 								KAYNAK
 							</Text>
 							<ScrollView
@@ -493,7 +494,7 @@ export default function TakipEdilenDizilerScreen() {
 								))}
 							</ScrollView>
 							<Text
-								style={{ color: colors.textSecondary, fontSize: sp(11) }}>
+								style={{ color: Palette.onSurfaceVariant, fontSize: sp(11) }}>
 								SIRA
 							</Text>
 							<ScrollView
@@ -519,7 +520,7 @@ export default function TakipEdilenDizilerScreen() {
 								<View style={{ height: sp(9) }} />
 							)}
 							ListEmptyComponent={
-								<Text style={{ color: colors.textSecondary, padding: sp(14) }}>
+								<Text style={{ color: Palette.onSurfaceVariant, padding: sp(14) }}>
 									Bu süzgeçte dizi yok.
 								</Text>
 							}
@@ -537,7 +538,7 @@ export default function TakipEdilenDizilerScreen() {
 								<RefreshControl
 									refreshing={yenileniyor}
 									onRefresh={() => basiliCek({ sifirla: true })}
-									tintColor={colors.textSecondary}
+									tintColor={Palette.onSurfaceVariant}
 								/>
 							}
 						/>
@@ -583,20 +584,20 @@ function GirisKart({ sp, colors }) {
 			<Ionicons
 				name="lock-closed-outline"
 				size={sp(34)}
-				color={colors.textSecondary}
+				color={Palette.onSurfaceVariant}
 			/>
 			<Text
 				style={{
-					color: colors.text,
+					color: Palette.onSurface,
 					fontSize: sp(15),
 					marginTop: sp(10),
-					fontWeight: "600",
+					fontFamily: FontFamily.semiBold,
 				}}>
 				Takip listesi hesabınla çalışır
 			</Text>
 			<Text
 				style={{
-					color: colors.textSecondary,
+					color: Palette.onSurfaceVariant,
 					fontSize: sp(12.5),
 					marginTop: sp(4),
 					textAlign: "center",
@@ -618,7 +619,7 @@ function GirisKart({ sp, colors }) {
 					<Text
 						style={{
 							color: "#fff",
-							fontWeight: "700",
+							fontFamily: FontFamily.bold,
 							fontSize: sp(13.5),
 						}}>
 						Giriş yap
@@ -635,20 +636,20 @@ function BosDurum({ sp, colors }) {
 			<Ionicons
 				name="television-outline"
 				size={sp(34)}
-				color={colors.textSecondary}
+				color={Palette.onSurfaceVariant}
 			/>
 			<Text
 				style={{
-					color: colors.text,
+					color: Palette.onSurface,
 					fontSize: sp(15),
 					marginTop: sp(10),
-					fontWeight: "600",
+					fontFamily: FontFamily.semiBold,
 				}}>
 				Henüz takip yok
 			</Text>
 			<Text
 				style={{
-					color: colors.textSecondary,
+					color: Palette.onSurfaceVariant,
 					fontSize: sp(12.5),
 					marginTop: sp(4),
 					textAlign: "center",
@@ -684,7 +685,7 @@ const styles = StyleSheet.create({
 	},
 	topBarTitle: {
 		fontSize: 17,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		flex: 1,
 	},
 	topBarSpacer: { width: 38 },
@@ -712,7 +713,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	kartGovde: { flex: 1, gap: 5 },
-	kartBaslik: { fontWeight: "700" },
+	kartBaslik: { fontFamily: FontFamily.bold },
 	kartCipSatiri: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
 	kartCip: {
 		flexDirection: "row",

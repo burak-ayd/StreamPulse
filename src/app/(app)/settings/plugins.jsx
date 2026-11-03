@@ -1,3 +1,4 @@
+import { FontFamily, Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { useThemeContext } from "@/context/ThemeContext";
 import {
@@ -34,7 +35,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PluginSettingsScreen() {
-	const { theme, colors } = useThemeContext();
+	const { theme } = useThemeContext();
 	const router = useRouter();
 	// TV: eklenti satırları ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
 	const { contentMaxWidth } = useTvMetrics();
@@ -324,10 +325,10 @@ export default function PluginSettingsScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right"]}
-				style={[styles.container, { backgroundColor: colors.bg }]}>
+				style={[styles.container, { backgroundColor: Palette.background }]}>
 				<StatusBar
 					barStyle={theme === "dark" ? "light-content" : "dark-content"}
-					backgroundColor={colors.bg}
+					backgroundColor={Palette.background}
 				/>
 
 				{/* Header */}
@@ -335,8 +336,8 @@ export default function PluginSettingsScreen() {
 					style={[
 						styles.header,
 						{
-							borderBottomColor: colors.border,
-							backgroundColor: colors.cardBg,
+							borderBottomColor: "rgba(229, 225, 228, 0.08)",
+							backgroundColor: Palette.surfaceLow,
 						},
 					]}>
 					<TVPressable
@@ -344,16 +345,16 @@ export default function PluginSettingsScreen() {
 						style={styles.backButton}
 						focusedStyle={styles.headerButtonFocused}
 						hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-						<Ionicons name="arrow-back" size={24} color={colors.text} />
+						<Ionicons name="arrow-back" size={24} color={Palette.onSurface} />
 					</TVPressable>
 					<View style={styles.headerTitleContainer}>
-						<Text style={[styles.headerTitle, { color: colors.text }]}>
+						<Text style={[styles.headerTitle, { color: Palette.onSurface }]}>
 							Eklenti Ayarları
 						</Text>
 						<Text
 							style={[
 								styles.headerSubtitle,
-								{ color: colors.textSecondary },
+								{ color: Palette.onSurfaceVariant },
 							]}>
 							{activeCount}/{totalCount} Aktif
 						</Text>
@@ -366,7 +367,7 @@ export default function PluginSettingsScreen() {
 						<Ionicons
 							name="refresh"
 							size={20}
-							color={refreshing ? colors.textSecondary : colors.primary}
+							color={refreshing ? Palette.onSurfaceVariant : Palette.primary}
 						/>
 					</TVPressable>
 				</View>
@@ -389,8 +390,8 @@ export default function PluginSettingsScreen() {
 						<RefreshControl
 							refreshing={refreshing}
 							onRefresh={handleRefresh}
-							tintColor={colors.primary}
-							colors={[colors.primary]}
+							tintColor={Palette.primary}
+							colors={[Palette.primary]}
 						/>
 					}>
 					{/* Information Card */}
@@ -412,17 +413,17 @@ export default function PluginSettingsScreen() {
 							<Ionicons
 								name="extension-puzzle-outline"
 								size={22}
-								color={colors.primary}
+								color={Palette.primary}
 							/>
 							<Text
-								style={[styles.infoBannerTitle, { color: colors.text }]}>
+								style={[styles.infoBannerTitle, { color: Palette.onSurface }]}>
 								Eklenti Görünürlüğü ve Tercihler
 							</Text>
 						</View>
 						<Text
 							style={[
 								styles.infoBannerText,
-								{ color: colors.textSecondary },
+								{ color: Palette.onSurfaceVariant },
 							]}>
 							Kapattığınız eklentiler veya gizlediğiniz kategoriler ana
 							sayfa akışında ve sağlayıcı ekranında gösterilmez.
@@ -447,7 +448,7 @@ export default function PluginSettingsScreen() {
 									]}
 								/>
 								<Text
-									style={[styles.statText, { color: colors.text }]}>
+									style={[styles.statText, { color: Palette.onSurface }]}>
 									{activeCount} Görünür
 								</Text>
 							</View>
@@ -466,7 +467,7 @@ export default function PluginSettingsScreen() {
 									]}
 								/>
 								<Text
-									style={[styles.statText, { color: colors.text }]}>
+									style={[styles.statText, { color: Palette.onSurface }]}>
 									{inactiveCount} Gizli
 								</Text>
 							</View>
@@ -481,7 +482,7 @@ export default function PluginSettingsScreen() {
 								<Text
 									style={[
 										styles.statText,
-										{ color: colors.textSecondary },
+										{ color: Palette.onSurfaceVariant },
 									]}>
 									Toplam: {totalCount}
 								</Text>
@@ -495,21 +496,21 @@ export default function PluginSettingsScreen() {
 							style={[
 								styles.searchBox,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.08)",
 								},
 							]}>
 							<Ionicons
 								name="search"
 								size={18}
-								color={colors.textSecondary}
+								color={Palette.onSurfaceVariant}
 							/>
 							<TextInput
 								value={searchQuery}
 								onChangeText={setSearchQuery}
 								placeholder="Eklenti ara..."
-								placeholderTextColor={colors.textSecondary}
-								style={[styles.searchInput, { color: colors.text }]}
+								placeholderTextColor={Palette.onSurfaceVariant}
+								style={[styles.searchInput, { color: Palette.onSurface }]}
 							/>
 							{searchQuery.length > 0 && (
 								<TVPressable
@@ -519,7 +520,7 @@ export default function PluginSettingsScreen() {
 									<Ionicons
 										name="close-circle"
 										size={18}
-										color={colors.textSecondary}
+										color={Palette.onSurfaceVariant}
 									/>
 								</TVPressable>
 							)}
@@ -543,7 +544,7 @@ export default function PluginSettingsScreen() {
 									color="#10b981"
 								/>
 								<Text
-									style={[styles.bulkActionText, { color: colors.text }]}>
+									style={[styles.bulkActionText, { color: Palette.onSurface }]}>
 									Tümünü Aç
 								</Text>
 							</TVPressable>
@@ -561,7 +562,7 @@ export default function PluginSettingsScreen() {
 								activeOpacity={0.7}>
 								<Ionicons name="eye-off-outline" size={15} color="#ef4444" />
 								<Text
-									style={[styles.bulkActionText, { color: colors.text }]}>
+									style={[styles.bulkActionText, { color: Palette.onSurface }]}>
 									Tümünü Gizle
 								</Text>
 							</TVPressable>
@@ -573,7 +574,7 @@ export default function PluginSettingsScreen() {
 						<Text
 							style={[
 								styles.sectionTitle,
-								{ color: colors.textSecondary },
+								{ color: Palette.onSurfaceVariant },
 							]}>
 							YÜKLÜ EKLENTİLER ({filteredPlugins.length})
 						</Text>
@@ -582,11 +583,11 @@ export default function PluginSettingsScreen() {
 					{/* Loading State */}
 					{loading && (
 						<View style={styles.centerBox}>
-							<ActivityIndicator size="large" color={colors.primary} />
+							<ActivityIndicator size="large" color={Palette.primary} />
 							<Text
 								style={[
 									styles.loadingText,
-									{ color: colors.textSecondary },
+									{ color: Palette.onSurfaceVariant },
 								]}>
 								Eklentiler yükleniyor...
 							</Text>
@@ -599,22 +600,22 @@ export default function PluginSettingsScreen() {
 							style={[
 								styles.emptyBox,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.08)",
 								},
 							]}>
 							<Ionicons
 								name="extension-puzzle-outline"
 								size={48}
-								color={colors.textSecondary}
+								color={Palette.onSurfaceVariant}
 							/>
-							<Text style={[styles.emptyTitle, { color: colors.text }]}>
+							<Text style={[styles.emptyTitle, { color: Palette.onSurface }]}>
 								Eklenti Bulunamadı
 							</Text>
 							<Text
 								style={[
 									styles.emptySubtitle,
-									{ color: colors.textSecondary },
+									{ color: Palette.onSurfaceVariant },
 								]}>
 								{searchQuery
 									? `"${searchQuery}" ile eşleşen eklenti yok.`
@@ -629,8 +630,8 @@ export default function PluginSettingsScreen() {
 							style={[
 								styles.pluginListContainer,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.08)",
 								},
 							]}>
 							{filteredPlugins.map((plugin, index) => {
@@ -677,7 +678,7 @@ export default function PluginSettingsScreen() {
 															styles.pluginIconFallback,
 															{
 																backgroundColor: isVisible
-																	? `${colors.primary}22`
+																	? `${Palette.primary}22`
 																	: "rgba(100, 116, 139, 0.16)",
 															},
 														]}>
@@ -686,8 +687,8 @@ export default function PluginSettingsScreen() {
 																styles.pluginInitial,
 																{
 																	color: isVisible
-																		? colors.primary
-																		: colors.textSecondary,
+																		? Palette.primary
+																		: Palette.onSurfaceVariant,
 																},
 															]}>
 															{plugin.name?.[0]?.toUpperCase() ||
@@ -708,8 +709,8 @@ export default function PluginSettingsScreen() {
 															styles.pluginName,
 															{
 																color: isVisible
-																	? colors.text
-																	: colors.textSecondary,
+																	? Palette.onSurface
+																	: Palette.onSurfaceVariant,
 															},
 														]}>
 														{plugin.name}
@@ -732,8 +733,8 @@ export default function PluginSettingsScreen() {
 																	styles.langBadgeText,
 																	{
 																		color: isVisible
-																			? colors.text
-																			: colors.textSecondary,
+																			? Palette.onSurface
+																			: Palette.onSurfaceVariant,
 																	},
 																]}>
 																{plugin.language.toUpperCase()}
@@ -747,7 +748,7 @@ export default function PluginSettingsScreen() {
 													<Text
 														style={[
 															styles.pluginDescription,
-															{ color: colors.textSecondary },
+															{ color: Palette.onSurfaceVariant },
 														]}
 														numberOfLines={2}>
 														{plugin.description}
@@ -775,7 +776,7 @@ export default function PluginSettingsScreen() {
 													}
 													trackColor={{
 														false: "#374151",
-														true: colors.primary,
+														true: Palette.primary,
 													}}
 													thumbColor="#ffffff"
 													ios_backgroundColor="#374151"
@@ -785,7 +786,7 @@ export default function PluginSettingsScreen() {
 														styles.switchLabel,
 														{
 															color: isVisible
-																? colors.primary
+																? Palette.primary
 																: "#ef4444",
 														},
 													]}>
@@ -809,7 +810,7 @@ export default function PluginSettingsScreen() {
 																: "rgba(0, 0, 0, 0.02)",
 													borderColor: isExpanded
 														? "rgba(37, 99, 235, 0.3)"
-														: colors.border,
+														: "rgba(229, 225, 228, 0.08)",
 												},
 											]}
 											focusedStyle={styles.accordionFocused}
@@ -821,8 +822,8 @@ export default function PluginSettingsScreen() {
 													size={15}
 													color={
 														isExpanded
-															? colors.primary
-															: colors.textSecondary
+															? Palette.primary
+															: Palette.onSurfaceVariant
 													}
 												/>
 												<Text
@@ -830,8 +831,8 @@ export default function PluginSettingsScreen() {
 														styles.categoryAccordionTitle,
 														{
 															color: isExpanded
-																? colors.primary
-																: colors.text,
+																? Palette.primary
+																: Palette.onSurface,
 														},
 													]}>
 													Kategoriler
@@ -871,7 +872,7 @@ export default function PluginSettingsScreen() {
 												{isLoadingCats ? (
 													<ActivityIndicator
 														size="small"
-														color={colors.primary}
+														color={Palette.primary}
 													/>
 												) : (
 													<Ionicons
@@ -881,7 +882,7 @@ export default function PluginSettingsScreen() {
 																: "chevron-down"
 														}
 														size={16}
-														color={colors.textSecondary}
+														color={Palette.onSurfaceVariant}
 													/>
 												)}
 											</View>
@@ -897,7 +898,7 @@ export default function PluginSettingsScreen() {
 															theme === "dark"
 																? "rgba(15, 23, 42, 0.55)"
 																: "rgba(248, 250, 252, 0.95)",
-														borderColor: colors.border,
+														borderColor: "rgba(229, 225, 228, 0.08)",
 													},
 												]}>
 												{!isVisible && (
@@ -938,14 +939,14 @@ export default function PluginSettingsScreen() {
 														}>
 														<ActivityIndicator
 															size="small"
-															color={colors.primary}
+															color={Palette.primary}
 														/>
 														<Text
 															style={[
 																styles.categoriesLoadingText,
 																{
 																	color:
-																		colors.textSecondary,
+																		Palette.onSurfaceVariant,
 																},
 															]}>
 															Kategoriler yükleniyor...
@@ -958,14 +959,14 @@ export default function PluginSettingsScreen() {
 														<Ionicons
 															name="folder-open-outline"
 															size={26}
-															color={colors.textSecondary}
+															color={Palette.onSurfaceVariant}
 														/>
 														<Text
 															style={[
 																styles.categoriesEmptyText,
 																{
 																	color:
-																		colors.textSecondary,
+																		Palette.onSurfaceVariant,
 																},
 															]}>
 															Bu eklentiye ait kategori
@@ -976,7 +977,7 @@ export default function PluginSettingsScreen() {
 																styles.reloadCatsButton,
 																{
 																	borderColor:
-																		colors.border,
+																		"rgba(229, 225, 228, 0.08)",
 																},
 															]}
 															focusedStyle={styles.bulkButtonFocused}
@@ -988,14 +989,14 @@ export default function PluginSettingsScreen() {
 															<Ionicons
 																name="refresh"
 																size={13}
-																color={colors.primary}
+																color={Palette.primary}
 															/>
 															<Text
 																style={[
 																	styles.reloadCatsText,
 																	{
 																		color:
-																			colors.primary,
+																			Palette.primary,
 																	},
 																]}>
 																Yeniden Dene
@@ -1014,7 +1015,7 @@ export default function PluginSettingsScreen() {
 																	styles.categoriesSubTitle,
 																	{
 																		color:
-																			colors.textSecondary,
+																			Palette.onSurfaceVariant,
 																	},
 																]}>
 																KATEGORİLER (
@@ -1148,8 +1149,8 @@ export default function PluginSettingsScreen() {
 																						}
 																						color={
 																							isCatVisible
-																								? colors.primary
-																								: colors.textSecondary
+																								? Palette.primary
+																								: Palette.onSurfaceVariant
 																						}
 																					/>
 																					<View
@@ -1161,8 +1162,8 @@ export default function PluginSettingsScreen() {
 																								styles.categoryItemName,
 																								{
 																									color: isCatVisible
-																										? colors.text
-																										: colors.textSecondary,
+																										? Palette.onSurface
+																										: Palette.onSurfaceVariant,
 																								},
 																							]}
 																							numberOfLines={
@@ -1204,7 +1205,7 @@ export default function PluginSettingsScreen() {
 																						}
 																						trackColor={{
 																							false: "#374151",
-																							true: colors.primary,
+																							true: Palette.primary,
 																						}}
 																						thumbColor="#ffffff"
 																						ios_backgroundColor="#374151"
@@ -1225,7 +1226,7 @@ export default function PluginSettingsScreen() {
 																							styles.categoryItemSwitchLabel,
 																							{
 																								color: isCatVisible
-																									? colors.primary
+																									? Palette.primary
 																									: "#ef4444",
 																							},
 																						]}>
@@ -1241,7 +1242,7 @@ export default function PluginSettingsScreen() {
 																						styles.categoryDivider,
 																						{
 																							backgroundColor:
-																								colors.border,
+																								"rgba(229, 225, 228, 0.08)",
 																						},
 																					]}
 																				/>
@@ -1261,7 +1262,7 @@ export default function PluginSettingsScreen() {
 											<View
 												style={[
 													styles.cardDivider,
-													{ backgroundColor: colors.border },
+													{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 												]}
 											/>
 										)}
@@ -1302,12 +1303,12 @@ const styles = StyleSheet.create({
 	},
 	headerTitle: {
 		fontSize: 17,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		letterSpacing: -0.3,
 	},
 	headerSubtitle: {
 		fontSize: 11,
-		fontWeight: "500",
+		fontFamily: FontFamily.medium,
 		marginTop: 1,
 	},
 	iconButton: {
@@ -1335,7 +1336,7 @@ const styles = StyleSheet.create({
 	},
 	infoBannerTitle: {
 		fontSize: 15,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	infoBannerText: {
 		fontSize: 13,
@@ -1362,7 +1363,7 @@ const styles = StyleSheet.create({
 	},
 	statText: {
 		fontSize: 12,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	toolbarContainer: {
 		marginBottom: 16,
@@ -1398,7 +1399,7 @@ const styles = StyleSheet.create({
 	},
 	bulkActionText: {
 		fontSize: 12,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	sectionHeaderRow: {
 		marginBottom: 8,
@@ -1406,7 +1407,7 @@ const styles = StyleSheet.create({
 	},
 	sectionTitle: {
 		fontSize: 12,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		letterSpacing: 1.1,
 		textTransform: "uppercase",
 	},
@@ -1430,7 +1431,7 @@ const styles = StyleSheet.create({
 	},
 	emptyTitle: {
 		fontSize: 16,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	emptySubtitle: {
 		fontSize: 13,
@@ -1472,7 +1473,7 @@ const styles = StyleSheet.create({
 	},
 	pluginInitial: {
 		fontSize: 18,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	activeBadgeIndicator: {
 		position: "absolute",
@@ -1497,7 +1498,7 @@ const styles = StyleSheet.create({
 	},
 	pluginName: {
 		fontSize: 15,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		letterSpacing: -0.2,
 	},
 	langBadge: {
@@ -1507,7 +1508,7 @@ const styles = StyleSheet.create({
 	},
 	langBadgeText: {
 		fontSize: 10,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	pluginDescription: {
 		fontSize: 12,
@@ -1525,7 +1526,7 @@ const styles = StyleSheet.create({
 	},
 	switchLabel: {
 		fontSize: 10,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		marginTop: 2,
 	},
 	cardDivider: {
@@ -1550,7 +1551,7 @@ const styles = StyleSheet.create({
 	},
 	categoryAccordionTitle: {
 		fontSize: 12,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	categoryCountBadge: {
 		paddingHorizontal: 7,
@@ -1559,7 +1560,7 @@ const styles = StyleSheet.create({
 	},
 	categoryCountBadgeText: {
 		fontSize: 10,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	categoryAccordionRight: {
 		justifyContent: "center",
@@ -1587,7 +1588,7 @@ const styles = StyleSheet.create({
 		fontSize: 11,
 		color: "#ef4444",
 		flex: 1,
-		fontWeight: "500",
+		fontFamily: FontFamily.medium,
 	},
 	categoriesLoadingBox: {
 		paddingVertical: 16,
@@ -1620,7 +1621,7 @@ const styles = StyleSheet.create({
 	},
 	reloadCatsText: {
 		fontSize: 11,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	categoriesHeaderRow: {
 		flexDirection: "row",
@@ -1633,7 +1634,7 @@ const styles = StyleSheet.create({
 	},
 	categoriesSubTitle: {
 		fontSize: 10,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		letterSpacing: 0.8,
 	},
 	categoriesBulkActions: {
@@ -1650,7 +1651,7 @@ const styles = StyleSheet.create({
 	},
 	catBulkButtonText: {
 		fontSize: 10,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	categoryItemsList: {
 		gap: 2,
@@ -1676,7 +1677,7 @@ const styles = StyleSheet.create({
 	},
 	categoryItemName: {
 		fontSize: 13,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	categoryItemSub: {
 		fontSize: 10,
@@ -1690,7 +1691,7 @@ const styles = StyleSheet.create({
 	},
 	categoryItemSwitchLabel: {
 		fontSize: 10,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		minWidth: 38,
 		textAlign: "right",
 	},

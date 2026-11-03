@@ -25,6 +25,7 @@
 
 import TVPressable from "@/components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { authDiag } from "@/utils/authDiagnostics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -49,7 +50,7 @@ function kayitRengi(olay, veri, colors) {
 		return colors.warning;
 	if (sonuc === "ok" || sonuc === "dogrulandi" || sonuc === "refreshed")
 		return colors.success;
-	return colors.textSecondary;
+	return Palette.onSurfaceVariant;
 }
 
 /** Olay adını Türkçeye çevirir (okunabilirlik için). */
@@ -117,23 +118,23 @@ export default function AuthDiagScreen() {
 	};
 
 	return (
-		<SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+		<SafeAreaView style={[styles.safe, { backgroundColor: Palette.background }]}>
 			<Stack.Screen options={{ headerShown: false }} />
 
 			{/* Üst çubuk */}
 			<View
 				style={[
 					styles.topBar,
-					{ borderBottomColor: colors.border, backgroundColor: colors.bg },
+					{ borderBottomColor: "rgba(229, 225, 228, 0.08)", backgroundColor: Palette.background },
 				]}>
 				<TVPressable
 					onPress={() => router.back()}
 					focusedStyle={styles.topBarBtnFocused}
 					style={styles.topBarBtn}
 					accessibilityLabel="Geri">
-					<Ionicons name="arrow-back" size={22} color={colors.text} />
+					<Ionicons name="arrow-back" size={22} color={Palette.onSurface} />
 				</TVPressable>
-				<Text style={[styles.topBarTitle, { color: colors.text }]}>
+				<Text style={[styles.topBarTitle, { color: Palette.onSurface }]}>
 					Oturum Teşhisi
 				</Text>
 				<TVPressable
@@ -141,7 +142,7 @@ export default function AuthDiagScreen() {
 					focusedStyle={styles.topBarBtnFocused}
 					style={styles.topBarBtn}
 					accessibilityLabel="Yenile">
-					<Ionicons name="refresh" size={20} color={colors.text} />
+					<Ionicons name="refresh" size={20} color={Palette.onSurface} />
 				</TVPressable>
 			</View>
 
@@ -157,12 +158,12 @@ export default function AuthDiagScreen() {
 				<View
 					style={[
 						styles.infoCard,
-						{ backgroundColor: colors.surface, borderColor: colors.border },
+						{ backgroundColor: colors.surface, borderColor: "rgba(229, 225, 228, 0.08)" },
 					]}>
-					<Text style={[styles.infoTitle, { color: colors.text }]}>
+					<Text style={[styles.infoTitle, { color: Palette.onSurface }]}>
 						Çıkış olduğunda buraya bak
 					</Text>
-					<Text style={[styles.infoBody, { color: colors.textSecondary }]}>
+					<Text style={[styles.infoBody, { color: Palette.onSurfaceVariant }]}>
 						Uygulama oturumu hiç kullanmayı denemeden giriş ekranına
 						düşerse sunucu loglarında HİÇBİR iz kalmaz. Bu kayıt o an
 						cihazda ne olduğunu gösterir. Token değerleri burada
@@ -180,9 +181,9 @@ export default function AuthDiagScreen() {
 						<Ionicons
 							name="information-circle-outline"
 							size={16}
-							color={colors.text}
+							color={Palette.onSurface}
 						/>
-						<Text style={[styles.eylemBtnYazi, { color: colors.text }]}>
+						<Text style={[styles.eylemBtnYazi, { color: Palette.onSurface }]}>
 							Nasıl kopyalarım?
 						</Text>
 					</TVPressable>
@@ -191,8 +192,8 @@ export default function AuthDiagScreen() {
 						focusedStyle={styles.eylemBtnFocused}
 						style={[styles.eylemBtn, { backgroundColor: colors.surface }]}
 						accessibilityLabel="Kayıtları temizle">
-						<Ionicons name="trash-outline" size={16} color={colors.text} />
-						<Text style={[styles.eylemBtnYazi, { color: colors.text }]}>
+						<Ionicons name="trash-outline" size={16} color={Palette.onSurface} />
+						<Text style={[styles.eylemBtnYazi, { color: Palette.onSurface }]}>
 							Temizle
 						</Text>
 					</TVPressable>
@@ -200,16 +201,16 @@ export default function AuthDiagScreen() {
 
 				{/* Kayıt listesi */}
 				{yukleniyor ? (
-					<Text style={[styles.bosYazi, { color: colors.textSecondary }]}>
+					<Text style={[styles.bosYazi, { color: Palette.onSurfaceVariant }]}>
 						Yükleniyor…
 					</Text>
 				) : kayitlar.length === 0 ? (
 					<View
 						style={[
 							styles.bosKart,
-							{ backgroundColor: colors.surface, borderColor: colors.border },
+							{ backgroundColor: colors.surface, borderColor: "rgba(229, 225, 228, 0.08)" },
 						]}>
-						<Text style={[styles.bosYazi, { color: colors.textSecondary }]}>
+						<Text style={[styles.bosYazi, { color: Palette.onSurfaceVariant }]}>
 							Kayıt yok. Uygulamayı kapatıp yeniden aç; sorun
 							oluştuğunda buraya dön.
 						</Text>
@@ -224,22 +225,22 @@ export default function AuthDiagScreen() {
 								key={`${k.ms}-${k.sira}`}
 								style={[
 									styles.kayit,
-									{ backgroundColor: colors.surface, borderColor: colors.border },
+									{ backgroundColor: colors.surface, borderColor: "rgba(229, 225, 228, 0.08)" },
 								]}>
 								<View style={styles.kayitBaslik}>
 									<View
 										style={[styles.nokta, { backgroundColor: renk }]}
 									/>
-									<Text style={[styles.olay, { color: colors.text }]}>
+									<Text style={[styles.olay, { color: Palette.onSurface }]}>
 										{OLAY_ADI[k.olay] ?? k.olay}
 									</Text>
 									<Text
-										style={[styles.zaman, { color: colors.textSecondary }]}>
+										style={[styles.zaman, { color: Palette.onSurfaceVariant }]}>
 										{zaman}
 									</Text>
 								</View>
 								<Text
-									style={[styles.veri, { color: colors.textSecondary }]}
+									style={[styles.veri, { color: Palette.onSurfaceVariant }]}
 									selectable>
 									{JSON.stringify(k.veri)}
 								</Text>
@@ -253,7 +254,7 @@ export default function AuthDiagScreen() {
 					focusedStyle={styles.geriBtnFocused}
 					style={[styles.geriBtn, { backgroundColor: colors.surface }]}
 					accessibilityLabel="Geri dön">
-					<Text style={[styles.geriBtnYazi, { color: colors.text }]}>
+					<Text style={[styles.geriBtnYazi, { color: Palette.onSurface }]}>
 						Geri dön
 					</Text>
 				</TVPressable>
@@ -280,12 +281,12 @@ const styles = StyleSheet.create({
 		borderRadius: 8,
 	},
 	topBarBtnFocused: { opacity: 0.6 },
-	topBarTitle: { fontSize: 17, fontWeight: "600" },
+	topBarTitle: { fontSize: 17, fontFamily: FontFamily.semiBold },
 
 	scrollContent: { padding: 16, paddingBottom: 40, gap: 10 },
 
 	infoCard: { padding: 14, borderRadius: 12, borderWidth: 1 },
-	infoTitle: { fontSize: 14, fontWeight: "700", marginBottom: 6 },
+	infoTitle: { fontSize: 14, fontFamily: FontFamily.bold, marginBottom: 6 },
 	infoBody: { fontSize: 12, lineHeight: 18 },
 
 	eylemSatiri: { flexDirection: "row", gap: 10 },
@@ -299,7 +300,7 @@ const styles = StyleSheet.create({
 		borderRadius: 10,
 	},
 	eylemBtnFocused: { opacity: 0.6 },
-	eylemBtnYazi: { fontSize: 13, fontWeight: "600" },
+	eylemBtnYazi: { fontSize: 13, fontFamily: FontFamily.semiBold },
 
 	bosKart: { padding: 20, borderRadius: 12, borderWidth: 1, alignItems: "center" },
 	bosYazi: { fontSize: 13, textAlign: "center", lineHeight: 19 },
@@ -307,7 +308,7 @@ const styles = StyleSheet.create({
 	kayit: { padding: 11, borderRadius: 10, borderWidth: 1 },
 	kayitBaslik: { flexDirection: "row", alignItems: "center", gap: 7 },
 	nokta: { width: 7, height: 7, borderRadius: 4 },
-	olay: { fontSize: 13, fontWeight: "600", flex: 1 },
+	olay: { fontSize: 13, fontFamily: FontFamily.semiBold, flex: 1 },
 	zaman: { fontSize: 11 },
 	veri: { fontSize: 11, marginTop: 5, fontFamily: "monospace" },
 
@@ -318,5 +319,5 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 	},
 	geriBtnFocused: { opacity: 0.6 },
-	geriBtnYazi: { fontSize: 14, fontWeight: "600" },
+	geriBtnYazi: { fontSize: 14, fontFamily: FontFamily.semiBold },
 });

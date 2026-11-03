@@ -14,6 +14,7 @@
 import Slider from "@/components/common/Slider";
 import TVPressable from "@/components/common/TVPressable";
 import { useThemeContext } from "@/context/ThemeContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
@@ -62,17 +63,17 @@ function ValueRow({ colors, icon, iconBg, title, subtitle, valueText, onPress })
 				<Ionicons name={icon} size={16} color="#ffffff" />
 			</View>
 			<View style={styles.valueRowText}>
-				<Text style={[styles.valueRowTitle, { color: colors.text }]}>{title}</Text>
+				<Text style={[styles.valueRowTitle, { color: Palette.onSurface }]}>{title}</Text>
 				{subtitle ? (
-					<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
+					<Text style={[styles.valueRowSub, { color: Palette.onSurfaceVariant }]}>
 						{subtitle}
 					</Text>
 				) : null}
 			</View>
-			<Text style={[styles.valueRowValue, { color: colors.primary }]}>
+			<Text style={[styles.valueRowValue, { color: Palette.primary }]}>
 				{valueText}
 			</Text>
-			<Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+			<Ionicons name="chevron-forward" size={16} color={Palette.onSurfaceVariant} />
 		</TVPressable>
 	);
 }
@@ -108,8 +109,8 @@ export default function DownloadSettingsScreen() {
 
 	if (!settings) {
 		return (
-			<SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
-				<StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+			<SafeAreaView style={[styles.safeArea, { backgroundColor: Palette.background }]}>
+				<StatusBar barStyle="light-content" backgroundColor={Palette.background} />
 				<Stack.Screen options={{ headerShown: false }} />
 			</SafeAreaView>
 		);
@@ -202,22 +203,22 @@ export default function DownloadSettingsScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right", "bottom"]}
-				style={[styles.safeArea, { backgroundColor: colors.bg }]}>
-				<StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+				style={[styles.safeArea, { backgroundColor: Palette.background }]}>
+				<StatusBar barStyle="light-content" backgroundColor={Palette.background} />
 
 				{/* Header */}
 				<View
 					style={[
 						styles.header,
-						{ borderBottomColor: colors.border, backgroundColor: colors.cardBg },
+						{ borderBottomColor: "rgba(229, 225, 228, 0.08)", backgroundColor: Palette.surfaceLow },
 					]}>
 					<TVPressable
 						onPress={() => router.back()}
 						style={styles.backButton}
 						focusedStyle={styles.headerButtonFocused}>
-						<Ionicons name="arrow-back" size={24} color={colors.text} />
+						<Ionicons name="arrow-back" size={24} color={Palette.onSurface} />
 					</TVPressable>
-					<Text style={[styles.headerTitle, { color: colors.text }]}>
+					<Text style={[styles.headerTitle, { color: Palette.onSurface }]}>
 						İndirme Ayarları
 					</Text>
 					<View style={{ width: 40 }} />
@@ -233,10 +234,10 @@ export default function DownloadSettingsScreen() {
 							: null,
 					]}>
 					{/* GENEL */}
-					<Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
+					<Text style={[styles.sectionHeader, { color: Palette.onSurfaceVariant }]}>
 						GENEL
 					</Text>
-					<View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+					<View style={[styles.card, { backgroundColor: Palette.surfaceLow, borderColor: "rgba(229, 225, 228, 0.08)" }]}>
 						<ValueRow
 							colors={colors}
 							icon="arrow-down-outline"
@@ -252,10 +253,10 @@ export default function DownloadSettingsScreen() {
 									<Ionicons name="link-outline" size={16} color="#ffffff" />
 								</View>
 								<View style={styles.valueRowText}>
-									<Text style={[styles.valueRowTitle, { color: colors.text }]}>
+									<Text style={[styles.valueRowTitle, { color: Palette.onSurface }]}>
 										Eş Zamanlı Bağlantı
 									</Text>
-									<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
+									<Text style={[styles.valueRowSub, { color: Palette.onSurfaceVariant }]}>
 										Dosya başına paralel parça indirme
 									</Text>
 								</View>
@@ -288,28 +289,28 @@ export default function DownloadSettingsScreen() {
 								<Ionicons name="help-circle-outline" size={16} color="#ffffff" />
 							</View>
 							<View style={styles.valueRowText}>
-								<Text style={[styles.valueRowTitle, { color: colors.text }]}>
+								<Text style={[styles.valueRowTitle, { color: Palette.onSurface }]}>
 									Her Defasında Sor
 								</Text>
-								<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
+								<Text style={[styles.valueRowSub, { color: Palette.onSurfaceVariant }]}>
 									Kapalıysa kayıtlı eklenti tercihiyle modal olmadan başlar
 								</Text>
 							</View>
 							<Switch
 								value={settings.alwaysAskBeforeDownload}
-								trackColor={{ false: colors.border, true: colors.primary }}
+								trackColor={{ false: "rgba(229, 225, 228, 0.08)", true: Palette.primary }}
 								thumbColor="#ffffff"
 							/>
 						</TVPressable>
 					</View>
 
 					{/* EKLENTİ İNDİRME TERCİHLERİ */}
-					<Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
+					<Text style={[styles.sectionHeader, { color: Palette.onSurfaceVariant }]}>
 						EKLENTİ İNDİRME TERCİHLERİ
 					</Text>
-					<View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+					<View style={[styles.card, { backgroundColor: Palette.surfaceLow, borderColor: "rgba(229, 225, 228, 0.08)" }]}>
 						{Object.keys(prefs).length === 0 ? (
-							<Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+							<Text style={[styles.emptyText, { color: Palette.onSurfaceVariant }]}>
 								Henüz eklenti tercihi kaydedilmedi. İndirme modalında
 								{"\"Bu eklenti için ayarları hatırla\""} işaretleyerek kaydedebilirsin.
 							</Text>
@@ -330,7 +331,7 @@ export default function DownloadSettingsScreen() {
 
 					{Object.keys(prefs).length > 0 && (
 						<TVPressable
-							style={[styles.resetAllBtn, { borderColor: colors.border }]}
+							style={[styles.resetAllBtn, { borderColor: "rgba(229, 225, 228, 0.08)" }]}
 							focusedStyle={styles.rowFocused}
 							onPress={resetAllPrefs}>
 							<Ionicons name="trash-outline" size={18} color="#f43f5e" />
@@ -351,14 +352,14 @@ export default function DownloadSettingsScreen() {
 				<TVPressable style={styles.modalBackdrop} onPress={() => setOptionModal(null)}>
 					<View />
 				</TVPressable>
-				<View style={[styles.optionSheet, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+				<View style={[styles.optionSheet, { backgroundColor: Palette.surfaceLow, borderColor: "rgba(229, 225, 228, 0.08)" }]}>
 					{optionModalOptions.map((opt) => (
 						<TVPressable
 							key={opt.value}
 							style={styles.optionItem}
 							focusedStyle={styles.rowFocused}
 							onPress={() => pickOption(optionModal, opt.value)}>
-							<Text style={{ color: colors.text, fontSize: 14 }}>{opt.label}</Text>
+							<Text style={{ color: Palette.onSurface, fontSize: 14 }}>{opt.label}</Text>
 						</TVPressable>
 					))}
 				</View>
@@ -378,15 +379,15 @@ export default function DownloadSettingsScreen() {
 						<View
 							style={[
 								styles.pluginSheet,
-								{ backgroundColor: colors.cardBg, borderColor: colors.border },
+								{ backgroundColor: Palette.surfaceLow, borderColor: "rgba(229, 225, 228, 0.08)" },
 							]}>
-							<Text style={[styles.pluginTitle, { color: colors.text }]}>
+							<Text style={[styles.pluginTitle, { color: Palette.onSurface }]}>
 								{editPlugin}
 							</Text>
 
 							{/* Tercih edilen kaynak: kaynaklar içeriğe göre değiştiği
 							    için serbest metin; boş = "Otomatik" */}
-							<Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+							<Text style={[styles.fieldLabel, { color: Palette.onSurfaceVariant }]}>
 								Tercih Edilen Kaynak (boş = Otomatik)
 							</Text>
 							<TextInput
@@ -395,10 +396,10 @@ export default function DownloadSettingsScreen() {
 									setEditDraft({ ...editDraft, preferredSource: t.trim() || null })
 								}
 								placeholder="Örn. RapidVid"
-								placeholderTextColor={colors.textSecondary}
+								placeholderTextColor={Palette.onSurfaceVariant}
 								style={[
 									styles.textInput,
-									{ color: colors.text, borderColor: colors.border },
+									{ color: Palette.onSurface, borderColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -408,7 +409,7 @@ export default function DownloadSettingsScreen() {
 								["preferredSubtitle", "Tercih Edilen Altyazı", SUBTITLE_OPTIONS],
 							].map(([field, label, opts]) => (
 								<View key={field}>
-									<Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+									<Text style={[styles.fieldLabel, { color: Palette.onSurfaceVariant }]}>
 										{label}
 									</Text>
 									<View style={styles.chipRow}>
@@ -418,7 +419,7 @@ export default function DownloadSettingsScreen() {
 												style={[
 													styles.chip,
 													{
-														borderColor: colors.border,
+														borderColor: "rgba(229, 225, 228, 0.08)",
 														backgroundColor:
 															editDraft[field] === opt.value
 																? "rgba(56,189,248,0.15)"
@@ -433,8 +434,8 @@ export default function DownloadSettingsScreen() {
 													style={{
 														color:
 															editDraft[field] === opt.value
-																? colors.primary
-																: colors.text,
+																? Palette.primary
+																: Palette.onSurface,
 														fontSize: 12.5,
 													}}>
 													{opt.label}
@@ -457,12 +458,12 @@ export default function DownloadSettingsScreen() {
 								}
 								accessibilityRole="switch"
 								accessibilityState={{ checked: editDraft.downloadSubtitle !== false }}>
-								<Text style={{ color: colors.text, fontSize: 14 }}>
+								<Text style={{ color: Palette.onSurface, fontSize: 14 }}>
 									Altyazıyı indir
 								</Text>
 								<Switch
 									value={editDraft.downloadSubtitle !== false}
-									trackColor={{ false: colors.border, true: colors.primary }}
+									trackColor={{ false: "rgba(229, 225, 228, 0.08)", true: Palette.primary }}
 									thumbColor="#ffffff"
 								/>
 							</TVPressable>
@@ -477,16 +478,16 @@ export default function DownloadSettingsScreen() {
 								accessibilityRole="switch"
 								accessibilityState={{ checked: editDraft.alwaysAsk === true }}>
 								<View style={{ flex: 1 }}>
-									<Text style={{ color: colors.text, fontSize: 14 }}>
+									<Text style={{ color: Palette.onSurface, fontSize: 14 }}>
 										Her seferinde sor
 									</Text>
-									<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
+									<Text style={[styles.valueRowSub, { color: Palette.onSurfaceVariant }]}>
 										Kapalıysa bu eklentide modal olmadan indirilir
 									</Text>
 								</View>
 								<Switch
 									value={editDraft.alwaysAsk === true}
-									trackColor={{ false: colors.border, true: colors.primary }}
+									trackColor={{ false: "rgba(229, 225, 228, 0.08)", true: Palette.primary }}
 									thumbColor="#ffffff"
 								/>
 							</TVPressable>
@@ -494,16 +495,16 @@ export default function DownloadSettingsScreen() {
 							{/* Butonlar */}
 							<View style={styles.pluginActions}>
 								<TVPressable
-									style={[styles.pluginActionBtn, { borderColor: colors.border }]}
+									style={[styles.pluginActionBtn, { borderColor: "rgba(229, 225, 228, 0.08)" }]}
 									focusedStyle={styles.rowFocused}
 									onPress={resetPlugin}>
 									<Text style={{ color: "#f43f5e", fontSize: 13 }}>Sıfırla</Text>
 								</TVPressable>
 								<TVPressable
-									style={[styles.pluginActionBtn, styles.pluginSaveBtn, { borderColor: colors.border }]}
+									style={[styles.pluginActionBtn, styles.pluginSaveBtn, { borderColor: "rgba(229, 225, 228, 0.08)" }]}
 									focusedStyle={styles.rowFocused}
 									onPress={savePluginDraft}>
-									<Text style={{ color: "#ffffff", fontSize: 13, fontWeight: "700" }}>
+									<Text style={{ color: "#ffffff", fontSize: 13, fontFamily: FontFamily.bold }}>
 										Kaydet
 									</Text>
 								</TVPressable>
@@ -528,11 +529,11 @@ const styles = StyleSheet.create({
 	},
 	backButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
 	headerButtonFocused: { backgroundColor: "rgba(229, 9, 20, 0.25)" },
-	headerTitle: { fontSize: 17, fontWeight: "700" },
+	headerTitle: { fontSize: 17, fontFamily: FontFamily.bold },
 	scrollContainer: { padding: 16, gap: 8 },
 	sectionHeader: {
 		fontSize: 12,
-		fontWeight: "800",
+		fontFamily: FontFamily.bold,
 		letterSpacing: 1,
 		marginTop: 14,
 		marginBottom: 6,
@@ -569,9 +570,9 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	valueRowText: { flex: 1 },
-	valueRowTitle: { fontSize: 14, fontWeight: "600" },
+	valueRowTitle: { fontSize: 14, fontFamily: FontFamily.semiBold },
 	valueRowSub: { fontSize: 11.5, marginTop: 1 },
-	valueRowValue: { fontSize: 13, fontWeight: "600" },
+	valueRowValue: { fontSize: 13, fontFamily: FontFamily.semiBold },
 	toggleRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -590,7 +591,7 @@ const styles = StyleSheet.create({
 		paddingVertical: 12,
 		marginTop: 12,
 	},
-	resetAllText: { fontSize: 13.5, fontWeight: "700" },
+	resetAllText: { fontSize: 13.5, fontFamily: FontFamily.bold },
 	modalBackdrop: {
 		flex: 1,
 		backgroundColor: "rgba(0,0,0,0.6)",
@@ -610,8 +611,8 @@ const styles = StyleSheet.create({
 		padding: 16,
 		gap: 6,
 	},
-	pluginTitle: { fontSize: 16, fontWeight: "700", marginBottom: 6 },
-	fieldLabel: { fontSize: 11.5, fontWeight: "700", letterSpacing: 0.4, marginTop: 6 },
+	pluginTitle: { fontSize: 16, fontFamily: FontFamily.bold, marginBottom: 6 },
+	fieldLabel: { fontSize: 11.5, fontFamily: FontFamily.bold, letterSpacing: 0.4, marginTop: 6 },
 	textInput: {
 		borderWidth: 1,
 		borderRadius: 10,

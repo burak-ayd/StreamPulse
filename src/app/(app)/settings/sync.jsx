@@ -11,6 +11,7 @@
 import TVPressable from "@/components/common/TVPressable";
 import { useAuth } from "@/context/AuthContext";
 import { useSync } from "@/context/SyncContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { openLogin } from "@/utils/authRoutes";
 import { useThemeContext } from "@/context/ThemeContext";
@@ -30,7 +31,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SyncSettingsScreen() {
-	const { colors, theme } = useThemeContext();
+	const { theme } = useThemeContext();
 	// TV: ayar satırları ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
 	const { contentMaxWidth } = useTvMetrics();
 	const { user, isLoggedIn, logout } = useAuth();
@@ -173,10 +174,10 @@ export default function SyncSettingsScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right", "bottom"]}
-				style={[styles.container, { backgroundColor: colors.bg }]}>
+				style={[styles.container, { backgroundColor: Palette.background }]}>
 				<StatusBar
 					barStyle={theme === "dark" ? "light-content" : "dark-content"}
-					backgroundColor={colors.bg}
+					backgroundColor={Palette.background}
 				/>
 
 				{/* Kendi üst çubuğumuz — geri + başlık */}
@@ -184,8 +185,8 @@ export default function SyncSettingsScreen() {
 					style={[
 						styles.topBar,
 						{
-							borderBottomColor: colors.border,
-							backgroundColor: colors.bg,
+							borderBottomColor: "rgba(229, 225, 228, 0.08)",
+							backgroundColor: Palette.background,
 						},
 					]}>
 					<TVPressable
@@ -193,9 +194,9 @@ export default function SyncSettingsScreen() {
 						focusedStyle={styles.topBarBtnFocused}
 						style={styles.topBarBtn}
 						accessibilityLabel="Geri">
-						<Ionicons name="arrow-back" size={22} color={colors.text} />
+						<Ionicons name="arrow-back" size={22} color={Palette.onSurface} />
 					</TVPressable>
-					<Text style={[styles.topBarTitle, { color: colors.text }]}>
+					<Text style={[styles.topBarTitle, { color: Palette.onSurface }]}>
 						Senkronizasyon
 					</Text>
 					<View style={styles.topBarSpacer} />
@@ -220,8 +221,8 @@ export default function SyncSettingsScreen() {
 							style={[
 								styles.accountCard,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.08)",
 								},
 							]}>
 							<View
@@ -232,10 +233,10 @@ export default function SyncSettingsScreen() {
 								<Ionicons name="person" size={28} color="#38bdf8" />
 							</View>
 							<View style={styles.accountInfo}>
-								<Text style={[styles.accountName, { color: colors.text }]}>
+								<Text style={[styles.accountName, { color: Palette.onSurface }]}>
 									{user.display_name || user.username || "Kullanıcı"}
 								</Text>
-								<Text style={[styles.accountEmail, { color: colors.textSecondary }]}>
+								<Text style={[styles.accountEmail, { color: Palette.onSurfaceVariant }]}>
 									{user.email}
 								</Text>
 							</View>
@@ -267,8 +268,8 @@ export default function SyncSettingsScreen() {
 							style={[
 								styles.accountCard,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.08)",
 								},
 							]}>
 							<View
@@ -279,10 +280,10 @@ export default function SyncSettingsScreen() {
 								<Ionicons name="cloud-offline-outline" size={28} color="#F59E0B" />
 							</View>
 							<View style={styles.accountInfo}>
-								<Text style={[styles.accountName, { color: colors.text }]}>
+								<Text style={[styles.accountName, { color: Palette.onSurface }]}>
 									Giriş Yapılmadı
 								</Text>
-								<Text style={[styles.accountEmail, { color: colors.textSecondary }]}>
+								<Text style={[styles.accountEmail, { color: Palette.onSurfaceVariant }]}>
 									Cihazlar arası eşitleme için giriş yapın
 								</Text>
 							</View>
@@ -297,15 +298,15 @@ export default function SyncSettingsScreen() {
 
 					{/* Senkronizasyon Durumu */}
 					<View style={styles.sectionWrapper}>
-						<Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+						<Text style={[styles.sectionTitle, { color: Palette.onSurfaceVariant }]}>
 							SENKRONİZASYON
 						</Text>
 						<View
 							style={[
 								styles.sectionCard,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.08)",
 								},
 							]}>
 							{/* Durum */}
@@ -330,10 +331,10 @@ export default function SyncSettingsScreen() {
 										)}
 									</View>
 									<View style={{ flex: 1, marginRight: 8 }}>
-										<Text style={[styles.statusLabel, { color: colors.text }]}>
+										<Text style={[styles.statusLabel, { color: Palette.onSurface }]}>
 											Son Eşitleme
 										</Text>
-										<Text style={[styles.statusValue, { color: colors.textSecondary }]}>
+										<Text style={[styles.statusValue, { color: Palette.onSurfaceVariant }]}>
 											{isSyncing
 												? "Veriler eşitleniyor..."
 												: formatLastSync(lastSyncedAt)}
@@ -349,7 +350,7 @@ export default function SyncSettingsScreen() {
 								)}
 							</View>
 
-							<View style={[styles.divider, { backgroundColor: colors.border }]} />
+							<View style={[styles.divider, { backgroundColor: "rgba(229, 225, 228, 0.08)" }]} />
 
 							{/* Şimdi Senkronize Et */}
 							<TVPressable
@@ -363,10 +364,10 @@ export default function SyncSettingsScreen() {
 										<Ionicons name="cloud-upload-outline" size={20} color="#fff" />
 									</View>
 									<View>
-										<Text style={[styles.statusLabel, { color: colors.text }]}>
+										<Text style={[styles.statusLabel, { color: Palette.onSurface }]}>
 											Şimdi Senkronize Et
 										</Text>
-										<Text style={[styles.statusValue, { color: colors.textSecondary }]}>
+										<Text style={[styles.statusValue, { color: Palette.onSurfaceVariant }]}>
 											Favori, liste ve ayarları sunucuyla eşitle
 										</Text>
 									</View>
@@ -377,7 +378,7 @@ export default function SyncSettingsScreen() {
 									<Ionicons
 										name="chevron-forward"
 										size={18}
-										color={colors.textSecondary}
+										color={Palette.onSurfaceVariant}
 										style={{ opacity: 0.6 }}
 									/>
 								)}
@@ -389,7 +390,7 @@ export default function SyncSettingsScreen() {
 					{isLoggedIn && (
 						<View style={styles.sectionWrapper}>
 							<View style={styles.sectionHeaderRow}>
-								<Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+								<Text style={[styles.sectionTitle, { color: Palette.onSurfaceVariant }]}>
 									BAĞLI CİHAZLAR
 								</Text>
 								<TVPressable
@@ -400,7 +401,7 @@ export default function SyncSettingsScreen() {
 									<Ionicons
 										name="refresh-outline"
 										size={16}
-										color={colors.textSecondary}
+										color={Palette.onSurfaceVariant}
 									/>
 								</TVPressable>
 							</View>
@@ -408,8 +409,8 @@ export default function SyncSettingsScreen() {
 								style={[
 									styles.sectionCard,
 									{
-										backgroundColor: colors.cardBg,
-										borderColor: colors.border,
+										backgroundColor: Palette.surfaceLow,
+										borderColor: "rgba(229, 225, 228, 0.08)",
 									},
 								]}>
 								{isLoadingDevices ? (
@@ -444,7 +445,7 @@ export default function SyncSettingsScreen() {
 														</View>
 														<View style={{ flex: 1, marginRight: 8 }}>
 															<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-																<Text style={[styles.deviceName, { color: colors.text }]}>
+																<Text style={[styles.deviceName, { color: Palette.onSurface }]}>
 																	{device.device_name || "Bilinmeyen Cihaz"}
 																</Text>
 																{isCurrent && (
@@ -453,7 +454,7 @@ export default function SyncSettingsScreen() {
 																	</View>
 																)}
 															</View>
-															<Text style={[styles.deviceInfo, { color: colors.textSecondary }]}>
+															<Text style={[styles.deviceInfo, { color: Palette.onSurfaceVariant }]}>
 																Sürüm {device.app_version || "1.0.0"} • {formatLastSync(device.last_pulled_at || device.updated_at)}
 															</Text>
 														</View>
@@ -471,7 +472,7 @@ export default function SyncSettingsScreen() {
 													<View
 														style={[
 															styles.divider,
-															{ backgroundColor: colors.border },
+															{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 														]}
 													/>
 												)}
@@ -483,10 +484,10 @@ export default function SyncSettingsScreen() {
 										<Ionicons
 											name="phone-portrait-outline"
 											size={32}
-											color={colors.textSecondary}
+											color={Palette.onSurfaceVariant}
 											style={{ opacity: 0.4 }}
 										/>
-										<Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+										<Text style={[styles.emptyText, { color: Palette.onSurfaceVariant }]}>
 											Henüz başka bir cihaz bağlanmadı
 										</Text>
 									</View>
@@ -519,7 +520,7 @@ export default function SyncSettingsScreen() {
 									</>
 								)}
 							</TVPressable>
-							<Text style={[styles.logoutHint, { color: colors.textSecondary }]}>
+							<Text style={[styles.logoutHint, { color: Palette.onSurfaceVariant }]}>
 								Çıkış yaptığınızda bu cihazdaki verileriniz korunacaktır.
 							</Text>
 						</View>
@@ -553,7 +554,7 @@ const styles = StyleSheet.create({
 	topBarTitle: {
 		flex: 1,
 		fontSize: 18,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		textAlign: "center",
 		letterSpacing: -0.2,
 	},
@@ -585,7 +586,7 @@ const styles = StyleSheet.create({
 	},
 	accountName: {
 		fontSize: 16,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		marginBottom: 2,
 	},
 	accountEmail: {
@@ -599,7 +600,7 @@ const styles = StyleSheet.create({
 	},
 	loginBtnText: {
 		color: "#0f172a",
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		fontSize: 13,
 	},
 	syncStatusBadge: {
@@ -619,7 +620,7 @@ const styles = StyleSheet.create({
 	},
 	syncStatusText: {
 		fontSize: 12,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		color: "#10B981",
 	},
 	sectionWrapper: {
@@ -634,7 +635,7 @@ const styles = StyleSheet.create({
 	},
 	sectionTitle: {
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		letterSpacing: 0.8,
 		marginBottom: 8,
 		paddingHorizontal: 4,
@@ -665,7 +666,7 @@ const styles = StyleSheet.create({
 	},
 	statusLabel: {
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		marginBottom: 2,
 	},
 	statusValue: {
@@ -679,7 +680,7 @@ const styles = StyleSheet.create({
 	},
 	pendingBadgeText: {
 		fontSize: 11,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		color: "#F59E0B",
 	},
 	divider: {
@@ -714,7 +715,7 @@ const styles = StyleSheet.create({
 	},
 	deviceName: {
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	deviceInfo: {
 		fontSize: 11,
@@ -728,7 +729,7 @@ const styles = StyleSheet.create({
 	},
 	currentDeviceText: {
 		fontSize: 10,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		color: "#38bdf8",
 	},
 	logoutWrapper: {
@@ -749,7 +750,7 @@ const styles = StyleSheet.create({
 	logoutText: {
 		color: "#EF4444",
 		fontSize: 15,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	logoutHint: {
 		fontSize: 12,

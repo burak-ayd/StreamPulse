@@ -1,6 +1,7 @@
 import TVPressable from "@/components/common/TVPressable";
 import { usePlayerSettings } from "@/context/PlayerSettingsContext";
 import { useThemeContext } from "@/context/ThemeContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
@@ -114,15 +115,15 @@ function ToggleRow({ colors, icon, title, subtitle, value, onChange }) {
 			accessibilityRole="switch"
 			accessibilityState={{ checked: Boolean(value) }}>
 			<View style={styles.toggleRowLeft}>
-				<Ionicons name={icon} size={20} color={colors.primary} />
+				<Ionicons name={icon} size={20} color={Palette.primary} />
 				<View style={styles.toggleTextContainer}>
-					<Text style={[styles.toggleTitle, { color: colors.text }]}>
+					<Text style={[styles.toggleTitle, { color: Palette.onSurface }]}>
 						{title}
 					</Text>
 					<Text
 						style={[
 							styles.toggleSubtitle,
-							{ color: colors.textSecondary },
+							{ color: Palette.onSurfaceVariant },
 						]}>
 						{subtitle}
 					</Text>
@@ -131,7 +132,7 @@ function ToggleRow({ colors, icon, title, subtitle, value, onChange }) {
 			<Switch
 				value={Boolean(value)}
 				onValueChange={(val) => onChange(val)}
-				trackColor={{ false: colors.border, true: colors.primary }}
+				trackColor={{ false: "rgba(229, 225, 228, 0.08)", true: Palette.primary }}
 				thumbColor="#ffffff"
 			/>
 		</TVPressable>
@@ -197,10 +198,10 @@ export default function PlayerSettingsScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right", "bottom"]}
-				style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+				style={[styles.safeArea, { backgroundColor: Palette.background }]}>
 				<StatusBar
 					barStyle="light-content"
-					backgroundColor={colors.bg}
+					backgroundColor={Palette.background}
 				/>
 
 				{/* Header */}
@@ -208,8 +209,8 @@ export default function PlayerSettingsScreen() {
 					style={[
 						styles.header,
 						{
-							borderBottomColor: colors.border,
-							backgroundColor: colors.cardBg,
+							borderBottomColor: "rgba(229, 225, 228, 0.08)",
+							backgroundColor: Palette.surfaceLow,
 						},
 					]}>
 					<TVPressable
@@ -219,10 +220,10 @@ export default function PlayerSettingsScreen() {
 						<Ionicons
 							name="arrow-back"
 							size={24}
-							color={colors.text}
+							color={Palette.onSurface}
 						/>
 					</TVPressable>
-					<Text style={[styles.headerTitle, { color: colors.text }]}>
+					<Text style={[styles.headerTitle, { color: Palette.onSurface }]}>
 						Oynatıcı ve Altyazı
 					</Text>
 					<TVPressable
@@ -232,7 +233,7 @@ export default function PlayerSettingsScreen() {
 						<Text
 							style={[
 								styles.resetButtonText,
-								{ color: colors.primary },
+								{ color: Palette.primary },
 							]}>
 							Sıfırla
 						</Text>
@@ -259,7 +260,7 @@ export default function PlayerSettingsScreen() {
 								style={[
 									styles.sectionHeader,
 									{
-										color: colors.textSecondary,
+										color: Palette.onSurfaceVariant,
 										paddingHorizontal: 0,
 									},
 								]}>
@@ -329,7 +330,7 @@ export default function PlayerSettingsScreen() {
 						<Text
 							style={[
 								styles.sectionHeader,
-								{ color: colors.textSecondary },
+								{ color: Palette.onSurfaceVariant },
 							]}>
 							ALTYAZI GÖRÜNÜMÜ
 						</Text>
@@ -338,8 +339,8 @@ export default function PlayerSettingsScreen() {
 							style={[
 								styles.settingsGroup,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.08)",
 								},
 							]}>
 							{/* Yazı Boyutu */}
@@ -348,12 +349,12 @@ export default function PlayerSettingsScreen() {
 									<Ionicons
 										name="text-outline"
 										size={20}
-										color={colors.primary}
+										color={Palette.primary}
 									/>
 									<Text
 										style={[
 											styles.settingBlockTitle,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										Yazı Boyutu ({settings.subtitleFontSize}
 										px)
@@ -372,11 +373,11 @@ export default function PlayerSettingsScreen() {
 													{
 														backgroundColor:
 															isSelected
-																? colors.primary
-																: `${colors.border}40`,
+																? Palette.primary
+																: `${"rgba(229, 225, 228, 0.08)"}40`,
 														borderColor: isSelected
-															? colors.primary
-															: colors.border,
+															? Palette.primary
+															: "rgba(229, 225, 228, 0.08)",
 													},
 												]}
 												focusedStyle={
@@ -395,7 +396,7 @@ export default function PlayerSettingsScreen() {
 														{
 															color: isSelected
 																? "#FFFFFF"
-																: colors.text,
+																: Palette.onSurface,
 															fontWeight:
 																isSelected
 																	? "700"
@@ -413,7 +414,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -423,12 +424,12 @@ export default function PlayerSettingsScreen() {
 									<Ionicons
 										name="color-palette-outline"
 										size={20}
-										color={colors.primary}
+										color={Palette.primary}
 									/>
 									<Text
 										style={[
 											styles.settingBlockTitle,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										Metin Rengi
 									</Text>
@@ -444,10 +445,10 @@ export default function PlayerSettingsScreen() {
 												style={[
 													styles.colorCard,
 													{
-														backgroundColor: `${colors.border}40`,
+														backgroundColor: `${"rgba(229, 225, 228, 0.08)"}40`,
 														borderColor: isSelected
-															? colors.primary
-															: colors.border,
+															? Palette.primary
+															: "rgba(229, 225, 228, 0.08)",
 														borderWidth: isSelected
 															? 2
 															: 1,
@@ -486,8 +487,8 @@ export default function PlayerSettingsScreen() {
 														styles.colorLabel,
 														{
 															color: isSelected
-																? colors.primary
-																: colors.textSecondary,
+																? Palette.primary
+																: Palette.onSurfaceVariant,
 															fontWeight:
 																isSelected
 																	? "700"
@@ -505,7 +506,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -515,12 +516,12 @@ export default function PlayerSettingsScreen() {
 									<Ionicons
 										name="layers-outline"
 										size={20}
-										color={colors.primary}
+										color={Palette.primary}
 									/>
 									<Text
 										style={[
 											styles.settingBlockTitle,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										Arka Plan Stili
 									</Text>
@@ -538,11 +539,11 @@ export default function PlayerSettingsScreen() {
 													{
 														backgroundColor:
 															isSelected
-																? colors.primary
-																: `${colors.border}40`,
+																? Palette.primary
+																: `${"rgba(229, 225, 228, 0.08)"}40`,
 														borderColor: isSelected
-															? colors.primary
-															: colors.border,
+															? Palette.primary
+															: "rgba(229, 225, 228, 0.08)",
 													},
 												]}
 												focusedStyle={
@@ -561,7 +562,7 @@ export default function PlayerSettingsScreen() {
 														{
 															color: isSelected
 																? "#FFFFFF"
-																: colors.text,
+																: Palette.onSurface,
 															fontWeight:
 																isSelected
 																	? "700"
@@ -579,7 +580,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -597,20 +598,20 @@ export default function PlayerSettingsScreen() {
 									<Ionicons
 										name="sunny-outline"
 										size={20}
-										color={colors.primary}
+										color={Palette.primary}
 									/>
 									<View style={styles.toggleTextContainer}>
 										<Text
 											style={[
 												styles.toggleTitle,
-												{ color: colors.text },
+												{ color: Palette.onSurface },
 											]}>
 											Metin Gölgesi
 										</Text>
 										<Text
 											style={[
 												styles.toggleSubtitle,
-												{ color: colors.textSecondary },
+												{ color: Palette.onSurfaceVariant },
 											]}>
 											Açık renkli sahnelerde
 											okunabilirliği artırır
@@ -625,8 +626,8 @@ export default function PlayerSettingsScreen() {
 										})
 									}
 									trackColor={{
-										false: colors.border,
-										true: colors.primary,
+										false: "rgba(229, 225, 228, 0.08)",
+										true: Palette.primary,
 									}}
 									thumbColor="#ffffff"
 								/>
@@ -635,7 +636,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -645,12 +646,12 @@ export default function PlayerSettingsScreen() {
 									<Ionicons
 										name="language-outline"
 										size={20}
-										color={colors.primary}
+										color={Palette.primary}
 									/>
 									<Text
 										style={[
 											styles.settingBlockTitle,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										Varsayılan Altyazı Dili
 									</Text>
@@ -668,11 +669,11 @@ export default function PlayerSettingsScreen() {
 													{
 														backgroundColor:
 															isSelected
-																? colors.primary
-																: `${colors.border}40`,
+																? Palette.primary
+																: `${"rgba(229, 225, 228, 0.08)"}40`,
 														borderColor: isSelected
-															? colors.primary
-															: colors.border,
+															? Palette.primary
+															: "rgba(229, 225, 228, 0.08)",
 													},
 												]}
 												focusedStyle={
@@ -691,7 +692,7 @@ export default function PlayerSettingsScreen() {
 														{
 															color: isSelected
 																? "#FFFFFF"
-																: colors.text,
+																: Palette.onSurface,
 															fontWeight:
 																isSelected
 																	? "700"
@@ -713,7 +714,7 @@ export default function PlayerSettingsScreen() {
 						<Text
 							style={[
 								styles.sectionHeader,
-								{ color: colors.textSecondary },
+								{ color: Palette.onSurfaceVariant },
 							]}>
 							OYNATICI AYARLARI
 						</Text>
@@ -722,8 +723,8 @@ export default function PlayerSettingsScreen() {
 							style={[
 								styles.settingsGroup,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.08)",
 								},
 							]}>
 							{/* Sarma Süresi */}
@@ -732,12 +733,12 @@ export default function PlayerSettingsScreen() {
 									<Ionicons
 										name="play-forward-outline"
 										size={20}
-										color={colors.primary}
+										color={Palette.primary}
 									/>
 									<Text
 										style={[
 											styles.settingBlockTitle,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										İleri / Geri Sarma Süresi
 									</Text>
@@ -755,11 +756,11 @@ export default function PlayerSettingsScreen() {
 													{
 														backgroundColor:
 															isSelected
-																? colors.primary
-																: `${colors.border}40`,
+																? Palette.primary
+																: `${"rgba(229, 225, 228, 0.08)"}40`,
 														borderColor: isSelected
-															? colors.primary
-															: colors.border,
+															? Palette.primary
+															: "rgba(229, 225, 228, 0.08)",
 													},
 												]}
 												focusedStyle={
@@ -778,7 +779,7 @@ export default function PlayerSettingsScreen() {
 														{
 															color: isSelected
 																? "#FFFFFF"
-																: colors.text,
+																: Palette.onSurface,
 															fontWeight:
 																isSelected
 																	? "700"
@@ -796,7 +797,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -806,12 +807,12 @@ export default function PlayerSettingsScreen() {
 									<Ionicons
 										name="scan-outline"
 										size={20}
-										color={colors.primary}
+										color={Palette.primary}
 									/>
 									<Text
 										style={[
 											styles.settingBlockTitle,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										Varsayılan Görüntü Boyutu
 									</Text>
@@ -830,11 +831,11 @@ export default function PlayerSettingsScreen() {
 														flex: 1,
 														backgroundColor:
 															isSelected
-																? colors.primary
-																: `${colors.border}40`,
+																? Palette.primary
+																: `${"rgba(229, 225, 228, 0.08)"}40`,
 														borderColor: isSelected
-															? colors.primary
-															: colors.border,
+															? Palette.primary
+															: "rgba(229, 225, 228, 0.08)",
 													},
 												]}
 												focusedStyle={
@@ -853,7 +854,7 @@ export default function PlayerSettingsScreen() {
 														{
 															color: isSelected
 																? "#FFFFFF"
-																: colors.text,
+																: Palette.onSurface,
 															fontWeight:
 																isSelected
 																	? "700"
@@ -871,7 +872,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -881,12 +882,12 @@ export default function PlayerSettingsScreen() {
 									<Ionicons
 										name="timer-outline"
 										size={20}
-										color={colors.primary}
+										color={Palette.primary}
 									/>
 									<Text
 										style={[
 											styles.settingBlockTitle,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										Kontrol Çubuğu Gizlenme Süresi
 									</Text>
@@ -904,11 +905,11 @@ export default function PlayerSettingsScreen() {
 													{
 														backgroundColor:
 															isSelected
-																? colors.primary
-																: `${colors.border}40`,
+																? Palette.primary
+																: `${"rgba(229, 225, 228, 0.08)"}40`,
 														borderColor: isSelected
-															? colors.primary
-															: colors.border,
+															? Palette.primary
+															: "rgba(229, 225, 228, 0.08)",
 													},
 												]}
 												focusedStyle={
@@ -927,7 +928,7 @@ export default function PlayerSettingsScreen() {
 														{
 															color: isSelected
 																? "#FFFFFF"
-																: colors.text,
+																: Palette.onSurface,
 															fontWeight:
 																isSelected
 																	? "700"
@@ -945,7 +946,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -962,20 +963,20 @@ export default function PlayerSettingsScreen() {
 									<Ionicons
 										name="refresh-circle-outline"
 										size={20}
-										color={colors.primary}
+										color={Palette.primary}
 									/>
 									<View style={styles.toggleTextContainer}>
 										<Text
 											style={[
 												styles.toggleTitle,
-												{ color: colors.text },
+												{ color: Palette.onSurface },
 											]}>
 											Kaldığı Yerden Devam Et
 										</Text>
 										<Text
 											style={[
 												styles.toggleSubtitle,
-												{ color: colors.textSecondary },
+												{ color: Palette.onSurfaceVariant },
 											]}>
 											Kaynak değişiminde ve tekrar
 											açılışta süreyi korur
@@ -988,8 +989,8 @@ export default function PlayerSettingsScreen() {
 										updateSettings({ autoResume: val })
 									}
 									trackColor={{
-										false: colors.border,
-										true: colors.primary,
+										false: "rgba(229, 225, 228, 0.08)",
+										true: Palette.primary,
 									}}
 									thumbColor="#ffffff"
 								/>
@@ -1002,7 +1003,7 @@ export default function PlayerSettingsScreen() {
 						<Text
 							style={[
 								styles.sectionHeader,
-								{ color: colors.textSecondary },
+								{ color: Palette.onSurfaceVariant },
 							]}>
 							DOKUNMA VE HAREKET
 						</Text>
@@ -1011,8 +1012,8 @@ export default function PlayerSettingsScreen() {
 							style={[
 								styles.settingsGroup,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.08)",
 								},
 							]}>
 							<ToggleRow
@@ -1029,7 +1030,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -1047,7 +1048,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -1065,7 +1066,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -1083,7 +1084,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -1103,7 +1104,7 @@ export default function PlayerSettingsScreen() {
 									<View
 										style={[
 											styles.divider,
-											{ backgroundColor: colors.border },
+											{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 										]}
 									/>
 									<View style={styles.settingBlock}>
@@ -1111,12 +1112,12 @@ export default function PlayerSettingsScreen() {
 											<Ionicons
 												name="timer-outline"
 												size={20}
-												color={colors.primary}
+												color={Palette.primary}
 											/>
 											<Text
 												style={[
 													styles.settingBlockTitle,
-													{ color: colors.text },
+													{ color: Palette.onSurface },
 												]}>
 												Hızlandırma Tetikleme Süresi
 											</Text>
@@ -1135,12 +1136,12 @@ export default function PlayerSettingsScreen() {
 																{
 																	backgroundColor:
 																		isSelected
-																			? colors.primary
-																			: `${colors.border}40`,
+																			? Palette.primary
+																			: `${"rgba(229, 225, 228, 0.08)"}40`,
 																	borderColor:
 																		isSelected
-																			? colors.primary
-																			: colors.border,
+																			? Palette.primary
+																			: "rgba(229, 225, 228, 0.08)",
 																},
 															]}
 															focusedStyle={
@@ -1159,7 +1160,7 @@ export default function PlayerSettingsScreen() {
 																	{
 																		color: isSelected
 																			? "#FFFFFF"
-																			: colors.text,
+																			: Palette.onSurface,
 																		fontWeight:
 																			isSelected
 																				? "700"
@@ -1180,7 +1181,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -1198,7 +1199,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -1220,7 +1221,7 @@ export default function PlayerSettingsScreen() {
 						<Text
 							style={[
 								styles.sectionHeader,
-								{ color: colors.textSecondary },
+								{ color: Palette.onSurfaceVariant },
 							]}>
 							OYNATMA
 						</Text>
@@ -1229,8 +1230,8 @@ export default function PlayerSettingsScreen() {
 							style={[
 								styles.settingsGroup,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.08)",
 								},
 							]}>
 							<View style={styles.settingBlock}>
@@ -1238,12 +1239,12 @@ export default function PlayerSettingsScreen() {
 									<Ionicons
 										name="speedometer-outline"
 										size={20}
-										color={colors.primary}
+										color={Palette.primary}
 									/>
 									<Text
 										style={[
 											styles.settingBlockTitle,
-											{ color: colors.text },
+											{ color: Palette.onSurface },
 										]}>
 										Varsayılan Oynatma Hızı
 									</Text>
@@ -1261,11 +1262,11 @@ export default function PlayerSettingsScreen() {
 													{
 														backgroundColor:
 															isSelected
-																? colors.primary
-																: `${colors.border}40`,
+																? Palette.primary
+																: `${"rgba(229, 225, 228, 0.08)"}40`,
 														borderColor: isSelected
-															? colors.primary
-															: colors.border,
+															? Palette.primary
+															: "rgba(229, 225, 228, 0.08)",
 													},
 												]}
 												focusedStyle={
@@ -1284,7 +1285,7 @@ export default function PlayerSettingsScreen() {
 														{
 															color: isSelected
 																? "#FFFFFF"
-																: colors.text,
+																: Palette.onSurface,
 															fontWeight:
 																isSelected
 																	? "700"
@@ -1302,7 +1303,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -1324,7 +1325,7 @@ export default function PlayerSettingsScreen() {
 						<Text
 							style={[
 								styles.sectionHeader,
-								{ color: colors.textSecondary },
+								{ color: Palette.onSurfaceVariant },
 							]}>
 							SİSTEM ENTEGRASYONU
 						</Text>
@@ -1333,8 +1334,8 @@ export default function PlayerSettingsScreen() {
 							style={[
 								styles.settingsGroup,
 								{
-									backgroundColor: colors.cardBg,
-									borderColor: colors.border,
+									backgroundColor: Palette.surfaceLow,
+									borderColor: "rgba(229, 225, 228, 0.08)",
 								},
 							]}>
 							<ToggleRow
@@ -1351,7 +1352,7 @@ export default function PlayerSettingsScreen() {
 							<View
 								style={[
 									styles.divider,
-									{ backgroundColor: colors.border },
+									{ backgroundColor: "rgba(229, 225, 228, 0.08)" },
 								]}
 							/>
 
@@ -1394,7 +1395,7 @@ const styles = StyleSheet.create({
 	headerTitle: {
 		flex: 1,
 		fontSize: 18,
-		fontWeight: "bold",
+		fontFamily: FontFamily.bold,
 		textAlign: "center",
 	},
 	resetButton: {
@@ -1403,7 +1404,7 @@ const styles = StyleSheet.create({
 	},
 	resetButtonText: {
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	scrollContainer: {
 		paddingTop: 16,
@@ -1440,7 +1441,7 @@ const styles = StyleSheet.create({
 	liveBadgeText: {
 		color: "#FF3B30",
 		fontSize: 11,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		textTransform: "uppercase",
 	},
 	mockVideoScreen: {
@@ -1464,7 +1465,7 @@ const styles = StyleSheet.create({
 	mockVideoInfoText: {
 		color: "rgba(255, 255, 255, 0.35)",
 		fontSize: 12,
-		fontWeight: "500",
+		fontFamily: FontFamily.medium,
 	},
 	mockSubtitleContainer: {
 		position: "absolute",
@@ -1481,7 +1482,7 @@ const styles = StyleSheet.create({
 		maxWidth: "92%",
 	},
 	mockSubtitleText: {
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		textAlign: "center",
 		textShadowOffset: { width: 0, height: 1 },
 	},
@@ -1490,7 +1491,7 @@ const styles = StyleSheet.create({
 	},
 	sectionHeader: {
 		fontSize: 12,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		letterSpacing: 1.2,
 		textTransform: "uppercase",
 		paddingHorizontal: 4,
@@ -1512,7 +1513,7 @@ const styles = StyleSheet.create({
 	},
 	settingBlockTitle: {
 		fontSize: 15,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	chipsRow: {
 		flexDirection: "row",
@@ -1571,7 +1572,7 @@ const styles = StyleSheet.create({
 	},
 	toggleTitle: {
 		fontSize: 15,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	toggleSubtitle: {
 		fontSize: 12,

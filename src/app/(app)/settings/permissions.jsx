@@ -17,7 +17,7 @@ import React, { useCallback, useState } from "react";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 
 import TVPressable from "@/components/common/TVPressable";
-import { useThemeContext } from "@/context/ThemeContext";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import {
@@ -27,23 +27,22 @@ import {
 } from "@/utils/permissions";
 
 /** Durum → görünür metin/renk. */
-function statusMeta(status, colors) {
+function statusMeta(status) {
 	switch (status) {
 		case "granted":
-			return { text: "Verildi", color: "#10b981" };
+			return { text: "Verildi", color: Palette.primary };
 		case "not_required":
-			return { text: "Gerekmiyor", color: colors.textSecondary };
+			return { text: "Gerekmiyor", color: Palette.onSurfaceVariant };
 		case "never_ask_again":
-			return { text: "Ayarları Aç →", color: "#f59e0b" };
+			return { text: "Ayarları Aç →", color: Palette.tertiary };
 		default:
-			return { text: "Verilmedi", color: "#f43f5e" };
+			return { text: "Verilmedi", color: Palette.error };
 	}
 }
 
 export default function PermissionsScreen() {
-	const { colors } = useThemeContext();
 	const router = useRouter();
-	const { contentMaxWidth } = useTvMetrics();
+	const { contentMaxWidth, sp } = useTvMetrics();
 	const [rows, setRows] = useState(null);
 
 	const refresh = useCallback(async () => {
@@ -78,8 +77,8 @@ export default function PermissionsScreen() {
 
 	if (!rows) {
 		return (
-			<SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
-				<StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+			<SafeAreaView style={styles.safeArea}>
+				<StatusBar barStyle="light-content" backgroundColor={Palette.background} />
 				<Stack.Screen options={{ headerShown: false }} />
 			</SafeAreaView>
 		);
@@ -97,73 +96,92 @@ export default function PermissionsScreen() {
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
-			<SafeAreaView
-				edges={["top", "left", "right", "bottom"]}
-				style={[styles.safeArea, { backgroundColor: colors.bg }]}>
-				<StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+			<SafeAreaView edges={["top", "left", "right", "bottom"]} style={styles.safeArea}>
+				<StatusBar barStyle="light-content" backgroundColor={Palette.background} />
 
-				{/* Header */}
-				<View
-					style={[
-						styles.header,
-						{ borderBottomColor: colors.border, backgroundColor: colors.cardBg },
-					]}>
+				<View style={[styles.header, { paddingHorizontal: sp(16), gap: sp(8) }]}>
 					<TVPressable
 						onPress={() => router.back()}
-						style={styles.backButton}
-						focusedStyle={styles.headerButtonFocused}>
-						<Ionicons name="arrow-back" size={24} color={colors.text} />
+						focusedStyle={null}
+						style={({ focused }) => [
+							styles.backButton,
+							{ borderRadius: sp(12) },
+							focused && styles.focusRing,
+						]}>
+						<Ionicons name="arrow-back" size={sp(20)} color={Palette.onSurface} />
 					</TVPressable>
-					<Text style={[styles.headerTitle, { color: colors.text }]}>
+					<Text numberOfLines={1} style={[styles.headerTitle, { fontSize: sp(20) }]}>
 						İzinler
 					</Text>
-					<View style={{ width: 40 }} />
+					<View style={{ width: sp(36) }} />
 				</View>
 
 				<ScrollView
 					showsVerticalScrollIndicator={false}
 					contentContainerStyle={[
 						styles.scrollContainer,
+						{ paddingHorizontal: sp(16) },
 						contentMaxWidth
 							? { alignSelf: "center", width: "100%", maxWidth: contentMaxWidth }
 							: null,
 					]}>
-					<Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
+					<Text style={[styles.sectionHeader, { fontSize: sp(10) }]}>
 						UYGULAMA İZİNLERİ
 					</Text>
-					<View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+					<View style={[styles.card, { borderRadius: sp(14) }]}>
 						{rows.map((row) => {
-							const meta = statusMeta(row.status, colors);
+							const meta = statusMeta(row.status);
 							return (
 								<TVPressable
 									key={row.key}
-									style={styles.valueRow}
-									focusedStyle={styles.rowFocused}
+									focusedStyle={null}
+									style={({ focused }) => [
+										styles.valueRow,
+										{ paddingVertical: sp(12), paddingHorizontal: sp(12), gap: sp(12) },
+										focused && styles.focusRing,
+									]}
 									onPress={() => onRow(row)}>
-									<View style={[styles.valueIcon, { backgroundColor: meta.color }]}>
+									<View
+										style={[
+											styles.valueIcon,
+											{ borderRadius: sp(16), backgroundColor: Palette.surfaceHigh },
+										]}>
 										<Ionicons
-											name={row.status === "granted" ? "checkmark" : "lock-closed-outline"}
-											size={16}
-											color="#ffffff"
+											name={
+												row.status === "granted"
+													? "checkmark"
+													: "lock-closed-outline"
+											}
+											size={sp(15)}
+											color={meta.color}
 										/>
 									</View>
 									<View style={styles.valueRowText}>
-										<Text style={[styles.valueRowTitle, { color: colors.text }]}>
+										<Text
+											numberOfLines={1}
+											style={[styles.valueRowTitle, { fontSize: sp(13) }]}>
 											{row.label}
 											{row.required ? "  (zorunlu)" : ""}
 										</Text>
-										<Text style={[styles.valueRowSub, { color: colors.textSecondary }]}>
+										<Text
+											numberOfLines={2}
+											style={[styles.valueRowSub, { fontSize: sp(11) }]}>
 											{row.reason}
 										</Text>
 									</View>
-									<Text style={[styles.valueRowValue, { color: meta.color }]}>
+									<Text
+										numberOfLines={1}
+										style={[
+											styles.valueRowValue,
+											{ fontSize: sp(12), color: meta.color },
+										]}>
 										{meta.text}
 									</Text>
 								</TVPressable>
 							);
 						})}
 					</View>
-					<Text style={[styles.note, { color: colors.textSecondary }]}>
+					<Text style={[styles.note, { fontSize: sp(11) }]}>
 						Satıra dokunmak izni ister. Kalıcı reddedilen bir izin için sistem
 						ayarları açılır.
 					</Text>
@@ -174,33 +192,71 @@ export default function PermissionsScreen() {
 }
 
 const styles = StyleSheet.create({
-	safeArea: { flex: 1 },
+	safeArea: { flex: 1, backgroundColor: Palette.background },
 	header: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "space-between",
-		paddingHorizontal: 16,
 		paddingVertical: 10,
-		borderBottomWidth: 1,
 	},
-	backButton: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-	headerButtonFocused: { backgroundColor: "rgba(255,255,255,0.12)" },
-	headerTitle: { fontSize: 18, fontWeight: "800" },
-	scrollContainer: { padding: 16, paddingBottom: 40 },
-	sectionHeader: { fontSize: 12, fontWeight: "800", letterSpacing: 1, marginBottom: 8 },
-	card: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+	backButton: {
+		width: 36,
+		height: 36,
+		alignItems: "center",
+		justifyContent: "center",
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	headerTitle: {
+		flex: 1,
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		letterSpacing: -0.3,
+	},
+	scrollContainer: { paddingTop: 8, paddingBottom: 40 },
+	sectionHeader: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.bold,
+		letterSpacing: 1.1,
+		marginBottom: 8,
+		paddingHorizontal: 4,
+	},
+	card: {
+		backgroundColor: Palette.surfaceLow,
+		overflow: "hidden",
+	},
 	valueRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingVertical: 14,
-		paddingHorizontal: 14,
-		gap: 12,
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
-	rowFocused: { backgroundColor: "rgba(255,255,255,0.06)" },
-	valueIcon: { width: 32, height: 32, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+	valueIcon: {
+		width: 32,
+		height: 32,
+		alignItems: "center",
+		justifyContent: "center",
+	},
 	valueRowText: { flex: 1 },
-	valueRowTitle: { fontSize: 14.5, fontWeight: "700" },
-	valueRowSub: { fontSize: 12, marginTop: 2 },
-	valueRowValue: { fontSize: 13, fontWeight: "700" },
-	note: { fontSize: 11.5, marginTop: 10, paddingHorizontal: 4 },
+	valueRowTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+	},
+	valueRowSub: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
+		marginTop: 2,
+	},
+	valueRowValue: {
+		fontFamily: FontFamily.bold,
+	},
+	note: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
+		marginTop: 10,
+		paddingHorizontal: 4,
+	},
+	focusRing: {
+		borderColor: Palette.primary,
+		borderWidth: 2,
+	},
 });
