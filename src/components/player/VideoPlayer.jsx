@@ -1605,12 +1605,12 @@ export default function VideoPlayer({
 									<View style={styles.roundInner}>
 										<Ionicons
 											name="play-back-circle-outline"
-											size={30}
-											color="#FFFFFF"
+											size={26}
+											color={Palette.onSurface}
 										/>
-										{/* <Text style={styles.roundLabel}>
+										<Text style={styles.roundLabel}>
 											{seekDuration}
-										</Text> */}
+										</Text>
 									</View>
 								</TVPressable>
 							) : (
@@ -1625,8 +1625,8 @@ export default function VideoPlayer({
 								onPress={togglePlayPause}>
 								<Ionicons
 									name={paused ? "play" : "pause"}
-									size={34}
-									color="#FFFFFF"
+									size={30}
+									color={Palette.onPrimaryContainer}
 								/>
 							</TVPressable>
 
@@ -1639,12 +1639,12 @@ export default function VideoPlayer({
 									<View style={styles.roundInner}>
 										<Ionicons
 											name="play-forward-circle-outline"
-											size={30}
-											color="#FFFFFF"
+											size={26}
+											color={Palette.onSurface}
 										/>
-										{/* <Text style={styles.roundLabel}>
+										<Text style={styles.roundLabel}>
 											{seekDuration}
-										</Text> */}
+										</Text>
 									</View>
 								</TVPressable>
 							) : (
@@ -2053,31 +2053,38 @@ const styles = StyleSheet.create({
 		borderRadius: 28,
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "rgba(0, 0, 0, 0.25)",
+		backgroundColor: Palette.primaryContainer,
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
 	playButtonFocused: {
-		backgroundColor: "rgba(192, 193, 255, 0.40)",
-		transform: [{ scale: 1.12 }],
+		borderColor: Palette.onSurface,
 	},
 	roundButton: {
 		width: 52,
 		height: 52,
+		borderRadius: 26,
 		alignItems: "center",
 		justifyContent: "center",
+		backgroundColor: "rgba(0, 0, 0, 0.45)",
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
 	roundButtonFocused: {
-		transform: [{ scale: 1.12 }],
+		borderColor: Palette.primary,
 	},
 	roundInner: {
 		alignItems: "center",
 		justifyContent: "center",
 	},
 	roundLabel: {
-		position: "absolute",
-		color: "#FFFFFF",
-		fontSize: 12,
+		color: Palette.onSurface,
+		fontSize: 10,
+		lineHeight: 12,
 		fontFamily: FontFamily.bold,
 		textAlign: "center",
+		includeFontPadding: false,
+		marginTop: -2,
 	},
 	/*
 	 * Seek yokken (canlı TV) ortadaki oynat düğmesi kaymasın diye üç eşit
