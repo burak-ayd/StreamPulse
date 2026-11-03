@@ -1,29 +1,26 @@
 /*
- * İndirilenler ekranı (download_feature_plan.md Faz 4 + geri bildirim #3/#4/#10).
+ * İndirilenler ekranı — yeni tasarım (Faz 5).
  *
- * • Diziler ACCORDION: başlık "Dizi Adı — 3/8" (indirilen/toplam bölüm),
- *   açılınca o dizinin indirme kuyruğu listelenir.
- * • Filmler tek kart.
- * • Görsel dil, kullanıcının verdiği "İndirilenler" tasarımından: depolama
- *   ölçer kartı, kırmızı birincil buton, 16:9 ilerleme kartı ve 2:3 posterli
- *   tamamlanmış kartlar (Material 3 yüzey rampası).
- * • İlerleme: HLS'te segment sayısına göre yüzde (dalgalanmaz) + indirilen MB;
- *   düz dosyada yüzde + indirilen/toplam (Content-Length'ten bilinir).
+ * • Başlık satırı: "İndirilenler" + "N öğe" hapı + sağda `Düzenle` ve ayarlar.
+ * • Depolama kartı: kullanılan/toplam, ince bar, StreamPulse / Diğer / Boş.
+ * • Filtre sekmeleri: Tümü / İndiriliyor / Tamamlananlar (sayılı).
+ * • Diziler ACCORDION (başlık + bölüm satırları aynı kartta), filmler tek kart.
+ * • `Düzenle` → seçim modu; kartlarda onay kutusu, altta "Seçilenleri Sil".
+ * • Veri katmanı değişmedi: `useDownload()` kuyruğu ve eylemleri aynen kullanılır.
  */
 
 import BottomNavigation from "@/components/BottomNavigation";
 import SmartImage from "@/components/common/SmartImage";
 import TVPressable from "@/components/common/TVPressable";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useDownload } from "@/context/DownloadContext";
-import { useThemeContext } from "@/context/ThemeContext";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { etaLabel } from "@/utils/downloadEta";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { LinearGradient } from "expo-linear-gradient";
 import { Paths } from "expo-file-system";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
@@ -35,6 +32,8 @@ import {
 	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const PADDING_HORIZONTAL = 16;
 
 const STATUS_LABEL = {
 	queued: "Sırada",
@@ -68,16 +67,38 @@ function formatBytes(bytes) {
 	return `${(n / 1024).toFixed(0)} KB`;
 }
 
+/** İndirme hızı: "4.2 MB/sn". */
+function formatSpeed(bps) {
+	const size = formatBytes(bps);
+	return size ? `${size}/sn` : "";
+}
+
 /** "Film • 2.1 GB" — boş parçalar atlanır. */
 function metaLine(...parts) {
 	return parts.filter(Boolean).join(" • ");
 }
 
-/** Dizi bölümü etiketi: "S01xE04 · Bölüm adı" */
+/** Dizi bölümü etiketi (oynatıcıya giden): "S01xE04 · Bölüm adı" */
 function episodeLabel(item) {
 	const s = String(item.seasonNumber || 1).padStart(2, "0");
 	const e = String(item.episodeNumber || 1).padStart(2, "0");
 	return `S${s}xE${e}${item.episodeTitle ? ` · ${item.episodeTitle}` : ""}`;
+}
+
+/** Kart satırındaki kısa etiket: "S2 B1" */
+function episodeTag(item) {
+	return `S${item.seasonNumber || 1} B${item.episodeNumber || 1}`;
+}
+
+/** Kayıtlı varyant çözünürlüğünden kalite rozeti ("4K", "1080p", …). */
+function qualityLabel(item) {
+	const m = String(item.variantResolution || "").match(
+		/(\d{3,4})\s*[x×]\s*(\d{3,4})/,
+	);
+	if (!m) return null;
+	const h = Number(m[2]);
+	if (h >= 2160) return "4K";
+	return `${h}p`;
 }
 
 /** Öğenin diskte kapladığı alan (tamamlanmamışsa indirilen kısım). */
@@ -100,9 +121,8 @@ function readDisk() {
 
 export default function DownloadsScreen() {
 	const router = useRouter();
-	const { colors, m3 } = useThemeContext();
 	const { contentPaddingLeft } = useNavLayout();
-	const { contentMaxWidth } = useTvMetrics();
+	const { sp, contentMaxWidth, isWide } = useTvMetrics();
 	const {
 		queue,
 		pauseDownload,
@@ -116,6 +136,11 @@ export default function DownloadsScreen() {
 	// Accordion açık grupları. Varsayılan: tümü açık (kullanıcı isterse kapatır).
 	const [collapsed, setCollapsed] = useState({});
 
+	// Filtre sekmesi + seçim modu.
+	const [filter, setFilter] = useState("all");
+	const [isSelectionMode, setIsSelectionMode] = useState(false);
+	const [selectedIds, setSelectedIds] = useState(() => new Set());
+
 	// Cihaz depolaması — kart yalnızca değer okunabiliyorsa gösterilir.
 	const [disk, setDisk] = useState(readDisk);
 
@@ -125,13 +150,18 @@ export default function DownloadsScreen() {
 			setDisk(readDisk());
 
 			const onBackPress = () => {
+				if (isSelectionMode) {
+					setIsSelectionMode(false);
+					setSelectedIds(new Set());
+					return true;
+				}
 				if (router.canGoBack()) router.back();
 				else router.replace("/(app)");
 				return true;
 			};
 			const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
 			return () => sub.remove();
-		}, [router]),
+		}, [router, isSelectionMode]),
 	);
 
 	/**
@@ -142,7 +172,8 @@ export default function DownloadsScreen() {
 		const map = new Map();
 		(queue || []).forEach((item) => {
 			const isSeries =
-				item.type === "series" || Boolean(item.seasonNumber && item.episodeNumber);
+				item.type === "series" ||
+				Boolean(item.seasonNumber && item.episodeNumber);
 			const key = isSeries
 				? `series:${item.seriesId || item.seriesTitle || item.contentTitle}`
 				: `movie:${item.id}`;
@@ -164,16 +195,43 @@ export default function DownloadsScreen() {
 			const items = g.items.sort(
 				(a, b) =>
 					Number(a.seasonNumber || 0) - Number(b.seasonNumber || 0) ||
-					Number(a.episodeNumber || 0) - Number(b.episodeNumber || 0),
+					Number(b.episodeNumber || 0) - Number(a.episodeNumber || 0),
 			);
 			return {
 				...g,
 				items,
 				completedCount: items.filter((i) => i.status === "completed").length,
+				activeCount: items.filter((i) => i.status !== "completed").length,
 				bytes: items.reduce((sum, i) => sum + bytesOf(i), 0),
 			};
 		});
 	}, [queue]);
+
+	/** Sekmeye göre görünür gruplar (bölümler de filtrelenir). */
+	const visibleGroups = useMemo(() => {
+		const keep = (item) => {
+			if (filter === "active") return item.status !== "completed";
+			if (filter === "completed") return item.status === "completed";
+			return true;
+		};
+		return groups
+			.map((g) => {
+				const items = g.items.filter(keep);
+				return {
+					...g,
+					items,
+					completedCount: items.filter((i) => i.status === "completed").length,
+					activeCount: items.filter((i) => i.status !== "completed").length,
+					bytes: items.reduce((sum, i) => sum + bytesOf(i), 0),
+				};
+			})
+			.filter((g) => g.items.length > 0);
+	}, [groups, filter]);
+
+	const visibleItems = useMemo(
+		() => visibleGroups.flatMap((g) => g.items),
+		[visibleGroups],
+	);
 
 	/** StreamPulse'ın kapladığı toplam alan. */
 	const usedBytes = useMemo(
@@ -202,11 +260,12 @@ export default function DownloadsScreen() {
 	};
 
 	const openPlayer = (item) => {
-		if (item.status !== "completed" || !item.filePath) return;		const isSeries = item.type === "series";
+		if (item.status !== "completed" || !item.filePath) return;
+		const isSeries = item.type === "series";
 		router.push({
 			pathname: "/player",
 			params: {
-				// Yerel kayıt: çıktı URI'sini doğrudan kaynaktır (madde 11/14).
+				// Yerel kayıt: çıktı URI'sini doğrudan kaynaktır.
 				url: item.filePath,
 				localSubtitle: item.subtitlePath || undefined,
 				title: item.contentTitle,
@@ -240,231 +299,301 @@ export default function DownloadsScreen() {
 	};
 
 	const confirmDelete = (item) => {
+		Alert.alert("İndirmeyi Sil", "Kayıt ve indirilen dosyalar silinsin mi?", [
+			{ text: "Vazgeç", style: "cancel" },
+			{
+				text: "Sil",
+				style: "destructive",
+				onPress: () => removeDownload(item.id),
+			},
+		]);
+	};
+
+	/* ── Seçim modu ─────────────────────────────────────────────── */
+
+	const exitSelection = () => {
+		setIsSelectionMode(false);
+		setSelectedIds(new Set());
+	};
+
+	const toggleSelected = (id) => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	};
+
+	/** Dizi başlığına dokunmak, o dizinin görünür bölümlerini seçer/bırakır. */
+	const toggleGroupSelected = (group) => {
+		const ids = group.items.map((i) => i.id);
+		const allSelected = ids.every((id) => selectedIds.has(id));
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			ids.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
+			return next;
+		});
+	};
+
+	const allVisibleSelected =
+		visibleItems.length > 0 &&
+		visibleItems.every((i) => selectedIds.has(i.id));
+
+	const toggleSelectAll = () => {
+		if (allVisibleSelected) {
+			setSelectedIds(new Set());
+			return;
+		}
+		setSelectedIds(new Set(visibleItems.map((i) => i.id)));
+	};
+
+	const selectedBytes = useMemo(
+		() =>
+			(queue || [])
+				.filter((i) => selectedIds.has(i.id))
+				.reduce((sum, i) => sum + bytesOf(i), 0),
+		[queue, selectedIds],
+	);
+
+	const handleBulkDelete = () => {
+		const ids = [...selectedIds];
+		if (ids.length === 0) return;
 		Alert.alert(
-			"İndirmeyi Sil",
-			"Kayıt ve indirilen dosyalar silinsin mi?",
+			"İndirmeleri Sil",
+			`${ids.length} indirme ve dosyaları silinsin mi?`,
 			[
 				{ text: "Vazgeç", style: "cancel" },
 				{
 					text: "Sil",
 					style: "destructive",
-					onPress: () => removeDownload(item.id),
+					onPress: async () => {
+						for (const id of ids) await removeDownload(id);
+						exitSelection();
+					},
 				},
 			],
 		);
 	};
 
-	/** Poster yoksa düz zemin + ikon (indirme kaydında poster zorunlu değil). */
-	const renderThumb = (uri) =>
-		uri ? (
-			<SmartImage
-				source={{ uri }}
-				style={styles.fillImg}
-				contentFit="cover"
-				transition={0}
-			/>
-		) : (
-			<View style={styles.thumbFallback}>
-				<Ionicons name="film-outline" size={20} color={m3.onSurfaceVariant} />
-			</View>
-		);
+	/* ── Parçalar ───────────────────────────────────────────────── */
 
-	/** İlerleme çubuğu + "indirilen / toplam" + hız satırı. */
-	const renderProgress = (item) => {
-		const pct = Math.max(0, Math.min(100, Math.round((item.progress || 0) * 100)));
-		const speed = formatBytes(item.speedBps);
-		return (
-			<>
+	/** Poster yoksa düz zemin + ikon (indirme kaydında poster zorunlu değil). */
+	const renderPoster = (uri, badge, width = 56) => (
+		<View
+			style={[
+				styles.posterWrap,
+				{ width: sp(width), borderRadius: sp(8) },
+			]}>
+			{uri ? (
+				<SmartImage
+					source={{ uri }}
+					style={styles.fillImg}
+					contentFit="cover"
+					transition={0}
+				/>
+			) : (
+				<View style={styles.posterFallback}>
+					<Ionicons
+						name="film-outline"
+						size={sp(18)}
+						color={Palette.onSurfaceVariant}
+					/>
+				</View>
+			)}
+			{badge ? (
 				<View
 					style={[
-						styles.track,
-						{ backgroundColor: m3.surfaceContainerHighest },
+						styles.posterBadge,
+						{ borderRadius: sp(4), paddingHorizontal: sp(4) },
 					]}>
-					{pct > 0 ? (
-						<LinearGradient
-							colors={[m3.primaryContainer, m3.tertiary]}
-							start={{ x: 0, y: 0 }}
-							end={{ x: 1, y: 0 }}
-							style={[styles.fill, { width: `${pct}%` }]}
-						/>
-					) : null}
-				</View>
-				<View style={styles.progressMeta}>
 					<Text
-						style={[styles.meta, { color: m3.onSurfaceVariant }]}
-						numberOfLines={1}>
-						{item.totalBytes > 0
-							? `${formatBytes(item.downloadedBytes) || "0 MB"} / ${formatBytes(item.totalBytes)}`
-							: `%${pct}`}
+						numberOfLines={1}
+						style={[styles.posterBadgeText, { fontSize: sp(8) }]}>
+						{badge}
 					</Text>
-					{speed ? (
-						<Text style={[styles.speed, { color: m3.tertiary }]}>
-							{`${speed}/s`}
-						</Text>
-					) : null}
 				</View>
-			</>
+			) : null}
+		</View>
+	);
+
+	/** İlerleme çubuğu (yalnız aktif indirmelerde). */
+	const renderProgress = (item) => {
+		const pct = Math.max(0, Math.min(100, Math.round((item.progress || 0) * 100)));
+		return (
+			<View
+				style={[
+					styles.progressTrack,
+					{ height: Math.max(3, sp(3)), borderRadius: sp(2) },
+				]}>
+				{pct > 0 ? (
+					<View
+						style={[
+							styles.progressFill,
+							{ width: `${pct}%`, borderRadius: sp(2) },
+						]}
+					/>
+				) : null}
+			</View>
 		);
 	};
 
-	/** Yuvarlak eylem butonu (duraklat/devam, iptal, sil). */
-	const actionButton = ({ key, icon, color, onPress, label }) => (
+	/** Durum satırı: "4.2 MB/sn · 3 dk kaldı (%68)" / "2.4 GB · İndirildi". */
+	const statusLine = (item) => {
+		const pct = Math.round((item.progress || 0) * 100);
+		const size = formatBytes(item.status === "completed" ? bytesOf(item) : 0);
+		if (item.status === "completed") {
+			return { text: metaLine(size, "İndirildi"), tone: "muted" };
+		}
+		if (item.status === "downloading" || item.status === "queued") {
+			const speed = formatSpeed(item.speedBps);
+			const eta = etaLabel(item);
+			return {
+				text: metaLine(speed, eta, `%${pct}`),
+				tone: "accent",
+			};
+		}
+		if (item.status === "failed") {
+			return {
+				text: metaLine(formatBytes(bytesOf(item)), `%${pct}`, "Hata"),
+				tone: "error",
+			};
+		}
+		return {
+			text: metaLine(
+				formatBytes(bytesOf(item)),
+				`${STATUS_LABEL[item.status] || ""} (%${pct})`,
+			),
+			tone: "muted",
+		};
+	};
+
+	/** Yuvarlak eylem butonu. */
+	const actionButton = ({ key, icon, color, onPress, label, busy }) => (
 		<TVPressable
 			key={key}
 			onPress={onPress}
 			accessibilityLabel={label}
-			style={styles.iconBtn}>
-			<Ionicons name={icon} size={20} color={color} />
+			focusedStyle={styles.roundFocus}
+			style={({ focused }) => [
+				styles.roundBtn,
+				{ borderRadius: sp(16) },
+				focused && styles.roundFocused,
+			]}>
+			{busy ? (
+				<ActivityIndicator size="small" color={color} />
+			) : (
+				<Ionicons name={icon} size={sp(17)} color={color} />
+			)}
 		</TVPressable>
 	);
 
-	/** İndirilen (veya indirilmekte olan) tek öğe — film kartı. */
-	const renderMovieCard = (item) => {
-		if (isActiveStatus(item.status)) {
-			const eta = etaLabel(item);
-			const canResume = item.status === "paused" || item.status === "failed";
+	/** Onay kutusu (seçim modu). */
+	const renderCheck = (checked) => (
+		<View
+			style={[
+				styles.check,
+				{ borderRadius: sp(11) },
+				checked && styles.checkOn,
+			]}>
+			{checked ? (
+				<Ionicons
+					name="checkmark"
+					size={sp(14)}
+					color={Palette.onPrimaryContainer}
+				/>
+			) : null}
+		</View>
+	);
+
+	/** Bir öğenin eylem düğmeleri (film kartı ve bölüm satırı ortak). */
+	const renderActions = (item) => {
+		if (item.status === "merged" || item.status === "merging") {
 			return (
-				<View style={[styles.card, { backgroundColor: m3.surfaceContainer }]}>
-					<View style={styles.row}>
-						<View
-							style={[styles.thumbWide, { backgroundColor: m3.surfaceLowest }]}>
-							{renderThumb(item.posterUrl)}
-							<View
-								style={[
-									styles.percentBadge,
-									{ backgroundColor: `${m3.surfaceLowest}E6` },
-								]}>
-								<Ionicons name="sync" size={11} color={m3.tertiary} />
-								<Text style={[styles.percentText, { color: m3.tertiary }]}>
-									{`%${Math.round((item.progress || 0) * 100)}`}
-								</Text>
-							</View>
-						</View>
-						<View style={styles.flex}>
-							<Text
-								style={[styles.title, { color: m3.onSurface }]}
-								numberOfLines={1}>
-								{item.contentTitle}
-							</Text>
-							<Text
-								style={[styles.sub, { color: m3.onSurfaceVariant }]}
-								numberOfLines={1}>
-								{STATUS_LABEL[item.status]}
-							</Text>
-							{renderProgress(item)}
-						</View>
-					</View>
-					<View style={[styles.footer, { backgroundColor: m3.surfaceLow }]}>
-						<View style={styles.footerLeft}>
-							<Ionicons name="download-outline" size={16} color={m3.tertiary} />
-							<Text
-								style={[styles.footerText, { color: m3.onSurfaceVariant }]}
-								numberOfLines={1}>
-								{eta ? `Tahmini: ${eta}` : STATUS_LABEL[item.status]}
-							</Text>
-						</View>
-						<View style={styles.footerRight}>
-							{canResume
-								? actionButton({
-										key: "resume",
-										icon: "play",
-										color: m3.tertiary,
-										onPress: () => resumeDownload(item.id),
-										label: "Devam Et",
-									})
-								: item.status === "downloading" || item.status === "queued"
-									? actionButton({
-											key: "pause",
-											icon: "pause",
-											color: m3.onSurface,
-											onPress: () => pauseDownload(item.id),
-											label: "Duraklat",
-										})
-									: null}
-							{actionButton({
-								key: "cancel",
-								icon: "close",
-								color: m3.error,
-								onPress: () => confirmCancel(item),
-								label: "İptal Et",
-							})}
-						</View>
-					</View>
-					{item.status === "failed" && item.error ? (
-						<Text style={[styles.errorText, { color: m3.error }]} numberOfLines={2}>
-							{item.error}
-						</Text>
-					) : null}
+				<View style={styles.actions}>
+					<ActivityIndicator size="small" color={Palette.tertiary} />
 				</View>
 			);
 		}
-
-		return (
-			<View
-				style={[
-					styles.card,
-					styles.row,
-					{ backgroundColor: m3.surfaceContainer },
-				]}>
-				<View style={[styles.thumbPoster, { backgroundColor: m3.surfaceLowest }]}>
-					{renderThumb(item.posterUrl)}
-					{item.status === "completed" ? (
-						<View style={[styles.checkBadge, { backgroundColor: m3.success }]}>
-							<Ionicons name="checkmark" size={11} color={m3.surfaceLowest} />
-						</View>
-					) : null}
+		if (item.status === "downloading" || item.status === "queued") {
+			return (
+				<View style={styles.actions}>
+					{actionButton({
+						key: "pause",
+						icon: "pause",
+						color: Palette.onSurface,
+						onPress: () => pauseDownload(item.id),
+						label: "Duraklat",
+					})}
+					{actionButton({
+						key: "cancel",
+						icon: "close",
+						color: Palette.error,
+						onPress: () => confirmCancel(item),
+						label: "İptal Et",
+					})}
 				</View>
-				<View style={styles.flex}>
-					<Text
-						style={[styles.title, { color: m3.onSurface }]}
-						numberOfLines={1}>
-						{item.contentTitle}
-					</Text>
-					<Text style={[styles.sub, { color: m3.onSurfaceVariant }]}>
-						{metaLine(
-							"Film",
-							formatBytes(bytesOf(item)),
-							item.exported ? "Dışa aktarıldı" : null,
-						)}
-					</Text>
-				</View>
-				<View style={styles.rowActions}>
-					{item.status === "completed" ? (
-						<TVPressable
-							onPress={() => openPlayer(item)}
-							style={[styles.playPill, { backgroundColor: m3.primaryContainer }]}
-							focusedStyle={styles.pillFocus}>
-							<Ionicons name="play" size={18} color={m3.onPrimaryContainer} />
-							<Text
-								style={[styles.playPillText, { color: m3.onPrimaryContainer }]}>
-								Oynat
-							</Text>
-						</TVPressable>
-					) : null}
-					{item.status === "completed" && !item.exported ? (
-						<TVPressable
-							onPress={() => exportDownload(item)}
-							style={[styles.playPill, { backgroundColor: m3.surfaceContainerHigh }]}
-							focusedStyle={styles.pillFocus}
-							accessibilityLabel="Dışa aktar">
-							{exportingIds[item.id] ? (
-								<ActivityIndicator size="small" color={m3.tertiary} />
-							) : (
-								<Ionicons name="share-outline" size={18} color={m3.tertiary} />
-							)}
-							<Text style={[styles.playPillText, { color: m3.tertiary }]}>
-								Dışa Aktar
-							</Text>
-						</TVPressable>
-					) : null}
+			);
+		}
+		if (
+			item.status === "paused" ||
+			item.status === "failed" ||
+			item.status === "cancelled"
+		) {
+			return (
+				<View style={styles.actions}>
+					{actionButton({
+						key: "resume",
+						icon: "refresh",
+						color: Palette.tertiary,
+						onPress: () => resumeDownload(item.id),
+						label: "Devam Et",
+					})}
 					{actionButton({
 						key: "delete",
 						icon: "trash-outline",
-						color: m3.onSurfaceVariant,
+						color: Palette.onSurfaceVariant,
 						onPress: () => confirmDelete(item),
 						label: "Sil",
 					})}
 				</View>
+			);
+		}
+		// Tamamlandı
+		return (
+			<View style={styles.actions}>
+				{!item.exported
+					? actionButton({
+							key: "export",
+							icon: "share-outline",
+							color: Palette.onSurfaceVariant,
+							onPress: () => exportDownload(item),
+							label: "Dışa aktar",
+							busy: Boolean(exportingIds[item.id]),
+						})
+					: null}
+				{actionButton({
+					key: "delete",
+					icon: "trash-outline",
+					color: Palette.onSurfaceVariant,
+					onPress: () => confirmDelete(item),
+					label: "Sil",
+				})}
+				<TVPressable
+					onPress={() => openPlayer(item)}
+					accessibilityLabel="Oynat"
+					focusedStyle={styles.playFocus}
+					style={({ focused }) => [
+						styles.playBtn,
+						{ borderRadius: sp(20) },
+						focused && styles.playFocused,
+					]}>
+					<Ionicons
+						name="play"
+						size={sp(16)}
+						color={Palette.onPrimaryContainer}
+					/>
+				</TVPressable>
 			</View>
 		);
 	};
@@ -472,122 +601,278 @@ export default function DownloadsScreen() {
 	/** Dizi bölümü satırı (accordion içi). */
 	const renderEpisodeRow = (item) => {
 		const active = isActiveStatus(item.status);
-		const canResume = item.status === "paused" || item.status === "failed";
+		const status = statusLine(item);
+		const quality = qualityLabel(item);
+		const selected = selectedIds.has(item.id);
 		return (
-			<View
+			<TVPressable
 				key={item.id}
-				style={[styles.episodeRow, { backgroundColor: m3.surfaceContainer }]}>
+				onPress={() =>
+					isSelectionMode ? toggleSelected(item.id) : openPlayer(item)
+				}
+				focusedStyle={null}
+				style={({ focused }) => [
+					styles.epRow,
+					{ paddingVertical: sp(9), gap: sp(10) },
+					focused && styles.rowFocused,
+				]}>
+				{isSelectionMode ? renderCheck(selected) : null}
 				<View
-					style={[styles.thumbSmall, { backgroundColor: m3.surfaceLowest }]}>
-					{renderThumb(item.posterUrl)}
-					{active ? (
-						<View
-							style={[
-								styles.percentBadge,
-								{ backgroundColor: `${m3.surfaceLowest}E6` },
-							]}>
-							<Text style={[styles.percentText, { color: m3.tertiary }]}>
-								{`%${Math.round((item.progress || 0) * 100)}`}
-							</Text>
-						</View>
-					) : null}
-				</View>
+					style={[
+						styles.epBar,
+						{
+							backgroundColor: active
+								? Palette.tertiary
+								: item.status === "completed"
+									? Palette.primary
+									: Palette.outlineVariant,
+						},
+					]}
+				/>
 				<View style={styles.flex}>
+					<View style={[styles.epTitleRow, { gap: sp(6) }]}>
+						<Text
+							numberOfLines={1}
+							style={[styles.epTitle, { fontSize: sp(13) }]}>
+							{`${episodeTag(item)}${item.episodeTitle ? `: ${item.episodeTitle}` : ""}`}
+						</Text>
+						{quality ? (
+							<View
+								style={[
+									styles.qualityBadge,
+									{ borderRadius: sp(4), paddingHorizontal: sp(5) },
+								]}>
+								<Text
+									style={[
+										styles.qualityText,
+										{ fontSize: sp(9) },
+									]}>
+									{quality}
+								</Text>
+							</View>
+						) : null}
+					</View>
 					<Text
-						style={[styles.epTitle, { color: m3.onSurface }]}
-						numberOfLines={1}>
-						{episodeLabel(item)}
+						numberOfLines={1}
+						style={[
+							styles.meta,
+							{ fontSize: sp(11) },
+							status.tone === "accent" && styles.metaAccent,
+							status.tone === "error" && styles.metaError,
+						]}>
+						{status.text}
 					</Text>
 					{active ? (
-						renderProgress(item)
-					) : (
+						<View style={{ marginTop: sp(6) }}>{renderProgress(item)}</View>
+					) : null}
+				</View>
+				{renderActions(item)}
+			</TVPressable>
+		);
+	};
+
+	/** Film kartı. */
+	const renderMovieCard = (item) => {
+		const status = statusLine(item);
+		const quality = qualityLabel(item);
+		const selected = selectedIds.has(item.id);
+		return (
+			<TVPressable
+				key={item.id}
+				onPress={() =>
+					isSelectionMode ? toggleSelected(item.id) : openPlayer(item)
+				}
+				focusedStyle={null}
+				style={({ focused }) => [
+					styles.movieCard,
+					{ borderRadius: sp(14), padding: sp(10), gap: sp(10) },
+					item.status === "failed" && styles.movieCardFailed,
+					focused && styles.focusRing,
+				]}>
+				{isSelectionMode ? renderCheck(selected) : null}
+				{renderPoster(item.posterUrl, quality || "Film", 52)}
+				<View style={styles.flex}>
+					<View style={[styles.epTitleRow, { gap: sp(6) }]}>
 						<Text
-							style={[styles.meta, { color: m3.onSurfaceVariant }]}
-							numberOfLines={1}>
-							{metaLine(
-								formatBytes(bytesOf(item)),
-								item.exported ? "Dışa aktarıldı" : null,
-							)}
+							numberOfLines={1}
+							style={[styles.movieTitle, { fontSize: sp(14) }]}>
+							{item.contentTitle}
 						</Text>
-					)}
-				</View>
-				<View style={styles.rowActions}>
-					{active ? (
-						<>
-							{canResume
-								? actionButton({
-										key: "resume",
-										icon: "play",
-										color: m3.tertiary,
-										onPress: () => resumeDownload(item.id),
-										label: "Devam Et",
-									})
-								: actionButton({
-										key: "pause",
-										icon: "pause",
-										color: m3.onSurface,
-										onPress: () => pauseDownload(item.id),
-										label: "Duraklat",
-									})}
-							{actionButton({
-								key: "cancel",
-								icon: "close",
-								color: m3.error,
-								onPress: () => confirmCancel(item),
-								label: "İptal Et",
-							})}
-						</>
-					) : (
-						<>
-							{item.status === "completed" ? (
-								<TVPressable
-									onPress={() => openPlayer(item)}
-									accessibilityLabel="Bölümü Oynat"
+						{isSelectionMode ? null : (
+							<View
+								style={[
+									styles.pluginChip,
+									{ borderRadius: sp(4), paddingHorizontal: sp(5) },
+								]}>
+								<Text
+									numberOfLines={1}
 									style={[
-										styles.playRound,
-										{ backgroundColor: m3.primaryContainer },
-									]}
-									focusedStyle={styles.pillFocus}>
-									<Ionicons
-										name="play"
-										size={18}
-										color={m3.onPrimaryContainer}
-									/>
-								</TVPressable>
-							) : null}
-							{item.status === "completed" && !item.exported ? (
-								<TVPressable
-									onPress={() => exportDownload(item)}
-									accessibilityLabel="Dışa aktar"
-									style={[
-										styles.playRound,
-										{ backgroundColor: m3.surfaceContainerHigh },
-									]}
-									focusedStyle={styles.pillFocus}>
-									{exportingIds[item.id] ? (
-										<ActivityIndicator size="small" color={m3.tertiary} />
-									) : (
-										<Ionicons
-											name="share-outline"
-											size={18}
-											color={m3.tertiary}
-										/>
-									)}
-								</TVPressable>
-							) : null}
-							{actionButton({
-								key: "delete",
-								icon: "trash-outline",
-								color: m3.onSurfaceVariant,
-								onPress: () => confirmDelete(item),
-								label: "Bölümü Sil",
-							})}
-						</>
-					)}
+										styles.pluginText,
+										{ fontSize: sp(8) },
+									]}>
+									{String(item.pluginName || "Film").toUpperCase()}
+								</Text>
+							</View>
+						)}
+					</View>
+					<Text
+						numberOfLines={1}
+						style={[
+							styles.meta,
+							{ fontSize: sp(11), marginTop: sp(2) },
+							status.tone === "accent" && styles.metaAccent,
+							status.tone === "error" && styles.metaError,
+						]}>
+						{status.text}
+					</Text>
+					{item.status === "failed" && item.error ? (
+						<Text
+							numberOfLines={1}
+							style={[
+								styles.errorText,
+								{ fontSize: sp(10), marginTop: sp(2) },
+							]}>
+							{item.error}
+						</Text>
+					) : null}
+					{isActiveStatus(item.status) ? (
+						<View style={{ marginTop: sp(6) }}>{renderProgress(item)}</View>
+					) : null}
 				</View>
+				{renderActions(item)}
+			</TVPressable>
+		);
+	};
+
+	/** Dizi grubu: başlık (accordion) + bölüm satırları, tek kart içinde. */
+	const renderSeriesGroup = (group) => {
+		const isCollapsed = Boolean(collapsed[group.key]);
+		const groupSelected = group.items.every((i) => selectedIds.has(i.id));
+		const subtitle = [
+			`${group.items.length} Bölüm`,
+			formatBytes(group.bytes) ? `${formatBytes(group.bytes)} Toplam` : null,
+		]
+			.filter(Boolean)
+			.join(" · ");
+		const statusParts = [
+			group.activeCount > 0
+				? `${group.activeCount} İndiriliyor`
+				: null,
+			group.completedCount > 0
+				? `${group.completedCount} Tamamlandı`
+				: null,
+		].filter(Boolean);
+
+		return (
+			<View
+				key={group.key}
+				style={[styles.groupCard, { borderRadius: sp(14) }]}>
+				<TVPressable
+					onPress={() =>
+						isSelectionMode
+							? toggleGroupSelected(group)
+							: setCollapsed((prev) => ({
+									...prev,
+									[group.key]: !prev[group.key],
+								}))
+					}
+					focusedStyle={null}
+					style={({ focused }) => [
+						styles.groupHeader,
+						{ padding: sp(10), gap: sp(10) },
+						focused && styles.focusRing,
+					]}>
+					{isSelectionMode ? renderCheck(groupSelected) : null}
+					{renderPoster(
+						group.poster,
+						qualityLabel(group.items[0]) || "Dizi",
+						48,
+					)}
+					<View style={styles.flex}>
+						<Text
+							numberOfLines={1}
+							style={[styles.groupTitle, { fontSize: sp(14) }]}>
+							{group.title}
+						</Text>
+						<Text
+							numberOfLines={1}
+							style={[styles.meta, { fontSize: sp(11) }]}>
+							{subtitle}
+						</Text>
+						{statusParts.length > 0 ? (
+							<Text
+								numberOfLines={1}
+								style={[
+									styles.meta,
+									styles.metaAccent,
+									{ fontSize: sp(11), marginTop: sp(2) },
+								]}>
+								{statusParts.join(" · ")}
+							</Text>
+						) : null}
+					</View>
+					{isSelectionMode ? null : (
+						<Ionicons
+							name={isCollapsed ? "chevron-down" : "chevron-up"}
+							size={sp(18)}
+							color={Palette.onSurfaceVariant}
+						/>
+					)}
+				</TVPressable>
+
+				{!isCollapsed
+					? group.items.map((item) => (
+							<View
+								key={item.id}
+								style={{
+									paddingHorizontal: sp(10),
+									borderTopWidth: 1,
+									borderTopColor: "rgba(229, 225, 228, 0.08)",
+								}}>
+								{renderEpisodeRow(item)}
+							</View>
+						))
+					: null}
 			</View>
 		);
 	};
+
+	/** Alt seçim çubuğu. */
+	const renderSelectionBar = () => (
+		<View
+			style={[
+				styles.selectionBar,
+				{
+					paddingHorizontal: PADDING_HORIZONTAL,
+					paddingTop: sp(10),
+					paddingBottom: sp(10),
+					gap: sp(10),
+				},
+			]}>
+			<View style={[styles.selectionInfo, { gap: sp(8) }]}>
+				<Text style={[styles.selectionCount, { fontSize: sp(12) }]}>
+					{`${selectedIds.size} Seçili`}
+				</Text>
+				<Text style={[styles.selectionBytes, { fontSize: sp(11) }]}>
+					{formatBytes(selectedBytes) || "0 MB"}
+				</Text>
+			</View>
+			<TVPressable
+				onPress={handleBulkDelete}
+				disabled={selectedIds.size === 0}
+				style={({ focused }) => [
+					styles.dangerBtn,
+					{ borderRadius: sp(18), paddingHorizontal: sp(14) },
+					selectedIds.size === 0 && styles.btnDisabled,
+					focused && styles.roundFocused,
+				]}>
+				<Ionicons name="trash-outline" size={sp(15)} color={Palette.error} />
+				<Text style={[styles.dangerText, { fontSize: sp(12) }]}>
+					Seçilenleri Sil
+				</Text>
+			</TVPressable>
+		</View>
+	);
 
 	const canResumeAll = (queue || []).some(
 		(i) => i.status === "paused" || i.status === "failed",
@@ -599,253 +884,372 @@ export default function DownloadsScreen() {
 	const usedPct = disk
 		? Math.min(100, Math.max(0, (usedBytes / disk.total) * 100))
 		: 0;
+	const otherBytes = disk ? Math.max(0, disk.total - disk.free - usedBytes) : 0;
+
+	const tabs = [
+		{ key: "all", label: "Tümü", count: (queue || []).length },
+		{
+			key: "active",
+			label: "İndiriliyor",
+			count: (queue || []).filter((i) => i.status !== "completed").length,
+		},
+		{
+			key: "completed",
+			label: "Tamamlananlar",
+			count: (queue || []).filter((i) => i.status === "completed").length,
+		},
+	];
 
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
-				style={[
-					styles.safeArea,
-					{ paddingLeft: contentPaddingLeft, backgroundColor: colors.bg },
-				]}
+				style={[styles.safeArea, { paddingLeft: contentPaddingLeft }]}
 				edges={["top", "left", "right"]}>
-				<StatusBar barStyle="light-content" backgroundColor={colors.bg} />
-
-				<View
-					style={[
-						styles.header,
-						{ borderBottomColor: colors.border, backgroundColor: colors.cardBg },
-						contentMaxWidth
-							? { width: "100%", maxWidth: contentMaxWidth, alignSelf: "center" }
-							: null,
-					]}>
-					<TVPressable
-						onPress={() => router.back()}
-						style={styles.backButton}
-						focusedStyle={styles.iconFocused}>
-						<Ionicons name="arrow-back" size={24} color={colors.text} />
-					</TVPressable>
-					<Text style={[styles.headerTitle, { color: colors.text }]}>
-						İndirilenler
-					</Text>
-					{canResumeAll ? (
-						<TVPressable
-							onPress={() => resumeAll()}
-							style={styles.backButton}
-							focusedStyle={styles.iconFocused}>
-							<Ionicons name="play-outline" size={24} color={colors.primary} />
-						</TVPressable>
-					) : (
-						<View style={{ width: 40 }} />
-					)}
-				</View>
+				<StatusBar
+					barStyle="light-content"
+					backgroundColor={Palette.background}
+				/>
 
 				<ScrollView
 					contentInsetAdjustmentBehavior="automatic"
 					showsVerticalScrollIndicator={false}
 					contentContainerStyle={[
 						styles.scrollContent,
+						{ paddingHorizontal: PADDING_HORIZONTAL },
 						contentMaxWidth
-							? { alignSelf: "center", width: "100%", maxWidth: contentMaxWidth }
+							? {
+									alignSelf: "center",
+									width: "100%",
+									maxWidth: contentMaxWidth,
+								}
 							: null,
 					]}>
+					{/* 1. BAŞLIK */}
+					<View style={[styles.titleRow, { gap: sp(8) }]}>
+						<Text
+							numberOfLines={1}
+							style={[styles.screenTitle, { fontSize: sp(30) }]}>
+							İndirilenler
+						</Text>
+						{isWide ? (
+							<View
+								style={[
+									styles.countPill,
+									{
+										borderRadius: sp(12),
+										paddingHorizontal: sp(8),
+										paddingVertical: sp(2),
+									},
+								]}>
+								<Text
+									numberOfLines={1}
+									style={[styles.countPillText, { fontSize: sp(11) }]}>
+									{`${(queue || []).length} öğe`}
+								</Text>
+							</View>
+						) : null}
+						<View style={styles.flex} />
+						<TVPressable
+							onPress={() =>
+								isSelectionMode
+									? exitSelection()
+									: setIsSelectionMode(true)
+							}
+							focusedStyle={null}
+							style={({ focused }) => [
+								styles.editPill,
+								{
+									borderRadius: sp(18),
+									paddingHorizontal: sp(12),
+									paddingVertical: sp(7),
+									gap: sp(6),
+								},
+								focused && styles.focusRing,
+							]}>
+							<Ionicons
+								name={
+									isSelectionMode
+										? "close"
+										: "checkmark-circle-outline"
+								}
+								size={sp(15)}
+								color={Palette.onSurface}
+							/>
+							<Text style={[styles.editText, { fontSize: sp(12) }]}>
+								{isSelectionMode ? "Bitti" : "Düzenle"}
+							</Text>
+						</TVPressable>
+						<TVPressable
+							onPress={() => router.push("/(app)/settings/download")}
+							accessibilityLabel="İndirme Ayarları"
+							focusedStyle={null}
+							style={({ focused }) => [
+								styles.iconButton,
+								{ borderRadius: sp(18) },
+								focused && styles.focusRing,
+							]}>
+							<Ionicons
+								name="options-outline"
+								size={sp(17)}
+								color={Palette.onSurface}
+							/>
+						</TVPressable>
+					</View>
+					<Text
+						numberOfLines={1}
+						style={[styles.subtitle, { fontSize: sp(12), marginTop: sp(2) }]}>
+						Çevrimdışı izleme kataloğu
+					</Text>
+
+					{/* 2. DEPOLAMA */}
 					{disk ? (
 						<View
-							style={[styles.storageCard, { backgroundColor: m3.surfaceContainer }]}>
+							style={[
+								styles.storageCard,
+								{
+									borderRadius: sp(14),
+									padding: sp(12),
+									gap: sp(8),
+									marginTop: sp(12),
+								},
+							]}>
 							<View style={styles.storageTop}>
-								<View style={styles.storageLabelRow}>
+								<View style={[styles.storageLabelRow, { gap: sp(8) }]}>
 									<Ionicons
-										name="pie-chart-outline"
-										size={18}
-										color={m3.primaryContainer}
+										name="save-outline"
+										size={sp(15)}
+										color={Palette.onSurfaceVariant}
 									/>
-									<Text style={[styles.storageLabel, { color: m3.onSurface }]}>
-										Depolama Alanı
+									<Text
+										numberOfLines={1}
+										style={[
+											styles.storageLabel,
+											{ fontSize: sp(12) },
+										]}>
+										Cihaz Depolama Durumu
 									</Text>
 								</View>
-								<Text style={[styles.meta, { color: m3.onSurfaceVariant }]}>
+								<Text
+									numberOfLines={1}
+									style={[styles.storageValue, { fontSize: sp(12) }]}>
 									{`${formatBytes(usedBytes) || "0 MB"} / ${formatBytes(disk.total)}`}
 								</Text>
 							</View>
 							<View
 								style={[
-									styles.barTrack,
-									{ backgroundColor: m3.surfaceContainerHighest },
+									styles.storageTrack,
+									{ height: Math.max(4, sp(4)), borderRadius: sp(2) },
 								]}>
 								<View
-									style={{
-										width: `${usedPct}%`,
-										backgroundColor: m3.primaryContainer,
-									}}
+									style={[
+										styles.storageFill,
+										{
+											width: `${usedPct}%`,
+											borderRadius: sp(2),
+										},
+									]}
 								/>
 							</View>
-							<View style={styles.legendRow}>
-								<View style={styles.legendItem}>
+							<View style={[styles.legendRow, { gap: sp(14) }]}>
+								<View style={[styles.legendItem, { gap: sp(6) }]}>
 									<View
-										style={[styles.dot, { backgroundColor: m3.primaryContainer }]}
+										style={[styles.dot, { backgroundColor: Palette.primary }]}
 									/>
-									<Text style={[styles.legendText, { color: m3.onSurfaceVariant }]}>
+									<Text
+										numberOfLines={1}
+										style={[styles.legendText, { fontSize: sp(10) }]}>
 										{`StreamPulse (${formatBytes(usedBytes) || "0 MB"})`}
 									</Text>
 								</View>
-								<View style={styles.legendItem}>
-									<Text style={[styles.legendText, { color: m3.tertiary }]}>
-										{`${formatBytes(disk.free)} Boş`}
+								<View style={[styles.legendItem, { gap: sp(6) }]}>
+									<View
+										style={[
+											styles.dot,
+											{ backgroundColor: Palette.surfaceHighest },
+										]}
+									/>
+									<Text
+										numberOfLines={1}
+										style={[styles.legendText, { fontSize: sp(10) }]}>
+										{`Diğer (${formatBytes(otherBytes)})`}
+									</Text>
+								</View>
+								<View style={[styles.legendItem, { gap: sp(6) }]}>
+									<View
+										style={[styles.dot, { backgroundColor: Palette.surface }]}
+									/>
+									<Text
+										numberOfLines={1}
+										style={[styles.legendText, { fontSize: sp(10) }]}>
+										{`Boş (${formatBytes(disk.free)})`}
 									</Text>
 								</View>
 							</View>
 						</View>
 					) : null}
 
-					{groups.length > 0 ? (
-						<View style={styles.strip}>
-							{canResumeAll || hasActive ? (
+					{/* 3. FİLTRELER */}
+					<ScrollView
+						horizontal
+						showsHorizontalScrollIndicator={false}
+						contentContainerStyle={[
+							styles.tabRow,
+							{ gap: sp(8), paddingVertical: sp(12) },
+						]}>
+						{tabs.map((tab) => {
+							const active = filter === tab.key;
+							return (
 								<TVPressable
-									onPress={() => (canResumeAll ? resumeAll() : pauseAll())}
-									style={[
-										styles.primaryBtn,
-										{ backgroundColor: m3.primaryContainer },
-									]}
-									focusedStyle={styles.pillFocus}>
-									<Ionicons
-										name={canResumeAll ? "play" : "pause"}
-										size={18}
-										color={m3.onPrimaryContainer}
-									/>
+									key={tab.key}
+									onPress={() => setFilter(tab.key)}
+									focusedStyle={null}
+									style={({ focused }) => [
+										styles.tabPill,
+										{
+											borderRadius: sp(18),
+											paddingHorizontal: sp(14),
+											paddingVertical: sp(8),
+											gap: sp(8),
+										},
+										active
+											? styles.tabPillActive
+											: styles.tabPillIdle,
+										focused && styles.focusRing,
+									]}>
 									<Text
+										numberOfLines={1}
 										style={[
-											styles.primaryBtnText,
-											{ color: m3.onPrimaryContainer },
+											styles.tabText,
+											{ fontSize: sp(12) },
+											{
+												color: active
+													? Palette.onPrimary
+													: Palette.onSurfaceVariant,
+											},
 										]}>
-										{canResumeAll ? "Tümünü Devam Ettir" : "Tümünü Duraklat"}
+										{tab.label}
 									</Text>
+									{tab.count > 0 ? (
+										<View
+											style={[
+												styles.tabCountPill,
+												{
+													borderRadius: sp(8),
+													paddingHorizontal: sp(6),
+													paddingVertical: sp(1),
+												},
+												active
+													? styles.tabCountPillActive
+													: null,
+											]}>
+											<Text
+												style={[
+													styles.tabCountText,
+													{ fontSize: sp(10) },
+													{
+														color: active
+															? Palette.onPrimary
+															: Palette.onSurfaceVariant,
+													},
+												]}>
+												{tab.count}
+											</Text>
+										</View>
+									) : null}
 								</TVPressable>
-							) : null}
+							);
+						})}
+					</ScrollView>
+
+					{/* 4. BÖLÜM BAŞLIĞI */}
+					<View style={[styles.sectionRow, { gap: sp(8) }]}>
+						<Text
+							numberOfLines={1}
+							style={[styles.sectionTitle, { fontSize: sp(11) }]}>
+							{`${
+								tabs.find((t) => t.key === filter)?.label || "Tümü"
+							} (${
+								isSelectionMode
+									? `${selectedIds.size} Seçili`
+									: visibleItems.length
+							})`}
+						</Text>
+						<View style={styles.flex} />
+						{isSelectionMode && visibleItems.length > 0 ? (
 							<TVPressable
-								onPress={() => router.push("/(app)/settings/download")}
-								style={[
-									styles.secondaryBtn,
-									{ backgroundColor: m3.surfaceContainerHigh },
-								]}
-								focusedStyle={styles.pillFocus}>
-								<Ionicons name="tune" size={18} color={m3.onSurface} />
+								onPress={toggleSelectAll}
+								focusedStyle={null}
+								style={({ focused }) => [
+									{
+										paddingHorizontal: sp(8),
+										paddingVertical: sp(2),
+										borderRadius: sp(8),
+									},
+									focused && styles.focusRing,
+								]}>
 								<Text
-									style={[styles.secondaryBtnText, { color: m3.onSurface }]}>
-									İndirme Ayarları
+									style={[styles.selectAllText, { fontSize: sp(12) }]}>
+									{allVisibleSelected ? "Seçimi Kaldır" : "Tümünü Seç"}
 								</Text>
 							</TVPressable>
-						</View>
-					) : null}
+						) : canResumeAll || hasActive ? (
+							<TVPressable
+								onPress={() => (canResumeAll ? resumeAll() : pauseAll())}
+								focusedStyle={null}
+								style={({ focused }) => [
+									{
+										paddingHorizontal: sp(8),
+										paddingVertical: sp(2),
+										borderRadius: sp(8),
+									},
+									focused && styles.focusRing,
+								]}>
+								<Text
+									style={[styles.selectAllText, { fontSize: sp(12) }]}>
+									{canResumeAll ? "Tümünü Devam Ettir" : "Tümünü Duraklat"}
+								</Text>
+							</TVPressable>
+						) : null}
+					</View>
 
-					{groups.length === 0 ? (
-						<View
-							style={[
-								styles.emptyCard,
-								{ backgroundColor: colors.cardBg, borderColor: colors.border },
-							]}>
-							<View style={[styles.emptyIconCircle, { backgroundColor: "rgba(37, 99, 235, 0.15)" }]}>
-								<Ionicons name="cloud-download-outline" size={44} color="#2563EB" />
+					{/* 5. LİSTE */}
+					{visibleGroups.length === 0 ? (
+						<View style={[styles.emptyCard, { borderRadius: sp(14) }]}>
+							<View style={[styles.emptyIcon, { borderRadius: sp(26) }]}>
+								<Ionicons
+									name="cloud-download-outline"
+									size={sp(34)}
+									color={Palette.primary}
+								/>
 							</View>
-							<Text style={[styles.emptyTitle, { color: colors.text }]}>
-								İndirme Yok
+							<Text style={[styles.emptyTitle, { fontSize: sp(15) }]}>
+								{(queue || []).length === 0
+									? "İndirme Yok"
+									: "Bu Filtrede İndirme Yok"}
 							</Text>
-							<Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-								İnternet bağlantınız olmadığında kesintisiz film ve dizi
-								izleyebilmeniz için içerikleri indirin. Detay ekranındaki
-								{" \"İndir\""} butonundan başlayabilirsiniz.
+							<Text
+								style={[
+									styles.emptyText,
+									{ fontSize: sp(12), maxWidth: sp(320) },
+								]}>
+								{(queue || []).length === 0
+									? 'İnternet bağlantınız olmadığında kesintisiz izlemek için içerikleri indirin. Detay ekranındaki "İndir" butonundan başlayabilirsiniz.'
+									: "Başka bir sekmeyi deneyin."}
 							</Text>
 						</View>
 					) : (
-						groups.map((group) => {
-							if (!group.isSeries) {
-								return (
-									<View key={group.key} style={styles.fullWidth}>
-										{renderMovieCard(group.items[0])}
-									</View>
-								);
-							}
-							const isCollapsed = Boolean(collapsed[group.key]);
-							return (
-								<View key={group.key} style={styles.fullWidth}>
-									<TVPressable
-										onPress={() =>
-											setCollapsed((prev) => ({
-												...prev,
-												[group.key]: !prev[group.key],
-											}))
-										}
-										style={[
-											styles.card,
-											styles.row,
-											{ backgroundColor: m3.surfaceContainer },
-										]}>
-										<View
-											style={[
-												styles.thumbPoster,
-												{ backgroundColor: m3.surfaceLowest },
-											]}>
-											{renderThumb(group.poster)}
-											<View
-												style={[
-													styles.countBadge,
-													{ backgroundColor: `${m3.surfaceLowest}E6` },
-												]}>
-												<Text
-													style={[styles.percentText, { color: m3.onSurface }]}>
-													{`${group.completedCount} Blm`}
-												</Text>
-											</View>
-										</View>
-										<View style={styles.flex}>
-											<Text
-												style={[styles.title, { color: m3.onSurface }]}
-												numberOfLines={1}>
-												{group.title}
-											</Text>
-											<Text
-												style={[styles.sub, { color: m3.onSurfaceVariant }]}
-												numberOfLines={1}>
-												{metaLine(
-													"Dizi",
-													`${group.completedCount}/${group.items.length} Bölüm Hazır`,
-													formatBytes(group.bytes),
-												)}
-											</Text>
-											{group.completedCount === group.items.length ? (
-												<View style={styles.offlineRow}>
-													<Ionicons
-														name="cloud-offline-outline"
-														size={15}
-														color={m3.tertiary}
-													/>
-													<Text
-														style={[
-															styles.offlineText,
-															{ color: m3.tertiary },
-														]}>
-														Çevrimdışı İzlemeye Hazır
-													</Text>
-												</View>
-											) : null}
-										</View>
-										<View style={styles.rowActions}>
-											<Ionicons
-												name={isCollapsed ? "chevron-down" : "chevron-up"}
-												size={22}
-												color={m3.onSurfaceVariant}
-											/>
-										</View>
-									</TVPressable>
-									{!isCollapsed ? (
-										<View style={styles.groupBody}>
-											{group.items.map((item) => renderEpisodeRow(item))}
-										</View>
-									) : null}
-								</View>
-							);
-						})
+						<View style={{ gap: sp(10) }}>
+							{visibleGroups.map((group) =>
+								group.isSeries
+									? renderSeriesGroup(group)
+									: renderMovieCard(group.items[0]),
+							)}
+						</View>
 					)}
 				</ScrollView>
+
+				{isSelectionMode ? renderSelectionBar() : null}
 
 				<BottomNavigation activeRoute="/(app)/downloads" />
 			</SafeAreaView>
@@ -854,210 +1258,398 @@ export default function DownloadsScreen() {
 }
 
 const styles = StyleSheet.create({
-	safeArea: { flex: 1 },
-	header: {
-		height: 56,
+	safeArea: {
+		flex: 1,
+		backgroundColor: Palette.background,
+	},
+	flex: {
+		flex: 1,
+	},
+	scrollContent: {
+		paddingTop: 8,
+		paddingBottom: 24,
+	},
+
+	/* 1. Başlık */
+	titleRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "space-between",
-		paddingHorizontal: 16,
-		borderBottomWidth: 1,
 	},
-	backButton: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
-		justifyContent: "center",
+	screenTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		letterSpacing: -0.4,
+		flexShrink: 1,
+	},
+	countPill: {
+		backgroundColor: Palette.surfaceHigh,
+	},
+	countPillText: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.semiBold,
+	},
+	subtitle: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
+	},
+	editPill: {
+		flexDirection: "row",
 		alignItems: "center",
+		backgroundColor: Palette.surfaceLow,
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
-	iconFocused: { backgroundColor: "rgba(229, 9, 20, 0.25)" },
-	headerTitle: { fontSize: 18, fontWeight: "700" },
-	scrollContent: { padding: 16, alignItems: "center", gap: 10 },
+	editText: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+	},
+	iconButton: {
+		width: 36,
+		height: 36,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.surfaceLow,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
 
-	// ── Depolama kartı ─────────────────────────────────────────────
-	storageCard: { width: "100%", borderRadius: 12, padding: 14, gap: 8 },
+	/* 2. Depolama */
+	storageCard: {
+		backgroundColor: Palette.surfaceLow,
+	},
 	storageTop: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
 	},
-	storageLabelRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-	storageLabel: { fontSize: 13.5, fontWeight: "600" },
-	barTrack: { height: 10, borderRadius: 5, overflow: "hidden", flexDirection: "row" },
+	storageLabelRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		flexShrink: 1,
+	},
+	storageLabel: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+		flexShrink: 1,
+	},
+	storageValue: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
+	},
+	storageTrack: {
+		backgroundColor: Palette.surfaceHighest,
+		overflow: "hidden",
+		flexDirection: "row",
+	},
+	storageFill: {
+		height: "100%",
+		backgroundColor: Palette.primary,
+	},
 	legendRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "space-between",
+		flexWrap: "wrap",
 	},
-	legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-	dot: { width: 8, height: 8, borderRadius: 4 },
-	legendText: { fontSize: 11.5 },
-
-	// ── Eylem şeridi ───────────────────────────────────────────────
-	strip: { width: "100%", flexDirection: "row", flexWrap: "wrap", gap: 8 },
-	primaryBtn: {
-		height: 44,
-		paddingHorizontal: 16,
-		borderRadius: 22,
+	legendItem: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 6,
+		flexShrink: 1,
 	},
-	primaryBtnText: { fontSize: 13.5, fontWeight: "700" },
-	secondaryBtn: {
-		height: 44,
-		paddingHorizontal: 16,
-		borderRadius: 22,
+	dot: {
+		width: 7,
+		height: 7,
+		borderRadius: 4,
+	},
+	legendText: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
+		flexShrink: 1,
+	},
+
+	/* 3. Filtreler */
+	tabRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 6,
 	},
-	secondaryBtnText: { fontSize: 13, fontWeight: "600" },
-	// Odak halkası: kırmızı zemin üstünde görünür olsun diye beyaz.
-	pillFocus: { borderColor: "#ffffff", borderWidth: 2 },
+	tabPill: {
+		flexDirection: "row",
+		alignItems: "center",
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	tabPillActive: {
+		backgroundColor: Palette.primary,
+	},
+	tabPillIdle: {
+		backgroundColor: Palette.surfaceLow,
+	},
+	tabText: {
+		fontFamily: FontFamily.semiBold,
+	},
+	tabCountPill: {
+		backgroundColor: "rgba(14, 14, 16, 0.28)",
+	},
+	tabCountPillActive: {
+		backgroundColor: "rgba(14, 14, 16, 0.18)",
+	},
+	tabCountText: {
+		fontFamily: FontFamily.bold,
+	},
 
-	// ── Kartlar ────────────────────────────────────────────────────
-	card: { width: "100%", borderRadius: 12, padding: 10, gap: 10 },
-	row: { flexDirection: "row", alignItems: "center", gap: 12 },
-	flex: { flex: 1, minWidth: 0 },
-	title: { fontSize: 16, fontWeight: "700" },
-	sub: { fontSize: 12, marginTop: 1 },
-	meta: { fontSize: 11.5 },
-	speed: { fontSize: 11.5, fontWeight: "700" },
-	errorText: { fontSize: 12 },
+	/* 4. Bölüm başlığı */
+	sectionRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		marginTop: 2,
+		marginBottom: 8,
+	},
+	sectionTitle: {
+		flexShrink: 1,
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.bold,
+		letterSpacing: 1.1,
+		textTransform: "uppercase",
+	},
+	selectAllText: {
+		color: Palette.primary,
+		fontFamily: FontFamily.semiBold,
+	},
 
-	thumbWide: {
-		width: 112,
-		aspectRatio: 16 / 9,
-		borderRadius: 8,
+	/* Kartlar */
+	groupCard: {
+		backgroundColor: Palette.surfaceLow,
 		overflow: "hidden",
 	},
-	thumbSmall: {
-		width: 88,
-		aspectRatio: 16 / 9,
-		borderRadius: 6,
-		overflow: "hidden",
+	groupHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
-	thumbPoster: {
-		width: 64,
+	groupTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+		flexShrink: 1,
+	},
+	movieCard: {
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: Palette.surfaceLow,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	movieCardFailed: {
+		backgroundColor: "rgba(255, 180, 171, 0.06)",
+	},
+	movieTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+		flexShrink: 1,
+	},
+
+	/* Poster */
+	posterWrap: {
 		aspectRatio: 2 / 3,
-		borderRadius: 8,
+		backgroundColor: Palette.surfaceLowest,
 		overflow: "hidden",
 	},
-	fillImg: { width: "100%", height: "100%" },
-	thumbFallback: {
+	fillImg: {
 		width: "100%",
 		height: "100%",
+	},
+	posterFallback: {
+		flex: 1,
 		alignItems: "center",
 		justifyContent: "center",
 	},
-	percentBadge: {
+	posterBadge: {
 		position: "absolute",
-		left: 4,
-		bottom: 4,
-		paddingHorizontal: 5,
-		paddingVertical: 1,
-		borderRadius: 4,
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 2,
+		top: 3,
+		left: 3,
+		backgroundColor: "rgba(14, 14, 16, 0.82)",
 	},
-	percentText: { fontSize: 9.5, fontWeight: "700" },
-	countBadge: {
-		position: "absolute",
-		right: 4,
-		bottom: 4,
-		paddingHorizontal: 4,
-		borderRadius: 4,
-	},
-	checkBadge: {
-		position: "absolute",
-		top: 4,
-		left: 4,
-		width: 16,
-		height: 16,
-		borderRadius: 8,
-		alignItems: "center",
-		justifyContent: "center",
+	posterBadgeText: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		letterSpacing: 0.3,
 	},
 
-	track: { height: 6, borderRadius: 3, overflow: "hidden", marginTop: 8 },
-	fill: { height: "100%", borderRadius: 3 },
-	progressMeta: {
+	/* Bölüm satırı */
+	epRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	epBar: {
+		width: 3,
+		alignSelf: "stretch",
+		borderRadius: 2,
+		minHeight: 24,
+	},
+	epTitleRow: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	epTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+		flexShrink: 1,
+	},
+	qualityBadge: {
+		backgroundColor: Palette.surfaceHigh,
+	},
+	qualityText: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.bold,
+	},
+	pluginChip: {
+		backgroundColor: "rgba(192, 193, 255, 0.14)",
+	},
+	pluginText: {
+		color: Palette.primary,
+		fontFamily: FontFamily.bold,
+		letterSpacing: 0.4,
+	},
+	meta: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
+	},
+	metaAccent: {
+		color: Palette.secondary,
+	},
+	metaError: {
+		color: Palette.error,
+	},
+	errorText: {
+		color: Palette.error,
+		fontFamily: FontFamily.medium,
+	},
+
+	/* İlerleme */
+	progressTrack: {
+		backgroundColor: "rgba(229, 225, 228, 0.16)",
+		overflow: "hidden",
+		flexDirection: "row",
+	},
+	progressFill: {
+		height: "100%",
+		backgroundColor: Palette.primary,
+	},
+
+	/* Eylemler */
+	actions: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+	},
+	roundBtn: {
+		width: 32,
+		height: 32,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.surfaceHigh,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	roundFocused: {
+		borderColor: Palette.primary,
+	},
+	playBtn: {
+		width: 40,
+		height: 40,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.primary,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	playFocused: {
+		borderColor: Palette.onSurface,
+	},
+	playFocus: {
+		borderColor: Palette.onSurface,
+		borderWidth: 2,
+	},
+
+	/* Seçim */
+	check: {
+		width: 22,
+		height: 22,
+		alignItems: "center",
+		justifyContent: "center",
+		borderWidth: 2,
+		borderColor: Palette.outline,
+	},
+	checkOn: {
+		backgroundColor: Palette.primary,
+		borderColor: Palette.primary,
+	},
+	selectionBar: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		marginTop: 4,
+		backgroundColor: Palette.surfaceLow,
 	},
-
-	footer: {
+	selectionInfo: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "space-between",
-		borderRadius: 8,
-		paddingHorizontal: 10,
-		paddingVertical: 4,
 	},
-	footerLeft: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
-	footerText: { fontSize: 11.5 },
-	footerRight: { flexDirection: "row", alignItems: "center", gap: 4 },
-
-	rowActions: { flexDirection: "row", alignItems: "center", gap: 6 },
-	iconBtn: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
-		alignItems: "center",
-		justifyContent: "center",
+	selectionCount: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
 	},
-	playPill: {
-		height: 40,
-		paddingHorizontal: 14,
-		borderRadius: 20,
+	selectionBytes: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
+	},
+	dangerBtn: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 4,
+		gap: 6,
+		paddingVertical: 8,
+		backgroundColor: "rgba(255, 180, 171, 0.16)",
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
-	playPillText: { fontSize: 13, fontWeight: "700" },
-	playRound: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
-		alignItems: "center",
-		justifyContent: "center",
+	dangerText: {
+		color: Palette.error,
+		fontFamily: FontFamily.bold,
+	},
+	btnDisabled: {
+		opacity: 0.4,
 	},
 
-	// ── Dizi accordion ─────────────────────────────────────────────
-	groupBody: { marginTop: 8, gap: 8 },
-	episodeRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 10,
-		borderRadius: 10,
-		padding: 8,
-	},
-	epTitle: { fontSize: 13, fontWeight: "600" },
-	offlineRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 },
-	offlineText: { fontSize: 11.5, fontWeight: "600" },
-
-	// ── Boş durum ──────────────────────────────────────────────────
-	fullWidth: { width: "100%" },
+	/* Boş durum */
 	emptyCard: {
-		width: "100%",
-		borderRadius: 16,
-		padding: 28,
 		alignItems: "center",
-		borderWidth: 1,
-		marginTop: 20,
+		backgroundColor: Palette.surfaceLow,
+		padding: 24,
+		gap: 10,
 	},
-	emptyIconCircle: {
-		width: 80,
-		height: 80,
-		borderRadius: 40,
+	emptyIcon: {
+		width: 52,
+		height: 52,
+		alignItems: "center",
 		justifyContent: "center",
-		alignItems: "center",
-		marginBottom: 16,
+		backgroundColor: "rgba(192, 193, 255, 0.12)",
 	},
-	emptyTitle: { fontSize: 19, fontWeight: "700", textAlign: "center", marginBottom: 8 },
-	emptySubtitle: { fontSize: 13.5, lineHeight: 20, textAlign: "center" },
+	emptyTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+	},
+	emptyText: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
+		textAlign: "center",
+	},
+
+	/* Odak */
+	focusRing: {
+		borderColor: Palette.primary,
+		borderWidth: 2,
+	},
+	rowFocused: {
+		borderColor: Palette.primary,
+	},
 });
