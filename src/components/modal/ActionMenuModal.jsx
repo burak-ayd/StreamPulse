@@ -1,6 +1,7 @@
 import TVPressable, {
 	isTVPressSuppressed,
 } from "@/components/common/TVPressable";
+import { FontFamily, Palette } from "@/constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import React, { useEffect } from "react";
 import {
@@ -130,7 +131,7 @@ export default function ActionMenuModal({
 											action.icon || "ellipse-outline"
 										}
 										size={19}
-										color={action.iconColor || "#38bdf8"}
+										color={action.iconColor || Palette.secondary}
 									/>
 								</View>
 								<View style={styles.actionTextCol}>
@@ -169,19 +170,18 @@ export default function ActionMenuModal({
 const styles = StyleSheet.create({
 	backdrop: {
 		flex: 1,
-		backgroundColor: "rgba(0, 0, 0, 0.75)",
+		backgroundColor: "rgba(0, 0, 0, 0.62)",
 		justifyContent: "flex-end",
 	},
 	sheet: {
-		backgroundColor: "#161B24",
-		borderTopLeftRadius: 24,
-		borderTopRightRadius: 24,
+		backgroundColor: Palette.surfaceLow,
+		borderTopLeftRadius: 20,
+		borderTopRightRadius: 20,
 		borderTopWidth: 1,
-		borderTopColor: "rgba(255, 255, 255, 0.1)",
+		borderTopColor: "rgba(229, 225, 228, 0.08)",
 		paddingTop: 10,
-		paddingBottom: 24,
-		paddingHorizontal: 20,
-		// TV'de alt sayfa ekranın tamamına yayılmasın.
+		paddingBottom: 20,
+		paddingHorizontal: 16,
 		width: "100%",
 		maxWidth: 560,
 		alignSelf: "center",
@@ -190,52 +190,52 @@ const styles = StyleSheet.create({
 		width: 40,
 		height: 4,
 		borderRadius: 2,
-		backgroundColor: "rgba(255, 255, 255, 0.2)",
+		backgroundColor: "rgba(229, 225, 228, 0.20)",
 		alignSelf: "center",
-		marginBottom: 14,
+		marginBottom: 12,
 	},
 	header: {
-		paddingBottom: 14,
+		paddingBottom: 12,
 		borderBottomWidth: 1,
-		borderBottomColor: "rgba(255, 255, 255, 0.08)",
-		marginBottom: 14,
+		borderBottomColor: "rgba(229, 225, 228, 0.08)",
+		marginBottom: 12,
 	},
 	title: {
-		fontSize: 16,
-		fontWeight: "800",
-		color: "#ffffff",
+		fontSize: 15,
+		fontFamily: FontFamily.bold,
+		color: Palette.onSurface,
 		letterSpacing: -0.2,
-		marginBottom: 3,
+		marginBottom: 2,
 	},
 	subtitle: {
-		fontSize: 12,
-		color: "#94a3b8",
+		fontSize: 11,
+		fontFamily: FontFamily.medium,
+		color: Palette.onSurfaceVariant,
 	},
 	actionsScroll: {
 		maxHeight: 340,
 	},
 	actionsList: {
 		gap: 8,
-		marginBottom: 16,
+		marginBottom: 14,
 	},
 	actionRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		padding: 12,
+		padding: 11,
 		borderRadius: 14,
-		backgroundColor: "rgba(30, 37, 50, 0.6)",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.05)",
+		backgroundColor: Palette.surface,
+		borderWidth: 2,
+		borderColor: "transparent",
 		gap: 12,
 	},
 	destructiveRow: {
-		backgroundColor: "rgba(244, 63, 94, 0.08)",
-		borderColor: "rgba(244, 63, 94, 0.2)",
+		backgroundColor: "rgba(255, 180, 171, 0.08)",
 	},
 	iconWrapper: {
-		width: 38,
-		height: 38,
-		borderRadius: 12,
+		width: 36,
+		height: 36,
+		borderRadius: 18,
 		justifyContent: "center",
 		alignItems: "center",
 	},
@@ -244,44 +244,38 @@ const styles = StyleSheet.create({
 	},
 	actionTitle: {
 		fontSize: 13,
-		fontWeight: "700",
-		color: "#f1f5f9",
-		marginBottom: 2,
+		fontFamily: FontFamily.semiBold,
+		color: Palette.onSurface,
+		marginBottom: 1,
 	},
 	actionDesc: {
 		fontSize: 10,
-		color: "#64748b",
+		fontFamily: FontFamily.regular,
+		color: Palette.onSurfaceVariant,
 	},
 	cancelButton: {
 		height: 44,
-		borderRadius: 14,
-		backgroundColor: "#1E2532",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.08)",
+		borderRadius: 18,
+		backgroundColor: Palette.surfaceHigh,
+		borderWidth: 2,
+		borderColor: "transparent",
 		justifyContent: "center",
 		alignItems: "center",
 	},
 	cancelButtonText: {
-		color: "#cbd5e1",
+		color: Palette.onSurface,
 		fontSize: 13,
-		fontWeight: "700",
+		fontFamily: FontFamily.semiBold,
 	},
 	actionRowFocused: {
-		borderWidth: 1.5,
-		borderColor: "#E50914",
-		backgroundColor: "rgba(229, 9, 20, 0.15)",
-		transform: [{ scale: 1.02 }],
+		borderColor: Palette.primary,
+		backgroundColor: "rgba(192, 193, 255, 0.10)",
 	},
 	actionRowDestructiveFocused: {
-		borderWidth: 1.5,
-		borderColor: "#f43f5e",
-		backgroundColor: "rgba(244, 63, 94, 0.2)",
-		transform: [{ scale: 1.02 }],
+		borderColor: Palette.error,
+		backgroundColor: "rgba(255, 180, 171, 0.16)",
 	},
 	cancelButtonFocused: {
-		borderWidth: 2,
-		borderColor: "#FFFFFF",
-		backgroundColor: "rgba(255, 255, 255, 0.15)",
-		transform: [{ scale: 1.03 }],
+		borderColor: Palette.primary,
 	},
 });

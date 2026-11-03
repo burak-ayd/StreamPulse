@@ -1,3 +1,4 @@
+import { FontFamily, Palette } from "@/constants/theme";
 import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import TVPressable, {
 	isTVPressSuppressed,
@@ -30,9 +31,9 @@ import {
 } from "react-native";
 
 const STATUS_CHIPS = [
-	{ key: "watching", label: "İzleniyor", color: "#E50914" },
-	{ key: "planned", label: "Planlandı", color: "#38bdf8" },
-	{ key: "completed", label: "Tamamlandı", color: "#10b981" },
+	{ key: "watching", label: "İzleniyor", color: Palette.primary },
+	{ key: "planned", label: "Planlandı", color: Palette.secondary },
+	{ key: "completed", label: "Tamamlandı", color: Palette.secondary },
 ];
 
 export default function QuickPreviewModal({
@@ -493,7 +494,7 @@ export default function QuickPreviewModal({
 							]}
 							focusedStyle={{
 								borderWidth: 2,
-								borderColor: "#E50914",
+								borderColor: Palette.primary,
 								backgroundColor: "rgba(229, 9, 20, 0.2)",
 								transform: [{ scale: focusScale }],
 							}}
@@ -503,7 +504,7 @@ export default function QuickPreviewModal({
 								<Ionicons
 									name="checkmark"
 									size={sp(15)}
-									color="#ffffff"
+									color={Palette.onSurface}
 								/>
 							)}
 							<Text
@@ -544,7 +545,7 @@ export default function QuickPreviewModal({
 				]}
 				focusedStyle={{
 					borderWidth: 2,
-					borderColor: "#E50914",
+					borderColor: Palette.primary,
 					transform: [{ scale: focusScale }],
 				}}
 				onPress={handleToggleList}
@@ -562,12 +563,12 @@ export default function QuickPreviewModal({
 					size={phone ? sp(18) : sp(20)}
 					color={
 						activeStatus === "watching"
-							? "#E50914"
+							? Palette.primary
 							: activeStatus === "planned"
-								? "#38bdf8"
+								? Palette.secondary
 								: activeStatus === "completed"
 									? "#10B981"
-									: "#ffffff"
+									: Palette.onSurface
 					}
 				/>
 				<Text
@@ -601,7 +602,7 @@ export default function QuickPreviewModal({
 				]}
 				focusedStyle={{
 					borderWidth: 2,
-					borderColor: "#E50914",
+					borderColor: Palette.primary,
 					transform: [{ scale: focusScale }],
 				}}
 				onPress={handleNavigateDetails}
@@ -640,13 +641,13 @@ export default function QuickPreviewModal({
 			]}
 			focusedStyle={{
 				borderWidth: 2,
-				borderColor: "#FFFFFF",
-				backgroundColor: "#b20710",
+				borderColor: Palette.onSurface,
+				backgroundColor: Palette.primaryContainer,
 				transform: [{ scale: focusScale }],
 			}}
 			onPress={handlePlay}
 			activeOpacity={0.85}>
-			<Ionicons name="play" size={sp(21)} color="#ffffff" />
+			<Ionicons name="play" size={sp(21)} color={Palette.onPrimaryContainer} />
 			<Text style={[styles.prominentCtaText, { fontSize: sp(15) }]}>
 				{isSeries ? "1. Bölümü Başlat" : "Oynat"}
 			</Text>
@@ -713,7 +714,7 @@ export default function QuickPreviewModal({
 						<Ionicons
 							name={item.icon}
 							size={phone ? sp(22) : sp(21)}
-							color="#cbd5e1"
+							color={Palette.onSurface}
 						/>
 						<Text
 							style={[
@@ -748,7 +749,7 @@ export default function QuickPreviewModal({
 					]}
 					focusedStyle={{
 						borderWidth: 2,
-						borderColor: "#E50914",
+						borderColor: Palette.primary,
 						transform: [{ scale: focusScale + 0.04 }],
 					}}
 					activeOpacity={0.9}
@@ -820,7 +821,7 @@ export default function QuickPreviewModal({
 								]}
 								focusedStyle={{
 									borderWidth: 2,
-									borderColor: "#E50914",
+									borderColor: Palette.primary,
 									backgroundColor: "rgba(229, 9, 20, 0.2)",
 									transform: [{ scale: focusScale }],
 								}}
@@ -834,7 +835,7 @@ export default function QuickPreviewModal({
 									}
 									size={sp(19)}
 									color={
-										isNotificationOn ? "#E50914" : "#cbd5e1"
+										isNotificationOn ? Palette.primary : Palette.onSurface
 									}
 								/>
 							</TVPressable>
@@ -849,7 +850,7 @@ export default function QuickPreviewModal({
 								]}
 								focusedStyle={{
 									borderWidth: 2,
-									borderColor: "#E50914",
+									borderColor: Palette.primary,
 									backgroundColor: "rgba(229, 9, 20, 0.2)",
 									transform: [{ scale: focusScale }],
 								}}
@@ -858,7 +859,7 @@ export default function QuickPreviewModal({
 								<Ionicons
 									name={isFav ? "heart" : "heart-outline"}
 									size={sp(19)}
-									color={isFav ? "#E50914" : "#cbd5e1"}
+									color={isFav ? Palette.primary : Palette.onSurface}
 								/>
 							</TVPressable>
 						</View>
@@ -980,7 +981,7 @@ export default function QuickPreviewModal({
 							borderWidth: 1,
 							borderColor: "rgba(255, 255, 255, 0.14)",
 							paddingTop: 0,
-							backgroundColor: "#111621",
+							backgroundColor: Palette.surfaceLow,
 							shadowOpacity: 0.75,
 						},
 						// Telefon: daha uzun bottom-sheet, tam yuvarlak üst köşeler.
@@ -1001,14 +1002,14 @@ export default function QuickPreviewModal({
 							style={styles.phoneCloseBtn}
 							focusedStyle={{
 								borderWidth: 2,
-								borderColor: "#E50914",
+								borderColor: Palette.primary,
 								transform: [{ scale: focusScale }],
 							}}
 							activeOpacity={0.75}>
 							<Ionicons
 								name="close"
 								size={sp(18)}
-								color="#ffffff"
+								color={Palette.onSurface}
 							/>
 						</TVPressable>
 					) : null}
@@ -1046,7 +1047,7 @@ export default function QuickPreviewModal({
 								style={styles.undoButton}
 								focusedStyle={{
 									borderWidth: 2,
-									borderColor: "#FFFFFF",
+									borderColor: Palette.onSurface,
 									borderRadius: sp(8),
 									transform: [{ scale: focusScale }],
 								}}
@@ -1142,8 +1143,8 @@ export default function QuickPreviewModal({
 										]}
 										focusedStyle={{
 											borderWidth: 2,
-											borderColor: "#FFFFFF",
-											backgroundColor: "#b20710",
+											borderColor: Palette.onSurface,
+											backgroundColor: Palette.primaryContainer,
 											transform: [
 												{ scale: focusScale + 0.08 },
 											],
@@ -1153,7 +1154,7 @@ export default function QuickPreviewModal({
 										<Ionicons
 											name="play"
 											size={sp(30)}
-											color="#ffffff"
+											color={Palette.onSurface}
 										/>
 									</TVPressable>
 
@@ -1189,7 +1190,7 @@ export default function QuickPreviewModal({
 											style={styles.muteButton}
 											focusedStyle={{
 												borderWidth: 2,
-												borderColor: "#FFFFFF",
+												borderColor: Palette.onSurface,
 												borderRadius: sp(20),
 												transform: [
 													{ scale: focusScale },
@@ -1202,7 +1203,7 @@ export default function QuickPreviewModal({
 														: "volume-high-outline"
 												}
 												size={sp(20)}
-												color="#ffffff"
+												color={Palette.onSurface}
 											/>
 										</TVPressable>
 									</View>
@@ -1245,7 +1246,7 @@ export default function QuickPreviewModal({
 										]}
 										focusedStyle={{
 											borderWidth: 2,
-											borderColor: "#E50914",
+											borderColor: Palette.primary,
 											transform: [
 												{ scale: focusScale + 0.04 },
 											],
@@ -1374,7 +1375,7 @@ export default function QuickPreviewModal({
 												]}
 												focusedStyle={{
 													borderWidth: 2,
-													borderColor: "#E50914",
+													borderColor: Palette.primary,
 													backgroundColor:
 														"rgba(229, 9, 20, 0.2)",
 													transform: [
@@ -1394,8 +1395,8 @@ export default function QuickPreviewModal({
 													size={sp(20)}
 													color={
 														isNotificationOn
-															? "#E50914"
-															: "#cbd5e1"
+															? Palette.primary
+															: Palette.onSurface
 													}
 												/>
 											</TVPressable>
@@ -1411,7 +1412,7 @@ export default function QuickPreviewModal({
 												]}
 												focusedStyle={{
 													borderWidth: 2,
-													borderColor: "#E50914",
+													borderColor: Palette.primary,
 													backgroundColor:
 														"rgba(229, 9, 20, 0.2)",
 													transform: [
@@ -1429,8 +1430,8 @@ export default function QuickPreviewModal({
 													size={sp(21)}
 													color={
 														isFav
-															? "#E50914"
-															: "#cbd5e1"
+															? Palette.primary
+															: Palette.onSurface
 													}
 												/>
 											</TVPressable>
@@ -1570,7 +1571,7 @@ const styles = StyleSheet.create({
 		justifyContent: "flex-end",
 	},
 	sheetContainer: {
-		backgroundColor: "#121620",
+		backgroundColor: Palette.surfaceLow,
 		borderTopLeftRadius: 26,
 		borderTopRightRadius: 26,
 		borderTopWidth: 1,
@@ -1623,7 +1624,7 @@ const styles = StyleSheet.create({
 	},
 	toastText: {
 		color: "#10B981",
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		flex: 1,
 	},
 	undoButton: {
@@ -1631,8 +1632,8 @@ const styles = StyleSheet.create({
 		paddingVertical: 4,
 	},
 	undoButtonText: {
-		color: "#cbd5e1",
-		fontWeight: "700",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
 	},
 
 	scrollContent: {},
@@ -1673,23 +1674,23 @@ const styles = StyleSheet.create({
 		width: 6,
 		height: 6,
 		borderRadius: 3,
-		backgroundColor: "#ffffff",
+		backgroundColor: Palette.onSurface,
 	},
 	liveBadgeText: {
-		color: "#ffffff",
-		fontWeight: "700",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
 	},
 	top10Badge: {
 		backgroundColor: "rgba(0, 0, 0, 0.7)",
 		borderWidth: 1,
-		borderColor: "#E50914",
+		borderColor: Palette.primary,
 		paddingHorizontal: 6,
 		paddingVertical: 2,
 		borderRadius: 4,
 	},
 	top10Text: {
-		color: "#E50914",
-		fontWeight: "800",
+		color: Palette.primary,
+		fontFamily: FontFamily.bold,
 	},
 	centerPlayBtn: {
 		borderWidth: 1.5,
@@ -1719,12 +1720,12 @@ const styles = StyleSheet.create({
 	trailerProgressFill: {
 		width: "25%",
 		height: "100%",
-		backgroundColor: "#E50914",
+		backgroundColor: Palette.primaryContainer,
 		borderRadius: 1.5,
 	},
 	trailerTimeText: {
-		color: "#cbd5e1",
-		fontWeight: "600",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
 	},
 	muteButton: {
 		padding: 4,
@@ -1751,7 +1752,7 @@ const styles = StyleSheet.create({
 	posterSlot: {},
 	posterWrapper: {
 		overflow: "hidden",
-		backgroundColor: "#161B24",
+		backgroundColor: Palette.surfaceLow,
 		borderWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.15)",
 		position: "relative",
@@ -1767,11 +1768,11 @@ const styles = StyleSheet.create({
 	},
 	posterTopBadge: {
 		position: "absolute",
-		backgroundColor: "#E50914",
+		backgroundColor: Palette.primaryContainer,
 	},
 	posterTopBadgeText: {
-		color: "#ffffff",
-		fontWeight: "800",
+		color: Palette.onPrimaryContainer,
+		fontFamily: FontFamily.bold,
 		letterSpacing: 0.3,
 	},
 	posterHdBadge: {
@@ -1781,8 +1782,8 @@ const styles = StyleSheet.create({
 		borderColor: "rgba(255, 255, 255, 0.2)",
 	},
 	posterHdText: {
-		color: "#cbd5e1",
-		fontWeight: "700",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
 	},
 
 	/* Details Column */
@@ -1797,8 +1798,8 @@ const styles = StyleSheet.create({
 	},
 	movieTitle: {
 		flex: 1,
-		fontWeight: "800",
-		color: "#ffffff",
+		fontFamily: FontFamily.bold,
+		color: Palette.onSurface,
 		letterSpacing: -0.3,
 	},
 	headerIconActions: {
@@ -1825,15 +1826,15 @@ const styles = StyleSheet.create({
 		borderColor: "rgba(255, 255, 255, 0.08)",
 	},
 	typeBadgeText: {
-		color: "#e2e8f0",
-		fontWeight: "700",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
 	},
 	metaYearText: {
-		color: "#94a3b8",
-		fontWeight: "600",
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.semiBold,
 	},
 	metaDot: {
-		color: "#64748b",
+		color: Palette.outline,
 	},
 	ratingBox: {
 		flexDirection: "row",
@@ -1842,7 +1843,7 @@ const styles = StyleSheet.create({
 	},
 	ratingText: {
 		color: "#F5C518",
-		fontWeight: "800",
+		fontFamily: FontFamily.bold,
 	},
 	hdrBadge: {
 		borderWidth: 1,
@@ -1852,12 +1853,12 @@ const styles = StyleSheet.create({
 		borderRadius: 3,
 	},
 	hdrText: {
-		color: "#94a3b8",
-		fontWeight: "700",
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.bold,
 	},
 
 	synopsisText: {
-		color: "#94a3b8",
+		color: Palette.onSurfaceVariant,
 	},
 
 	/* Durumu Güncelle Section (Screen 2) */
@@ -1872,13 +1873,13 @@ const styles = StyleSheet.create({
 		marginBottom: 8,
 	},
 	statusSectionTitle: {
-		fontWeight: "800",
-		color: "#94a3b8",
+		fontFamily: FontFamily.bold,
+		color: Palette.onSurfaceVariant,
 		letterSpacing: 0.6,
 	},
 	statusSectionSub: {
 		fontSize: 10,
-		color: "#64748b",
+		color: Palette.outline,
 	},
 	statusChipsScroll: {
 		paddingVertical: 2,
@@ -1886,21 +1887,21 @@ const styles = StyleSheet.create({
 	statusChip: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: "#1A202D",
+		backgroundColor: Palette.surfaceLow,
 		borderWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.08)",
 	},
 	statusChipActive: {
-		backgroundColor: "#E50914",
-		borderColor: "#E50914",
+		backgroundColor: Palette.primaryContainer,
+		borderColor: Palette.primary,
 	},
 	statusChipText: {
-		color: "#cbd5e1",
-		fontWeight: "600",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
 	},
 	statusChipTextActive: {
-		color: "#ffffff",
-		fontWeight: "700",
+		color: Palette.onPrimaryContainer,
+		fontFamily: FontFamily.bold,
 	},
 
 	/* Eylem Butonları (Grid) */
@@ -1921,15 +1922,15 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(16, 185, 129, 0.1)",
 	},
 	actionBtnSecondaryText: {
-		fontWeight: "700",
-		color: "#ffffff",
+		fontFamily: FontFamily.bold,
+		color: Palette.onSurface,
 	},
 	actionBtnPrimary: {
 		flex: 1.25,
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "#ffffff",
+		backgroundColor: Palette.onSurface,
 		shadowColor: "#000",
 		shadowOffset: { width: 0, height: 2 },
 		shadowOpacity: 0.3,
@@ -1937,7 +1938,7 @@ const styles = StyleSheet.create({
 		elevation: 3,
 	},
 	actionBtnPrimaryText: {
-		fontWeight: "800",
+		fontFamily: FontFamily.bold,
 		color: "#000000",
 	},
 
@@ -1946,16 +1947,16 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "#E50914",
-		shadowColor: "#E50914",
+		backgroundColor: Palette.primaryContainer,
+		shadowColor: Palette.primary,
 		shadowOffset: { width: 0, height: 4 },
 		shadowOpacity: 0.35,
 		shadowRadius: 8,
 		elevation: 5,
 	},
 	prominentCtaText: {
-		color: "#ffffff",
-		fontWeight: "800",
+		color: Palette.onPrimaryContainer,
+		fontFamily: FontFamily.bold,
 		letterSpacing: 0.2,
 	},
 
@@ -1971,8 +1972,8 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 	},
 	subActionLabel: {
-		fontWeight: "600",
-		color: "#94a3b8",
+		fontFamily: FontFamily.semiBold,
+		color: Palette.onSurfaceVariant,
 	},
 
 	homeIndicatorBar: {

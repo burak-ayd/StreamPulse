@@ -40,9 +40,9 @@
  *     `contentMaxWidth` ile ortalanıyor.
  *  Metin/ikon ölçüleri `useTvMetrics().sp()` ile ölçeklenir (1080p'de 1.2×).
  */
+import { FontFamily, Palette } from "@/constants/theme";
 import TVPressable from "@/components/common/TVPressable";
 import { useAppUpdate } from "@/context/AppUpdateContext";
-import { useThemeContext } from "@/context/ThemeContext";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -67,7 +67,6 @@ const BANNER_EDGE = 18;
 
 function BannerCard({
 	release,
-	colors,
 	isTV,
 	sp,
 	radius,
@@ -222,8 +221,8 @@ function BannerCard({
 		height: ringSize,
 		borderWidth: ringWidth,
 		borderRadius: ringSize / 2,
-		borderTopColor: colors.primary,
-		borderRightColor: colors.primary,
+		borderTopColor: Palette.primary,
+		borderRightColor: Palette.primary,
 		borderBottomColor: "transparent",
 		borderLeftColor: "transparent",
 	};
@@ -233,8 +232,8 @@ function BannerCard({
 			style={[
 				styles.card,
 				{
-					backgroundColor: colors.cardBg,
-					borderColor: isUrgent ? colors.primary : colors.border,
+					backgroundColor: Palette.surfaceLow,
+					borderColor: isUrgent ? Palette.primary : "rgba(229, 225, 228, 0.10)",
 					opacity: slide,
 					transform: [{ translateY }],
 					width: "100%",
@@ -247,7 +246,7 @@ function BannerCard({
 			<TVPressable
 				style={styles.pressArea}
 				focusedStyle={{
-					backgroundColor: colors.border,
+					backgroundColor: "rgba(229, 225, 228, 0.10)",
 					borderRadius: radius - 4,
 				}}
 				// TV'de odak buraya gelsin; aksi halde kumandayla banner'a
@@ -260,7 +259,7 @@ function BannerCard({
 					style={[
 						styles.iconBox,
 						{
-							backgroundColor: colors.primary,
+							backgroundColor: Palette.primary,
 							width: iconSize,
 							height: iconSize,
 							borderRadius: iconSize / 2,
@@ -269,7 +268,7 @@ function BannerCard({
 					<Ionicons
 						name="cloud-download-outline"
 						size={sp(20)}
-						color="#ffffff"
+						color={Palette.onSurface}
 					/>
 				</View>
 
@@ -277,14 +276,14 @@ function BannerCard({
 					<Text
 						style={[
 							styles.title,
-							{ color: colors.text, fontSize: sp(15) },
+							{ color: Palette.onSurface, fontSize: sp(15) },
 						]}>
 						Yeni sürüm yayında
 					</Text>
 					<Text
 						style={[
 							styles.subtitle,
-							{ color: colors.textSecondary, fontSize: sp(13) },
+							{ color: Palette.onSurfaceVariant, fontSize: sp(13) },
 						]}
 						numberOfLines={1}>
 						v{release.version} • {release.sizeMB} MB —{" "}
@@ -306,7 +305,7 @@ function BannerCard({
 							{
 								width: patchWidth,
 								height: patchHeight,
-								backgroundColor: colors.primary,
+								backgroundColor: Palette.primary,
 								left: (ringSize - patchWidth) / 2,
 								top: ringSize / 2 + ringRadius - patchHeight / 2,
 							},
@@ -360,7 +359,7 @@ function BannerCard({
 						},
 					]}
 					focusedStyle={{
-						backgroundColor: colors.border,
+						backgroundColor: "rgba(229, 225, 228, 0.10)",
 						borderRadius: closeSize / 2,
 					}}
 					accessibilityRole="button"
@@ -368,7 +367,7 @@ function BannerCard({
 					<Ionicons
 						name="close"
 						size={sp(18)}
-						color={isUrgent ? colors.primary : colors.textSecondary}
+						color={isUrgent ? Palette.primary : Palette.onSurfaceVariant}
 					/>
 				</TVPressable>
 			</View>
@@ -377,7 +376,6 @@ function BannerCard({
 }
 
 export default function UpdateBanner() {
-	const { colors } = useThemeContext();
 	const { bannerVisible, release, openSheet, dismissBanner, sheetVisible } =
 		useAppUpdate();
 	const insets = useSafeAreaInsets();
@@ -411,7 +409,6 @@ export default function UpdateBanner() {
 			pointerEvents="box-none">
 			<BannerCard
 				release={release}
-				colors={colors}
 				isTV={isTV}
 				sp={sp}
 				radius={isTV ? sp(16) : 14}
@@ -463,7 +460,7 @@ const styles = StyleSheet.create({
 		marginLeft: 12,
 	},
 	title: {
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	subtitle: {
 		marginTop: 2,

@@ -18,8 +18,8 @@
  * `onRequestClose` ile kapatır — ActionMenuModal kalıbı.
  */
 
+import { FontFamily, Palette } from "@/constants/theme";
 import TVPressable from "@/components/common/TVPressable";
-import { useThemeContext } from "@/context/ThemeContext";
 import { extractVideoSources } from "@/services/api";
 import { DownloadManager } from "@/services/downloadManager";
 import {
@@ -42,7 +42,7 @@ import {
 	View,
 } from "react-native";
 
-const ACCENT = "#38bdf8";
+const ACCENT = Palette.secondary;
 
 /** Kaynağın kullanıcının göreceği etiketi: extractor + kalite ipucu. */
 function sourceLabel(source) {
@@ -62,7 +62,6 @@ export default function DownloadConfigModal({
 	// Sağlayıcıdan gelir (döngüsel import olmasın diye context yerine prop).
 	enqueueDownload,
 }) {
-	const { colors, theme } = useThemeContext();
 
 	const [loading, setLoading] = useState(false);
 	const [loadError, setLoadError] = useState(null);
@@ -299,10 +298,10 @@ export default function DownloadConfigModal({
 		}
 	};
 
-	const surfaceBg = theme === "dark" ? "#161B24" : "#ffffff";
-	const surfaceBorder = theme === "dark" ? "#232A36" : "#E2E8F0";
-	const textColor = colors.text || "#ffffff";
-	const mutedColor = colors.textSecondary || "#9ca3af";
+	const surfaceBg = Palette.surfaceLow;
+	const surfaceBorder = "rgba(229, 225, 228, 0.10)";
+	const textColor = Palette.onSurface;
+	const mutedColor = Palette.onSurfaceVariant;
 
 	/** Radyo satırı: seçim + etiket. Pasif satırlar seçilemez. */
 	const renderOptionRow = ({ key, label, note, selected, disabled, onPress }) => (
@@ -383,7 +382,7 @@ export default function DownloadConfigModal({
 							</View>
 						) : loadError ? (
 							<View style={styles.centerBox}>
-								<Ionicons name="alert-circle-outline" size={34} color="#f43f5e" />
+								<Ionicons name="alert-circle-outline" size={34} color={Palette.error} />
 								<Text style={[styles.hint, { color: mutedColor }]}>{loadError}</Text>
 								<TVPressable style={styles.retryBtn} onPress={loadSources}>
 									<Text style={styles.retryText}>Tekrar Dene</Text>
@@ -498,15 +497,15 @@ export default function DownloadConfigModal({
 								styles.startBtn,
 								{
 									backgroundColor:
-										!hasDirectSource || loading || starting ? "#1e293b" : "#E50914",
-									borderColor: focused ? "#ffffff" : "transparent",
+										!hasDirectSource || loading || starting ? Palette.surfaceHigh : Palette.primary,
+									borderColor: focused ? Palette.onSurface : "transparent",
 								},
 							]}>
 							{starting ? (
-								<ActivityIndicator size="small" color="#ffffff" />
+								<ActivityIndicator size="small" color={Palette.onSurface} />
 							) : (
 								<>
-									<Ionicons name="download" size={18} color="#ffffff" />
+									<Ionicons name="download" size={18} color={Palette.onSurface} />
 									<Text style={styles.startText}>İndirmeyi Başlat</Text>
 								</>
 							)}
@@ -543,9 +542,9 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 	},
-	headerTitle: { fontSize: 16, fontWeight: "700" },
+	headerTitle: { fontSize: 16, fontFamily: FontFamily.bold },
 	body: { padding: 16, gap: 6 },
-	contentTitle: { fontSize: 15, fontWeight: "600", marginBottom: 12 },
+	contentTitle: { fontSize: 15, fontFamily: FontFamily.semiBold, marginBottom: 12 },
 	sectionTitleRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -553,7 +552,7 @@ const styles = StyleSheet.create({
 		marginTop: 10,
 		marginBottom: 4,
 	},
-	sectionTitle: { fontSize: 12, fontWeight: "700", letterSpacing: 0.5 },
+	sectionTitle: { fontSize: 12, fontFamily: FontFamily.bold, letterSpacing: 0.5 },
 	optionRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -564,17 +563,17 @@ const styles = StyleSheet.create({
 		borderRadius: 10,
 		marginBottom: 6,
 	},
-	optionLabel: { fontSize: 14, fontWeight: "600" },
+	optionLabel: { fontSize: 14, fontFamily: FontFamily.semiBold },
 	optionNote: { fontSize: 11.5, marginTop: 1 },
 	centerBox: { alignItems: "center", paddingVertical: 28, gap: 10 },
 	hint: { fontSize: 13, textAlign: "center" },
 	retryBtn: {
-		backgroundColor: "#E50914",
+		backgroundColor: Palette.primaryContainer,
 		paddingHorizontal: 18,
 		paddingVertical: 9,
 		borderRadius: 10,
 	},
-	retryText: { color: "#ffffff", fontWeight: "700", fontSize: 13 },
+	retryText: { color: Palette.onPrimaryContainer, fontFamily: FontFamily.bold, fontSize: 13 },
 	footer: { padding: 14 },
 	startBtn: {
 		flexDirection: "row",
@@ -585,5 +584,5 @@ const styles = StyleSheet.create({
 		borderRadius: 12,
 		borderWidth: 1,
 	},
-	startText: { color: "#ffffff", fontWeight: "700", fontSize: 15 },
+	startText: { color: Palette.onSurface, fontFamily: FontFamily.bold, fontSize: 15 },
 });

@@ -13,10 +13,10 @@
  * odaklanabilir DEĞİL: odak oraya kaçarsa kullanıcı geri dönemez.
  * Ölçüler `useTvMetrics().sp()` ile ölçeklenir.
  */
+import { FontFamily, Palette } from "@/constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import TVPressable from "@/components/common/TVPressable";
 import { useAppUpdate } from "@/context/AppUpdateContext";
-import { useThemeContext } from "@/context/ThemeContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import React from "react";
 import {
@@ -47,7 +47,6 @@ function formatDate(value) {
 }
 
 export default function UpdateSheet() {
-	const { colors } = useThemeContext();
 	const insets = useSafeAreaInsets();
 	const { isTV, sp, gutter } = useTvMetrics();
 	const {
@@ -86,7 +85,7 @@ export default function UpdateSheet() {
 		...styles.focusRing,
 	};
 	const secondaryFocusedStyle = {
-		backgroundColor: colors.border,
+		backgroundColor: "rgba(229, 225, 228, 0.10)",
 		...styles.focusRing,
 	};
 	const linkFocusedStyle = {
@@ -98,18 +97,18 @@ export default function UpdateSheet() {
 		if (isChecking) {
 			return (
 				<View style={styles.centered}>
-					<ActivityIndicator color={colors.primary} size="large" />
+					<ActivityIndicator color={Palette.primary} size="large" />
 					<Text
 						style={[
 							styles.statusText,
-							{ color: colors.text, fontSize: sp(16) },
+							{ color: Palette.onSurface, fontSize: sp(16) },
 						]}>
 						Güncellemeler kontrol ediliyor…
 					</Text>
 					<Text
 						style={[
 							styles.statusHint,
-							{ color: colors.textSecondary, fontSize: sp(13) },
+							{ color: Palette.onSurfaceVariant, fontSize: sp(13) },
 						]}>
 						GitHub yayınlarına bakılıyor
 					</Text>
@@ -124,7 +123,7 @@ export default function UpdateSheet() {
 						style={[
 							styles.iconCircle,
 							{
-								backgroundColor: colors.border,
+								backgroundColor: "rgba(229, 225, 228, 0.10)",
 								width: sp(62),
 								height: sp(62),
 								borderRadius: sp(31),
@@ -133,20 +132,20 @@ export default function UpdateSheet() {
 						<Ionicons
 							name="information-circle-outline"
 							size={sp(30)}
-							color={colors.textSecondary}
+							color={Palette.onSurfaceVariant}
 						/>
 					</View>
 					<Text
 						style={[
 							styles.statusText,
-							{ color: colors.text, fontSize: sp(16) },
+							{ color: Palette.onSurface, fontSize: sp(16) },
 						]}>
 						Güncelleme kullanılamıyor
 					</Text>
 					<Text
 						style={[
 							styles.statusHint,
-							{ color: colors.textSecondary, fontSize: sp(13) },
+							{ color: Palette.onSurfaceVariant, fontSize: sp(13) },
 						]}>
 						{disabledReason}
 					</Text>
@@ -161,7 +160,7 @@ export default function UpdateSheet() {
 						style={[
 							styles.iconCircle,
 							{
-								backgroundColor: `${colors.primary}22`,
+								backgroundColor: `${Palette.primary}22`,
 								width: sp(62),
 								height: sp(62),
 								borderRadius: sp(31),
@@ -170,20 +169,20 @@ export default function UpdateSheet() {
 						<Ionicons
 							name={error ? "alert-circle-outline" : "checkmark-circle-outline"}
 							size={sp(30)}
-							color={error ? "#EF4444" : colors.primary}
+							color={error ? "#EF4444" : Palette.primary}
 						/>
 					</View>
 					<Text
 						style={[
 							styles.statusText,
-							{ color: colors.text, fontSize: sp(16) },
+							{ color: Palette.onSurface, fontSize: sp(16) },
 						]}>
 						{error ? "Kontrol tamamlanamadı" : "Uygulamanız güncel"}
 					</Text>
 					<Text
 						style={[
 							styles.statusHint,
-							{ color: colors.textSecondary, fontSize: sp(13) },
+							{ color: Palette.onSurfaceVariant, fontSize: sp(13) },
 						]}>
 						{error || statusMessage || `v${currentVersion} yüklü`}
 					</Text>
@@ -198,7 +197,7 @@ export default function UpdateSheet() {
 						style={[
 							styles.badge,
 							{
-								backgroundColor: `${colors.primary}22`,
+								backgroundColor: `${Palette.primary}22`,
 								paddingHorizontal: isTV ? sp(10) : 10,
 								paddingVertical: isTV ? sp(4) : 4,
 								borderRadius: isTV ? sp(8) : 8,
@@ -207,7 +206,7 @@ export default function UpdateSheet() {
 						<Text
 							style={[
 								styles.badgeText,
-								{ color: colors.primary, fontSize: sp(13) },
+								{ color: Palette.primary, fontSize: sp(13) },
 							]}>
 							v{release.version}
 						</Text>
@@ -215,7 +214,7 @@ export default function UpdateSheet() {
 					<Text
 						style={[
 							styles.metaText,
-							{ color: colors.textSecondary, fontSize: sp(13) },
+							{ color: Palette.onSurfaceVariant, fontSize: sp(13) },
 						]}>
 						{release.sizeMB} MB
 						{publishedAt ? ` • ${publishedAt}` : ""}
@@ -229,14 +228,14 @@ export default function UpdateSheet() {
 					<Text
 						style={[
 							styles.notesTitle,
-							{ color: colors.text, fontSize: sp(13) },
+							{ color: Palette.onSurface, fontSize: sp(13) },
 						]}>
 						Sürüm notları
 					</Text>
 					<Text
 						style={[
 							styles.notesBody,
-							{ color: colors.textSecondary, fontSize: sp(14) },
+							{ color: Palette.onSurfaceVariant, fontSize: sp(14) },
 						]}>
 						{release.notes}
 					</Text>
@@ -246,7 +245,7 @@ export default function UpdateSheet() {
 					<Text
 						style={[
 							styles.statusHint,
-							{ color: colors.textSecondary, fontSize: sp(13), marginTop: 12 },
+							{ color: Palette.onSurfaceVariant, fontSize: sp(13), marginTop: 12 },
 						]}>
 						Sistem yükleyicisi açıldı — yeni sürümü yükleyin.
 					</Text>
@@ -258,14 +257,14 @@ export default function UpdateSheet() {
 							<Text
 								style={[
 									styles.progressLabel,
-									{ color: colors.text, fontSize: sp(13) },
+									{ color: Palette.onSurface, fontSize: sp(13) },
 								]}>
 								{isInstalling ? "Kuruluyor…" : "İndiriliyor…"}
 							</Text>
 							<Text
 								style={[
 									styles.progressLabel,
-									{ color: colors.textSecondary, fontSize: sp(13) },
+									{ color: Palette.onSurfaceVariant, fontSize: sp(13) },
 								]}>
 								{isInstalling ? "" : `%${Math.round(progress)}`}
 							</Text>
@@ -273,13 +272,13 @@ export default function UpdateSheet() {
 						<View
 							style={[
 								styles.progressTrack,
-								{ backgroundColor: colors.border, height: isTV ? sp(8) : 8 },
+								{ backgroundColor: "rgba(229, 225, 228, 0.10)", height: isTV ? sp(8) : 8 },
 							]}>
 							<View
 								style={[
 									styles.progressFill,
 									{
-										backgroundColor: colors.primary,
+										backgroundColor: Palette.primary,
 										width: isInstalling ? "100%" : `${Math.round(progress)}%`,
 									},
 								]}
@@ -332,25 +331,25 @@ export default function UpdateSheet() {
 					style={[
 						styles.sheet,
 						{
-							backgroundColor: colors.cardBg,
+							backgroundColor: Palette.surfaceLow,
 							paddingBottom: Math.max(insets.bottom, isTV ? sp(16) : 16) + 8,
 							paddingHorizontal: isTV ? Math.max(gutter, 24) : 20,
 						},
 					]}>
-					<View style={[styles.handle, { backgroundColor: colors.border }]} />
+					<View style={[styles.handle, { backgroundColor: "rgba(229, 225, 228, 0.10)" }]} />
 
 					<View style={styles.header}>
 						<Text
 							style={[
 								styles.headerTitle,
-								{ color: colors.text, fontSize: sp(19) },
+								{ color: Palette.onSurface, fontSize: sp(19) },
 							]}>
 							Uygulama Güncellemesi
 						</Text>
 						<Text
 							style={[
 								styles.headerSubtitle,
-								{ color: colors.textSecondary, fontSize: sp(13) },
+								{ color: Palette.onSurfaceVariant, fontSize: sp(13) },
 							]}>
 							Yüklü sürüm: v{currentVersion}
 						</Text>
@@ -366,7 +365,7 @@ export default function UpdateSheet() {
 								// TV'de odak doğrudan ana eylemde olsun.
 								autoFocus={isTV}
 								style={{
-									backgroundColor: colors.primary,
+									backgroundColor: Palette.primary,
 									opacity: isBusy ? 0.75 : 1,
 									height: isTV ? sp(56) : 50,
 									borderRadius: isTV ? sp(12) : 12,
@@ -392,7 +391,7 @@ export default function UpdateSheet() {
 								style={[
 									styles.secondaryButton,
 									{
-										borderColor: colors.border,
+										borderColor: "rgba(229, 225, 228, 0.10)",
 										height: isTV ? sp(50) : 46,
 										borderRadius: isTV ? sp(12) : 12,
 									},
@@ -402,7 +401,7 @@ export default function UpdateSheet() {
 								<Text
 									style={[
 										styles.secondaryButtonText,
-										{ color: colors.text, fontSize: sp(15) },
+										{ color: Palette.onSurface, fontSize: sp(15) },
 									]}>
 									İndirmeyi iptal et
 								</Text>
@@ -417,7 +416,7 @@ export default function UpdateSheet() {
 								style={[
 									styles.secondaryButton,
 									{
-										borderColor: colors.border,
+										borderColor: "rgba(229, 225, 228, 0.10)",
 										opacity: isBusy ? 0.5 : 1,
 										height: isTV ? sp(50) : 46,
 										borderRadius: isTV ? sp(12) : 12,
@@ -428,7 +427,7 @@ export default function UpdateSheet() {
 								<Text
 									style={[
 										styles.secondaryButtonText,
-										{ color: colors.text, fontSize: sp(15) },
+										{ color: Palette.onSurface, fontSize: sp(15) },
 									]}>
 									{release ? "Şimdi değil" : "Kapat"}
 								</Text>
@@ -444,7 +443,7 @@ export default function UpdateSheet() {
 							<Text
 								style={[
 									styles.linkText,
-									{ color: colors.primary, fontSize: sp(14) },
+									{ color: Palette.primary, fontSize: sp(14) },
 								]}>
 								Güncellemeleri tekrar kontrol et
 							</Text>
@@ -485,7 +484,7 @@ const styles = StyleSheet.create({
 		marginBottom: 14,
 	},
 	headerTitle: {
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	headerSubtitle: {
 		marginTop: 3,
@@ -500,7 +499,7 @@ const styles = StyleSheet.create({
 		marginBottom: 14,
 	},
 	statusText: {
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		textAlign: "center",
 	},
 	statusHint: {
@@ -515,7 +514,7 @@ const styles = StyleSheet.create({
 	},
 	badge: {},
 	badgeText: {
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	metaText: {
 		marginLeft: 10,
@@ -527,7 +526,7 @@ const styles = StyleSheet.create({
 		paddingBottom: 4,
 	},
 	notesTitle: {
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		marginBottom: 6,
 	},
 	notesBody: {
@@ -542,7 +541,7 @@ const styles = StyleSheet.create({
 		marginBottom: 6,
 	},
 	progressLabel: {
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	progressTrack: {
 		borderRadius: 4,
@@ -560,8 +559,8 @@ const styles = StyleSheet.create({
 		gap: 10,
 	},
 	primaryButtonText: {
-		color: "#ffffff",
-		fontWeight: "700",
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
 		textAlign: "center",
 	},
 	secondaryButton: {
@@ -570,10 +569,10 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	secondaryButtonText: {
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	linkText: {
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		textAlign: "center",
 	},
 	// TV odak halkası. TVPressable'in varsayılanı `scale` kullanıyor;
@@ -581,7 +580,7 @@ const styles = StyleSheet.create({
 	// absolute konumlu banner'ı kaydırdığı için burada sabit bir
 	// çerçeve tercih edildi.
 	focusRing: {
-		borderColor: "#FFFFFF",
+		borderColor: Palette.onSurface,
 		borderWidth: 2,
 	},
 });

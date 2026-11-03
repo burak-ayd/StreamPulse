@@ -1,3 +1,4 @@
+import { FontFamily, Palette } from "@/constants/theme";
 import TVPressable, { isTVPressSuppressed } from "@components/common/TVPressable";
 import {
 	getContentLibraryStatus,
@@ -22,7 +23,7 @@ const LIST_OPTIONS = [
 		label: "İzleniyor",
 		desc: "Kaldığın yerden devam et listesine ekler",
 		icon: "play-circle",
-		color: "#E50914",
+		color: Palette.primary,
 		badge: "Devam Eden",
 	},
 	{
@@ -30,7 +31,7 @@ const LIST_OPTIONS = [
 		label: "Planlandı (Listem)",
 		desc: "Daha sonra izlemek üzere listeye kaydeder",
 		icon: "bookmark",
-		color: "#38bdf8",
+		color: Palette.secondary,
 		badge: "İzlenecek",
 	},
 	{
@@ -38,7 +39,7 @@ const LIST_OPTIONS = [
 		label: "Tamamlandı",
 		desc: "Bitirdiğin yapımlara ve geçmişe ekler",
 		icon: "checkmark-circle",
-		color: "#10b981",
+		color: Palette.secondary,
 		badge: "Bitti",
 	},
 ];
@@ -229,7 +230,7 @@ export default function ListSelectModal({
 											<Ionicons
 												name="checkmark"
 												size={14}
-												color="#ffffff"
+												color={Palette.onSurface}
 											/>
 										)}
 									</View>
@@ -250,7 +251,7 @@ export default function ListSelectModal({
 								<Ionicons
 									name="trash-outline"
 									size={18}
-									color="#f43f5e"
+									color={Palette.error}
 								/>
 								<Text style={styles.removeButtonText}>
 									İzleme Listelerinden Kaldır
@@ -272,7 +273,7 @@ export default function ListSelectModal({
 							<Ionicons
 								name={isFav ? "heart" : "heart-outline"}
 								size={18}
-								color={isFav ? "#f43f5e" : "#cbd5e1"}
+								color={isFav ? Palette.error : Palette.onSurface}
 							/>
 							<Text
 								style={[
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
 		justifyContent: "flex-end",
 	},
 	sheet: {
-		backgroundColor: "#161B24",
+		backgroundColor: Palette.surfaceLow,
 		borderTopLeftRadius: 26,
 		borderTopRightRadius: 26,
 		borderTopWidth: 1,
@@ -337,26 +338,26 @@ const styles = StyleSheet.create({
 		width: 44,
 		height: 64,
 		borderRadius: 8,
-		backgroundColor: "#1E2532",
+		backgroundColor: Palette.surfaceLow,
 	},
 	headerInfo: {
 		flex: 1,
 	},
 	headerTitle: {
 		fontSize: 16,
-		fontWeight: "800",
-		color: "#ffffff",
+		fontFamily: FontFamily.bold,
+		color: Palette.onSurface,
 		letterSpacing: -0.2,
 		marginBottom: 3,
 	},
 	headerSub: {
 		fontSize: 11,
-		color: "#94a3b8",
+		color: Palette.onSurfaceVariant,
 	},
 	sectionTitle: {
 		fontSize: 11,
-		fontWeight: "800",
-		color: "#94a3b8",
+		fontFamily: FontFamily.bold,
+		color: Palette.onSurfaceVariant,
 		letterSpacing: 0.6,
 		marginBottom: 10,
 	},
@@ -402,11 +403,11 @@ const styles = StyleSheet.create({
 	},
 	optionLabel: {
 		fontSize: 13,
-		fontWeight: "700",
-		color: "#cbd5e1",
+		fontFamily: FontFamily.bold,
+		color: Palette.onSurface,
 	},
 	optionLabelSelected: {
-		color: "#ffffff",
+		color: Palette.onSurface,
 	},
 	badge: {
 		paddingHorizontal: 5,
@@ -416,24 +417,24 @@ const styles = StyleSheet.create({
 	},
 	badgeText: {
 		fontSize: 9,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	optionDesc: {
 		fontSize: 10,
-		color: "#64748b",
+		color: Palette.outline,
 	},
 	radioCircle: {
 		width: 22,
 		height: 22,
 		borderRadius: 11,
 		borderWidth: 1.5,
-		borderColor: "#64748b",
+		borderColor: Palette.outline,
 		justifyContent: "center",
 		alignItems: "center",
 	},
 	radioCircleActive: {
-		backgroundColor: "#E50914",
-		borderColor: "#E50914",
+		backgroundColor: Palette.primaryContainer,
+		borderColor: Palette.primary,
 	},
 	removeButton: {
 		flexDirection: "row",
@@ -448,9 +449,9 @@ const styles = StyleSheet.create({
 		marginTop: 4,
 	},
 	removeButtonText: {
-		color: "#f43f5e",
+		color: Palette.error,
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	footerRow: {
 		flexDirection: "row",
@@ -464,7 +465,7 @@ const styles = StyleSheet.create({
 		gap: 6,
 		paddingVertical: 12,
 		borderRadius: 12,
-		backgroundColor: "#1E2532",
+		backgroundColor: Palette.surfaceLow,
 		borderWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.08)",
 	},
@@ -473,12 +474,12 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(244, 63, 94, 0.12)",
 	},
 	favButtonText: {
-		color: "#cbd5e1",
+		color: Palette.onSurface,
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	favButtonTextActive: {
-		color: "#f43f5e",
+		color: Palette.error,
 	},
 	closeButton: {
 		paddingHorizontal: 20,
@@ -489,18 +490,18 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 	},
 	closeButtonText: {
-		color: "#ffffff",
+		color: Palette.onSurface,
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	optionCardFocused: {
 		borderWidth: 2,
-		borderColor: "#E50914",
+		borderColor: Palette.primary,
 		transform: [{ scale: 1.02 }],
 	},
 	buttonFocused: {
 		borderWidth: 2,
-		borderColor: "#FFFFFF",
+		borderColor: Palette.onSurface,
 		transform: [{ scale: 1.04 }],
 	},
 });

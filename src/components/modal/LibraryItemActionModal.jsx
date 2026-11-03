@@ -1,3 +1,4 @@
+import { FontFamily, Palette } from "@/constants/theme";
 import TVPressable, { isTVPressSuppressed } from "@/components/common/TVPressable";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
@@ -105,7 +106,7 @@ export default function LibraryItemActionModal({
 								<Ionicons
 									name="information-circle-outline"
 									size={20}
-									color="#38bdf8"
+									color={Palette.secondary}
 								/>
 							</View>
 							<View style={styles.actionTextCol}>
@@ -119,7 +120,7 @@ export default function LibraryItemActionModal({
 							<Ionicons
 								name="chevron-forward"
 								size={16}
-								color="#64748b"
+								color={Palette.outline}
 							/>
 						</TVPressable>
 
@@ -140,7 +141,7 @@ export default function LibraryItemActionModal({
 								<Ionicons
 									name="swap-horizontal"
 									size={19}
-									color="#f5c518"
+									color={Palette.tertiary}
 								/>
 							</View>
 							<View style={styles.actionTextCol}>
@@ -154,7 +155,7 @@ export default function LibraryItemActionModal({
 							<Ionicons
 								name="chevron-forward"
 								size={16}
-								color="#64748b"
+								color={Palette.outline}
 							/>
 						</TVPressable>
 
@@ -175,7 +176,7 @@ export default function LibraryItemActionModal({
 								<Ionicons
 									name="share-social-outline"
 									size={18}
-									color="#94a3b8"
+									color={Palette.onSurfaceVariant}
 								/>
 							</View>
 							<View style={styles.actionTextCol}>
@@ -187,7 +188,7 @@ export default function LibraryItemActionModal({
 							<Ionicons
 								name="chevron-forward"
 								size={16}
-								color="#64748b"
+								color={Palette.outline}
 							/>
 						</TVPressable>
 
@@ -208,14 +209,14 @@ export default function LibraryItemActionModal({
 								<Ionicons
 									name="trash-outline"
 									size={19}
-									color="#f43f5e"
+									color={Palette.error}
 								/>
 							</View>
 							<View style={styles.actionTextCol}>
 								<Text
 									style={[
 										styles.actionTitle,
-										{ color: "#f43f5e" },
+										{ color: Palette.error },
 									]}>
 									Kitaplıktan Kaldır
 								</Text>
@@ -247,7 +248,7 @@ const styles = StyleSheet.create({
 		justifyContent: "flex-end",
 	},
 	sheet: {
-		backgroundColor: "#161B24",
+		backgroundColor: Palette.surfaceLow,
 		borderTopLeftRadius: 24,
 		borderTopRightRadius: 24,
 		borderTopWidth: 1,
@@ -277,21 +278,21 @@ const styles = StyleSheet.create({
 		width: 44,
 		height: 64,
 		borderRadius: 8,
-		backgroundColor: "#1E2532",
+		backgroundColor: Palette.surfaceLow,
 	},
 	headerTextCol: {
 		flex: 1,
 	},
 	title: {
 		fontSize: 16,
-		fontWeight: "800",
-		color: "#ffffff",
+		fontFamily: FontFamily.bold,
+		color: Palette.onSurface,
 		letterSpacing: -0.2,
 		marginBottom: 3,
 	},
 	subtitle: {
 		fontSize: 12,
-		color: "#94a3b8",
+		color: Palette.onSurfaceVariant,
 	},
 	actionsList: {
 		gap: 8,
@@ -323,43 +324,43 @@ const styles = StyleSheet.create({
 	},
 	actionTitle: {
 		fontSize: 13,
-		fontWeight: "700",
-		color: "#f1f5f9",
+		fontFamily: FontFamily.bold,
+		color: Palette.onSurface,
 		marginBottom: 2,
 	},
 	actionDesc: {
 		fontSize: 10,
-		color: "#64748b",
+		color: Palette.outline,
 	},
 	cancelButton: {
 		height: 44,
 		borderRadius: 14,
-		backgroundColor: "#1E2532",
+		backgroundColor: Palette.surfaceLow,
 		borderWidth: 1,
 		borderColor: "rgba(255, 255, 255, 0.08)",
 		justifyContent: "center",
 		alignItems: "center",
 	},
 	cancelButtonText: {
-		color: "#cbd5e1",
+		color: Palette.onSurface,
 		fontSize: 13,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	actionRowFocused: {
 		borderWidth: 1.5,
-		borderColor: "#E50914",
+		borderColor: Palette.primary,
 		backgroundColor: "rgba(229, 9, 20, 0.15)",
 		transform: [{ scale: 1.02 }],
 	},
 	actionRowDestructiveFocused: {
 		borderWidth: 1.5,
-		borderColor: "#f43f5e",
+		borderColor: Palette.error,
 		backgroundColor: "rgba(244, 63, 94, 0.2)",
 		transform: [{ scale: 1.02 }],
 	},
 	cancelButtonFocused: {
 		borderWidth: 2,
-		borderColor: "#FFFFFF",
+		borderColor: Palette.onSurface,
 		backgroundColor: "rgba(255, 255, 255, 0.15)",
 		transform: [{ scale: 1.03 }],
 	},
