@@ -2,6 +2,8 @@ import BottomNavigation from "@/components/BottomNavigation";
 import TVPressable from "@/components/common/TVPressable";
 import LibraryItemActionModal from "@/components/modal/LibraryItemActionModal";
 import ListSelectModal from "@/components/modal/ListSelectModal";
+import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { fetchPluginDetail } from "@/services/api";
 import { canonicalType, isSeriesContent } from "@/utils/mediaType";
@@ -16,7 +18,9 @@ import {
 	getWatchlist,
 	hideLibraryItem,
 	isLibraryHidden,
+	markContentCompleted,
 	removeContinueWatching,
+	setContentLibraryList,
 	toggleFavorite,
 	toggleWatchlist,
 } from "@/utils/storage";
@@ -31,15 +35,12 @@ import {
 	ActivityIndicator,
 	BackHandler,
 	FlatList,
-	Modal,
-	Pressable,
 	ScrollView,
 	Share,
 	StatusBar,
 	StyleSheet,
 	Text,
 	TextInput,
-	TouchableOpacity,
 	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -65,29 +66,95 @@ function cardWidthFor(screenWidth, numColumns) {
  * Bir kartın okunabilir en küçük genişliği (sütun hesabı için).
  * Alt sınır 2 sütun (dar telefon), üst sınır 6 sütun (geniş ekran).
  *
- * 190 → 150 (TV geri bildirimi): 864dp kutuda 4 sütun × ~197dp kartlar
- * hâlâ büyük duruyordu; 150 ile 5 sütun × ~155dp çıkar. Telefon dikeyde
- * sonuç değişmez (hâlâ 2 sütun).
+ * 190 → 150 → 140 → 130 (TV geri bildirimi): sağdaki Hızlı İşlemler paneli
+ * ızgaradan yer aldığı için kart genişliği kısıtlı; 130 ile TV'de tasarımdaki
+ * gibi 4 sütun çıkar. Telefon dikeyde sonuç değişmez (2 sütun).
  */
-const MIN_CARD_WIDTH = 150;
+const MIN_CARD_WIDTH = 130;
 
-// Göreceli zaman biçimlendirici (Türkçe)
-function formatRelativeTime(dateString) {
-	if (!dateString) return "Yakın zamanda";
-	const diffMs = Date.now() - new Date(dateString).getTime();
-	if (isNaN(diffMs)) return "Yakın zamanda";
-	const diffMin = Math.floor(diffMs / 60000);
-	if (diffMin < 1) return "Az önce";
-	if (diffMin < 60) return `${diffMin} dk önce`;
-	const diffHour = Math.floor(diffMin / 60);
-	if (diffHour < 24) return `${diffHour} saat önce`;
-	const diffDay = Math.floor(diffHour / 24);
-	if (diffDay === 1) return "Dün";
-	if (diffDay < 7) return `${diffDay} gün önce`;
-	const diffWeek = Math.floor(diffDay / 7);
-	if (diffWeek === 1) return "Geçen hafta";
-	return `${diffWeek} hafta önce`;
+/**
+ * Tür filtresi eşleşmesi — hem liste süzgeci hem filtre sayıları aynı
+ * kuralı okusun diye tek yerde.
+ */
+function matchesTypeFilter(item, filter) {
+	if (filter === "all") return true;
+	const tip = canonicalType(item);
+	if (filter === "movie") return tip === "movie";
+	if (filter === "series") return tip === "series";
+	if (filter === "anime") {
+		// Anime ayrı bir alan değil; `normalizeMediaType` "anime"i "series"e
+		// indirger, bu yüzden içerik metninden ayrıca aranır.
+		const metin = `${item.title || ""} ${item.category || ""}`.toLowerCase();
+		return tip === "series" && metin.includes("anime");
+	}
+	return true;
 }
+
+/** Kitaplık kaydından kartın gösterdiği tüm metinleri türetir. */
+function cardMeta(item) {
+	const isCompletedSeriesGroup = item.completedEpisodesCount !== undefined;
+	const isDizi =
+		item.type === "series" ||
+		item.content_type === "series" ||
+		isCompletedSeriesGroup ||
+		Boolean(item.season);
+
+	const ratingVal = item.rating
+		? typeof item.rating === "number"
+			? item.rating.toFixed(1)
+			: parseFloat(item.rating)
+				? parseFloat(item.rating).toFixed(1)
+				: item.rating
+		: null;
+
+	const progressPercent = Math.min(
+		100,
+		Math.max(0, Math.round((item.progress || 0) * 100)),
+	);
+
+	const remainingText = isCompletedSeriesGroup
+		? item.totalEpisodesCount > 0
+			? item.completedEpisodesCount >= item.totalEpisodesCount
+				? "Tamamlandı"
+				: `${item.totalEpisodesCount - item.completedEpisodesCount} bölüm kaldı`
+			: "Tamamlanan"
+		: item.duration && item.currentTime
+			? `${Math.max(1, Math.round((item.duration - item.currentTime) / 60))} dk kaldı`
+			: progressPercent > 0
+				? `%${progressPercent} izlendi`
+				: null;
+
+	const episodeText = isCompletedSeriesGroup
+		? item.totalEpisodesCount > 0
+			? `${item.completedEpisodesCount}/${item.totalEpisodesCount} Bölüm`
+			: `${item.completedEpisodesCount} Bölüm İzlendi`
+		: item.season && item.episode
+			? `S${item.season} B${item.episode}`
+			: item.runtime_minutes
+				? `${item.runtime_minutes} dk`
+				: isDizi
+					? "Dizi"
+					: "Film";
+
+	return {
+		isDizi,
+		ratingVal,
+		progressPercent,
+		remainingText,
+		episodeText,
+		posterUri:
+			item.poster ||
+			item.poster_url ||
+			item.image ||
+			item.backdrop_url ||
+			null,
+		plugin: normalizePluginValue(item.plugin),
+		genre: item.genre || item.category || item.tagline || null,
+		title: item.title || item.seriesTitle || "Başlıksız",
+	};
+}
+
+const itemKey = (item) => item.id || item.url;
 
 export default function LibraryScreen() {
 	const router = useRouter();
@@ -101,7 +168,8 @@ export default function LibraryScreen() {
 	 * iki kart, ekranın iki ucunu dolduruyor, ortası bomboştu (sütun
 	 * sayısı ve kart genişliği aşağıda bu kutudan türetilir).
 	 */
-	const { sp, contentMaxWidth, width: screenWidth } = useTvMetrics();
+	const { sp, contentMaxWidth, width: screenWidth, isTV, isLarge } =
+		useTvMetrics();
 
 	/**
 	 * Kitaplık kutusu: daraltılmış içerik sütunu varsa o, yoksa ekran.
@@ -109,35 +177,13 @@ export default function LibraryScreen() {
 	const boxWidth = contentMaxWidth ?? screenWidth;
 
 	/**
-	 * Sütun sayısı SABİT DEĞİL (eskiden `isTV ? 4 : 2`).
-	 *
-	 * ⚠️ Sabit sayı ara ekranlarda yanlış çıkıyordu: yatay telefonda
-	 * (≈800dp) 2 sütun → ~345dp'lik dev kartlar, 10" tablet yatayda ise
-	 * 4 sütun küçük kalıyordu. Kart sayısı kutunun genişliğinden türetilir
-	 * (`hooks/useMeasuredColumns.js` ile aynı formül) — kutunun genişliği
-	 * burada zaten bilindiği için `onLayout` ölçümüne gerek yok.
+	 * Hızlı İşlemler paneli — yalnız TV ve geniş ekran (tablet yatay).
+	 * Panel sağda sabit genişlikte durur, ızgara kalan alana sığar.
 	 */
-	const columns = Math.min(
-		Math.max(
-			Math.floor(
-				(boxWidth - PADDING_HORIZONTAL * 2 + CARD_GAP) /
-					(MIN_CARD_WIDTH + CARD_GAP),
-			),
-			2,
-		),
-		6,
-	);
-
-	/**
-	 * Kart genişliği, ızgaranın oturacağı KUTudan hesaplanır.
-	 *
-	 * ⚠️ Burada `FlatList`'in `onLayout` ölçümü KULLANILMAZ: FlatList'in
-	 * kendisi her zaman tam ekran genişliğindedir (içerik kabı
-	 * `contentContainerStyle` ile daraltılıyor), dolayısıyla ölçüm ekranı
-	 * verir ve kartlar daraltılmış kaba SIĞMAZ, taşıp ekranın sağından
-	 * kırpılırdı.
-	 */
-	const cardWidth = cardWidthFor(boxWidth, columns);
+	const showQuickActions = isTV || isLarge;
+	const panelWidth = Math.min(sp(340), Math.round(boxWidth * 0.26));
+	const gridWidth =
+		boxWidth - (showQuickActions ? panelWidth + PADDING_HORIZONTAL : 0);
 
 	// Durum Sekmeleri (Beklemede ve Bırakıldı kaldırıldı)
 	const [activeTab, setActiveTab] = useState("watching"); // 'watching' | 'completed' | 'planned' | 'favorites'
@@ -149,6 +195,47 @@ export default function LibraryScreen() {
 	const [progressFilter, setProgressFilter] = useState("all"); // 'all' | 'in_progress' | 'not_started'
 	const [isSortModalVisible, setIsSortModalVisible] = useState(false);
 	const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'list'
+
+	// Seçim modu (Düzenle): kart basışı seçer, alttaki çubuk toplu eylem sunar.
+	const [isSelectionMode, setIsSelectionMode] = useState(false);
+	const [selectedIds, setSelectedIds] = useState(() => new Set());
+	const [isBulkListSheetVisible, setIsBulkListSheetVisible] = useState(false);
+	// Hızlı İşlemler paneli odaklanan kartı izler.
+	const [focusedItemId, setFocusedItemId] = useState(null);
+
+	/**
+	 * Sütun sayısı SABİT DEĞİL (eskiden `isTV ? 4 : 2`).
+	 *
+	 * ⚠️ Sabit sayı ara ekranlarda yanlış çıkıyordu: yatay telefonda
+	 * (≈800dp) 2 sütun → ~345dp'lik dev kartlar, 10" tablet yatayda ise
+	 * 4 sütun küçük kalıyordu. Kart sayısı kutunun genişliğinden türetilir
+	 * (`hooks/useMeasuredColumns.js` ile aynı formül) — kutunun genişliği
+	 * burada zaten bilindiği için `onLayout` ölçümüne gerek yok.
+	 */
+	const columns =
+		viewMode === "list"
+			? 1
+			: Math.min(
+					Math.max(
+						Math.floor(
+							(gridWidth - PADDING_HORIZONTAL * 2 + CARD_GAP) /
+								(MIN_CARD_WIDTH + CARD_GAP),
+						),
+						2,
+					),
+					6,
+				);
+
+	/**
+	 * Kart genişliği, ızgaranın oturacağı KUTudan hesaplanır.
+	 *
+	 * ⚠️ Burada `FlatList`'in `onLayout` ölçümü KULLANILMAZ: FlatList'in
+	 * kendisi her zaman tam ekran genişliğindedir (içerik kabı
+	 * `contentContainerStyle` ile daraltılıyor), dolayısıyla ölçüm ekranı
+	 * verir ve kartlar daraltılmış kaba SIĞMAZ, taşıp ekranın sağından
+	 * kırpılırdı.
+	 */
+	const cardWidth = cardWidthFor(gridWidth, columns);
 
 	// Özel Seçenekler & Liste Değiştirme Modalları
 	const [selectedActionItem, setSelectedActionItem] = useState(null);
@@ -177,12 +264,21 @@ export default function LibraryScreen() {
 					setIsSortModalVisible(false);
 					return true;
 				}
+				if (isBulkListSheetVisible) {
+					setIsBulkListSheetVisible(false);
+					return true;
+				}
 				if (isActionModalVisible) {
 					setIsActionModalVisible(false);
 					return true;
 				}
 				if (isListSelectModalVisible) {
 					setIsListSelectModalVisible(false);
+					return true;
+				}
+				if (isSelectionMode) {
+					setIsSelectionMode(false);
+					setSelectedIds(new Set());
 					return true;
 				}
 				if (router.canGoBack()) router.back();
@@ -196,8 +292,17 @@ export default function LibraryScreen() {
 			return () => sub.remove();
 		}, [
 			isSortModalVisible,
+			isBulkListSheetVisible,
 			isActionModalVisible,
 			isListSelectModalVisible,
+			isSelectionMode,
+			// Setter'lar sabit; React Compiler deps listesinde görmek istiyor.
+			setIsSortModalVisible,
+			setIsBulkListSheetVisible,
+			setIsActionModalVisible,
+			setIsListSelectModalVisible,
+			setIsSelectionMode,
+			setSelectedIds,
 			router,
 		]),
 	);
@@ -492,21 +597,7 @@ export default function LibraryScreen() {
 
 		// 2. Tür Filtresi — `utils/mediaType.js` tek kaynağı
 		if (typeFilter !== "all") {
-			list = list.filter((item) => {
-				const tip = canonicalType(item);
-				if (typeFilter === "movie") return tip === "movie";
-				if (typeFilter === "series") return tip === "series";
-				if (typeFilter === "anime") {
-					// Anime ayrı bir filtre olarak duruyor ama veri modelinde
-					// ayrı bir alanı yok; `normalizeMediaType` "anime" değerini
-					// "series" sınıfına indirger. Bu yüzden burada içerik
-					// metninden ayrıca aranır.
-					const metin =
-						`${item.title || ""} ${item.category || ""}`.toLowerCase();
-					return tip === "series" && metin.includes("anime");
-				}
-				return true;
-			});
+			list = list.filter((item) => matchesTypeFilter(item, typeFilter));
 		}
 
 		// 3. İlerleme Durumu Filtresi
@@ -563,6 +654,67 @@ export default function LibraryScreen() {
 		return list;
 	}, [rawTabItems, searchQuery, typeFilter, progressFilter, sortBy]);
 
+	/* Filtre hapındaki sayılar — süzgeç öncesi sekme toplamı. */
+	const typeCounts = useMemo(
+		() => ({
+			all: rawTabItems.length,
+			movie: rawTabItems.filter((i) => matchesTypeFilter(i, "movie"))
+				.length,
+			series: rawTabItems.filter((i) => matchesTypeFilter(i, "series"))
+				.length,
+			anime: rawTabItems.filter((i) => matchesTypeFilter(i, "anime"))
+				.length,
+		}),
+		[rawTabItems],
+	);
+
+	/* Hızlı İşlemler: odaklanan kart listeden düştüyse ilk karta döner. */
+	const quickActionItem = useMemo(() => {
+		if (displayedItems.length === 0) return null;
+		return (
+			displayedItems.find((i) => itemKey(i) === focusedItemId) ||
+			displayedItems[0]
+		);
+	}, [displayedItems, focusedItemId]);
+
+	// ── Seçim modu ───────────────────────────────────────────────────
+	const selectedItems = displayedItems.filter((i) =>
+		selectedIds.has(itemKey(i)),
+	);
+
+	const exitSelection = () => {
+		setIsSelectionMode(false);
+		setSelectedIds(new Set());
+	};
+
+	const toggleSelect = (item) => {
+		const key = itemKey(item);
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(key)) next.delete(key);
+			else next.add(key);
+			return next;
+		});
+	};
+
+	const handleCardPress = (item) => {
+		if (isSelectionMode) toggleSelect(item);
+		else handleOpenDetails(item);
+	};
+
+	const handleCardLongPress = (item) => {
+		setIsSelectionMode(true);
+		toggleSelect(item);
+	};
+
+	const toggleSelectAll = () => {
+		setSelectedIds((prev) =>
+			prev.size >= displayedItems.length
+				? new Set()
+				: new Set(displayedItems.map(itemKey)),
+		);
+	};
+
 	// Seçenekler Menüsü (Kart Menüsü) - Artık Alert yerine şık modal açılıyor
 	const handleItemOptions = (item) => {
 		setSelectedActionItem(item);
@@ -576,21 +728,78 @@ export default function LibraryScreen() {
 	// bölümlerinin işaretlerini tombstone'luyordu). Kaldırma yalnızca
 	// görünürlük kaydı yazar; izlenme verisi hesaba bağlı kalır
 	// (kullanıcı: "Veriler sıfırlanmadan silinmemeli").
+	/**
+	 * Tek öğeyi aktif sekmenin listesinden çıkarır (yeniden yükleme YOK —
+	 * toplu eylemler tek seferde yüklesin diye ayrıldı).
+	 */
+	const removeItemFromList = async (item) => {
+		if (!item) return;
+		if (activeTab === "watching") {
+			await removeContinueWatching(item);
+		} else if (activeTab === "planned") {
+			await toggleWatchlist(item);
+		} else if (activeTab === "completed") {
+			await hideLibraryItem(item);
+		} else if (activeTab === "favorites") {
+			await toggleFavorite(item);
+		}
+	};
+
 	const handleRemoveItem = async (item) => {
 		if (!item) return;
 		try {
-			if (activeTab === "watching") {
-				await removeContinueWatching(item);
-			} else if (activeTab === "planned") {
-				await toggleWatchlist(item);
-			} else if (activeTab === "completed") {
-				await hideLibraryItem(item);
-			} else if (activeTab === "favorites") {
-				await toggleFavorite(item);
-			}
+			await removeItemFromList(item);
 			await loadLibraryData();
 		} catch (error) {
 			console.error("Kitaplıktan kaldırılırken hata:", error);
+		}
+	};
+
+	// ── Toplu eylemler (seçim çubuğu) ────────────────────────────────
+	const handleBulkRemove = async () => {
+		try {
+			for (const item of selectedItems) {
+				await removeItemFromList(item);
+			}
+			exitSelection();
+			await loadLibraryData();
+		} catch (error) {
+			console.error("Toplu kaldırma hatası:", error);
+		}
+	};
+
+	const handleBulkMarkWatched = async () => {
+		try {
+			for (const item of selectedItems) {
+				await markContentCompleted(item);
+			}
+			exitSelection();
+			await loadLibraryData();
+		} catch (error) {
+			console.error("Toplu izlendi işaretleme hatası:", error);
+		}
+	};
+
+	const handleBulkMoveToList = async (targetList) => {
+		setIsBulkListSheetVisible(false);
+		try {
+			for (const item of selectedItems) {
+				await setContentLibraryList(item, targetList);
+			}
+			exitSelection();
+			await loadLibraryData();
+		} catch (error) {
+			console.error("Toplu liste taşıma hatası:", error);
+		}
+	};
+
+	const handleMarkWatched = async (item) => {
+		if (!item) return;
+		try {
+			await markContentCompleted(item);
+			await loadLibraryData();
+		} catch (error) {
+			console.error("İzlendi işaretleme hatası:", error);
 		}
 	};
 
@@ -843,37 +1052,39 @@ export default function LibraryScreen() {
 		[],
 	);
 
-	// Sekme Yapılandırması
+	// Sekme Yapılandırması — adlar tasarımdan, sıra mevcut akıştan.
 	const tabs = [
 		{
 			key: "watching",
-			label: "İzleniyor",
-			icon: "play-circle",
+			label: "İzlemeye Devam Edenler",
 			count: continueWatchingList.length,
-			iconColor: "#ffffff",
 		},
 		{
 			key: "completed",
-			label: "Tamamlandı",
-			icon: "checkmark-circle",
+			label: "Tamamlananlar",
 			count: completedItemsGrouped.length,
-			iconColor: "#34d399",
 		},
 		{
 			key: "planned",
-			label: "Planlandı",
-			icon: "bookmark",
+			label: "Planlananlar",
 			count: watchlist.length,
-			iconColor: "#60a5fa",
 		},
 		{
 			key: "favorites",
 			label: "Favoriler",
-			icon: "heart",
 			count: favoritesList.length,
-			iconColor: "#f43f5e",
 		},
 	];
+
+	const activeTabLabel =
+		tabs.find((t) => t.key === activeTab)?.label ?? "Kitaplık";
+
+	const typeLabels = {
+		all: "Tümü",
+		movie: "Filmler",
+		series: "Diziler",
+		anime: "Anime",
+	};
 
 	// Sıralama Etiketi
 	const sortLabels = {
@@ -885,216 +1096,374 @@ export default function LibraryScreen() {
 	};
 
 	// Kart Render Bileşeni (Grid Modu)
-	const renderGridCard = ({ item }) => {
-		const isCompletedSeriesGroup =
-			item.completedEpisodesCount !== undefined;
-		const isDizi =
-			item.type === "series" ||
-			item.content_type === "series" ||
-			isCompletedSeriesGroup ||
-			Boolean(item.season);
+	const renderGridCard = ({ item }) => (
+		<LibraryCard
+			item={item}
+			width={cardWidth}
+			selected={selectedIds.has(itemKey(item))}
+			onPress={() => handleCardPress(item)}
+			onLongPress={() => handleCardLongPress(item)}
+			onFocus={() => setFocusedItemId(itemKey(item))}
+			onMore={() => handleItemOptions(item)}
+		/>
+	);
 
-		const ratingVal = item.rating
-			? typeof item.rating === "number"
-				? item.rating.toFixed(1)
-				: parseFloat(item.rating)
-					? parseFloat(item.rating).toFixed(1)
-					: item.rating
-			: null;
+	// Liste Modu Satırı
+	const renderListRow = ({ item }) => (
+		<LibraryRow
+			item={item}
+			selected={selectedIds.has(itemKey(item))}
+			onPress={() => handleCardPress(item)}
+			onLongPress={() => handleCardLongPress(item)}
+			onFocus={() => setFocusedItemId(itemKey(item))}
+			onMore={() => handleItemOptions(item)}
+		/>
+	);
 
-		const progressPercent = Math.min(
-			100,
-			Math.max(0, Math.round((item.progress || 0) * 100)),
-		);
+	// Sıralama seçenekleri — sheet satırları.
+	const sortOptions = [
+		{ key: "last_watched", label: "Son İzlenen" },
+		{ key: "date_added", label: "Eklenme Tarihi (En Yeni)" },
+		{ key: "name_asc", label: "İsim (A-Z)" },
+		{ key: "imdb_desc", label: "IMDb Puanı (Yüksekten Düşüğe)" },
+		{ key: "remaining_time", label: "Kalan Süre" },
+	];
 
-		const remainingText = isCompletedSeriesGroup
-			? item.totalEpisodesCount > 0
-				? item.completedEpisodesCount >= item.totalEpisodesCount
-					? "Tamamlandı"
-					: `${item.totalEpisodesCount - item.completedEpisodesCount} bölüm kaldı`
-				: "Tamamlanan"
-			: item.duration && item.currentTime
-				? `${Math.max(1, Math.round((item.duration - item.currentTime) / 60))} dk kaldı`
-				: progressPercent > 0
-					? `%${progressPercent} izlendi`
-					: null;
+	const resetFilters = () => {
+		setSortBy("last_watched");
+		setTypeFilter("all");
+		setProgressFilter("all");
+	};
 
-		const episodeText = isCompletedSeriesGroup
-			? item.totalEpisodesCount > 0
-				? `${item.completedEpisodesCount}/${item.totalEpisodesCount} Bölüm`
-				: `${item.completedEpisodesCount} Bölüm İzlendi`
-			: item.season && item.episode
-				? `${item.season}. Sezon ${item.episode}. Bölüm`
-				: item.runtime_minutes
-					? `${item.runtime_minutes} dk`
-					: isDizi
-						? "Dizi"
-						: "Film";
+	// Boş Durum
+	const renderEmptyState = () => (
+		<View style={[styles.emptyContainer, { gap: sp(10) }]}>
+			<View
+				style={[
+					styles.emptyIconBox,
+					{
+						width: sp(72),
+						height: sp(72),
+						borderRadius: sp(22),
+						marginBottom: sp(6),
+					},
+				]}>
+				<Ionicons
+					name="library-outline"
+					size={sp(34)}
+					color={Palette.primary}
+				/>
+			</View>
+			<Text style={[styles.emptyTitle, { fontSize: sp(17) }]}>
+				{searchQuery.trim().length > 0
+					? "Eşleşen İçerik Yok"
+					: "Listenizde Henüz İçerik Yok"}
+			</Text>
+			<Text
+				style={[
+					styles.emptySubtitle,
+					{ fontSize: sp(13), maxWidth: 320 },
+				]}>
+				{searchQuery.trim().length > 0
+					? `"${searchQuery.trim()}" için kitaplığınızda sonuç bulunamadı.`
+					: "Daha sonra izlemek istediğiniz veya takip ettiğiniz dizi ve filmleri buraya ekleyerek kitaplığınızı oluşturabilirsiniz."}
+			</Text>
+			{searchQuery.trim().length > 0 ? null : (
+				<TVPressable
+					onPress={() => router.push("/(app)")}
+					activeOpacity={0.85}
+					style={({ focused }) => [
+						styles.emptyCtaButton,
+						{
+							height: sp(44),
+							borderRadius: sp(22),
+							paddingHorizontal: sp(20),
+							marginTop: sp(8),
+						},
+						focused && styles.focusRing,
+					]}>
+					<Ionicons
+						name="compass-outline"
+						size={sp(17)}
+						color={Palette.onPrimaryContainer}
+					/>
+					<Text style={[styles.emptyCtaText, { fontSize: sp(13) }]}>
+						İçerikleri Keşfet
+					</Text>
+				</TVPressable>
+			)}
+		</View>
+	);
+
+	// Hızlı İşlemler paneli (TV / tablet yatay)
+	const renderQuickActions = () => {
+		const item = quickActionItem;
+		if (!item) return null;
+		const m = cardMeta(item);
+		const playing = playingItemId === itemKey(item);
+
+		// Panel satırları — tasarımdaki sıra: çıkar → taşı → izlendi → detay.
+		const rows = [
+			{
+				key: "remove",
+				icon: "remove-circle-outline",
+				label: "Listeden Çıkar",
+				onPress: () => handleRemoveItem(item),
+				danger: true,
+			},
+			{
+				key: "move",
+				icon: "folder-open-outline",
+				label: "Başka Listeye Taşı",
+				onPress: () => handleChangeList(item),
+			},
+			{
+				key: "watched",
+				icon: "checkmark-done",
+				label: "İzlendi Olarak İşaretle",
+				onPress: () => handleMarkWatched(item),
+			},
+			{
+				key: "details",
+				icon: "information-circle-outline",
+				label: "Detay Sayfasına Git",
+				onPress: () => handleOpenDetails(item),
+			},
+		];
 
 		return (
-			<TVPressable
+			<View
 				style={[
-					styles.card,
-					{ width: cardWidth, borderRadius: sp(16) },
-				]}
-				focusedStyle={styles.cardFocused}
-				onPress={() => handleOpenDetails(item)}>
-				{/* Poster & Overlays */}
-				<View style={styles.posterContainer}>
-					<Image
-						source={{
-							uri:
-								item.poster ||
-								item.poster_url ||
-								item.image ||
-								item.backdrop_url,
-						}}
-						style={styles.posterImage}
-						contentFit="cover"
-						transition={0}
-						recyclingKey={
-							item.poster ||
-							item.poster_url ||
-							item.image ||
-							item.backdrop_url
-						}
-					/>
-					{/* Gradient Karartma */}
-					<View style={styles.posterGradient} />
-
-					{/* Sol Üst Rozet: Dizi / Film */}
+					styles.panel,
+					{
+						width: panelWidth,
+						borderRadius: sp(16),
+						padding: sp(12),
+						gap: sp(4),
+						marginRight: PADDING_HORIZONTAL,
+					},
+				]}>
+				<View style={[styles.panelHeaderRow, { gap: sp(8) }]}>
+					<Text style={[styles.panelTitle, { fontSize: sp(13) }]}>
+						Hızlı İşlemler
+					</Text>
 					<View
 						style={[
-							styles.badgeType,
-							isDizi ? styles.badgeDizi : styles.badgeFilm,
+							styles.panelPlugin,
+							{
+								borderRadius: sp(8),
+								paddingHorizontal: sp(6),
+								paddingVertical: sp(1),
+							},
 						]}>
-						<Text style={styles.badgeTypeText}>
-							{isDizi ? "DİZİ" : "FİLM"}
+						<Text
+							numberOfLines={1}
+							style={[
+								styles.panelPluginText,
+								{ fontSize: sp(9) },
+							]}>
+							{m.title}
 						</Text>
 					</View>
+				</View>
 
-					{/* Sağ Üst Rozet: IMDb Puanı */}
-					{ratingVal && (
-						<View style={styles.badgeRating}>
-							<Ionicons name="star" size={11} color="#F5C518" />
-							<Text style={styles.badgeRatingText}>
-								{ratingVal}
-							</Text>
-						</View>
+				<TVPressable
+					onPress={() => handlePlayItem(item)}
+					disabled={playing}
+					activeOpacity={0.85}
+					style={({ focused }) => [
+						styles.panelPrimaryButton,
+						{
+							height: sp(40),
+							borderRadius: sp(20),
+							gap: sp(8),
+							marginVertical: sp(4),
+						},
+						focused && styles.focusRing,
+					]}>
+					{playing ? (
+						<ActivityIndicator
+							size="small"
+							color={Palette.onPrimaryContainer}
+						/>
+					) : (
+						<Ionicons
+							name="play"
+							size={sp(15)}
+							color={Palette.onPrimaryContainer}
+						/>
 					)}
+					<Text
+						numberOfLines={1}
+						style={[styles.panelPrimaryText, { fontSize: sp(12) }]}>
+						Oynatmaya Devam Et
+					</Text>
+				</TVPressable>
 
-					{/* Ortadaki Canlı Kırmızı Play Butonu */}
+				{rows.map((row) => (
 					<TVPressable
-						style={styles.centerPlayButton}
-						focusedStyle={styles.centerPlayButtonFocused}
-						onPress={() => handlePlayItem(item)}
-						disabled={playingItemId === (item.id || item.url)}>
-						{playingItemId === (item.id || item.url) ? (
-							<ActivityIndicator size="small" color="#ffffff" />
-						) : (
-							<Ionicons name="play" size={20} color="#ffffff" />
-						)}
+						key={row.key}
+						onPress={row.onPress}
+						activeOpacity={0.75}
+						style={({ focused }) => [
+							styles.panelGhostButton,
+							{
+								paddingVertical: sp(5),
+								paddingHorizontal: sp(6),
+								borderRadius: sp(10),
+								gap: sp(8),
+							},
+							focused && styles.focusRing,
+						]}>
+						<Ionicons
+							name={row.icon}
+							size={sp(14)}
+							color={
+								row.danger ? Palette.error : Palette.onSurface
+							}
+						/>
+						<Text
+							numberOfLines={1}
+							style={[styles.panelGhostText, { fontSize: sp(12) }]}>
+							{row.label}
+						</Text>
 					</TVPressable>
-
-					{/* Poster Altındaki İlerleme & Süre Bilgisi */}
-					<View style={styles.posterBottomInfo}>
-						<View style={styles.progressTextRow}>
-							<Text style={styles.episodeText} numberOfLines={1}>
-								{episodeText}
-							</Text>
-							{remainingText && (
-								<Text style={styles.remainingText}>
-									{remainingText}
-								</Text>
-							)}
-						</View>
-
-						{/* İlerleme Çubuğu */}
-						<View style={styles.progressBarTrack}>
-							<View
-								style={[
-									styles.progressBarFill,
-									{ width: `${progressPercent || 3}%` },
-								]}
-							/>
-						</View>
-					</View>
-				</View>
-
-				{/* Bilgi Gövdesi */}
-				<View style={styles.cardBody}>
-					<Text style={styles.cardTitle} numberOfLines={1}>
-						{item.title || item.seriesTitle || "Başlıksız"}
-					</Text>
-					<Text style={styles.cardTagline} numberOfLines={1}>
-						{item.tagline ||
-							item.genre ||
-							item.category ||
-							(isDizi ? "Dizi" : "Film")}
-					</Text>
-
-					{/* Alt Zaman & Seçenekler Çubuğu */}
-					<View style={styles.cardFooter}>
-						<View style={styles.timeRow}>
-							<Ionicons
-								name="time-outline"
-								size={12}
-								color="#E50914"
-							/>
-							<Text style={styles.timeText}>
-								{formatRelativeTime(
-									item.updatedAt || item.watchedAt,
-								)}
-							</Text>
-						</View>
-						<TVPressable
-							onPress={() => handleItemOptions(item)}
-							hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-							style={styles.moreButton}
-							focusedStyle={styles.moreButtonFocused}>
-							<Ionicons
-								name="ellipsis-vertical"
-								size={14}
-								color="#94a3b8"
-							/>
-						</TVPressable>
-					</View>
-				</View>
-			</TVPressable>
+				))}
+			</View>
 		);
 	};
 
-	// Boş Durum Bileşeni (Mockup'taki Tasarım)
-	const renderEmptyState = () => (
-		<View style={styles.emptyContainer}>
-			{/* Parıldayan Çember Rozet */}
-			<View style={styles.emptyGlowWrapper}>
-				<View style={styles.emptyGlow} />
-				<View style={styles.emptyIconBox}>
-					<Ionicons
-						name="play-circle-outline"
-						size={48}
-						color="#E50914"
+	// Seçim çubuğu (telefon/tablet: altta, gezinme çubuğunun üstünde)
+	const renderSelectionBar = () => {
+		const actions = [
+			{
+				key: "remove",
+				icon: "remove-circle-outline",
+				label: "Çıkar",
+				onPress: handleBulkRemove,
+			},
+			{
+				key: "move",
+				icon: "folder-open-outline",
+				label: "Listeye Taşı",
+				onPress: () => setIsBulkListSheetVisible(true),
+			},
+			{
+				key: "watched",
+				icon: "checkmark-done",
+				label: "İzlendi",
+				onPress: handleBulkMarkWatched,
+			},
+			{
+				key: "details",
+				icon: "open-outline",
+				label: "Detaya Git",
+				onPress: () => handleOpenDetails(selectedItems[0]),
+				disabled: selectedItems.length !== 1,
+			},
+		];
+
+		return (
+			<View
+				style={[
+					styles.selectionBar,
+					{
+						paddingHorizontal: PADDING_HORIZONTAL,
+						paddingTop: sp(10),
+						paddingBottom: sp(10),
+						gap: sp(10),
+					},
+				]}>
+				<View style={[styles.selectionHeader, { gap: sp(8) }]}>
+					<View
+						style={[
+							styles.selectionDot,
+							{
+								width: sp(8),
+								height: sp(8),
+								borderRadius: sp(4),
+							},
+						]}
 					/>
+					<Text
+						style={[styles.selectionCount, { fontSize: sp(13) }]}>
+						{selectedIds.size} İçerik Seçildi
+					</Text>
+					<TVPressable
+						onPress={exitSelection}
+						activeOpacity={0.75}
+						style={({ focused }) => [
+							{
+								paddingHorizontal: sp(8),
+								paddingVertical: sp(2),
+								borderRadius: sp(8),
+							},
+							focused && styles.focusRing,
+						]}>
+						<Text
+							style={[
+								styles.selectionCancel,
+								{ fontSize: sp(12) },
+							]}>
+							iptal
+						</Text>
+					</TVPressable>
+				</View>
+
+				<View style={[styles.selectionActions, { gap: sp(8) }]}>
+					{actions.map((action) => (
+						<TVPressable
+							key={action.key}
+							onPress={action.onPress}
+							disabled={action.disabled}
+							activeOpacity={0.8}
+							style={({ focused }) => [
+								styles.selectionAction,
+								{
+									borderRadius: sp(12),
+									paddingVertical: sp(10),
+									gap: sp(4),
+									opacity: action.disabled ? 0.45 : 1,
+								},
+								action.key === "watched" &&
+									styles.selectionActionSecondary,
+								action.key === "details" &&
+									styles.selectionActionPrimary,
+								focused && styles.focusRing,
+							]}>
+							<Ionicons
+								name={action.icon}
+								size={sp(16)}
+								color={
+									action.key === "watched"
+										? Palette.surfaceLowest
+										: action.key === "details"
+											? Palette.onPrimaryContainer
+											: Palette.onSurface
+								}
+							/>
+							<Text
+								numberOfLines={1}
+								style={[
+									styles.selectionActionText,
+									{
+										fontSize: sp(11),
+										color:
+											action.key === "watched"
+												? Palette.surfaceLowest
+												: action.key === "details"
+													? Palette.onPrimaryContainer
+													: Palette.onSurface,
+									},
+								]}>
+								{action.label}
+							</Text>
+						</TVPressable>
+					))}
 				</View>
 			</View>
-
-			<Text style={styles.emptyTitle}>Listenizde Henüz İçerik Yok</Text>
-			<Text style={styles.emptySubtitle}>
-				Daha sonra izlemek istediğiniz veya takip ettiğiniz dizi ve
-				filmleri buraya ekleyerek kitaplığınızı oluşturabilirsiniz.
-			</Text>
-
-			{/* Keşfet Butonu */}
-			<TVPressable
-				style={styles.emptyCtaButton}
-				focusedStyle={styles.emptyCtaButtonFocused}
-				onPress={() => router.push("/(app)")}>
-				<Ionicons name="compass-outline" size={18} color="#ffffff" />
-				<Text style={styles.emptyCtaText}>İçerikleri Keşfet</Text>
-			</TVPressable>
-		</View>
-	);
+		);
+	};
 
 	return (
 		<>
@@ -1102,12 +1471,14 @@ export default function LibraryScreen() {
 			<SafeAreaView
 				style={[styles.safeArea, { paddingLeft: contentPaddingLeft }]}
 				edges={["top", "left", "right"]}>
-				<StatusBar barStyle="light-content" backgroundColor="#0B0E14" />
+				<StatusBar
+					barStyle="light-content"
+					backgroundColor={Palette.background}
+				/>
 
-				{/* 1. ÜST ARAMA VE EYLEM ÇUBUĞU */}
 				<View
 					style={[
-						styles.topBar,
+						styles.page,
 						contentMaxWidth
 							? {
 									width: "100%",
@@ -1116,539 +1487,608 @@ export default function LibraryScreen() {
 								}
 							: null,
 					]}>
-					{/* Arama Kutusu */}
-					<View style={styles.searchContainer}>
+					{/* 1. BAŞLIK: Kitaplık + içerik sayısı + görünüm/düzenle */}
+					<View
+						style={[
+							styles.titleRow,
+							{
+								paddingHorizontal: PADDING_HORIZONTAL,
+								paddingTop: sp(10),
+								gap: sp(10),
+							},
+						]}>
+						<Text
+							style={[
+								styles.screenTitle,
+								{ fontSize: sp(isTV ? 26 : 24) },
+							]}>
+							Kitaplık
+						</Text>
+						<View
+							style={[
+								styles.countPill,
+								{
+									borderRadius: sp(12),
+									paddingHorizontal: sp(8),
+									paddingVertical: sp(3),
+								},
+							]}>
+							<Text
+								style={[
+									styles.countPillText,
+									{ fontSize: sp(11) },
+								]}>
+								{displayedItems.length} İçerik
+							</Text>
+						</View>
+
+						<View style={{ flex: 1 }} />
+
+						<TVPressable
+							onPress={() => setIsSortModalVisible(true)}
+							accessibilityLabel="Sırala ve filtrele"
+							style={({ focused }) => [
+								styles.iconButton,
+								{
+									width: sp(36),
+									height: sp(36),
+									borderRadius: sp(18),
+								},
+								focused && styles.focusRing,
+							]}>
+							<Ionicons
+								name="options-outline"
+								size={sp(17)}
+								color={Palette.onSurface}
+							/>
+						</TVPressable>
+					</View>
+
+					{/* 2. ARAMA */}
+					<View
+						style={[
+							styles.searchPill,
+							{
+								marginHorizontal: PADDING_HORIZONTAL,
+								marginTop: sp(10),
+								height: sp(44),
+								borderRadius: sp(22),
+								paddingHorizontal: sp(14),
+								gap: sp(8),
+							},
+						]}>
 						<Ionicons
 							name="search"
-							size={18}
-							color="#94a3b8"
-							style={styles.searchIcon}
+							size={sp(17)}
+							color={Palette.onSurfaceVariant}
 						/>
 						<TextInput
-							style={styles.searchInput}
+							style={[
+								styles.searchInput,
+								{ fontSize: sp(14) },
+							]}
 							placeholder="Kitaplığımda ara..."
-							placeholderTextColor="#64748b"
+							placeholderTextColor={Palette.outline}
 							value={searchQuery}
 							onChangeText={setSearchQuery}
 							returnKeyType="search"
+							autoCorrect={false}
 						/>
 						{searchQuery.length > 0 && (
-							<TouchableOpacity
+							<TVPressable
 								onPress={() => setSearchQuery("")}
-								hitSlop={{
-									top: 6,
-									bottom: 6,
-									left: 6,
-									right: 6,
-								}}>
+								accessibilityLabel="Aramayı temizle"
+								style={({ focused }) => [
+									styles.clearButton,
+									{
+										width: sp(26),
+										height: sp(26),
+										borderRadius: sp(13),
+									},
+									focused && styles.focusRing,
+								]}>
 								<Ionicons
-									name="close-circle"
-									size={16}
-									color="#94a3b8"
+									name="close"
+									size={sp(14)}
+									color={Palette.onSurfaceVariant}
 								/>
-							</TouchableOpacity>
+							</TVPressable>
 						)}
 					</View>
 
-					{/* Filtrele / Ayarlar Butonu */}
-					<TVPressable
-						style={styles.iconButton}
-						focusedStyle={styles.iconButtonFocused}
-						onPress={() => setIsSortModalVisible(true)}>
-						<Ionicons
-							name="options-outline"
-							size={19}
-							color="#cbd5e1"
-						/>
-					</TVPressable>
-
-					{/* Izgara / Liste Görünüm Butonu */}
-					<TVPressable
-						style={styles.iconButton}
-						focusedStyle={styles.iconButtonFocused}
-						onPress={() =>
-							setViewMode((prev) =>
-								prev === "grid" ? "list" : "grid",
-							)
-						}>
-						<Ionicons
-							name={
-								viewMode === "grid"
-									? "grid-outline"
-									: "list-outline"
-							}
-							size={19}
-							color="#cbd5e1"
-						/>
-					</TVPressable>
-				</View>
-
-				{/* 2. YATAY KATEGORİ / DURUM SEKMELERİ */}
-				<View style={styles.tabsWrapper}>
+					{/* 3. SEKMELER */}
 					<ScrollView
 						horizontal
 						showsHorizontalScrollIndicator={false}
-						contentContainerStyle={styles.tabsScrollContent}>
+						style={{ marginTop: sp(12), flexGrow: 0 }}
+						contentContainerStyle={{
+							paddingHorizontal: PADDING_HORIZONTAL,
+							gap: sp(8),
+						}}>
 						{tabs.map((tab) => {
 							const isActive = activeTab === tab.key;
 							return (
 								<TVPressable
 									key={tab.key}
-									style={[
+									onPress={() => {
+										setActiveTab(tab.key);
+										exitSelection();
+									}}
+									activeOpacity={0.8}
+									style={({ focused }) => [
 										styles.tabPill,
+										{
+											height: sp(36),
+											borderRadius: sp(18),
+											paddingHorizontal: sp(14),
+											gap: sp(6),
+										},
 										isActive
 											? styles.tabPillActive
-											: styles.tabPillInactive,
-									]}
-									focusedStyle={styles.tabPillFocused}
-									onPress={() => setActiveTab(tab.key)}>
-									<Ionicons
-										name={tab.icon}
-										size={15}
-										color={
-											isActive
-												? "#ffffff"
-												: tab.iconColor || "#94a3b8"
-										}
-									/>
+											: styles.tabPillIdle,
+										focused && styles.focusRing,
+									]}>
 									<Text
+										numberOfLines={1}
 										style={[
 											styles.tabText,
-											isActive
-												? styles.tabTextActive
-												: styles.tabTextInactive,
+											{
+												fontSize: sp(12),
+												color: isActive
+													? Palette.onPrimary
+													: Palette.onSurfaceVariant,
+											},
 										]}>
 										{tab.label}
 									</Text>
-									{typeof tab.count === "number" && (
-										<View
+									<View
+										style={[
+											styles.tabCountPill,
+											{
+												borderRadius: sp(8),
+												paddingHorizontal: sp(6),
+												paddingVertical: sp(1),
+											},
+											isActive &&
+												styles.tabCountPillActive,
+										]}>
+										<Text
 											style={[
-												styles.tabCountPill,
-												isActive &&
-													styles.tabCountPillActive,
+												styles.tabCountText,
+												{
+													fontSize: sp(10),
+													color: isActive
+														? Palette.onPrimary
+														: Palette.onSurfaceVariant,
+												},
 											]}>
-											<Text
-												style={[
-													styles.tabCountText,
-													isActive &&
-														styles.tabCountTextActive,
-												]}>
-												{tab.count}
-											</Text>
-										</View>
-									)}
+											{tab.count}
+										</Text>
+									</View>
 								</TVPressable>
 							);
 						})}
 					</ScrollView>
+
+					{/* 4. ARAÇ ÇUBUĞU: görünüm + sıralama + tür + düzenle */}
+					<View
+						style={[
+							styles.toolbar,
+							{
+								paddingHorizontal: PADDING_HORIZONTAL,
+								marginTop: sp(12),
+								gap: sp(8),
+							},
+						]}>
+						<View
+							style={[
+								styles.segmented,
+								{
+									borderRadius: sp(10),
+									padding: sp(2),
+									gap: sp(2),
+								},
+							]}>
+							{[
+								{ key: "grid", icon: "grid-outline" },
+								{ key: "list", icon: "list-outline" },
+							].map((mode) => (
+								<TVPressable
+									key={mode.key}
+									onPress={() => setViewMode(mode.key)}
+									accessibilityLabel={
+										mode.key === "grid"
+											? "Izgara görünümü"
+											: "Liste görünümü"
+									}
+									style={({ focused }) => [
+										styles.segmentItem,
+										{
+											width: sp(32),
+											height: sp(28),
+											borderRadius: sp(8),
+										},
+										viewMode === mode.key &&
+											styles.segmentItemActive,
+										focused && styles.focusRing,
+									]}>
+									<Ionicons
+										name={mode.icon}
+										size={sp(15)}
+										color={
+											viewMode === mode.key
+												? Palette.onSurface
+												: Palette.onSurfaceVariant
+										}
+									/>
+								</TVPressable>
+							))}
+						</View>
+						<Pill
+							icon="swap-vertical"
+							label={sortLabels[sortBy] || "Sırala"}
+							onPress={() => setIsSortModalVisible(true)}
+						/>
+						<Pill
+							icon="funnel-outline"
+							label={`${typeLabels[typeFilter]} (${typeCounts[typeFilter] ?? 0})`}
+							active={typeFilter !== "all"}
+							onPress={() => setIsSortModalVisible(true)}
+						/>
+						{progressFilter !== "all" ? (
+							<Pill
+								icon="hourglass-outline"
+								label={
+									progressFilter === "in_progress"
+										? "Devam Edenler"
+										: "Başlanmayanlar"
+								}
+								active
+								onPress={resetFilters}
+							/>
+						) : null}
+						<Pill
+							icon="checkmark-circle-outline"
+							label={
+								selectedIds.size > 0
+									? `Düzenle (${selectedIds.size})`
+									: "Düzenle"
+							}
+							active={isSelectionMode}
+							onPress={() =>
+								isSelectionMode
+									? exitSelection()
+									: setIsSelectionMode(true)
+							}
+						/>
+					</View>
+
+					{/* 5-6. İÇERİK: sol sütun (bölüm başlığı + ızgara) + sağda Hızlı İşlemler.
+					    Panel bölüm başlığı hizasından başlar; ızgaranın altından
+					    başlayınca ekranın altına taşıyordu. */}
+					<View style={[styles.contentRow, { gap: PADDING_HORIZONTAL }]}>
+						<View style={styles.contentColumn}>
+							<View
+								style={[
+									styles.sectionRow,
+									{
+										paddingHorizontal: PADDING_HORIZONTAL,
+										marginTop: sp(14),
+										marginBottom: sp(10),
+										gap: sp(8),
+									},
+								]}>
+								<Text
+									numberOfLines={1}
+									style={[
+										styles.sectionTitle,
+										{ fontSize: sp(11) },
+									]}>
+									{`${activeTabLabel} (${
+										isSelectionMode
+											? `${selectedIds.size} Seçili`
+											: displayedItems.length
+									})`}
+								</Text>
+								{isSelectionMode && displayedItems.length > 0 ? (
+									<TVPressable
+										onPress={toggleSelectAll}
+										activeOpacity={0.75}
+										style={({ focused }) => [
+											{
+												paddingHorizontal: sp(8),
+												paddingVertical: sp(2),
+												borderRadius: sp(8),
+											},
+											focused && styles.focusRing,
+										]}>
+										<Text
+											style={[
+												styles.selectAllText,
+												{ fontSize: sp(12) },
+											]}>
+											{selectedIds.size >=
+											displayedItems.length
+												? "Seçimi Kaldır"
+												: "Tümünü Seç"}
+										</Text>
+									</TVPressable>
+								) : null}
+							</View>
+
+							<FlatList
+								key={
+									viewMode === "list"
+										? "list"
+										: `grid-${columns}`
+								}
+								contentInsetAdjustmentBehavior="automatic"
+								data={displayedItems}
+								renderItem={
+									viewMode === "list"
+										? renderListRow
+										: renderGridCard
+								}
+								keyExtractor={gridKeyExtractor}
+								numColumns={columns}
+								style={{ flex: 1 }}
+								contentContainerStyle={[
+									styles.listContent,
+									displayedItems.length === 0 &&
+										styles.listContentEmpty,
+								]}
+								columnWrapperStyle={
+									columns > 1 ? styles.columnWrapper : undefined
+								}
+								ListEmptyComponent={renderEmptyState}
+								showsVerticalScrollIndicator={false}
+								// removeClippedSubviews TV'de false KALMALI: odaklı
+								// kartın detache olması kumanda odağını kaybettirir.
+								initialNumToRender={6}
+								maxToRenderPerBatch={4}
+								windowSize={5}
+								removeClippedSubviews={false}
+							/>
+						</View>
+						{showQuickActions ? renderQuickActions() : null}
+					</View>
+
+					{/* 7. SEÇİM ÇUBUĞU */}
+					{isSelectionMode && displayedItems.length > 0
+						? renderSelectionBar()
+						: null}
 				</View>
 
-				{/* 3. LİSTE BAŞLIĞI: YAPIM SAYISI & SIRALAMA BUTONU */}
-				<View style={styles.subHeader}>
-					<View style={styles.subHeaderLeft}>
-						<Text style={styles.itemCountText}>
-							{displayedItems.length} Yapım
+				<BottomNavigation activeRoute="/(app)/library" />
+
+				{/* 8. SIRALA VE FİLTRELE */}
+				<BottomSheetModal
+					visible={isSortModalVisible}
+					onClose={() => setIsSortModalVisible(false)}
+					snapToHeight={isTV ? 0.9 : 0.68}
+					title="Sırala ve Filtrele"
+					opacity={0.7}
+					handle={true}>
+					<ScrollView
+						showsVerticalScrollIndicator={false}
+						contentContainerStyle={{ paddingBottom: sp(12) }}>
+						<Text
+							style={[
+								styles.sheetLabel,
+								{ fontSize: sp(11), marginBottom: sp(8) },
+							]}>
+							SIRALAMA ÖLÇÜTÜ
 						</Text>
-						<View style={styles.dotSeparator} />
-						<Text style={styles.subHeaderDate}>
-							Son Güncelleme: Bugün
+						<View style={{ gap: sp(6) }}>
+							{sortOptions.map((opt) => {
+								const isSelected = sortBy === opt.key;
+								return (
+									<TVPressable
+										key={opt.key}
+										onPress={() => setSortBy(opt.key)}
+										activeOpacity={0.75}
+										style={({ focused }) => [
+											styles.sheetRow,
+											{
+												height: sp(44),
+												borderRadius: sp(12),
+												paddingHorizontal: sp(12),
+												gap: sp(10),
+											},
+											isSelected &&
+												styles.sheetRowActive,
+											focused && styles.focusRing,
+										]}>
+										<View
+											style={[
+												styles.radio,
+												{
+													width: sp(18),
+													height: sp(18),
+													borderRadius: sp(9),
+												},
+												isSelected &&
+													styles.radioActive,
+											]}>
+											{isSelected ? (
+												<View
+													style={[
+														styles.radioDot,
+														{
+															width: sp(8),
+															height: sp(8),
+															borderRadius: sp(4),
+														},
+													]}
+												/>
+											) : null}
+										</View>
+										<Text
+											numberOfLines={1}
+											style={[
+												styles.sheetRowText,
+												{
+													fontSize: sp(13),
+													color: isSelected
+														? Palette.onSurface
+														: Palette.onSurfaceVariant,
+												},
+											]}>
+											{opt.label}
+										</Text>
+									</TVPressable>
+								);
+							})}
+						</View>
+
+						<Text
+							style={[
+								styles.sheetLabel,
+								{
+									fontSize: sp(11),
+									marginTop: sp(18),
+									marginBottom: sp(8),
+								},
+							]}>
+							TÜR
 						</Text>
-					</View>
+						<View style={[styles.chipRow, { gap: sp(8) }]}>
+							{Object.keys(typeLabels).map((key) => (
+								<Pill
+									key={key}
+									label={`${typeLabels[key]} (${typeCounts[key] ?? 0})`}
+									active={typeFilter === key}
+									onPress={() => setTypeFilter(key)}
+								/>
+							))}
+						</View>
+
+						<Text
+							style={[
+								styles.sheetLabel,
+								{
+									fontSize: sp(11),
+									marginTop: sp(18),
+									marginBottom: sp(8),
+								},
+							]}>
+							İLERLEME DURUMU
+						</Text>
+						<View style={[styles.chipRow, { gap: sp(8) }]}>
+							<Pill
+								label="Devam Edenler"
+								active={progressFilter === "in_progress"}
+								onPress={() =>
+									setProgressFilter((p) =>
+										p === "in_progress"
+											? "all"
+											: "in_progress",
+									)
+								}
+							/>
+							<Pill
+								label="Henüz Başlanmayanlar"
+								active={progressFilter === "not_started"}
+								onPress={() =>
+									setProgressFilter((p) =>
+										p === "not_started"
+											? "all"
+											: "not_started",
+									)
+								}
+							/>
+						</View>
+					</ScrollView>
 
 					<TVPressable
-						style={styles.quickSortButton}
-						focusedStyle={styles.quickSortButtonFocused}
-						onPress={() => setIsSortModalVisible(true)}>
+						onPress={resetFilters}
+						activeOpacity={0.75}
+						style={({ focused }) => [
+							styles.resetButton,
+							{
+								height: sp(46),
+								borderRadius: sp(23),
+								marginTop: sp(12),
+							},
+							focused && styles.focusRing,
+						]}>
 						<Ionicons
-							name="swap-vertical"
-							size={13}
-							color="#cbd5e1"
+							name="refresh"
+							size={sp(16)}
+							color={Palette.onSurface}
 						/>
-						<Text style={styles.quickSortText}>
-							{sortLabels[sortBy] || "Sırala"}
+						<Text
+							style={[
+								styles.resetButtonText,
+								{ fontSize: sp(14) },
+							]}>
+							Filtreleri Sıfırla
 						</Text>
 					</TVPressable>
-				</View>
+				</BottomSheetModal>
 
-				{/* 4. MEDYA LİSTESİ (IZGARA / BOŞ DURUM) */}
-				<FlatList
-					contentInsetAdjustmentBehavior="automatic"
-					data={displayedItems}
-					renderItem={renderGridCard}
-					keyExtractor={gridKeyExtractor}
-					numColumns={columns}
-					contentContainerStyle={[
-						styles.listContent,
-						displayedItems.length === 0 && styles.listContentEmpty,
-						contentMaxWidth
-							? {
-									alignSelf: "center",
-									width: "100%",
-									maxWidth: contentMaxWidth,
-								}
-							: null,
-					]}
-					columnWrapperStyle={
-						displayedItems.length > 0
-							? styles.columnWrapper
-							: undefined
-					}
-					ListEmptyComponent={renderEmptyState}
-					showsVerticalScrollIndicator={false}
-					// Sanallaştırma ayarları (ana medya ızgarası).
-					// removeClippedSubviews TV'de false KALMALI: odaklı kartın
-					// detache olması kumanda odağını kaybettirir.
-					initialNumToRender={6}
-					maxToRenderPerBatch={4}
-					windowSize={5}
-					removeClippedSubviews={false}
-				/>
-
-				{/* 5. KAYAN SIRALAMA BUTONU (FAB - Yalnızca liste doluyken) */}
-				{displayedItems.length > 0 && (
-					<View style={styles.floatingFabWrapper}>
-						<TouchableOpacity
-							style={styles.floatingFab}
-							onPress={() => setIsSortModalVisible(true)}
-							activeOpacity={0.85}>
-							<Ionicons
-								name="filter-outline"
-								size={17}
-								color="#E50914"
-							/>
-							<Text style={styles.floatingFabText}>Sırala</Text>
-						</TouchableOpacity>
+				{/* 9. TOPLU LİSTE SEÇİMİ */}
+				<BottomSheetModal
+					visible={isBulkListSheetVisible}
+					onClose={() => setIsBulkListSheetVisible(false)}
+					fitContent={true}
+					title={`${selectedIds.size} içeriği taşı`}
+					opacity={0.7}
+					handle={true}>
+					<View style={{ gap: sp(8), paddingBottom: sp(8) }}>
+						{[
+							{
+								key: "watching",
+								label: "İzlemeye Devam Edenler",
+								icon: "play-circle-outline",
+							},
+							{
+								key: "planned",
+								label: "Planlananlar",
+								icon: "bookmark-outline",
+							},
+							{
+								key: "completed",
+								label: "Tamamlananlar",
+								icon: "checkmark-circle-outline",
+							},
+						].map((opt) => (
+							<TVPressable
+								key={opt.key}
+								onPress={() => handleBulkMoveToList(opt.key)}
+								activeOpacity={0.75}
+								style={({ focused }) => [
+									styles.sheetRow,
+									{
+										height: sp(50),
+										borderRadius: sp(12),
+										paddingHorizontal: sp(12),
+										gap: sp(10),
+									},
+									focused && styles.focusRing,
+								]}>
+								<Ionicons
+									name={opt.icon}
+									size={sp(18)}
+									color={Palette.primary}
+								/>
+								<Text
+									numberOfLines={1}
+									style={[
+										styles.sheetRowText,
+										{
+											fontSize: sp(14),
+											color: Palette.onSurface,
+										},
+									]}>
+									{opt.label}
+								</Text>
+							</TVPressable>
+						))}
 					</View>
-				)}
+				</BottomSheetModal>
 
-				{/* 6. SIRALA VE FİLTRELE BOTTOM SHEET MODAL */}
-				<Modal
-					visible={isSortModalVisible}
-					transparent
-					animationType="fade"
-					onRequestClose={() => setIsSortModalVisible(false)}>
-					<Pressable
-						style={styles.modalOverlay}
-						onPress={() => setIsSortModalVisible(false)}>
-						<Pressable style={styles.modalSheet}>
-							{/* Çekme Çubuğu */}
-							<View style={styles.modalDragHandle} />
-
-							{/* Modal Başlığı */}
-							<View style={styles.modalHeader}>
-								<View>
-									<View style={styles.modalTitleRow}>
-										<Ionicons
-											name="options-outline"
-											size={20}
-											color="#E50914"
-										/>
-										<Text style={styles.modalTitle}>
-											Sırala ve Filtrele
-										</Text>
-									</View>
-									<Text style={styles.modalSubtitle}>
-										Kitaplık görünümünü özelleştirin
-									</Text>
-								</View>
-
-								<View style={styles.modalHeaderActions}>
-									<TouchableOpacity
-										onPress={() => {
-											setSortBy("last_watched");
-											setTypeFilter("all");
-											setProgressFilter("all");
-										}}
-										style={styles.resetButton}>
-										<Text style={styles.resetButtonText}>
-											Sıfırla
-										</Text>
-									</TouchableOpacity>
-									<TouchableOpacity
-										style={styles.closeButton}
-										onPress={() =>
-											setIsSortModalVisible(false)
-										}>
-										<Ionicons
-											name="close"
-											size={18}
-											color="#94a3b8"
-										/>
-									</TouchableOpacity>
-								</View>
-							</View>
-
-							{/* Kaydırılabilir Filtre Seçenekleri */}
-							<ScrollView
-								style={styles.modalScrollView}
-								showsVerticalScrollIndicator={false}>
-								{/* BÖLÜM 1: SIRALAMA ÖLÇÜTÜ */}
-								<View style={styles.modalSection}>
-									<View style={styles.sectionHeaderRow}>
-										<Text style={styles.sectionTitle}>
-											SIRALAMA ÖLÇÜTÜ
-										</Text>
-										<Text style={styles.sectionBadge}>
-											1 Seçili
-										</Text>
-									</View>
-
-									<View style={styles.radioList}>
-										{[
-											{
-												key: "last_watched",
-												label: "Son İzlenen",
-												desc: "En son etkileşimde bulunulanlar üstte",
-												isDefault: true,
-											},
-											{
-												key: "date_added",
-												label: "Eklenme Tarihi (En Yeni)",
-												desc: "Son eklenen yapımlar önce",
-											},
-											{
-												key: "name_asc",
-												label: "İsim (A-Z)",
-												desc: "Alfabetik sıralama",
-											},
-											{
-												key: "imdb_desc",
-												label: "IMDb Puanı (Yüksekten Düşüğe)",
-												desc: "Puanı en yüksek yapımlar",
-												hasStar: true,
-											},
-											{
-												key: "remaining_time",
-												label: "Kalan Süre",
-												desc: "Bitmeye en yakın olanlar",
-											},
-										].map((opt) => {
-											const isSelected =
-												sortBy === opt.key;
-											return (
-												<TouchableOpacity
-													key={opt.key}
-													style={[
-														styles.radioOption,
-														isSelected &&
-															styles.radioOptionActive,
-													]}
-													onPress={() =>
-														setSortBy(opt.key)
-													}
-													activeOpacity={0.75}>
-													<View
-														style={
-															styles.radioLeft
-														}>
-														<View
-															style={[
-																styles.radioCircle,
-																isSelected &&
-																	styles.radioCircleActive,
-															]}>
-															{isSelected && (
-																<View
-																	style={
-																		styles.radioDot
-																	}
-																/>
-															)}
-														</View>
-														<View>
-															<View
-																style={
-																	styles.optionTitleRow
-																}>
-																<Text
-																	style={[
-																		styles.optionTitle,
-																		isSelected &&
-																			styles.optionTitleActive,
-																	]}>
-																	{opt.label}
-																</Text>
-																{opt.hasStar && (
-																	<Ionicons
-																		name="star"
-																		size={
-																			13
-																		}
-																		color="#F5C518"
-																	/>
-																)}
-															</View>
-															<Text
-																style={
-																	styles.optionDesc
-																}>
-																{opt.desc}
-															</Text>
-														</View>
-													</View>
-
-													{opt.isDefault && (
-														<View
-															style={
-																styles.defaultBadge
-															}>
-															<Text
-																style={
-																	styles.defaultBadgeText
-																}>
-																Varsayılan
-															</Text>
-														</View>
-													)}
-												</TouchableOpacity>
-											);
-										})}
-									</View>
-								</View>
-
-								{/* BÖLÜM 2: TÜR FİLTRESİ */}
-								<View style={styles.modalSection}>
-									<Text style={styles.sectionTitle}>
-										TÜR FİLTRESİ
-									</Text>
-									<View style={styles.chipsRow}>
-										{[
-											{ key: "all", label: "Tümü" },
-											{ key: "movie", label: "Filmler" },
-											{ key: "series", label: "Diziler" },
-											{ key: "anime", label: "Anime" },
-										].map((chip) => {
-											const isChipSelected =
-												typeFilter === chip.key;
-											return (
-												<TouchableOpacity
-													key={chip.key}
-													style={[
-														styles.filterChip,
-														isChipSelected &&
-															styles.filterChipActive,
-													]}
-													onPress={() =>
-														setTypeFilter(chip.key)
-													}
-													activeOpacity={0.75}>
-													<Text
-														style={[
-															styles.filterChipText,
-															isChipSelected &&
-																styles.filterChipTextActive,
-														]}>
-														{chip.label}
-													</Text>
-												</TouchableOpacity>
-											);
-										})}
-									</View>
-								</View>
-
-								{/* BÖLÜM 3: İLERLEME DURUMU */}
-								<View style={styles.modalSection}>
-									<Text style={styles.sectionTitle}>
-										İLERLEME DURUMU
-									</Text>
-									<View style={styles.progressRow}>
-										<TouchableOpacity
-											style={[
-												styles.progressButton,
-												progressFilter ===
-													"in_progress" &&
-													styles.progressButtonActive,
-											]}
-											onPress={() =>
-												setProgressFilter((p) =>
-													p === "in_progress"
-														? "all"
-														: "in_progress",
-												)
-											}
-											activeOpacity={0.75}>
-											<Ionicons
-												name="play"
-												size={14}
-												color={
-													progressFilter ===
-													"in_progress"
-														? "#E50914"
-														: "#94a3b8"
-												}
-											/>
-											<Text
-												style={[
-													styles.progressButtonText,
-													progressFilter ===
-														"in_progress" &&
-														styles.progressButtonTextActive,
-												]}>
-												Devam Edenler
-											</Text>
-										</TouchableOpacity>
-
-										<TouchableOpacity
-											style={[
-												styles.progressButton,
-												progressFilter ===
-													"not_started" &&
-													styles.progressButtonActive,
-											]}
-											onPress={() =>
-												setProgressFilter((p) =>
-													p === "not_started"
-														? "all"
-														: "not_started",
-												)
-											}
-											activeOpacity={0.75}>
-											<Ionicons
-												name="hourglass-outline"
-												size={14}
-												color={
-													progressFilter ===
-													"not_started"
-														? "#E50914"
-														: "#94a3b8"
-												}
-											/>
-											<Text
-												style={[
-													styles.progressButtonText,
-													progressFilter ===
-														"not_started" &&
-														styles.progressButtonTextActive,
-												]}>
-												Henüz Başlanmayanlar
-											</Text>
-										</TouchableOpacity>
-									</View>
-								</View>
-							</ScrollView>
-
-							{/* Alt Eylem Butonu */}
-							<View style={styles.modalFooter}>
-								<TouchableOpacity
-									style={styles.applyFilterButton}
-									onPress={() => setIsSortModalVisible(false)}
-									activeOpacity={0.85}>
-									<Ionicons
-										name="filter"
-										size={18}
-										color="#ffffff"
-									/>
-									<Text style={styles.applyFilterButtonText}>
-										Sonuçları Göster (
-										{displayedItems.length} Yapım)
-									</Text>
-								</TouchableOpacity>
-							</View>
-						</Pressable>
-					</Pressable>
-				</Modal>
-
-				{/* 8. KART EYLEM SEÇENEKLERİ MODALI (Alert yerine şık alt sayfa) */}
+				{/* 10. KART EYLEM MENÜSÜ */}
 				<LibraryItemActionModal
 					visible={isActionModalVisible}
 					item={selectedActionItem}
@@ -1680,7 +2120,7 @@ export default function LibraryScreen() {
 					}}
 				/>
 
-				{/* 9. LİSTE SEÇİM / TAŞIMA MODALI */}
+				{/* 11. TEK ÖĞE LİSTE SEÇİMİ */}
 				<ListSelectModal
 					visible={isListSelectModalVisible}
 					movie={listSelectTargetItem}
@@ -1689,179 +2129,436 @@ export default function LibraryScreen() {
 						await loadLibraryData();
 					}}
 				/>
-
-				{/* 7. ALT GEZİNTİ ÇUBUĞU */}
-				<BottomNavigation activeRoute="/(app)/library" />
 			</SafeAreaView>
 		</>
+	);
+}
+
+/* ── Sunum bileşenleri (liste dışında: yeniden kurulmasın) ───────── */
+
+function Pill({ icon, label, active = false, onPress }) {
+	const { sp } = useTvMetrics();
+	return (
+		<TVPressable
+			onPress={onPress}
+			activeOpacity={0.75}
+			style={({ focused }) => [
+				styles.pill,
+				{
+					height: sp(34),
+					borderRadius: sp(17),
+					paddingHorizontal: sp(12),
+					gap: sp(6),
+				},
+				active && styles.pillActive,
+				focused && styles.focusRing,
+			]}>
+			{icon ? (
+				<Ionicons
+					name={icon}
+					size={sp(13)}
+					color={active ? Palette.onPrimary : Palette.onSurfaceVariant}
+				/>
+			) : null}
+			<Text
+				numberOfLines={1}
+				style={[
+					styles.pillText,
+					{
+						fontSize: sp(12),
+						color: active ? Palette.onPrimary : Palette.onSurfaceVariant,
+					},
+				]}>
+				{label}
+			</Text>
+		</TVPressable>
+	);
+}
+
+function LibraryCard({
+	item,
+	width,
+	selected,
+	onPress,
+	onLongPress,
+	onFocus,
+	onMore,
+}) {
+	const { sp } = useTvMetrics();
+	const m = cardMeta(item);
+
+	return (
+		<TVPressable
+			onPress={onPress}
+			onLongPress={onLongPress}
+			onFocus={onFocus}
+			activeOpacity={0.85}
+			accessibilityLabel={m.title}
+			style={({ focused }) => [
+				styles.card,
+				{ width, borderRadius: sp(14) },
+				(selected || focused) && styles.cardActive,
+			]}>
+			<View style={styles.posterWrap}>
+				<Image
+					source={{ uri: m.posterUri }}
+					style={styles.posterImage}
+					contentFit="cover"
+					transition={0}
+					recyclingKey={m.posterUri}
+				/>
+
+				{m.plugin ? (
+					<View
+						style={[
+							styles.pluginBadge,
+							{
+								borderRadius: sp(6),
+								paddingHorizontal: sp(6),
+								paddingVertical: sp(2),
+							},
+						]}>
+						<Text
+							numberOfLines={1}
+							style={[
+								styles.pluginBadgeText,
+								{ fontSize: sp(9) },
+							]}>
+							{m.plugin}
+						</Text>
+					</View>
+				) : null}
+
+				{m.ratingVal ? (
+					<View
+						style={[
+							styles.ratingBadge,
+							{
+								borderRadius: sp(8),
+								paddingHorizontal: sp(6),
+								paddingVertical: sp(2),
+								gap: sp(3),
+							},
+						]}>
+						<Ionicons
+							name="star"
+							size={sp(10)}
+							color={Palette.tertiary}
+						/>
+						<Text
+							style={[
+								styles.ratingText,
+								{ fontSize: sp(10) },
+							]}>
+							{m.ratingVal}
+						</Text>
+					</View>
+				) : null}
+			</View>
+
+			<View style={styles.progressTrack}>
+				<View
+					style={[
+						styles.progressFill,
+						{ width: `${m.progressPercent || 0}%` },
+					]}
+				/>
+			</View>
+
+			<View
+				style={[
+					styles.cardBody,
+					{
+						paddingHorizontal: sp(10),
+						paddingTop: sp(8),
+						paddingBottom: sp(10),
+						gap: sp(4),
+					},
+				]}>
+				<View style={[styles.cardTitleRow, { gap: sp(6) }]}>
+					<Text
+						numberOfLines={1}
+						style={[styles.cardTitle, { fontSize: sp(14) }]}>
+						{m.title}
+					</Text>
+					<TVPressable
+						onPress={onMore}
+						hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+						accessibilityLabel="Seçenekler"
+						style={({ focused }) => [
+							{
+								width: sp(20),
+								height: sp(20),
+								borderRadius: sp(10),
+								alignItems: "center",
+								justifyContent: "center",
+							},
+							focused && styles.focusRing,
+						]}>
+						<Ionicons
+							name="ellipsis-vertical"
+							size={sp(13)}
+							color={Palette.onSurfaceVariant}
+						/>
+					</TVPressable>
+				</View>
+
+				<View style={[styles.cardMetaRow, { gap: sp(6) }]}>
+					<Text
+						numberOfLines={1}
+						style={[styles.cardMeta, { fontSize: sp(11) }]}>
+						{m.episodeText}
+						{m.progressPercent > 0
+							? ` · %${m.progressPercent}`
+							: ""}
+					</Text>
+					{m.remainingText ? (
+						<Text
+							numberOfLines={1}
+							style={[
+								styles.cardRemaining,
+								{ fontSize: sp(11) },
+							]}>
+							{m.remainingText}
+						</Text>
+					) : null}
+				</View>
+			</View>
+		</TVPressable>
+	);
+}
+
+function LibraryRow({
+	item,
+	selected,
+	onPress,
+	onLongPress,
+	onFocus,
+	onMore,
+}) {
+	const { sp } = useTvMetrics();
+	const m = cardMeta(item);
+
+	return (
+		<TVPressable
+			onPress={onPress}
+			onLongPress={onLongPress}
+			onFocus={onFocus}
+			activeOpacity={0.85}
+			accessibilityLabel={m.title}
+			style={({ focused }) => [
+				styles.row,
+				{
+					borderRadius: sp(12),
+					padding: sp(8),
+					gap: sp(12),
+				},
+				(selected || focused) && styles.cardActive,
+			]}>
+			<Image
+				source={{ uri: m.posterUri }}
+				style={[
+					styles.rowPoster,
+					{
+						width: sp(56),
+						height: sp(84),
+						borderRadius: sp(8),
+					},
+				]}
+				contentFit="cover"
+				transition={0}
+				recyclingKey={m.posterUri}
+			/>
+
+			<View style={[styles.rowBody, { gap: sp(6) }]}>
+				<Text
+					numberOfLines={1}
+					style={[styles.rowTitle, { fontSize: sp(14) }]}>
+					{m.title}
+				</Text>
+				<Text
+					numberOfLines={1}
+					style={[styles.rowMeta, { fontSize: sp(11) }]}>
+					{m.episodeText}
+				</Text>
+				<View style={styles.progressTrack}>
+					<View
+						style={[
+							styles.progressFill,
+							{ width: `${m.progressPercent || 0}%` },
+						]}
+					/>
+				</View>
+			</View>
+
+			{m.remainingText ? (
+				<Text
+					numberOfLines={1}
+					style={[styles.cardRemaining, { fontSize: sp(11) }]}>
+					{m.remainingText}
+				</Text>
+			) : null}
+
+			<TVPressable
+				onPress={onMore}
+				hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+				accessibilityLabel="Seçenekler"
+				style={({ focused }) => [
+					{
+						width: sp(24),
+						height: sp(24),
+						borderRadius: sp(12),
+						alignItems: "center",
+						justifyContent: "center",
+					},
+					focused && styles.focusRing,
+				]}>
+				<Ionicons
+					name="ellipsis-vertical"
+					size={sp(14)}
+					color={Palette.onSurfaceVariant}
+				/>
+			</TVPressable>
+		</TVPressable>
 	);
 }
 
 const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
-		backgroundColor: "#0B0E14",
+		backgroundColor: Palette.background,
+	},
+	page: {
+		flex: 1,
 	},
 
-	/* 1. Üst Çubuk */
-	topBar: {
+	/* 1. Başlık */
+	titleRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: PADDING_HORIZONTAL,
-		paddingTop: 8,
-		paddingBottom: 10,
-		gap: 10,
 	},
-	searchContainer: {
-		flex: 1,
+	screenTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		letterSpacing: -0.4,
+	},
+	countPill: {
+		backgroundColor: Palette.surfaceHigh,
+	},
+	countPillText: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.semiBold,
+	},
+	segmented: {
+		flexDirection: "row",
+		backgroundColor: Palette.surfaceLow,
+	},
+	iconButton: {
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.surfaceHigh,
+	},
+	segmentItem: {
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	segmentItemActive: {
+		backgroundColor: Palette.surfaceHighest,
+	},
+
+	/* Hap (sıralama / tür / düzenle) */
+	pill: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: "#161B24",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.08)",
-		borderRadius: 24,
-		paddingHorizontal: 12,
-		height: 40,
+		backgroundColor: Palette.surfaceLow,
+		maxWidth: "100%",
 	},
-	searchIcon: {
-		marginRight: 8,
+	pillActive: {
+		backgroundColor: Palette.primary,
+	},
+	pillText: {
+		fontFamily: FontFamily.semiBold,
+		flexShrink: 1,
+	},
+
+	/* 2. Arama */
+	searchPill: {
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: Palette.surfaceHigh,
 	},
 	searchInput: {
 		flex: 1,
-		fontSize: 13,
-		color: "#f1f5f9",
 		paddingVertical: 0,
+		color: Palette.onSurface,
+		fontFamily: FontFamily.medium,
 	},
-	iconButton: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
-		backgroundColor: "#161B24",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.08)",
-		justifyContent: "center",
+	clearButton: {
+		backgroundColor: Palette.surfaceHighest,
 		alignItems: "center",
-	},
-	iconButtonFocused: {
-		borderColor: "#FF3B30",
-		borderWidth: 1.5,
-		transform: [{ scale: 1.15 }],
+		justifyContent: "center",
 	},
 
-	/* 2. Sekmeler (Tabs) */
-	tabsWrapper: {
-		paddingVertical: 4,
-	},
-	tabsScrollContent: {
-		paddingHorizontal: PADDING_HORIZONTAL,
-		gap: 8,
-	},
+	/* 3. Sekmeler */
 	tabPill: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: 14,
-		paddingVertical: 8,
-		borderRadius: 20,
-		gap: 6,
 	},
 	tabPillActive: {
-		backgroundColor: "#E50914",
+		backgroundColor: Palette.primary,
 	},
-	tabPillInactive: {
-		backgroundColor: "#161B24",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.06)",
-	},
-	tabPillFocused: {
-		borderColor: "#FF3B30",
-		borderWidth: 1.5,
-		transform: [{ scale: 1.08 }],
+	tabPillIdle: {
+		backgroundColor: Palette.surfaceLow,
 	},
 	tabText: {
-		fontSize: 12,
-	},
-	tabTextActive: {
-		color: "#ffffff",
-		fontWeight: "700",
-	},
-	tabTextInactive: {
-		color: "#cbd5e1",
-		fontWeight: "500",
+		fontFamily: FontFamily.semiBold,
 	},
 	tabCountPill: {
-		backgroundColor: "rgba(0, 0, 0, 0.3)",
-		paddingHorizontal: 6,
-		paddingVertical: 1,
-		borderRadius: 10,
-		marginLeft: 2,
+		backgroundColor: "rgba(14, 14, 16, 0.28)",
 	},
 	tabCountPillActive: {
-		backgroundColor: "rgba(0, 0, 0, 0.25)",
+		backgroundColor: "rgba(14, 14, 16, 0.18)",
 	},
 	tabCountText: {
-		fontSize: 10,
-		fontWeight: "700",
-		color: "#94a3b8",
-	},
-	tabCountTextActive: {
-		color: "#ffffff",
+		fontFamily: FontFamily.bold,
 	},
 
-	/* 3. Alt Başlık */
-	subHeader: {
+	/* 4. Araç çubuğu */
+	toolbar: {
+		flexDirection: "row",
+		alignItems: "center",
+		flexWrap: "wrap",
+	},
+
+	/* 5. Bölüm başlığı */
+	sectionRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		paddingHorizontal: PADDING_HORIZONTAL,
-		paddingTop: 12,
-		paddingBottom: 10,
 	},
-	subHeaderLeft: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 6,
+	sectionTitle: {
+		flexShrink: 1,
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.bold,
+		letterSpacing: 1.1,
+		textTransform: "uppercase",
 	},
-	itemCountText: {
-		fontSize: 12,
-		fontWeight: "700",
-		color: "#e2e8f0",
-	},
-	dotSeparator: {
-		width: 3,
-		height: 3,
-		borderRadius: 1.5,
-		backgroundColor: "#64748b",
-	},
-	subHeaderDate: {
-		fontSize: 11,
-		color: "#64748b",
-	},
-	quickSortButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		backgroundColor: "#161B24",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.06)",
-		paddingHorizontal: 10,
-		paddingVertical: 5,
-		borderRadius: 8,
-		gap: 5,
-	},
-	quickSortButtonFocused: {
-		borderColor: "#FF3B30",
-		borderWidth: 1.5,
-		transform: [{ scale: 1.08 }],
-	},
-	quickSortText: {
-		fontSize: 11,
-		color: "#cbd5e1",
-		fontWeight: "600",
+	selectAllText: {
+		color: Palette.primary,
+		fontFamily: FontFamily.semiBold,
 	},
 
-	/* 4. Liste & Kartlar */
+	/* 6. İçerik */
+	contentRow: {
+		flex: 1,
+		flexDirection: "row",
+	},
+	contentColumn: {
+		flex: 1,
+	},
 	listContent: {
 		paddingHorizontal: PADDING_HORIZONTAL,
-		paddingBottom: 90,
+		paddingBottom: 24,
 	},
 	listContentEmpty: {
 		flexGrow: 1,
@@ -1869,540 +2566,286 @@ const styles = StyleSheet.create({
 	},
 	columnWrapper: {
 		// ⚠️ `space-between` DEĞİL: tam dolmayan son satırda kartları iki
-		// uca yayıyordu ("yeterli veri yoksa arada boşluk oluşuyor").
-		// Kart genişlikleri satırı tam doldurduğu için (cardWidthFor) `gap`
-		// ile tam satırlar birebir aynı kalır, eksik satırlar sola paketlenir.
+		// uca yayıyordu. Kart genişlikleri satırı tam doldurduğu için
+		// (cardWidthFor) `gap` ile tam satırlar birebir aynı kalır.
 		justifyContent: "flex-start",
 		gap: CARD_GAP,
 		marginBottom: CARD_GAP,
 	},
+
+	/* Kart */
 	card: {
-		backgroundColor: "#161B24",
+		backgroundColor: Palette.surfaceLow,
 		overflow: "hidden",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.07)",
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.3,
-		shadowRadius: 8,
-		elevation: 6,
 	},
-	cardFocused: {
-		borderColor: "#FF3B30",
+	cardActive: {
+		borderColor: Palette.primary,
 		borderWidth: 2,
-		transform: [{ scale: 1.05 }],
 	},
-	centerPlayButtonFocused: {
-		borderColor: "#FFFFFF",
-		borderWidth: 2,
-		transform: [{ scale: 1.2 }],
-	},
-	moreButtonFocused: {
-		backgroundColor: "rgba(255, 59, 48, 0.35)",
-		borderRadius: 12,
-		transform: [{ scale: 1.2 }],
-	},
-	emptyCtaButtonFocused: {
-		backgroundColor: "#FF3B30",
-		transform: [{ scale: 1.06 }],
-	},
-	posterContainer: {
+	posterWrap: {
 		width: "100%",
 		aspectRatio: 2 / 3,
-		backgroundColor: "#0B0E14",
+		backgroundColor: Palette.surfaceLowest,
 		position: "relative",
 	},
 	posterImage: {
 		width: "100%",
 		height: "100%",
 	},
-	posterGradient: {
-		...StyleSheet.absoluteFill,
-		backgroundColor: "rgba(0, 0, 0, 0.25)",
-	},
-	badgeType: {
+	pluginBadge: {
 		position: "absolute",
 		top: 8,
 		left: 8,
-		paddingHorizontal: 6,
-		paddingVertical: 2,
-		borderRadius: 4,
+		maxWidth: "58%",
+		backgroundColor: "rgba(14, 14, 16, 0.78)",
 	},
-	badgeDizi: {
-		backgroundColor: "#E50914",
-	},
-	badgeFilm: {
-		backgroundColor: "rgba(30, 41, 59, 0.9)",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.1)",
-	},
-	badgeTypeText: {
-		color: "#ffffff",
-		fontSize: 9,
-		fontWeight: "800",
+	pluginBadgeText: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
 		letterSpacing: 0.5,
+		textTransform: "uppercase",
 	},
-	badgeRating: {
+	ratingBadge: {
 		position: "absolute",
 		top: 8,
 		right: 8,
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 3,
-		backgroundColor: "rgba(0, 0, 0, 0.65)",
-		paddingHorizontal: 6,
-		paddingVertical: 2,
-		borderRadius: 6,
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.1)",
+		backgroundColor: "rgba(14, 14, 16, 0.78)",
 	},
-	badgeRatingText: {
-		color: "#F5C518",
-		fontSize: 10,
-		fontWeight: "700",
+	ratingText: {
+		color: Palette.tertiary,
+		fontFamily: FontFamily.bold,
 	},
-	centerPlayButton: {
-		position: "absolute",
-		top: "50%",
-		left: "50%",
-		width: 38,
-		height: 38,
-		borderRadius: 19,
-		backgroundColor: "rgba(229, 9, 20, 0.9)",
-		justifyContent: "center",
-		alignItems: "center",
-		transform: [{ translateX: -19 }, { translateY: -19 }],
-		shadowColor: "#E50914",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.5,
-		shadowRadius: 6,
-		elevation: 6,
-	},
-	posterBottomInfo: {
-		position: "absolute",
-		bottom: 0,
-		left: 0,
-		right: 0,
-		padding: 8,
-		backgroundColor: "rgba(11, 14, 20, 0.8)",
-	},
-	progressTextRow: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		alignItems: "center",
-		marginBottom: 4,
-	},
-	episodeText: {
-		color: "#ffffff",
-		fontSize: 10,
-		fontWeight: "700",
-		flex: 1,
-	},
-	remainingText: {
-		color: "#94a3b8",
-		fontSize: 9,
-		fontWeight: "500",
-	},
-	progressBarTrack: {
+	progressTrack: {
 		height: 3,
-		borderRadius: 1.5,
-		backgroundColor: "rgba(255, 255, 255, 0.2)",
-		overflow: "hidden",
+		backgroundColor: "rgba(229, 225, 228, 0.16)",
 	},
-	progressBarFill: {
+	progressFill: {
 		height: "100%",
-		borderRadius: 1.5,
-		backgroundColor: "#E50914",
+		backgroundColor: Palette.primary,
 	},
-	cardBody: {
-		padding: 10,
+	cardBody: {},
+	cardTitleRow: {
+		flexDirection: "row",
+		alignItems: "center",
 	},
 	cardTitle: {
-		fontSize: 13,
-		fontWeight: "700",
-		color: "#f8fafc",
-		letterSpacing: -0.2,
-		marginBottom: 2,
+		flex: 1,
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
 	},
-	cardTagline: {
-		fontSize: 10,
-		color: "#94a3b8",
-		marginBottom: 8,
-	},
-	cardFooter: {
+	cardMetaRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		paddingTop: 6,
-		borderTopWidth: 1,
-		borderTopColor: "rgba(255, 255, 255, 0.06)",
 	},
-	timeRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
+	cardMeta: {
+		flexShrink: 1,
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
 	},
-	timeText: {
-		fontSize: 10,
-		color: "#cbd5e1",
-	},
-	moreButton: {
-		padding: 2,
+	cardRemaining: {
+		color: Palette.secondary,
+		fontFamily: FontFamily.semiBold,
 	},
 
-	/* Boş Durum (Empty State) */
+	/* Liste satırı */
+	row: {
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: Palette.surfaceLow,
+		marginBottom: 8,
+	},
+	rowPoster: {
+		backgroundColor: Palette.surfaceHigh,
+	},
+	rowBody: {
+		flex: 1,
+	},
+	rowTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+	},
+	rowMeta: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
+	},
+
+	/* Hızlı İşlemler paneli */
+	panel: {
+		alignSelf: "flex-start",
+		backgroundColor: Palette.surfaceLow,
+		borderWidth: 1,
+		borderColor: "rgba(229, 225, 228, 0.08)",
+	},
+	panelHeaderRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+	},
+	panelTitle: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
+		flexShrink: 0,
+	},
+	panelPlugin: {
+		backgroundColor: "rgba(192, 193, 255, 0.14)",
+		flexShrink: 1,
+		minWidth: 0,
+	},
+	panelPluginText: {
+		color: Palette.primary,
+		fontFamily: FontFamily.semiBold,
+		letterSpacing: 0.4,
+		textTransform: "uppercase",
+	},
+	panelPrimaryButton: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.primaryContainer,
+	},
+	panelPrimaryText: {
+		color: Palette.onPrimaryContainer,
+		fontFamily: FontFamily.bold,
+		flexShrink: 1,
+	},
+	panelGhostButton: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	panelGhostText: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.medium,
+		flexShrink: 1,
+	},
+
+	/* Seçim çubuğu */
+	selectionBar: {
+		backgroundColor: Palette.surfaceLow,
+		borderTopWidth: 1,
+		borderTopColor: "rgba(229, 225, 228, 0.08)",
+	},
+	selectionHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	selectionDot: {
+		backgroundColor: Palette.secondary,
+	},
+	selectionCount: {
+		flex: 1,
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+	},
+	selectionCancel: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.medium,
+	},
+	selectionActions: {
+		flexDirection: "row",
+	},
+	selectionAction: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: Palette.surfaceHigh,
+	},
+	selectionActionSecondary: {
+		backgroundColor: Palette.secondary,
+	},
+	selectionActionPrimary: {
+		backgroundColor: Palette.primaryContainer,
+	},
+	selectionActionText: {
+		fontFamily: FontFamily.semiBold,
+		textAlign: "center",
+	},
+
+	/* Boş durum */
 	emptyContainer: {
 		alignItems: "center",
 		justifyContent: "center",
-		paddingVertical: 50,
+		paddingVertical: 48,
 		paddingHorizontal: 24,
 	},
-	emptyGlowWrapper: {
-		width: 90,
-		height: 90,
-		justifyContent: "center",
-		alignItems: "center",
-		marginBottom: 20,
-		position: "relative",
-	},
-	emptyGlow: {
-		position: "absolute",
-		width: 120,
-		height: 120,
-		borderRadius: 60,
-		backgroundColor: "rgba(229, 9, 20, 0.12)",
-	},
 	emptyIconBox: {
-		width: 76,
-		height: 76,
-		borderRadius: 24,
-		backgroundColor: "#161B24",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.1)",
-		justifyContent: "center",
 		alignItems: "center",
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 6 },
-		shadowOpacity: 0.5,
-		shadowRadius: 10,
-		elevation: 8,
+		justifyContent: "center",
+		backgroundColor: Palette.surfaceHigh,
 	},
 	emptyTitle: {
-		fontSize: 17,
-		fontWeight: "800",
-		color: "#ffffff",
-		marginBottom: 8,
+		color: Palette.onSurface,
+		fontFamily: FontFamily.bold,
 		textAlign: "center",
-		letterSpacing: -0.3,
 	},
 	emptySubtitle: {
-		fontSize: 12,
-		color: "#94a3b8",
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.regular,
 		textAlign: "center",
-		lineHeight: 18,
-		maxWidth: 280,
-		marginBottom: 24,
+		lineHeight: 20,
 	},
 	emptyCtaButton: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: "#E50914",
-		paddingHorizontal: 22,
-		paddingVertical: 12,
-		borderRadius: 24,
-		gap: 8,
-		shadowColor: "#E50914",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.35,
-		shadowRadius: 8,
-		elevation: 6,
+		backgroundColor: Palette.primaryContainer,
 	},
 	emptyCtaText: {
-		color: "#ffffff",
-		fontSize: 13,
-		fontWeight: "700",
+		color: Palette.onPrimaryContainer,
+		fontFamily: FontFamily.bold,
 	},
 
-	/* Kayan FAB Sıralama Butonu */
-	floatingFabWrapper: {
-		position: "absolute",
-		bottom: 75,
-		right: 16,
-		zIndex: 30,
+	/* Sheet */
+	sheetLabel: {
+		color: Palette.onSurfaceVariant,
+		fontFamily: FontFamily.bold,
+		letterSpacing: 1.1,
 	},
-	floatingFab: {
+	sheetRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: "rgba(30, 37, 50, 0.95)",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.1)",
-		paddingHorizontal: 16,
-		paddingVertical: 10,
-		borderRadius: 20,
-		gap: 8,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.5,
-		shadowRadius: 8,
-		elevation: 8,
+		backgroundColor: Palette.surfaceLow,
 	},
-	floatingFabText: {
-		color: "#f8fafc",
-		fontSize: 12,
-		fontWeight: "700",
-		letterSpacing: 0.3,
+	sheetRowActive: {
+		backgroundColor: Palette.surface,
 	},
-
-	/* Sırala & Filtrele Bottom Sheet Modal */
-	modalOverlay: {
-		flex: 1,
-		backgroundColor: "rgba(0, 0, 0, 0.75)",
-		justifyContent: "flex-end",
+	sheetRowText: {
+		flexShrink: 1,
+		fontFamily: FontFamily.medium,
 	},
-	modalSheet: {
-		backgroundColor: "#161B24",
-		borderTopLeftRadius: 28,
-		borderTopRightRadius: 28,
-		borderTopWidth: 1,
-		borderTopColor: "rgba(255, 255, 255, 0.1)",
-		maxHeight: "86%",
-		paddingBottom: 20,
-	},
-	modalDragHandle: {
-		width: 44,
-		height: 4,
-		borderRadius: 2,
-		backgroundColor: "rgba(255, 255, 255, 0.2)",
-		alignSelf: "center",
-		marginTop: 10,
-		marginBottom: 6,
-	},
-	modalHeader: {
-		flexDirection: "row",
+	radio: {
+		borderWidth: 1.5,
+		borderColor: Palette.outline,
 		alignItems: "center",
-		justifyContent: "space-between",
-		paddingHorizontal: 20,
-		paddingVertical: 12,
-		borderBottomWidth: 1,
-		borderBottomColor: "rgba(255, 255, 255, 0.06)",
-	},
-	modalTitleRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 8,
-	},
-	modalTitle: {
-		fontSize: 17,
-		fontWeight: "800",
-		color: "#ffffff",
-		letterSpacing: -0.2,
-	},
-	modalSubtitle: {
-		fontSize: 11,
-		color: "#94a3b8",
-		marginTop: 2,
-	},
-	modalHeaderActions: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 10,
-	},
-	resetButton: {
-		paddingHorizontal: 8,
-		paddingVertical: 4,
-	},
-	resetButtonText: {
-		fontSize: 12,
-		fontWeight: "600",
-		color: "#94a3b8",
-	},
-	closeButton: {
-		width: 32,
-		height: 32,
-		borderRadius: 16,
-		backgroundColor: "#1E2532",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.08)",
 		justifyContent: "center",
-		alignItems: "center",
 	},
-	modalScrollView: {
-		paddingHorizontal: 20,
-		paddingVertical: 14,
-	},
-	modalSection: {
-		marginBottom: 20,
-	},
-	sectionHeaderRow: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		alignItems: "center",
-		marginBottom: 10,
-	},
-	sectionTitle: {
-		fontSize: 11,
-		fontWeight: "800",
-		color: "#94a3b8",
-		letterSpacing: 0.6,
-		marginBottom: 10,
-	},
-	sectionBadge: {
-		fontSize: 10,
-		fontWeight: "700",
-		color: "#E50914",
-	},
-	radioList: {
-		gap: 8,
-	},
-	radioOption: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		padding: 12,
-		borderRadius: 14,
-		backgroundColor: "rgba(30, 37, 50, 0.6)",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.05)",
-	},
-	radioOptionActive: {
-		backgroundColor: "rgba(229, 9, 20, 0.08)",
-		borderColor: "rgba(229, 9, 20, 0.35)",
-	},
-	radioLeft: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 12,
-		flex: 1,
-	},
-	radioCircle: {
-		width: 18,
-		height: 18,
-		borderRadius: 9,
-		borderWidth: 2,
-		borderColor: "#64748b",
-		justifyContent: "center",
-		alignItems: "center",
-	},
-	radioCircleActive: {
-		borderColor: "#E50914",
+	radioActive: {
+		borderColor: Palette.primary,
 	},
 	radioDot: {
-		width: 8,
-		height: 8,
-		borderRadius: 4,
-		backgroundColor: "#E50914",
+		backgroundColor: Palette.primary,
 	},
-	optionTitleRow: {
+	chipRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 6,
+		flexWrap: "wrap",
 	},
-	optionTitle: {
-		fontSize: 13,
-		fontWeight: "600",
-		color: "#cbd5e1",
-	},
-	optionTitleActive: {
-		color: "#ffffff",
-		fontWeight: "700",
-	},
-	optionDesc: {
-		fontSize: 10,
-		color: "#64748b",
-		marginTop: 2,
-	},
-	defaultBadge: {
-		backgroundColor: "rgba(229, 9, 20, 0.18)",
-		borderWidth: 1,
-		borderColor: "rgba(229, 9, 20, 0.3)",
-		paddingHorizontal: 6,
-		paddingVertical: 2,
-		borderRadius: 4,
-	},
-	defaultBadgeText: {
-		fontSize: 9,
-		fontWeight: "800",
-		color: "#E50914",
-	},
-	chipsRow: {
-		flexDirection: "row",
-		gap: 8,
-	},
-	filterChip: {
-		flex: 1,
-		paddingVertical: 10,
-		borderRadius: 12,
-		backgroundColor: "#1E2532",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.06)",
-		alignItems: "center",
-	},
-	filterChipActive: {
-		backgroundColor: "#E50914",
-		borderColor: "#E50914",
-	},
-	filterChipText: {
-		fontSize: 11,
-		fontWeight: "600",
-		color: "#cbd5e1",
-	},
-	filterChipTextActive: {
-		color: "#ffffff",
-		fontWeight: "700",
-	},
-	progressRow: {
-		flexDirection: "row",
-		gap: 10,
-	},
-	progressButton: {
-		flex: 1,
+	resetButton: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "center",
-		gap: 6,
-		paddingVertical: 11,
-		borderRadius: 12,
-		backgroundColor: "#1E2532",
-		borderWidth: 1,
-		borderColor: "rgba(255, 255, 255, 0.06)",
-	},
-	progressButtonActive: {
-		backgroundColor: "rgba(255, 255, 255, 0.08)",
-		borderColor: "rgba(229, 9, 20, 0.4)",
-	},
-	progressButtonText: {
-		fontSize: 11,
-		fontWeight: "600",
-		color: "#94a3b8",
-	},
-	progressButtonTextActive: {
-		color: "#ffffff",
-		fontWeight: "700",
-	},
-	modalFooter: {
-		paddingHorizontal: 20,
-		paddingTop: 10,
-		borderTopWidth: 1,
-		borderTopColor: "rgba(255, 255, 255, 0.08)",
-	},
-	applyFilterButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
+		backgroundColor: Palette.surfaceHigh,
 		gap: 8,
-		backgroundColor: "#E50914",
-		paddingVertical: 14,
-		borderRadius: 16,
-		shadowColor: "#E50914",
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.4,
-		shadowRadius: 10,
-		elevation: 6,
 	},
-	applyFilterButtonText: {
-		color: "#ffffff",
-		fontSize: 14,
-		fontWeight: "800",
-		letterSpacing: 0.3,
+	resetButtonText: {
+		color: Palette.onSurface,
+		fontFamily: FontFamily.semiBold,
+	},
+
+	/* Odak: yalnızca halka */
+	focusRing: {
+		borderColor: Palette.primary,
+		borderWidth: 2,
 	},
 });
