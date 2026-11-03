@@ -30,6 +30,25 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 
 const FeedbackContext = createContext(null);
 
+/**
+ * Provider ağacının DIŞINDAN `useFeedback()` çağrılırsa dönen sessiz yedek.
+ *
+ * ⚠️ Neden var: uygulama açılışında provider'ın ÜSTÜNDE çalışan bir kancadan
+ * (ör. RootLayout içindeki `useOtaUpdate`) geri bildirim istenirse fırlatılan
+ * hata tüm uygulamayı beyaz ekrana düşürüyordu. Geri bildirim kaybolsun,
+ * uygulama açılsın.
+ */
+const FALLBACK_FEEDBACK = {
+	alert: () => Promise.resolve(false),
+	toast: {
+		show: () => {},
+		success: () => {},
+		error: () => {},
+		warning: () => {},
+		info: () => {},
+	},
+};
+
 const TOAST_MS = 2600;
 
 const TOAST_STYLE = {
@@ -220,10 +239,7 @@ export function AppFeedbackProvider({ children }) {
 
 export function useFeedback() {
 	const ctx = useContext(FeedbackContext);
-	if (!ctx) {
-		throw new Error("useFeedback, AppFeedbackProvider içinde kullanılmalı");
-	}
-	return ctx;
+	return ctx || FALLBACK_FEEDBACK;
 }
 
 const styles = StyleSheet.create({

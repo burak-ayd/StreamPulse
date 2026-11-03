@@ -34,6 +34,16 @@ import { hideNativeSplash, waitForStartupGate } from "@/utils/splashScreen";
 import MissingPermissionsGate from "@/components/permissions/MissingPermissionsGate";
 import { AppFeedbackProvider } from "@/components/feedback/AppFeedbackProvider";
 
+/**
+ * OTA kontrolünü provider ağacının İÇİNDE çalıştırır.
+ * `useOtaUpdate` geri bildirim (onay diyaloğu) kullanır; RootLayout'un
+ * gövdesinde çağrılırsa provider henüz kurulmamış olur.
+ */
+function OtaUpdateWatcher() {
+	useOtaUpdate();
+	return null;
+}
+
 export default function RootLayout() {
 	const [splashVisible, setSplashVisible] = useState(true);
 	/*
@@ -140,8 +150,11 @@ export default function RootLayout() {
 	 * bir sonraki açılışta native devreye girer. Uygulama AÇIKKEN
 	 * kontrol/reload YOK (RootLayout navigasyona abone edilmez).
 	 * Bildirim tercihi Ayarlar → "Güncelleme Bildirimi" satırında.
+	 *
+	 * ⚠️ Çağrı `OtaUpdateWatcher` içinde: kanca `useFeedback()` kullandığı
+	 * için `AppFeedbackProvider`'ın ALTINDA mount olmalı. RootLayout'un
+	 * gövdesinde çağrılırsa provider henüz kurulmamış olur.
 	 */
-	useOtaUpdate();
 
 	if (!fontsReady) return null;
 
@@ -150,6 +163,7 @@ export default function RootLayout() {
 			{/* Uygulama geneli onay diyaloğu + toast katmanı. En dışta:
 			    aşağıdaki tüm provider'lar `useFeedback()` kullanabilsin. */}
 			<AppFeedbackProvider>
+			<OtaUpdateWatcher />
 			{/*
 			 * AppUpdateProvider en dışta: hem banner hem ayarlar satırı
 			 * aynı güncelleme durumunu okusun diye tek doğruluk kaynağı
