@@ -70,7 +70,7 @@ import {
 	fetchLiveCategories,
 	fetchLiveChannels,
 } from "@/services/liveApi";
-import { ColorsM3, ScreenGutter } from "@/constants/theme";
+import { FontFamily, Palette, ScreenGutter } from "@/constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -88,7 +88,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 /** Sabit koyu palet — gerekçe `ChannelCard` dosya başında. */
-const c = ColorsM3.dark;
 
 /** Arama girdisinin sunucuya gitmeden önce bekleneceği süre (ms). */
 const ARAMA_DEBOUNCE_MS = 300;
@@ -464,12 +463,12 @@ export default function LiveScreen() {
 			<Ionicons
 				name={aramaSorgusu ? "search-outline" : "tv-outline"}
 				size={44}
-				color={c.onSurfaceVariant}
+				color={Palette.onSurfaceVariant}
 			/>
-			<Text style={[styles.centerTitle, { color: c.onSurface }]}>
+			<Text style={[styles.centerTitle, { color: Palette.onSurface }]}>
 				{aramaSorgusu ? "Eşleşen kanal yok" : "Bu kategoride kanal yok"}
 			</Text>
-			<Text style={[styles.centerText, { color: c.onSurfaceVariant }]}>
+			<Text style={[styles.centerText, { color: Palette.onSurfaceVariant }]}>
 				{aramaSorgusu
 					? `"${aramaSorgusu}" için sonuç bulunamadı. Farklı bir kelime dene ya da aramayı temizle.`
 					: "Seçili kategoride listelenecek kanal bulunamadı."}
@@ -482,10 +481,10 @@ export default function LiveScreen() {
 					<Ionicons
 						name="close-circle"
 						size={16}
-						color={c.primaryContainer}
+						color={Palette.primary}
 					/>
 					<Text
-						style={[styles.retryText, { color: c.primaryContainer }]}>
+						style={[styles.retryText, { color: Palette.primary }]}>
 						Aramayı Temizle
 					</Text>
 				</TVPressable>
@@ -498,12 +497,12 @@ export default function LiveScreen() {
 			<Ionicons
 				name="cloud-offline-outline"
 				size={44}
-				color={c.onSurfaceVariant}
+				color={Palette.onSurfaceVariant}
 			/>
-			<Text style={[styles.centerTitle, { color: c.onSurface }]}>
+			<Text style={[styles.centerTitle, { color: Palette.onSurface }]}>
 				Kanallar yüklenemedi
 			</Text>
-			<Text style={[styles.centerText, { color: c.onSurfaceVariant }]}>
+			<Text style={[styles.centerText, { color: Palette.onSurfaceVariant }]}>
 				{hataMesaji(hata)}
 			</Text>
 			{hata?.retryable ? (
@@ -515,10 +514,10 @@ export default function LiveScreen() {
 					<Ionicons
 						name="refresh"
 						size={16}
-						color={c.primaryContainer}
+						color={Palette.primary}
 					/>
 					<Text
-						style={[styles.retryText, { color: c.primaryContainer }]}>
+						style={[styles.retryText, { color: Palette.primary }]}>
 						Tekrar Dene
 					</Text>
 				</TVPressable>
@@ -535,7 +534,7 @@ export default function LiveScreen() {
 				style={[
 					styles.safeArea,
 					{
-						backgroundColor: c.surfaceLowest,
+						backgroundColor: Palette.surfaceLowest,
 						paddingLeft: contentPaddingLeft,
 					},
 				]}>
@@ -544,31 +543,24 @@ export default function LiveScreen() {
 				 * `light-content`; tema bağlamına bağlamak bu ekranda
 				 * anlamsız.
 				 */}
-				<StatusBar barStyle="light-content" backgroundColor={c.surfaceLowest} />
+				<StatusBar barStyle="light-content" backgroundColor={Palette.surfaceLowest} />
 
 				{/* Üst çubuk — geri + başlık + toplam */}
-				<View
-					style={[
-						styles.topBar,
-						{
-							backgroundColor: c.surfaceLowest,
-							borderBottomColor: `${c.surfaceContainerHigh}66`,
-						},
-					]}>
+				<View style={styles.topBar}>
 					<TVPressable
 						onPress={handleBack}
-						focusedStyle={styles.backFocused}
-						style={[
+						focusedStyle={null}
+						style={({ focused }) => [
 							styles.backBtn,
-							{ backgroundColor: `${c.surfaceContainerHigh}CC` },
+							focused && styles.backFocused,
 						]}
 						accessibilityLabel="Geri">
-						<Ionicons name="arrow-back" size={21} color={c.onSurface} />
+						<Ionicons name="arrow-back" size={21} color={Palette.onSurface} />
 					</TVPressable>
 
 					<View style={styles.topBarTitleWrap}>
 						<Text
-							style={[styles.topBarTitle, { color: c.onSurface }]}
+							style={[styles.topBarTitle, { color: Palette.onSurface }]}
 							numberOfLines={1}>
 							Canlı TV
 						</Text>
@@ -578,12 +570,9 @@ export default function LiveScreen() {
 						<View
 							style={[
 								styles.countChip,
-								{
-									backgroundColor: c.surfaceContainerHigh,
-									borderColor: c.outlineVariant,
-								},
+								{ backgroundColor: "rgba(192, 193, 255, 0.14)" },
 							]}>
-							<Text style={[styles.countText, { color: c.tertiary }]}>
+							<Text style={[styles.countText, { color: Palette.primary }]}>
 								{kategoriler.length} kategori
 							</Text>
 						</View>
@@ -605,25 +594,22 @@ export default function LiveScreen() {
 					onSelect={setSeciliKategori}
 				/>
 
-				{/* Arama kutusu — şekil `PlatformList`'ten, renkler M3'ten */}
+				{/* Arama kutusu — uygulamanın arama hapı diliyle aynı */}
 				<View style={styles.searchWrap}>
 					<View
 						style={[
 							styles.searchBox,
-							{
-								backgroundColor: c.surfaceContainer,
-								borderColor: c.outlineVariant,
-							},
+							{ backgroundColor: Palette.surfaceHigh },
 						]}>
 						<Ionicons
 							name="search"
 							size={17}
-							color={c.onSurfaceVariant}
+							color={Palette.onSurfaceVariant}
 						/>
 						<TextInput
-							style={[styles.searchInput, { color: c.onSurface }]}
+							style={[styles.searchInput, { color: Palette.onSurface }]}
 							placeholder="Kanal ara…"
-							placeholderTextColor={`${c.onSurfaceVariant}99`}
+							placeholderTextColor={`${Palette.onSurfaceVariant}99`}
 							value={arama}
 							onChangeText={setArama}
 							returnKeyType="search"
@@ -638,7 +624,7 @@ export default function LiveScreen() {
 								<Ionicons
 									name="close-circle"
 									size={16}
-									color={c.onSurfaceVariant}
+									color={Palette.onSurfaceVariant}
 								/>
 							</TVPressable>
 						) : null}
@@ -649,7 +635,7 @@ export default function LiveScreen() {
 				{kanallar.length > 0 ? (
 					<View style={styles.subHeader}>
 						<Text
-							style={[styles.subHeaderText, { color: c.onSurfaceVariant }]}>
+							style={[styles.subHeaderText, { color: Palette.onSurfaceVariant }]}>
 							{kanallar.length} kanal
 							{baslangicKategoriAdi ? ` • ${baslangicKategoriAdi}` : ""}
 							{aramaSorgusu ? ` • "${aramaSorgusu}"` : ""}
@@ -754,12 +740,12 @@ export default function LiveScreen() {
 								<View style={styles.footer}>
 									<ActivityIndicator
 										size="small"
-										color={c.primaryContainer}
+										color={Palette.primary}
 									/>
 									<Text
 										style={[
 											styles.footerText,
-											{ color: c.onSurfaceVariant },
+											{ color: Palette.onSurfaceVariant },
 										]}>
 										Güncelleniyor…
 									</Text>
@@ -785,14 +771,15 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: 12,
 		paddingHorizontal: ScreenGutter,
-		borderBottomWidth: 1,
 	},
 	backBtn: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
+		width: 36,
+		height: 36,
+		borderRadius: 12,
 		alignItems: "center",
 		justifyContent: "center",
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
 	topBarTitleWrap: {
 		flex: 1,
@@ -802,22 +789,21 @@ const styles = StyleSheet.create({
 		minWidth: 0,
 	},
 	topBarTitle: {
-		fontSize: 18,
-		lineHeight: 24,
-		fontWeight: "700",
-		letterSpacing: -0.2,
+		fontSize: 20,
+		lineHeight: 26,
+		fontFamily: FontFamily.bold,
+		letterSpacing: -0.3,
 		flexShrink: 1,
 	},
 	countChip: {
 		paddingHorizontal: 8,
 		paddingVertical: 2,
 		borderRadius: 999,
-		borderWidth: 1,
 	},
 	countText: {
 		fontSize: 11,
 		lineHeight: 16,
-		fontWeight: "700",
+		fontFamily: FontFamily.semiBold,
 	},
 
 	// Arama
@@ -827,14 +813,12 @@ const styles = StyleSheet.create({
 		paddingBottom: 4,
 	},
 	searchBox: {
-		// Ölçü ve şekil `PlatformList`'ten birebir; yalnızca renkler M3
-		// paletine taşındı (eski `#161b22` yerine `surfaceContainer`).
+		// Diğer ekranlardaki arama hapıyla aynı dil: dolgu yüzey, kenarlık yok.
 		flexDirection: "row",
 		alignItems: "center",
-		borderRadius: 12,
-		paddingHorizontal: 12,
-		height: 40,
-		borderWidth: 1,
+		borderRadius: 22,
+		paddingHorizontal: 14,
+		height: 44,
 		gap: 8,
 	},
 	searchInput: {
@@ -843,8 +827,8 @@ const styles = StyleSheet.create({
 	},
 	searchClearFocused: {
 		borderRadius: 999,
-		backgroundColor: c.surfaceContainerHighest,
-		transform: [{ scale: 1.12 }],
+		borderWidth: 2,
+		borderColor: Palette.primary,
 	},
 
 	// Liste başlığı
@@ -854,9 +838,11 @@ const styles = StyleSheet.create({
 		paddingBottom: 2,
 	},
 	subHeaderText: {
-		fontSize: 11,
+		fontSize: 10,
 		lineHeight: 16,
-		fontWeight: "600",
+		fontFamily: FontFamily.bold,
+		letterSpacing: 1.1,
+		textTransform: "uppercase",
 	},
 
 	// Izgara
@@ -883,7 +869,7 @@ const styles = StyleSheet.create({
 	centerTitle: {
 		fontSize: 15,
 		lineHeight: 20,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		textAlign: "center",
 	},
 	centerText: {
@@ -898,14 +884,14 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 18,
 		paddingVertical: 9,
 		borderRadius: 999,
-		borderWidth: 1,
-		borderColor: c.primaryContainer,
+		borderWidth: 2,
+		borderColor: Palette.primary,
 		marginTop: 4,
 	},
 	retryText: {
 		fontSize: 13,
 		lineHeight: 18,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	footer: {
 		alignItems: "center",
@@ -918,10 +904,13 @@ const styles = StyleSheet.create({
 		lineHeight: 18,
 	},
 
-	// TV odak — elevation yok (bkz. CategoryCard / ChannelCard notu)
-	backFocused: { transform: [{ scale: 1.12 }] },
+	// TV odak — yalnız kenarlık (tasarım kuralı: ölçek/dolgu yok)
+	backFocused: {
+		borderWidth: 2,
+		borderColor: Palette.primary,
+	},
 	retryFocused: {
-		backgroundColor: c.surfaceContainerHigh,
-		transform: [{ scale: 1.05 }],
+		borderWidth: 2,
+		borderColor: Palette.primary,
 	},
 });

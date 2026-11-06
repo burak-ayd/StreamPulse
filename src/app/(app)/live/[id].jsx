@@ -49,7 +49,7 @@ import {
 	fetchLiveCategories,
 	fetchLiveChannel,
 } from "@/services/liveApi";
-import { ColorsM3, ScreenGutter } from "@/constants/theme";
+import { FontFamily, Palette, ScreenGutter } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
@@ -72,11 +72,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-/** Sabit koyu palet — gerekçe `ChannelCard` dosya başında. */
-const c = ColorsM3.dark;
-
 /** Abonelik rozeti sarısı — `ChannelCard` ile aynı ton. */
-const PAY_TV_YELLOW = "#F5C518";
+const PAY_TV_YELLOW = Palette.tertiary;
 
 /**
  * `liveApi` sonucunu tek biçime indirger.
@@ -395,10 +392,10 @@ useEffect(() => {
 				<Stack.Screen options={{ headerShown: false }} />
 				<SafeAreaView
 					edges={["top", "left", "right"]}
-					style={[styles.safeArea, { backgroundColor: c.surfaceLowest }]}>
+					style={[styles.safeArea, { backgroundColor: Palette.surfaceLowest }]}>
 					<StatusBar
 						barStyle="light-content"
-						backgroundColor={c.surfaceLowest}
+						backgroundColor={Palette.surfaceLowest}
 					/>
 					<TopBar onBack={handleBack} title={kanal?.name || "Kanal"} />
 
@@ -410,14 +407,14 @@ useEffect(() => {
 									: "cloud-offline-outline"
 							}
 							size={44}
-							color={c.onSurfaceVariant}
+							color={Palette.onSurfaceVariant}
 						/>
 						<Text
-							style={[styles.centerTitle, { color: c.onSurface }]}>
+							style={[styles.centerTitle, { color: Palette.onSurface }]}>
 							{notFound ? "Kanal bulunamadı" : "Kanal yüklenemedi"}
 						</Text>
 						<Text
-							style={[styles.centerText, { color: c.onSurfaceVariant }]}>
+							style={[styles.centerText, { color: Palette.onSurfaceVariant }]}>
 							{hataMesaji(h)}
 						</Text>
 
@@ -431,10 +428,10 @@ useEffect(() => {
 								<Ionicons
 									name="refresh"
 									size={16}
-									color={c.primaryContainer}
+									color={Palette.primary}
 								/>
 								<Text
-									style={[styles.retryText, { color: c.primaryContainer }]}>
+									style={[styles.retryText, { color: Palette.primary }]}>
 									Tekrar Dene
 								</Text>
 							</TVPressable>
@@ -447,10 +444,10 @@ useEffect(() => {
 								<Ionicons
 									name="arrow-back"
 									size={16}
-									color={c.primaryContainer}
+									color={Palette.primary}
 								/>
 								<Text
-									style={[styles.retryText, { color: c.primaryContainer }]}>
+									style={[styles.retryText, { color: Palette.primary }]}>
 									Listeye Dön
 								</Text>
 							</TVPressable>
@@ -471,16 +468,16 @@ useEffect(() => {
 				<Stack.Screen options={{ headerShown: false }} />
 				<SafeAreaView
 					edges={["top", "left", "right"]}
-					style={[styles.safeArea, { backgroundColor: c.surfaceLowest }]}>
+					style={[styles.safeArea, { backgroundColor: Palette.surfaceLowest }]}>
 					<StatusBar
 						barStyle="light-content"
-						backgroundColor={c.surfaceLowest}
+						backgroundColor={Palette.surfaceLowest}
 					/>
 					<TopBar onBack={handleBack} title="Kanal" />
 					<View style={styles.center}>
-						<ActivityIndicator color={c.primaryContainer} />
+						<ActivityIndicator color={Palette.primary} />
 						<Text
-							style={[styles.centerText, { color: c.onSurfaceVariant }]}>
+							style={[styles.centerText, { color: Palette.onSurfaceVariant }]}>
 							Kanal yükleniyor…
 						</Text>
 					</View>
@@ -495,10 +492,10 @@ useEffect(() => {
 			<Stack.Screen options={{ headerShown: false }} />
 			<SafeAreaView
 				edges={["top", "left", "right"]}
-				style={[styles.safeArea, { backgroundColor: c.surfaceLowest }]}>
+				style={[styles.safeArea, { backgroundColor: Palette.surfaceLowest }]}>
 				<StatusBar
 					barStyle="light-content"
-					backgroundColor={c.surfaceLowest}
+					backgroundColor={Palette.surfaceLowest}
 				/>
 				<TopBar
 					onBack={handleBack}
@@ -531,8 +528,8 @@ useEffect(() => {
 							style={[
 								styles.logoBox,
 								{
-									backgroundColor: c.surfaceContainerHigh,
-									borderColor: c.outlineVariant,
+									backgroundColor: Palette.surfaceHigh,
+									borderColor: Palette.outlineVariant,
 								},
 							]}>
 							{kanal.logo ? (
@@ -548,14 +545,14 @@ useEffect(() => {
 								<Ionicons
 									name="tv-outline"
 									size={34}
-									color={c.onSurfaceVariant}
+									color={Palette.onSurfaceVariant}
 								/>
 							)}
 						</View>
 
 						<View style={styles.headText}>
 							<Text
-								style={[styles.channelName, { color: c.onSurface }]}
+								style={[styles.channelName, { color: Palette.onSurface }]}
 								numberOfLines={2}>
 								{kanal.name || "Kanal"}
 							</Text>
@@ -564,7 +561,7 @@ useEffect(() => {
 								<Text
 									style={[
 										styles.headMeta,
-										{ color: c.onSurfaceVariant },
+										{ color: Palette.onSurfaceVariant },
 									]}>
 									{kategoriAdi}
 								</Text>
@@ -573,14 +570,14 @@ useEffect(() => {
 										<Text
 											style={[
 												styles.headMetaDot,
-												{ color: c.outline },
+												{ color: Palette.outline },
 											]}>
 											•
 										</Text>
 										<Text
 											style={[
 												styles.headMeta,
-												{ color: c.onSurfaceVariant },
+												{ color: Palette.onSurfaceVariant },
 											]}>
 											{String(kanal.lang).toUpperCase()}
 										</Text>
@@ -617,7 +614,7 @@ useEffect(() => {
 					<Text
 						style={[
 							styles.sectionTitle,
-							{ color: c.onSurfaceVariant },
+							{ color: Palette.onSurfaceVariant },
 						]}>
 						AKIŞLAR
 					</Text>
@@ -627,19 +624,19 @@ useEffect(() => {
 							style={[
 								styles.streamEmpty,
 								{
-									backgroundColor: c.surfaceContainer,
-									borderColor: c.outlineVariant,
+									backgroundColor: Palette.surface,
+									borderColor: Palette.outlineVariant,
 								},
 							]}>
 							<Ionicons
 								name="alert-circle-outline"
 								size={20}
-								color={c.onSurfaceVariant}
+								color={Palette.onSurfaceVariant}
 							/>
 							<Text
 								style={[
 									styles.streamEmptyText,
-									{ color: c.onSurfaceVariant },
+									{ color: Palette.onSurfaceVariant },
 								]}>
 								Bu kanal için şu anda çözülebilir bir yayın
 								adresi yok. Kanal listede kalıyor ama kaynağı
@@ -670,16 +667,16 @@ useEffect(() => {
 						style={[
 							styles.infoBox,
 							{
-								backgroundColor: c.surfaceContainer,
-								borderColor: c.outlineVariant,
+								backgroundColor: Palette.surface,
+								borderColor: Palette.outlineVariant,
 							},
 						]}>
 						<Ionicons
 							name="information-circle-outline"
 							size={16}
-							color={c.tertiary}
+							color={Palette.tertiary}
 						/>
-						<Text style={[styles.infoText, { color: c.onSurfaceVariant }]}>
+						<Text style={[styles.infoText, { color: Palette.onSurfaceVariant }]}>
 							{ABONELIK_NOTU}
 						</Text>
 					</View>
@@ -696,34 +693,27 @@ useEffect(() => {
 /** Üst çubuk — geri düğmesi + başlık (+ isteğe bağlı alt satır). */
 function TopBar({ onBack, title, subtitle }) {
 	return (
-		<View
-			style={[
-				styles.topBar,
-				{
-					backgroundColor: c.surfaceLowest,
-					borderBottomColor: `${c.surfaceContainerHigh}66`,
-				},
-			]}>
+		<View style={styles.topBar}>
 			<TVPressable
 				onPress={onBack}
-				focusedStyle={styles.backFocused}
-				style={[
+				focusedStyle={null}
+				style={({ focused }) => [
 					styles.backBtn,
-					{ backgroundColor: `${c.surfaceContainerHigh}CC` },
+					focused && styles.backFocused,
 				]}
 				accessibilityLabel="Geri">
-				<Ionicons name="arrow-back" size={21} color={c.onSurface} />
+				<Ionicons name="arrow-back" size={21} color={Palette.onSurface} />
 			</TVPressable>
 
 			<View style={styles.topBarTitleWrap}>
 				<Text
-					style={[styles.topBarTitle, { color: c.onSurface }]}
+					style={[styles.topBarTitle, { color: Palette.onSurface }]}
 					numberOfLines={1}>
 					{title}
 				</Text>
 				{subtitle ? (
 					<Text
-						style={[styles.topBarSub, { color: c.onSurfaceVariant }]}
+						style={[styles.topBarSub, { color: Palette.onSurfaceVariant }]}
 						numberOfLines={1}>
 						{subtitle}
 					</Text>
@@ -751,14 +741,12 @@ function StreamRow({ akis, index, onPress }) {
 
 	return (
 		<TVPressable
-			style={[
+			style={({ focused }) => [
 				styles.streamRow,
-				{
-					backgroundColor: c.surfaceContainer,
-					borderColor: c.outlineVariant,
-				},
+				{ backgroundColor: Palette.surface },
+				focused && styles.streamFocused,
 			]}
-			focusedStyle={styles.streamFocused}
+			focusedStyle={null}
 			onPress={() => onPress(akis, index)}
 			accessibilityLabel={`${meta.ad}${quality ? `, ${quality}` : ""}${akis?.label ? `, ${akis.label}` : ""}`}>
 			{({ focused }) => (
@@ -773,8 +761,8 @@ function StreamRow({ akis, index, onPress }) {
 							size={11}
 							color={
 								akis?.kind === "primary"
-									? c.onPrimaryContainer
-									: c.onSurfaceVariant
+									? Palette.onPrimaryContainer
+									: Palette.onSurfaceVariant
 							}
 						/>
 						<Text
@@ -793,8 +781,8 @@ function StreamRow({ akis, index, onPress }) {
 									styles.streamLabel,
 									{
 										color: focused
-											? c.primaryContainer
-											: c.onSurface,
+											? Palette.primaryContainer
+											: Palette.onSurface,
 									},
 								]}
 								numberOfLines={1}>
@@ -806,8 +794,8 @@ function StreamRow({ akis, index, onPress }) {
 									styles.streamLabel,
 									{
 										color: focused
-											? c.primaryContainer
-											: c.onSurface,
+											? Palette.primaryContainer
+											: Palette.onSurface,
 									},
 								]}
 								numberOfLines={1}>
@@ -827,20 +815,20 @@ function StreamRow({ akis, index, onPress }) {
 									<Text
 										style={[
 											styles.streamTag,
-											{ color: c.tertiary },
+											{ color: Palette.tertiary },
 										]}>
 										{quality}
 									</Text>
 								) : null}
 								{akis?.yt_id ? (
 									<Text
-										style={[styles.streamTag, { color: c.onSurfaceVariant }]}>
+										style={[styles.streamTag, { color: Palette.onSurfaceVariant }]}>
 										YouTube kaynağı
 									</Text>
 								) : null}
 								{akis?.is_live === false ? (
 									<Text
-										style={[styles.streamTag, { color: c.outline }]}>
+										style={[styles.streamTag, { color: Palette.outline }]}>
 										Şu an yayında değil
 									</Text>
 								) : null}
@@ -851,7 +839,7 @@ function StreamRow({ akis, index, onPress }) {
 					<Ionicons
 						name="play-circle"
 						size={24}
-						color={focused ? c.primaryContainer : c.outline}
+						color={focused ? Palette.primaryContainer : Palette.outline}
 					/>
 				</View>
 			)}
@@ -869,29 +857,30 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: 12,
 		paddingHorizontal: ScreenGutter,
-		borderBottomWidth: 1,
 	},
 	backBtn: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
+		width: 36,
+		height: 36,
+		borderRadius: 12,
 		alignItems: "center",
 		justifyContent: "center",
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
 	topBarTitleWrap: {
 		flex: 1,
 		minWidth: 0,
 	},
 	topBarTitle: {
-		fontSize: 18,
-		lineHeight: 22,
-		fontWeight: "700",
-		letterSpacing: -0.2,
+		fontSize: 20,
+		lineHeight: 26,
+		fontFamily: FontFamily.bold,
+		letterSpacing: -0.3,
 	},
 	topBarSub: {
 		fontSize: 11,
 		lineHeight: 15,
-		fontWeight: "500",
+		fontFamily: FontFamily.medium,
 		marginTop: 1,
 	},
 
@@ -931,7 +920,7 @@ const styles = StyleSheet.create({
 	channelName: {
 		fontSize: 20,
 		lineHeight: 25,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		letterSpacing: -0.3,
 	},
 	headMetaRow: {
@@ -943,7 +932,7 @@ const styles = StyleSheet.create({
 	headMeta: {
 		fontSize: 12,
 		lineHeight: 16,
-		fontWeight: "500",
+		fontFamily: FontFamily.medium,
 	},
 	headMetaDot: {
 		fontSize: 12,
@@ -963,15 +952,16 @@ const styles = StyleSheet.create({
 	payPillText: {
 		fontSize: 11,
 		lineHeight: 15,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 
 	// Akış listesi
 	sectionTitle: {
-		fontSize: 11,
+		fontSize: 10,
 		lineHeight: 16,
-		fontWeight: "800",
-		letterSpacing: 0.6,
+		fontFamily: FontFamily.bold,
+		letterSpacing: 1.1,
+		textTransform: "uppercase",
 		marginBottom: 8,
 	},
 	streamList: {
@@ -979,7 +969,8 @@ const styles = StyleSheet.create({
 	},
 	streamRow: {
 		borderRadius: 14,
-		borderWidth: 1,
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
 	streamInner: {
 		flexDirection: "row",
@@ -994,19 +985,19 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 8,
 		paddingVertical: 4,
 		borderRadius: 999,
-		backgroundColor: c.surfaceContainerHighest,
+		backgroundColor: Palette.surfaceHighest,
 	},
 	kindBadgePrimary: {
-		backgroundColor: c.primaryContainer,
+		backgroundColor: Palette.primaryContainer,
 	},
 	kindText: {
 		fontSize: 10,
 		lineHeight: 14,
-		fontWeight: "700",
-		color: c.onSurfaceVariant,
+		fontFamily: FontFamily.bold,
+		color: Palette.onSurfaceVariant,
 	},
 	kindTextPrimary: {
-		color: c.onPrimaryContainer,
+		color: Palette.onPrimaryContainer,
 	},
 	streamInfo: {
 		flex: 1,
@@ -1015,7 +1006,7 @@ const styles = StyleSheet.create({
 	streamLabel: {
 		fontSize: 13,
 		lineHeight: 18,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	streamTags: {
 		flexDirection: "row",
@@ -1026,7 +1017,7 @@ const styles = StyleSheet.create({
 	streamTag: {
 		fontSize: 11,
 		lineHeight: 15,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	streamEmpty: {
 		flexDirection: "row",
@@ -1069,7 +1060,7 @@ const styles = StyleSheet.create({
 	centerTitle: {
 		fontSize: 16,
 		lineHeight: 21,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 		textAlign: "center",
 	},
 	centerText: {
@@ -1085,24 +1076,26 @@ const styles = StyleSheet.create({
 		paddingVertical: 9,
 		borderRadius: 999,
 		borderWidth: 1,
-		borderColor: c.primaryContainer,
+		borderColor: Palette.primaryContainer,
 		marginTop: 4,
 	},
 	retryText: {
 		fontSize: 13,
 		lineHeight: 18,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 
-	// TV odak
-	backFocused: { transform: [{ scale: 1.12 }] },
-	streamFocused: {
-		borderColor: c.primaryContainer,
+	// TV odak — yalnız kenarlık (tasarım kuralı: ölçek/dolgu yok)
+	backFocused: {
 		borderWidth: 2,
-		transform: [{ scale: 1.01 }],
+		borderColor: Palette.primary,
+	},
+	streamFocused: {
+		borderColor: Palette.primary,
+		borderWidth: 2,
 	},
 	retryFocused: {
-		backgroundColor: c.surfaceContainerHigh,
-		transform: [{ scale: 1.05 }],
+		borderWidth: 2,
+		borderColor: Palette.primary,
 	},
 });

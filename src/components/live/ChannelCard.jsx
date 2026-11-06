@@ -7,14 +7,11 @@
  * hâlde TV'de kart yine telefon genişliğinde kalır ve 10 sütun boşa
  * yer kaplardı.
  *
- * ── Neden `ColorsM3.dark` SABİT ──────────────────────────────────
- * `useThemeContext().m3` yerine doğrudan koyu palet okunuyor. Gerekçe:
- * canlı TV bir "video öncesi" yüzeyi — kullanıcı burada izlemek üzere
- * açılıyor ve uygulamanın geri kalanı her ne temada ise oradan bağımsız
- * tutarlı kalmalı. Ek olarak kart `memo` ve saf bir görsel bileşen:
- * tema bağlamına bağlanırsa her tema değişiminde 138 kartın tamamı
- * yeniden render olur. (Eski `Colors.*` paletine de dokunulmadı; 21 ekran
- * onu okuyor.)
+ * ── Neden sabit `Palette` ─────────────────────────────────────────
+ * `useThemeContext()` yerine doğrudan tasarım paleti okunuyor. Gerekçe:
+ * palet zaten tek (koyu) tasarım dili; kart `memo` ve saf bir görsel
+ * bileşen olduğu için tema bağlamına bağlanması gereksiz yeniden render
+ * demek. `Palette` modül sabiti olduğundan kart tema değişiminden etkilenmez.
  *
  * ── Logo kutusu ───────────────────────────────────────────────────
  * Logolar `raw.githubusercontent.com` üzerinde ve BOYUTLARI TUTARSIZ
@@ -37,24 +34,23 @@
  */
 
 import TVPressable from "@/components/common/TVPressable";
-import { ColorsM3 } from "@/constants/theme";
+import { FontFamily, Palette } from "@/constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 /** Sabit koyu palet — gerekçe dosya başında. */
-const c = ColorsM3.dark;
 
 /**
  * Abonelik rozeti sarısı.
  * `library.jsx`'in yıldız rozetiyle aynı ton: kullanıcı "sarı = bilgi/uyarı"
  * bağını uygulamadan öğrenmiş oluyor, yeni bir renk tanımlamaya gerek yok.
  */
-const PAY_TV_YELLOW = "#F5C518";
+const PAY_TV_YELLOW = Palette.tertiary;
 
 /** Kilit ikonu koyu zeminde okunsun diye (rozetin zemini sarı). */
-const PAY_TV_INK = "#1a1200";
+const PAY_TV_INK = Palette.surfaceLowest;
 
 /**
  * Bu genişliğin altındaki kartlarda punto küçülür.
@@ -103,8 +99,8 @@ function ChannelCard({ channel, onPress, width, onFocus, onBlur }) {
 					<View
 						style={[
 							styles.logoBox,
-							{ backgroundColor: c.surfaceContainerHigh },
-							focused && { borderColor: c.primaryContainer },
+							{ backgroundColor: Palette.surfaceHigh },
+							focused && { borderColor: Palette.primary },
 						]}>
 						{logo ? (
 							<Image
@@ -126,7 +122,7 @@ function ChannelCard({ channel, onPress, width, onFocus, onBlur }) {
 								<Ionicons
 									name="tv-outline"
 									size={compact ? 18 : 26}
-									color={c.onSurfaceVariant}
+									color={Palette.onSurfaceVariant}
 								/>
 							</View>
 						)}
@@ -154,8 +150,8 @@ function ChannelCard({ channel, onPress, width, onFocus, onBlur }) {
 							compact && styles.nameCompact,
 							{
 								color: focused
-									? c.primaryContainer
-									: c.onSurface,
+									? Palette.primary
+									: Palette.onSurface,
 							},
 						]}
 						numberOfLines={2}>
@@ -179,10 +175,7 @@ const styles = StyleSheet.create({
 		// genişlik dışarıdan verilir
 	},
 	cardFocused: {
-		// zIndex kaldırıldı: kardeş sıralamasını değiştirmek odak başına ayrı
-		// bir commit demek. Ölçek + ızgaradaki boşluk kartı komşusunun
-		// altına sokmaz, görsel olarak da yeterince belirgin.
-		transform: [{ scale: 1.07 }],
+		// Odak kuralı: yalnız kenarlık — ölçek yok (tasarım dili).
 	},
 	logoBox: {
 		width: "100%",
@@ -218,14 +211,14 @@ const styles = StyleSheet.create({
 	name: {
 		fontSize: 13,
 		lineHeight: CHANNEL_NAME_HEIGHT,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 		marginTop: CHANNEL_NAME_MARGIN_TOP,
 		letterSpacing: -0.1,
 	},
 	nameCompact: {
 		fontSize: 10,
 		lineHeight: CHANNEL_NAME_COMPACT_HEIGHT,
-		fontWeight: "500",
+		fontFamily: FontFamily.medium,
 		marginTop: CHANNEL_NAME_COMPACT_MARGIN_TOP,
 	},
 });

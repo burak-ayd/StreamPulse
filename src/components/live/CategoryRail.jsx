@@ -28,13 +28,10 @@
  */
 
 import TVPressable from "@/components/common/TVPressable";
-import { ColorsM3 } from "@/constants/theme";
+import { FontFamily, Palette } from "@/constants/theme";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { useCallback } from "react";
 import { FlatList, Platform, StyleSheet, Text, View } from "react-native";
-
-/** Sabit koyu palet — gerekçe `ChannelCard` dosya başında. */
-const c = ColorsM3.dark;
 
 /**
  * @param {{categories: Array<{id: string, name: string, order?: number,
@@ -172,26 +169,27 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 14,
 		paddingVertical: 7,
 		borderRadius: 999,
-		borderWidth: 1,
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
 	pillIdle: {
-		backgroundColor: c.surfaceContainer,
-		borderColor: c.outlineVariant,
+		backgroundColor: Palette.surface,
+		borderColor: Palette.outlineVariant,
 	},
 	pillSelected: {
-		backgroundColor: c.primaryContainer,
-		borderColor: c.primaryContainer,
+		backgroundColor: Palette.primary,
+		borderColor: Palette.primary,
 	},
 	pillText: {
 		fontSize: 13,
 		lineHeight: 18,
-		fontWeight: "600",
+		fontFamily: FontFamily.semiBold,
 	},
 	pillTextIdle: {
-		color: c.onSurfaceVariant,
+		color: Palette.onSurfaceVariant,
 	},
 	pillTextSelected: {
-		color: c.onPrimaryContainer,
+		color: Palette.onPrimary,
 	},
 	countBadge: {
 		minWidth: 20,
@@ -201,28 +199,24 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 	},
 	countBadgeIdle: {
-		backgroundColor: c.surfaceContainerHigh,
+		backgroundColor: Palette.surfaceHigh,
 	},
 	countBadgeSelected: {
-		// Seçili hap zaten kırmızı; rozet beyaz zeminde koyu mürekkep
-		// kullanıyor ki kontrast kaybolmasın.
-		backgroundColor: c.onPrimaryContainer,
+		backgroundColor: "rgba(14, 14, 16, 0.18)",
 	},
 	countText: {
 		fontSize: 10,
 		lineHeight: 14,
-		fontWeight: "700",
+		fontFamily: FontFamily.bold,
 	},
 	countTextIdle: {
-		color: c.onSurface,
+		color: Palette.onSurface,
 	},
 	countTextSelected: {
-		color: c.primaryContainer,
+		color: Palette.onPrimary,
 	},
-	// TV odak — kenar + ölçek, gölge/elevation yok (bkz. CategoryCard notu).
+	// TV odak — yalnız kenarlık (tasarım kuralı: ölçek/dolgu yok).
 	pillFocused: {
-		borderColor: "#FFFFFF",
-		borderWidth: 2,
-		transform: [{ scale: 1.05 }],
+		borderColor: Palette.primary,
 	},
 });
