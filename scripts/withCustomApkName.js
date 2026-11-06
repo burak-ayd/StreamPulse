@@ -1,13 +1,13 @@
 const { withAppBuildGradle } = require("@expo/config-plugins");
+const { splitEnabledFor } = require("./withSplitApk");
 
 module.exports = function withCustomApkName(config) {
 	const slug = config.slug || "app";
 	const appVariant = process.env.APP_VARIANT || "release";
 
-	// Split kapalıyken tek mimari derlenen varyantlarda arm64-v8a, aksi halde universal etiketi
-	const fallbackArch = ["development", "preview"].includes(appVariant)
-		? "arm64-v8a"
-		: "universal";
+	// Split açıkken ABI'siz output universal APK'dır; kapalıyken tek mimari (arm64-v8a)
+	// derlendiği için aynı isim çakışmasın diye "universal" etiketi kullanılmaz.
+	const fallbackArch = splitEnabledFor(appVariant) ? "universal" : "arm64-v8a";
 
 	return withAppBuildGradle(config, (config) => {
 		if (config.modResults.language === "groovy") {

@@ -1,54 +1,73 @@
 // withSplitApk.js
 const { withAppBuildGradle } = require("@expo/config-plugins");
 
+/**
+ * TEK DÜZENLEME NOKTASI — hangi varyant hangi APK'ları üretsin.
+ *
+ * abis:      üretilecek ABI APK'ları. [] → split kapalı, tek APK.
+ *            Örn. hepsi için: ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"]
+ * universal: ABI'siz ek APK üretilsin mi.
+ *
+ * "production" APP_VARIANT'ı release sayılır (app.config.js ile aynı eşleme).
+ */
+const SPLIT_APK = {
+	development: { abis: ["armeabi-v7a", "arm64-v8a"], universal: true },
+	preview: { abis: ["armeabi-v7a", "arm64-v8a"], universal: true },
+	release: { abis: ["armeabi-v7a", "arm64-v8a"], universal: true },
+};
+
+const splitConfigFor = (variant) => {
+	const key = (variant || process.env.APP_VARIANT || "release")
+		.trim()
+		.toLowerCase();
+	const configured = SPLIT_APK[key === "production" ? "release" : key];
+	return {
+		abis: configured?.abis ?? [],
+		universal: configured?.universal === true,
+	};
+};
+
+const splitEnabledFor = (variant) => splitConfigFor(variant).abis.length > 0;
+
+const splitsBlock = ({ abis, universal }) => {
+	const enabled = abis.length > 0;
+	const include = abis.length
+		? `\n            include ${abis.map((abi) => `"${abi}"`).join(", ")}`
+		: "";
+
+	return `splits {
+        abi {
+            enable ${enabled}
+            reset()${include}
+            universalApk ${enabled && universal}
+        }
+    }`;
+};
+
 module.exports = function withSplitApk(config) {
+	const splitConfig = splitConfigFor();
+
 	return withAppBuildGradle(config, (config) => {
-		if (config.modResults.language === "groovy") {
-			let contents = config.modResults.contents;
+		if (config.modResults.language !== "groovy") return config;
 
-			const currentVariant = process.env.APP_VARIANT || "release";
-			const isProdOrRelease = ["production", "release"].includes(
-				currentVariant,
+		let contents = config.modResults.contents;
+
+		if (contents.includes("splits {")) {
+			contents = contents.replace(
+				/splits\s*\{[\s\S]*?abi\s*\{[\s\S]*?\}[\s\S]*?\}/,
+				splitsBlock(splitConfig),
 			);
-
-			if (
-				contents.includes(
-					"enableSeparateBuildPerCPUArchitecture = false",
-				)
-			) {
-				contents = contents.replace(
-					/def enableSeparateBuildPerCPUArchitecture = false/,
-					`def enableSeparateBuildPerCPUArchitecture = ${isProdOrRelease}`,
-				);
-			} else if (contents.includes("splits {")) {
-				contents = contents.replace(
-					/splits\s*\{[\s\S]*?abi\s*\{[\s\S]*?\}[\s\S]*?\}/,
-					`splits {
-        abi {
-            enable ${isProdOrRelease}
-            reset()
-            include "armeabi-v7a", "arm64-v8a"
-            universalApk true
-        }
-    }`,
-				);
-			} else if (isProdOrRelease) {
-				contents = contents.replace(
-					/android\s*\{/,
-					`android {
-    splits {
-        abi {
-            enable true
-            reset()
-            include "armeabi-v7a", "arm64-v8a"
-            universalApk true
-        }
-    }`,
-				);
-			}
-
-			config.modResults.contents = contents;
+		} else if (splitEnabledFor()) {
+			contents = contents.replace(
+				/android\s*\{/,
+				`android {\n    ${splitsBlock(splitConfig)}`,
+			);
 		}
+
+		config.modResults.contents = contents;
 		return config;
 	});
 };
+
+module.exports.splitEnabledFor = splitEnabledFor;
+module.exports.splitConfigFor = splitConfigFor;
