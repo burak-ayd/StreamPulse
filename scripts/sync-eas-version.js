@@ -27,6 +27,16 @@ const m = gradle.match(/\bversionCode\s+(\d+)/);
 if (!m) { console.error('versionCode not found'); process.exit(1); }
 const versionCode = m[1];
 
+// Uzak sayacı geriye çekme: app.json'daki kalıcı versionCode'dan küçük bir
+// değeri EAS'a yazmak, sonraki tüm güncellemeleri "geçersiz paket"e sokar.
+const appVersionCode = app.expo?.android?.versionCode;
+if (Number.isInteger(appVersionCode) && Number(versionCode) < appVersionCode) {
+  console.error(
+    `Refusing to sync versionCode ${versionCode}: app.json has ${appVersionCode}.`,
+  );
+  process.exit(1);
+}
+
 function auth() {
   if (process.env.EXPO_TOKEN) return { token: process.env.EXPO_TOKEN };
   const sp = path.join(os.homedir(), '.expo', 'state.json');

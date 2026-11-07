@@ -43,7 +43,22 @@ const pkg = JSON.parse(fs.readFileSync(PKG_JSON, "utf8"));
 pkg.version = next;
 fs.writeFileSync(PKG_JSON, JSON.stringify(pkg, null, 2) + "\n");
 
-let nextCode = null;
+/*
+ * versionCode MONOTONİK olmalı: Android, yüklü sürümden düşük versionCode'lu
+ * APK'yı "geçersiz paket" / "uygulama yüklenemedi" diyerek reddeder.
+ *
+ * ⚠️ Burada yalnızca EAS'ın uzak sayacına güvenilmiyordu: `expo prebuild`
+ * gradle'daki versionCode'u app.json'daki değere (yoksa 1'e) sıfırlar;
+ * `eas build:version:get` de ağ/auth nedeniyle başarısız olursa yerel
+ * 2+1=3 gibi bir değer üretilip 34 olan yayımlanmış sürümün ÜSTÜNE
+ * yazılamıyordu. Artık üç kaynağın (EAS, app.json, gradle) EN BÜYÜĞÜ
+ * taban alınır ve app.json'a yazılır; prebuild bu değeri korur.
+ */
+const appVersionCode = Number.isInteger(appJson.expo?.android?.versionCode)
+	? appJson.expo.android.versionCode
+	: null;
+
+let easVersionCode = null;
 if (appJson.expo.extra?.eas?.projectId) {
 	try {
 		const out = execSync(
@@ -61,45 +76,18 @@ if (appJson.expo.extra?.eas?.projectId) {
 			clean.match(/Android\s+versionCode\s*[-–:]\s*(\d+)/i) ||
 			clean.match(/versionCode\s*[-–:]\s*(\d+)/i);
 		if (m) {
-			nextCode = parseInt(m[1], 10) + 1;
-			console.log(`EAS versionCode: ${m[1]} → ${nextCode}`);
+			easVersionCode = parseInt(m[1], 10);
+			console.log(`EAS versionCode: ${easVersionCode}`);
 		} else {
-			console.warn(
-				"Could not parse EAS versionCode; falling back to local bump",
-			);
+			console.warn("Could not parse EAS versionCode; using local sources");
 		}
 	} catch (e) {
-		// Never built on EAS yet — `build:version:get` fails. Seed the remote
-		// version with the local versionCode first, then bump from it.
-		const gradleText = fs.existsSync(GRADLE)
-			? fs.readFileSync(GRADLE, "utf8")
-			: "";
-		const m = gradleText.match(/\bversionCode\s+(\d+)/);
-		const localCode = m ? parseInt(m[1], 10) : null;
-		if (localCode == null) {
-			console.warn(
-				"Could not read local versionCode; falling back to local bump",
-			);
-		} else {
-			try {
-				execSync(
-					`eas build:version:set --platform android --profile ${PROFILE} --version-code ${localCode} --version-name ${current} --non-interactive`,
-					{
-						cwd: path.resolve(__dirname, ".."),
-						encoding: "utf8",
-						timeout: 30000,
-					},
-				);
-				nextCode = localCode + 1;
-				console.log(
-					`Seeded EAS versionCode ${localCode} (first build) → ${nextCode}`,
-				);
-			} catch (setErr) {
-				console.warn(
-					"EAS version set failed. (Ensure project is linked and authenticated)",
-				);
-			}
-		}
+		/*
+		 * EAS okunamadı. Uzak sayacı yerel (prebuild sonrası düşmüş
+		 * olabilecek) değerle TOHUMLAMA — bu, uzak sayacı geriye çeker ve
+		 * sonraki tüm güncellemeleri kilitler. Yerel kaynaklarla devam et.
+		 */
+		console.warn("EAS versionCode okunamadı; yerel kaynaklar kullanılacak.");
 	}
 }
 
@@ -108,11 +96,26 @@ if (!fs.existsSync(GRADLE)) {
 	process.exit(1);
 }
 let gradle = fs.readFileSync(GRADLE, "utf8");
-if (nextCode == null) {
-	const m = gradle.match(/\bversionCode\s+(\d+)/);
-	nextCode = m ? parseInt(m[1], 10) + 1 : 1;
-	console.log(`Local versionCode bump → ${nextCode}`);
-}
+const gradleMatch = gradle.match(/\bversionCode\s+(\d+)/);
+const gradleVersionCode = gradleMatch ? parseInt(gradleMatch[1], 10) : 0;
+
+const baseCode = Math.max(
+	easVersionCode ?? 0,
+	appVersionCode ?? 0,
+	gradleVersionCode
+);
+const nextCode = baseCode > 0 ? baseCode + 1 : 1;
+console.log(
+	`versionCode: EAS=${easVersionCode ?? "-"} app.json=${appVersionCode ?? "-"} gradle=${gradleVersionCode || "-"} → ${nextCode}`
+);
+
+// Prebuild sonraki çalıştırmada bu değeri gradle'a uygulasın.
+appJson.expo.android = {
+	...(appJson.expo.android ?? {}),
+	versionCode: nextCode,
+};
+fs.writeFileSync(APP_JSON, JSON.stringify(appJson, null, 2) + "\n");
+
 gradle = gradle.replace(/(\bversionCode\s+)\d+/, `$1${nextCode}`);
 gradle = gradle.replace(/(\bversionName\s+")[^"]*"/, `$1${next}"`);
 fs.writeFileSync(GRADLE, gradle);

@@ -141,12 +141,11 @@ export default ({ config }) => {
 		/*
 		 * ── OTA (expo-updates · custom server) ─────────────────────
 		 *
-		 * runtimeVersion = appVersion politikası: sürüm numarası her APK
-		 * derlemesinde bump-version.js ile arttığı için runtimeVersion da
-		 * otomatik artar. JS-only değişiklikte sürüm DEĞİŞMEZ → sunucudaki
-		 * güncelleme aynı runtime'a düşer → APK yeniden derlemeye gerek
-		 * kalmadan OTA ile gider. Native/gradle/plugin değişikliği →
-		 * sürüm ARTMAK ZORUNDA (APK derlemesi her şeye bağlı bulundu).
+		 * runtimeVersion SABİT "2" (appVersion politikası DEĞİL). JS-only
+		 * değişiklikte DEĞİŞTİRİLMEZ; yalnızca native modül / gradle /
+		 * plugin değişikliğinde elle artırılır. Sürüm numarası her APK'da
+		 * artar ama runtime'ı otomatik artırmak eski APK'ları OTA'dan
+		 * koparırdı.
 		 *
 		 * Sunucu: XPrem (expo-open-ota) —
 		 * https://ota.burakaydogan.net.tr/manifest. İstekler `expo-app-id`
