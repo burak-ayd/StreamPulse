@@ -30,8 +30,24 @@
 import TVPressable from "@/components/common/TVPressable";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
+import { useTvMetrics } from "@/utils/tvMetrics";
+import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useCallback } from "react";
 import { FlatList, Platform, StyleSheet, Text, View } from "react-native";
+
+/**
+ * Kategori ikonları — backend id'leri sabit. Tanınmayan bir kategori
+ * gelirse `ellipse-outline` kullanılır; ikon yüzünden satır kaybolmaz.
+ */
+const KATEGORI_IKON = {
+	tum: "apps-outline",
+	ulusal: "flag-outline",
+	spor: "football-outline",
+	haber: "newspaper-outline",
+	"belgesel-cocuk": "paw-outline",
+	"muzik-eğlence": "musical-notes-outline",
+	sinema: "film-outline",
+};
 
 /**
  * @param {{categories: Array<{id: string, name: string, order?: number,
@@ -41,6 +57,7 @@ import { FlatList, Platform, StyleSheet, Text, View } from "react-native";
  */
 function CategoryRail({ categories, selectedId, onSelect }) {
 	const list = Array.isArray(categories) ? categories : [];
+	const { sp } = useTvMetrics();
 
 	/*
 	 * SORUN 5 — odaklanan kategori hapı yatayda ORTALANIR.
@@ -55,6 +72,7 @@ function CategoryRail({ categories, selectedId, onSelect }) {
 			const isSelected = item.id === selectedId;
 			const count =
 				typeof item.kanal_sayisi === "number" ? item.kanal_sayisi : null;
+			const icon = KATEGORI_IKON[item.id] || "ellipse-outline";
 
 			return (
 				<TVPressable
@@ -62,20 +80,32 @@ function CategoryRail({ categories, selectedId, onSelect }) {
 						styles.pill,
 						isSelected ? styles.pillSelected : styles.pillIdle,
 					]}
-					focusedStyle={styles.pillFocused}
+					focusedStyle={
+						isSelected ? styles.pillFocusedSelected : styles.pillFocused
+					}
 					onPress={() => onSelect(item.id)}
 					onFocus={() => handleItemFocus(index)}
 					accessibilityRole="tab"
 					accessibilityState={{ selected: isSelected }}
 					accessibilityLabel={`${item.name}${count !== null ? `, ${count} kanal` : ""}`}>
-				<Text
-					style={[
-						styles.pillText,
-						isSelected
-							? styles.pillTextSelected
-							: styles.pillTextIdle,
-					]}
-					numberOfLines={1}>
+					<Ionicons
+						name={icon}
+						size={sp(14)}
+						color={
+							isSelected
+								? Palette.onPrimary
+								: Palette.onSurfaceVariant
+						}
+					/>
+					<Text
+						style={[
+							styles.pillText,
+							{ fontSize: sp(13) },
+							isSelected
+								? styles.pillTextSelected
+								: styles.pillTextIdle,
+						]}
+						numberOfLines={1}>
 						{item.name}
 					</Text>
 
@@ -101,7 +131,7 @@ function CategoryRail({ categories, selectedId, onSelect }) {
 				</TVPressable>
 			);
 		},
-		[selectedId, onSelect, handleItemFocus],
+		[selectedId, onSelect, handleItemFocus, sp],
 	);
 
 	/*
@@ -129,17 +159,10 @@ function CategoryRail({ categories, selectedId, onSelect }) {
 			/*
 			 * `flexGrow/flexShrink: 0` ŞART. React Native `ScrollView`
 			 * temel stilinde `flexGrow: 1, flexShrink: 1` uygular; bu ray
-			 * `flex: 1` bir sütunda kardeşi olan 138 kanallık DİKEY
-			 * `FlatList` ile yarışır. Dikey listenin devasa içerik isteği
-			 * büzülme fazlasını neredeyse tamamen kendi emdiği için yatay
-			 * ray yalnızca ~10dp küçülür ve haplar 34dp yerine 24dp'e
-			 * sıkışır — kategori adı dikeyden kırpılır (ölçüldü: ray 44dp,
-			 * beklenen 54dp). Sıfırlanınca ray içerik yüksekliğine
-			 * (10 + 34 + 10) tam oturur ve yalnızca yatayda büyür.
+			 * `flex: 1` bir sütunda kardeşi olan kanal listesiyle yarışır
+			 * ve haplar dikeyde kırpılır.
 			 */
 			style={styles.rail}
-			// Ray yalnızca 7 elemanlığa kadar sanallaştırmayı boşuna
-			// çalıştırmasın diye kapsamı tek ekrana sabitliyoruz.
 			initialNumToRender={7}
 			maxToRenderPerBatch={7}
 			windowSize={1}
@@ -157,7 +180,7 @@ const styles = StyleSheet.create({
 	content: {
 		gap: 8,
 		paddingHorizontal: 16,
-		paddingVertical: 10,
+		paddingVertical: 12,
 	},
 	pill: {
 		flexDirection: "row",
@@ -165,23 +188,27 @@ const styles = StyleSheet.create({
 		// Yatay rayda yan komşular varsa RN hapsı yatayda ezebiliyor;
 		// metin kırpılmasın, kap doğal genişliğinde kalsın.
 		flexShrink: 0,
-		gap: 6,
+		gap: 7,
 		paddingHorizontal: 14,
-		paddingVertical: 7,
+		paddingVertical: 8,
 		borderRadius: 999,
 		borderWidth: 2,
 		borderColor: "transparent",
 	},
 	pillIdle: {
-		backgroundColor: Palette.surface,
-		borderColor: Palette.outlineVariant,
+		backgroundColor: Palette.surfaceLow,
 	},
 	pillSelected: {
 		backgroundColor: Palette.primary,
+	},
+	pillFocused: {
 		borderColor: Palette.primary,
+		backgroundColor: Palette.surfaceHigh,
+	},
+	pillFocusedSelected: {
+		borderColor: Palette.onSurface,
 	},
 	pillText: {
-		fontSize: 13,
 		lineHeight: 18,
 		fontFamily: FontFamily.semiBold,
 	},
@@ -202,7 +229,7 @@ const styles = StyleSheet.create({
 		backgroundColor: Palette.surfaceHigh,
 	},
 	countBadgeSelected: {
-		backgroundColor: "rgba(14, 14, 16, 0.18)",
+		backgroundColor: "rgba(16, 0, 169, 0.18)",
 	},
 	countText: {
 		fontSize: 10,
@@ -214,9 +241,5 @@ const styles = StyleSheet.create({
 	},
 	countTextSelected: {
 		color: Palette.onPrimary,
-	},
-	// TV odak — yalnız kenarlık (tasarım kuralı: ölçek/dolgu yok).
-	pillFocused: {
-		borderColor: Palette.primary,
 	},
 });

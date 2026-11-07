@@ -37,17 +37,15 @@
  * doğru sütun sayısı çıkar.
  *
  * Hedef kart genişliği platforma göre değişir:
- *   • TV   → 76dp. 1920px TV ekranı çoğu Android TV'de 960dp raporlanır;
+ *   • TV   → 130dp. 1920px TV ekranı çoğu Android TV'de 960dp raporlanır;
  *            ray (56) + kenar boşluğu (28) düşülünce 876dp kalır ve
- *            (876+10)/(76+10) = 10 sütun çıkar. İstenen "10×18 gibi geniş
- *            ızgara" bu değerle birebir tutarlı.
- *   • Diğer → 104dp. 360dp telefon: 332dp içerik → (332+10)/(104+10) = 3
- *            sütun. İstenen "mobilde 3" aynı şekilde birebir.
+ *            (876+10)/(130+10) = 6 sütun çıkar.
+ *   • Diğer → 128dp. 360dp telefon: 332dp içerik → (332+10)/(128+10) = 2
+ *            sütun.
  *
- * 1×960dp raporlayan (density 1) bazı Android TV cihazlarında 21 sütun
- * çıkabilecek hesap; bu yüzden üst sınır 10. Sabit sütun sayısı TV'de
- * 21 kartı da göstermekten iyi: kartlar okunur kalır ve tek ekranda
- * gezinme yapılabilir.
+ * Sütun sayısı üst sınırı 6: daha fazlası kartları logonun okunmadığı
+ * küçük karelere çeviriyordu (eski tasarımın "demode" görünmesinin
+ * sebeplerinden biri).
  *
  * ── Durum makinesi ────────────────────────────────────────────────
  * `yukleniyor` tek bayrak, ama ekran mantığı AYRI: spinner yalnızca
@@ -60,6 +58,7 @@
 import CategoryRail from "@/components/live/CategoryRail";
 import ChannelCard from "@/components/live/ChannelCard";
 import ChannelCardSkeleton from "@/components/live/ChannelCardSkeleton";
+import FeaturedChannel from "@/components/live/FeaturedChannel";
 import TVPressable from "@/components/common/TVPressable";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
@@ -95,10 +94,19 @@ const ARAMA_DEBOUNCE_MS = 300;
 /** Kategori değişimi / arama sırasında eski listede ne kadar süre kalınır. */
 const GRID_GAP = 10;
 
-/** Platform hedef kart genişliği (dp) — bkz. dosya başındaki hesap. */
-const HEDEF_KART = Platform.isTV ? 76 : 104;
-const MIN_SUTUN = 3;
-const MAX_SUTUN = 10;
+/**
+ * Platform hedef kart genişliği (dp).
+ *
+ * 4:3 yayın kutusu artık kare logodan daha geniş bir hedef ister:
+ *   • TV   → ~130dp: 960dp raporlayan 1080p TV'de (ray + kenar düşünce
+ *            ~872dp) 6 sütun çıkar; logolar okunur kalır.
+ *   • Diğer → ~128dp: 360dp telefonda 2 sütun.
+ * Sabit sütun sayısı yerine hedef GENİŞLİK kullanılıyor: kartlar her
+ * ekranda aynı görsel ağırlıkta kalıyor.
+ */
+const HEDEF_KART = Platform.isTV ? 130 : 128;
+const MIN_SUTUN = 2;
+const MAX_SUTUN = 6;
 
 /**
  * `liveApi` sonucunu tek biçime indirger.
@@ -182,7 +190,7 @@ export default function LiveScreen() {
 	// aynı kararı vermek zorunda (bkz. hooks/useNavLayout.js).
 	const { contentPaddingLeft } = useNavLayout();
 	// TV: kanal ızgarası ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
-	const { contentMaxWidth } = useTvMetrics();
+	const { contentMaxWidth, sp, isWide, height } = useTvMetrics();
 
 	// ── Kategori ──────────────────────────────────────────────────
 	const [kategoriler, setKategoriler] = useState([]);
@@ -194,6 +202,8 @@ export default function LiveScreen() {
 	const [arama, setArama] = useState("");
 	/** Debounce'lanmış: sunucuya giden `q`. */
 	const [aramaSorgusu, setAramaSorgusu] = useState("");
+	/** TV'de arama kutusuna odak geldiğinde kenarlık vurgulanır. */
+	const [aramaOdakta, setAramaOdakta] = useState(false);
 
 	// ── Kanal listesi ─────────────────────────────────────────────
 	const [kanallar, setKanallar] = useState([]);
@@ -443,6 +453,69 @@ export default function LiveScreen() {
 	);
 
 	/*
+	 * Vitrin kartı: seçili kategorinin İLK kanalı. Arama sırasında
+	 * gösterilmez — kullanıcı zaten belirli bir sonuç arıyor ve vitrin
+	 * ekranın üstünü gereksiz kaplardı.
+	 */
+	const oneCikan = useMemo(
+		() => (aramaSorgusu ? null : kanallar[0] || null),
+		[aramaSorgusu, kanallar],
+	);
+	/*
+	 * Kısa ekranlarda (örn. yatay telefon, 720p TV) vitrin gizlenir:
+	 * üst blok ızgaraya yer bırakmazsa ekran "sadece tanıtım" olur.
+	 */
+	const vitrin = isWide && height < 480 ? null : oneCikan;
+
+	const renderArama = () => (
+		<View
+			style={[
+				styles.searchBox,
+				isWide && styles.searchBoxWide,
+				{
+					height: sp(46),
+					borderRadius: sp(23),
+					borderColor: aramaOdakta
+						? Palette.primary
+						: Palette.outlineVariant,
+				},
+			]}>
+			<Ionicons
+				name="search"
+				size={sp(18)}
+				color={Palette.onSurfaceVariant}
+			/>
+			<TextInput
+				style={[
+					styles.searchInput,
+					{ color: Palette.onSurface, fontSize: sp(14) },
+				]}
+				placeholder="Kanal ara…"
+				placeholderTextColor={`${Palette.onSurfaceVariant}99`}
+				value={arama}
+				onChangeText={setArama}
+				onFocus={() => setAramaOdakta(true)}
+				onBlur={() => setAramaOdakta(false)}
+				returnKeyType="search"
+				autoCapitalize="none"
+				autoCorrect={false}
+			/>
+			{arama.length > 0 ? (
+				<TVPressable
+					onPress={handleClearSearch}
+					focusedStyle={styles.searchClearFocused}
+					accessibilityLabel="Aramayı temizle">
+					<Ionicons
+						name="close-circle"
+						size={16}
+						color={Palette.onSurfaceVariant}
+					/>
+				</TVPressable>
+			) : null}
+		</View>
+	);
+
+	/*
 	 * Görünüm kararları — üçü AYRI, spinner hiçbirini gölgelemiyor.
 	 *
 	 * ⚠️ `gosterHata` `!yukleniyor` koşulunu TAŞIMAZ. Kategori listesi
@@ -545,7 +618,7 @@ export default function LiveScreen() {
 				 */}
 				<StatusBar barStyle="light-content" backgroundColor={Palette.surfaceLowest} />
 
-				{/* Üst çubuk — geri + başlık + toplam */}
+				{/* Üst çubuk — geri + başlık (+ geniş ekranda arama) */}
 				<View style={styles.topBar}>
 					<TVPressable
 						onPress={handleBack}
@@ -559,25 +632,42 @@ export default function LiveScreen() {
 					</TVPressable>
 
 					<View style={styles.topBarTitleWrap}>
+						<View style={styles.eyebrowRow}>
+							<View style={styles.eyebrowDot} />
+							<Text
+								style={[styles.eyebrow, { fontSize: sp(10) }]}>
+								CANLI YAYIN
+							</Text>
+						</View>
 						<Text
-							style={[styles.topBarTitle, { color: Palette.onSurface }]}
+							style={[
+								styles.topBarTitle,
+								{ color: Palette.onSurface, fontSize: sp(22) },
+							]}
 							numberOfLines={1}>
 							Canlı TV
 						</Text>
-						{/* Yalnızca sunucunun VERDİĞİ kategori sayısı gösterilir;
-						    kanal toplamı kategoriye bağlı olduğu için burada
-						    yazılmaz. */}
-						<View
-							style={[
-								styles.countChip,
-								{ backgroundColor: "rgba(192, 193, 255, 0.14)" },
-							]}>
-							<Text style={[styles.countText, { color: Palette.primary }]}>
-								{kategoriler.length} kategori
-							</Text>
-						</View>
 					</View>
+
+					{isWide ? (
+						<View style={styles.searchInline}>{renderArama()}</View>
+					) : null}
 				</View>
+
+				{!isWide ? (
+					<View style={styles.searchWrap}>{renderArama()}</View>
+				) : null}
+
+				{/* Vitrin: seçili kategorinin ilk kanalı */}
+				{vitrin ? (
+					<View style={styles.featuredWrap}>
+						<FeaturedChannel
+							channel={vitrin}
+							categoryName={baslangicKategoriAdi}
+							onPress={() => handleChannelPress(vitrin)}
+						/>
+					</View>
+				) : null}
 
 				{/* Kategori rayı */}
 				{/*
@@ -585,8 +675,8 @@ export default function LiveScreen() {
 				 * "spor" filtreliyken başka bir kategoriye geçip aynı
 				 * filtreyi sürdürmek isteyebilir; metni düşürürsek arama
 				 * kutusu ile gerçek `q` arasındaki bağ kopar ve kullanıcı
-				 * neden sonuç gelmediğini anlamaz. Bunun yerine başlık
-				 * satırındaki sayaç, etkin filtreyi açıkça yazar.
+				 * neden sonuç gelmediğini anlamaz. Bölüm başlığındaki
+				 * sayaç etkin filtreyi açıkça yazar.
 				 */}
 				<CategoryRail
 					categories={kategoriler}
@@ -594,50 +684,27 @@ export default function LiveScreen() {
 					onSelect={setSeciliKategori}
 				/>
 
-				{/* Arama kutusu — uygulamanın arama hapı diliyle aynı */}
-				<View style={styles.searchWrap}>
-					<View
-						style={[
-							styles.searchBox,
-							{ backgroundColor: Palette.surfaceHigh },
-						]}>
-						<Ionicons
-							name="search"
-							size={17}
-							color={Palette.onSurfaceVariant}
-						/>
-						<TextInput
-							style={[styles.searchInput, { color: Palette.onSurface }]}
-							placeholder="Kanal ara…"
-							placeholderTextColor={`${Palette.onSurfaceVariant}99`}
-							value={arama}
-							onChangeText={setArama}
-							returnKeyType="search"
-							autoCapitalize="none"
-							autoCorrect={false}
-						/>
-						{arama.length > 0 ? (
-							<TVPressable
-								onPress={handleClearSearch}
-								focusedStyle={styles.searchClearFocused}
-								accessibilityLabel="Aramayı temizle">
-								<Ionicons
-									name="close-circle"
-									size={16}
-									color={Palette.onSurfaceVariant}
-								/>
-							</TVPressable>
-						) : null}
-					</View>
-				</View>
-
 				{/* Liste başlığı */}
 				{kanallar.length > 0 ? (
 					<View style={styles.subHeader}>
 						<Text
-							style={[styles.subHeaderText, { color: Palette.onSurfaceVariant }]}>
+							style={[
+								styles.subHeaderTitle,
+								{ color: Palette.onSurface, fontSize: sp(15) },
+							]}
+							numberOfLines={1}>
+							{baslangicKategoriAdi || "Kanallar"}
+						</Text>
+						<Text
+							style={[
+								styles.subHeaderText,
+								{
+									color: Palette.onSurfaceVariant,
+									fontSize: sp(11),
+								},
+							]}
+							numberOfLines={1}>
 							{kanallar.length} kanal
-							{baslangicKategoriAdi ? ` • ${baslangicKategoriAdi}` : ""}
 							{aramaSorgusu ? ` • "${aramaSorgusu}"` : ""}
 						</Text>
 					</View>
@@ -654,7 +721,7 @@ export default function LiveScreen() {
 					<View
 						style={[
 							styles.listContent,
-							styles.listContentEmpty,
+							styles.skeletonGrid,
 							contentMaxWidth
 								? {
 										alignSelf: "center",
@@ -664,7 +731,9 @@ export default function LiveScreen() {
 								: null,
 						]}
 						pointerEvents="none">
-						{Array.from({ length: sutunSayisi * 4 }).map((_, index) => (
+						{Array.from({
+							length: sutunSayisi * (isWide ? 2 : 3),
+						}).map((_, index) => (
 							<View
 								key={`sk-kanal-${index}`}
 								style={{
@@ -766,16 +835,17 @@ const styles = StyleSheet.create({
 
 	// Üst çubuk
 	topBar: {
-		height: 56,
+		minHeight: 58,
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 12,
 		paddingHorizontal: ScreenGutter,
+		paddingTop: 4,
 	},
 	backBtn: {
 		width: 36,
 		height: 36,
-		borderRadius: 12,
+		borderRadius: 18,
 		alignItems: "center",
 		justifyContent: "center",
 		borderWidth: 2,
@@ -783,47 +853,59 @@ const styles = StyleSheet.create({
 	},
 	topBarTitleWrap: {
 		flex: 1,
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 8,
 		minWidth: 0,
 	},
-	topBarTitle: {
-		fontSize: 20,
-		lineHeight: 26,
+	eyebrowRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+	},
+	eyebrowDot: {
+		width: 6,
+		height: 6,
+		borderRadius: 3,
+		backgroundColor: "#ff5b6e",
+	},
+	eyebrow: {
+		color: Palette.onSurfaceVariant,
+		lineHeight: 14,
 		fontFamily: FontFamily.bold,
-		letterSpacing: -0.3,
-		flexShrink: 1,
+		letterSpacing: 1.4,
 	},
-	countChip: {
-		paddingHorizontal: 8,
-		paddingVertical: 2,
-		borderRadius: 999,
-	},
-	countText: {
-		fontSize: 11,
-		lineHeight: 16,
-		fontFamily: FontFamily.semiBold,
+	topBarTitle: {
+		lineHeight: 30,
+		fontFamily: FontFamily.bold,
+		letterSpacing: -0.5,
 	},
 
 	// Arama
+	searchInline: {
+		flexShrink: 1,
+		width: "36%",
+		minWidth: 240,
+		maxWidth: 420,
+		paddingLeft: 12,
+	},
 	searchWrap: {
 		paddingHorizontal: ScreenGutter,
-		paddingTop: 12,
-		paddingBottom: 4,
+		paddingTop: 10,
+		paddingBottom: 2,
 	},
 	searchBox: {
-		// Diğer ekranlardaki arama hapıyla aynı dil: dolgu yüzey, kenarlık yok.
+		// Diğer ekranlardaki arama hapıyla aynı dil: dolgu yüzey + ince kenar.
 		flexDirection: "row",
 		alignItems: "center",
-		borderRadius: 22,
+		borderWidth: 1,
 		paddingHorizontal: 14,
-		height: 44,
 		gap: 8,
+		backgroundColor: Palette.surfaceLow,
+	},
+	searchBoxWide: {
+		width: "100%",
 	},
 	searchInput: {
 		flex: 1,
-		fontSize: 13,
+		paddingVertical: 0,
 	},
 	searchClearFocused: {
 		borderRadius: 999,
@@ -831,18 +913,30 @@ const styles = StyleSheet.create({
 		borderColor: Palette.primary,
 	},
 
+	// Vitrin
+	featuredWrap: {
+		paddingHorizontal: ScreenGutter,
+		paddingTop: 6,
+	},
+
 	// Liste başlığı
 	subHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: 12,
 		paddingHorizontal: ScreenGutter,
-		paddingTop: 8,
+		paddingTop: 6,
 		paddingBottom: 2,
 	},
-	subHeaderText: {
-		fontSize: 10,
-		lineHeight: 16,
+	subHeaderTitle: {
 		fontFamily: FontFamily.bold,
-		letterSpacing: 1.1,
-		textTransform: "uppercase",
+		letterSpacing: -0.2,
+		flexShrink: 1,
+	},
+	subHeaderText: {
+		fontFamily: FontFamily.medium,
+		flexShrink: 1,
 	},
 
 	// Izgara
@@ -855,6 +949,10 @@ const styles = StyleSheet.create({
 	listContentEmpty: {
 		flexGrow: 1,
 		justifyContent: "center",
+	},
+	skeletonGrid: {
+		flexDirection: "row",
+		flexWrap: "wrap",
 	},
 	row: { gap: GRID_GAP },
 

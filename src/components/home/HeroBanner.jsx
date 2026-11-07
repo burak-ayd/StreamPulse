@@ -1,6 +1,7 @@
 import LanguageBadge from "@/components/common/LanguageBadge";
 import RozetNokta from "@/components/common/RozetNokta";
 import TVPressable from "@/components/common/TVPressable";
+import { useAppUpdate } from "@/context/AppUpdateContext";
 import {
 	SkeletonBlock,
 	SkeletonLine,
@@ -53,6 +54,17 @@ export default function HeroBanner({
 	const { isSideRail } = useNavLayout();
 	const { isTV, sp } = useTvMetrics();
 	const skeletonColors = useSkeletonColors();
+	/*
+	 * Güncelleme banner'ı görünürken hero "Oynat" düğmesi TV'de
+	 * `hasTVPreferredFocus` İSTEMEZ.
+	 *
+	 * ⚠️ Neden: banner açılış kontrolü sonucunda SONRADAN mount olur;
+	 * hero'nun verisi de aynı anda gelirse iki `hasTVPreferredFocus`
+	 * yarışır ve Android TV hangisini son uygulayacağını garanti etmez.
+	 * Banner görünürken hero'nun tercih ettiği odak isteği kapatılır;
+	 * banner kapandığında kullanıcı yön tuşlarıyla hero'ya zaten geçebilir.
+	 */
+	const { bannerVisible } = useAppUpdate();
 
 	/*
 	 * Okunmamış bildirim sayacı — zilin rozet değeri. Serviste modül
@@ -299,7 +311,7 @@ export default function HeroBanner({
 
 				<View style={styles.buttonsRow}>
 					<TVPressable
-						autoFocus={!skeleton}
+						autoFocus={!skeleton && !bannerVisible}
 						style={styles.playButton}
 						focusedStyle={styles.playButtonFocused}
 						onPress={onPlayPress}>

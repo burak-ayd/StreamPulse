@@ -53,6 +53,7 @@ import { FontFamily, Palette, ScreenGutter } from "@/constants/theme";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
+import { LinearGradient } from "expo-linear-gradient";
 import {
 	Stack,
 	useFocusEffect,
@@ -522,14 +523,18 @@ useEffect(() => {
 								}
 							: null,
 					]}>
-					{/* Kanal başlığı */}
-					<View style={styles.head}>
+					{/* Kanal başlığı — vitrin kartı */}
+					<LinearGradient
+						colors={["#2a2440", Palette.surfaceLow]}
+						start={{ x: 0, y: 0 }}
+						end={{ x: 1, y: 1 }}
+						style={styles.head}>
 						<View
 							style={[
 								styles.logoBox,
 								{
-									backgroundColor: Palette.surfaceHigh,
-									borderColor: Palette.outlineVariant,
+									backgroundColor: "rgba(229, 225, 228, 0.06)",
+									borderColor: "rgba(229, 225, 228, 0.10)",
 								},
 							]}>
 							{kanal.logo ? (
@@ -551,6 +556,11 @@ useEffect(() => {
 						</View>
 
 						<View style={styles.headText}>
+							<View style={styles.liveRow}>
+								<View style={styles.liveDot} />
+								<Text style={styles.liveLabel}>CANLI YAYIN</Text>
+							</View>
+
 							<Text
 								style={[styles.channelName, { color: Palette.onSurface }]}
 								numberOfLines={2}>
@@ -608,16 +618,25 @@ useEffect(() => {
 								</View>
 							) : null}
 						</View>
-					</View>
+					</LinearGradient>
 
 					{/* Akış listesi */}
-					<Text
-						style={[
-							styles.sectionTitle,
-							{ color: Palette.onSurfaceVariant },
-						]}>
-						AKIŞLAR
-					</Text>
+					<View style={styles.sectionHeader}>
+						<Text
+							style={[
+								styles.sectionTitle,
+								{ color: Palette.onSurface },
+							]}>
+							Yayın Kaynakları
+						</Text>
+						<Text
+							style={[
+								styles.sectionMeta,
+								{ color: Palette.onSurfaceVariant },
+							]}>
+							{akislar.length} kaynak
+						</Text>
+					</View>
 
 					{akislar.length === 0 ? (
 						<View
@@ -737,7 +756,6 @@ function TopBar({ onBack, title, subtitle }) {
 function StreamRow({ akis, index, onPress }) {
 	const meta = KIND_META[akis?.kind] || KIND_VARSAYILAN;
 	const quality = akis?.quality ? String(akis.quality) : null;
-	const kaliteVar = Boolean(akis?.quality_score);
 
 	return (
 		<TVPressable
@@ -753,55 +771,35 @@ function StreamRow({ akis, index, onPress }) {
 				<View style={styles.streamInner}>
 					<View
 						style={[
-							styles.kindBadge,
-							akis?.kind === "primary" && styles.kindBadgePrimary,
+							styles.playCircle,
+							akis?.kind === "primary" && styles.playCirclePrimary,
+							focused && styles.playCircleFocused,
 						]}>
 						<Ionicons
-							name={meta.ikon}
-							size={11}
+							name="play"
+							size={13}
 							color={
 								akis?.kind === "primary"
 									? Palette.onPrimaryContainer
-									: Palette.onSurfaceVariant
+									: Palette.onSurface
 							}
+							style={styles.playIcon}
 						/>
-						<Text
-							style={[
-								styles.kindText,
-								akis?.kind === "primary" && styles.kindTextPrimary,
-							]}>
-							{meta.ad}
-						</Text>
 					</View>
 
 					<View style={styles.streamInfo}>
-						{akis?.label ? (
-							<Text
-								style={[
-									styles.streamLabel,
-									{
-										color: focused
-											? Palette.primaryContainer
-											: Palette.onSurface,
-									},
-								]}
-								numberOfLines={1}>
-								{akis.label}
-							</Text>
-						) : (
-							<Text
-								style={[
-									styles.streamLabel,
-									{
-										color: focused
-											? Palette.primaryContainer
-											: Palette.onSurface,
-									},
-								]}
-								numberOfLines={1}>
-								Akış {index + 1}
-							</Text>
-						)}
+						<Text
+							style={[
+								styles.streamLabel,
+								{
+									color: focused
+										? Palette.primary
+										: Palette.onSurface,
+								},
+							]}
+							numberOfLines={1}>
+							{akis?.label || `Akış ${index + 1}`}
+						</Text>
 
 						{/*
 						 * Kalite satırı YALNIZCA backend kalite gönderdiyse
@@ -809,37 +807,50 @@ function StreamRow({ akis, index, onPress }) {
 						 * puanıdır, ekranda "1080p" gibi bir çözünürlük
 						 * diye YAZILMAZ — bu bir uydurma olurdu.
 						 */}
-						{quality || kaliteVar || akis?.yt_id || akis?.is_live === false ? (
-							<View style={styles.streamTags}>
-								{quality ? (
-									<Text
-										style={[
-											styles.streamTag,
-											{ color: Palette.tertiary },
-										]}>
-										{quality}
-									</Text>
-								) : null}
-								{akis?.yt_id ? (
-									<Text
-										style={[styles.streamTag, { color: Palette.onSurfaceVariant }]}>
-										YouTube kaynağı
-									</Text>
-								) : null}
-								{akis?.is_live === false ? (
-									<Text
-										style={[styles.streamTag, { color: Palette.outline }]}>
-										Şu an yayında değil
-									</Text>
-								) : null}
-							</View>
-						) : null}
+						<View style={styles.streamTags}>
+							<Text
+								style={[
+									styles.streamTag,
+									akis?.kind === "primary"
+										? { color: Palette.primary }
+										: { color: Palette.onSurfaceVariant },
+								]}>
+								{meta.ad}
+							</Text>
+							{quality ? (
+								<Text
+									style={[
+										styles.streamTag,
+										{ color: Palette.tertiary },
+									]}>
+									{quality}
+								</Text>
+							) : null}
+							{akis?.yt_id ? (
+								<Text
+									style={[
+										styles.streamTag,
+										{ color: Palette.onSurfaceVariant },
+									]}>
+									YouTube kaynağı
+								</Text>
+							) : null}
+							{akis?.is_live === false ? (
+								<Text
+									style={[
+										styles.streamTag,
+										{ color: Palette.outline },
+									]}>
+									Şu an yayında değil
+								</Text>
+							) : null}
+						</View>
 					</View>
 
 					<Ionicons
-						name="play-circle"
-						size={24}
-						color={focused ? Palette.primaryContainer : Palette.outline}
+						name="chevron-forward"
+						size={16}
+						color={focused ? Palette.primary : Palette.outline}
 					/>
 				</View>
 			)}
@@ -891,37 +902,61 @@ const styles = StyleSheet.create({
 		gap: 4,
 	},
 
-	// Kanal başlığı
+	// Kanal başlığı — vitrin kartı
 	head: {
 		flexDirection: "row",
+		alignItems: "center",
 		gap: 16,
-		marginBottom: 22,
+		marginBottom: 20,
+		padding: 16,
+		borderRadius: 18,
+		borderWidth: 1,
+		borderColor: "rgba(229, 225, 228, 0.10)",
+		overflow: "hidden",
 	},
 	logoBox: {
 		width: 92,
 		height: 92,
-		borderRadius: 16,
+		borderRadius: 18,
 		overflow: "hidden",
 		borderWidth: 1,
 		alignItems: "center",
 		justifyContent: "center",
-		// `flexShrink` yok: başlık uzun kanal adlarında (örn. "beIN SPORTS
-		// 1 HD Türkçe") logoyu sıkıştırmak yerine metni kısaltıyoruz.
+		// Kısa kenar sabit: uzun kanal adlarında logo sıkışmaz, metin kısalır.
 		flexShrink: 0,
 	},
 	logo: {
-		width: "100%",
-		height: "100%",
+		width: "80%",
+		height: "80%",
 	},
 	headText: {
 		flex: 1,
 		minWidth: 0,
 	},
-	channelName: {
-		fontSize: 20,
-		lineHeight: 25,
+	liveRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+	},
+	liveDot: {
+		width: 6,
+		height: 6,
+		borderRadius: 3,
+		backgroundColor: "#ff5b6e",
+	},
+	liveLabel: {
+		color: Palette.onSurfaceVariant,
+		fontSize: 10,
+		lineHeight: 14,
 		fontFamily: FontFamily.bold,
-		letterSpacing: -0.3,
+		letterSpacing: 1.2,
+	},
+	channelName: {
+		marginTop: 4,
+		fontSize: 22,
+		lineHeight: 28,
+		fontFamily: FontFamily.bold,
+		letterSpacing: -0.4,
 	},
 	headMetaRow: {
 		flexDirection: "row",
@@ -943,7 +978,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: 5,
 		alignSelf: "flex-start",
-		marginTop: 8,
+		marginTop: 10,
 		paddingHorizontal: 9,
 		paddingVertical: 4,
 		borderRadius: 999,
@@ -956,68 +991,79 @@ const styles = StyleSheet.create({
 	},
 
 	// Akış listesi
+	sectionHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: 12,
+		marginBottom: 10,
+	},
 	sectionTitle: {
-		fontSize: 10,
-		lineHeight: 16,
+		fontSize: 15,
+		lineHeight: 20,
 		fontFamily: FontFamily.bold,
-		letterSpacing: 1.1,
-		textTransform: "uppercase",
-		marginBottom: 8,
+		letterSpacing: -0.2,
+	},
+	sectionMeta: {
+		fontSize: 11,
+		lineHeight: 15,
+		fontFamily: FontFamily.medium,
 	},
 	streamList: {
 		gap: 8,
 	},
 	streamRow: {
-		borderRadius: 14,
+		borderRadius: 16,
 		borderWidth: 2,
 		borderColor: "transparent",
+		backgroundColor: Palette.surfaceLow,
 	},
 	streamInner: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 12,
-		padding: 12,
+		padding: 13,
 	},
-	kindBadge: {
-		flexDirection: "row",
+	playCircle: {
+		width: 34,
+		height: 34,
+		borderRadius: 17,
+		backgroundColor: Palette.surfaceHigh,
 		alignItems: "center",
-		gap: 4,
-		paddingHorizontal: 8,
-		paddingVertical: 4,
-		borderRadius: 999,
-		backgroundColor: Palette.surfaceHighest,
+		justifyContent: "center",
+		flexShrink: 0,
 	},
-	kindBadgePrimary: {
+	playCirclePrimary: {
 		backgroundColor: Palette.primaryContainer,
 	},
-	kindText: {
-		fontSize: 10,
-		lineHeight: 14,
-		fontFamily: FontFamily.bold,
-		color: Palette.onSurfaceVariant,
+	playCircleFocused: {
+		borderWidth: 2,
+		borderColor: Palette.primary,
 	},
-	kindTextPrimary: {
-		color: Palette.onPrimaryContainer,
+	playIcon: {
+		marginLeft: 1,
 	},
 	streamInfo: {
 		flex: 1,
 		minWidth: 0,
 	},
 	streamLabel: {
-		fontSize: 13,
-		lineHeight: 18,
+		fontSize: 14,
+		lineHeight: 19,
 		fontFamily: FontFamily.semiBold,
 	},
 	streamTags: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 8,
+		flexWrap: "wrap",
+		gap: 9,
 		marginTop: 3,
 	},
 	streamTag: {
-		fontSize: 11,
-		lineHeight: 15,
+		fontSize: 10,
+		lineHeight: 14,
 		fontFamily: FontFamily.semiBold,
+		letterSpacing: 0.2,
 	},
 	streamEmpty: {
 		flexDirection: "row",

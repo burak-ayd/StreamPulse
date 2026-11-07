@@ -34,7 +34,17 @@
  *
  * ── TV ──────────────────────────────────────────────────────────────────
  *  1. Düz `Pressable` kumandada odaklanmaz; `TVPressable` odak alır ve OK'a
- *     cevap verir. Banner açılır açılmaz odağı alır (`autoFocus`).
+ *     cevap verir.
+ *
+ *     ⚠️ `autoFocus` banner'ın İLK mount anında `hasTVPreferredFocus`
+ *     gönderir; Android TV bunu görünüm pencereye eklenmeden önce
+ *     uygular ve `requestFocus()` sessizce başarısız olur. Açılış
+ *     kontrolü asenkron olduğu için banner her zaman SONRADAN mount
+ *     olur — sonuç: odak önceki öğede kalır, kumandanın OK'u bildirime
+ *     gitmez. Bu yüzden odak, `onLayout` ile görünüm bağlandıktan sonra
+ *     `hasTVPreferredFocus` false→true değiştirilerek İSTENİR: prop
+ *     değişimi RN'i bağlı görünümde yeniden `requestFocus()` çağırmaya
+ *     zorlar (aşağıda `tvFocusArmed`).
  *  2. TV'de sol ray (56dp) ekranın tamamında durur ve kenarlar overscan
  *     nedeniyle kırpılır. Sol kenar = ray + iç boşluk; kart
  *     `contentMaxWidth` ile ortalanıyor.
@@ -46,8 +56,15 @@ import { useAppUpdate } from "@/context/AppUpdateContext";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { useEffect, useState } from "react";
-import { Animated, Easing, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+	Animated,
+	DeviceEventEmitter,
+	Easing,
+	StyleSheet,
+	Text,
+	View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /** Bildirim kaç saniye sonra kendiliğinden kaybolur. */
@@ -82,6 +99,14 @@ function BannerCard({
 	const [secondsLeft, setSecondsLeft] = useState(AUTO_DISMISS_SECONDS);
 	// Alt dikiş yaması: başta var, geri sayımın ilk yarısında kaldırılır.
 	const [showPatch, setShowPatch] = useState(true);
+	// TV: ilk layout'a kadar false. Layout sonrası true'ya çevrilince
+	// `hasTVPreferredFocus` prop'u DEĞİŞİR ve RN bağlı görünümde
+	// `requestFocus()` çağırır — mount anındaki başarısız denemenin aksine.
+	const [tvFocusArmed, setTvFocusArmed] = useState(false);
+	const lastUserKeyAtRef = useRef(0);
+	const focusRetryTimerRef = useRef(null);
+	const focusRetryIntervalRef = useRef(null);
+	const hasFocusRef = useRef(false);
 
 	// `useRef(new Animated.Value(0))` DEĞİL: proje lint'i (react-hooks/refs)
 	// render sırasında ref okumayı yasaklıyor. Animated.Value bir NESNEDİR;
@@ -139,6 +164,56 @@ function BannerCard({
 			clearInterval(tick);
 		};
 	}, [progress, onDismiss]);
+
+	// Son kullanıcı tuşu — odak "çalınması" ile kullanıcı gezinmesini
+	// ayırmak için.
+	useEffect(() => {
+		if (!isTV) return;
+		const sub = DeviceEventEmitter.addListener("onHWKeyEvent", (evt) => {
+			if (evt?.eventKeyAction === 0) lastUserKeyAtRef.current = Date.now();
+		});
+		return () => sub.remove();
+	}, [isTV]);
+
+	/*
+	 * Odak, banner mount olduğunda TEK seferde garanti edilemiyor: ana
+	 * sayfa içeriği aynı anda yükleniyor ve ilk odaklanabilir öğe odağı
+	 * alabiliyor. Bu yüzden banner odak ALANA kadar (veya kullanıcı bir
+	 * tuşa basana kadar) kısa aralıklarla yeniden istenir. Odak alınınca
+	 * döngü durur; kullanıcı tuşa basınca da durur — böylece gezinmeyi
+	 * engellemez.
+	 */
+	useEffect(() => {
+		if (!isTV) return;
+		let attempts = 0;
+		const interval = setInterval(() => {
+			if (hasFocusRef.current) {
+				clearInterval(interval);
+				return;
+			}
+			if (Date.now() - lastUserKeyAtRef.current < 1000) {
+				clearInterval(interval);
+				return;
+			}
+			if (attempts >= 12) {
+				clearInterval(interval);
+				return;
+			}
+			attempts += 1;
+			setTvFocusArmed(false);
+			clearTimeout(focusRetryTimerRef.current);
+			focusRetryTimerRef.current = setTimeout(
+				() => setTvFocusArmed(true),
+				50,
+			);
+		}, 600);
+		focusRetryIntervalRef.current = interval;
+
+		return () => {
+			clearInterval(interval);
+			clearTimeout(focusRetryTimerRef.current);
+		};
+	}, [isTV]);
 
 	// Halka ölçüleri. Telefonda sabit; TV'de `sp()` ile ölçeklenir.
 	const ringSize = isTV ? sp(44) : 44;
@@ -247,12 +322,22 @@ function BannerCard({
 				style={styles.pressArea}
 				focusedStyle={{
 					backgroundColor: "rgba(229, 225, 228, 0.10)",
+					borderColor: Palette.primary,
 					borderRadius: radius - 4,
 				}}
 				// TV'de odak buraya gelsin; aksi halde kumandayla banner'a
 				// hiç ulaşılamaz.
-				autoFocus
+				autoFocus={!isTV || tvFocusArmed}
+				onLayout={
+					isTV && !tvFocusArmed
+						? () => setTvFocusArmed(true)
+						: undefined
+				}
 				onPress={onOpen}
+				onFocus={() => {
+					hasFocusRef.current = true;
+					clearInterval(focusRetryIntervalRef.current);
+				}}
 				accessibilityRole="button"
 				accessibilityLabel={`Yeni sürüm ${release.version} bulundu. Güncellemeyi açmak için dokunun`}>
 				<View
@@ -450,6 +535,9 @@ const styles = StyleSheet.create({
 		flex: 1,
 		flexDirection: "row",
 		alignItems: "center",
+		// Sabit şeffaf kenarlık: odakta yalnız RENK değişir, ölçü kaymaz.
+		borderWidth: 2,
+		borderColor: "transparent",
 	},
 	iconBox: {
 		alignItems: "center",
