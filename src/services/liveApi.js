@@ -106,11 +106,14 @@ export const LIVE_ERROR_REASON = {
 // önemsiz; karşılığında kategori yenilenmesi (M3U'da yeni kanal) kullanıcı
 // tarafında hissedilir hale gelir.
 //
-// `/sources` ve akış listeleri BİLİNÇLİ OLARAK ÖNBELLEKLENMEZ. Gerekçe
-// backend'in kendi ifadesiyle aynı: "bayat bir yayın adresi = ölü oynatıcı"
-// (`live.py` → `/channels/{id}` docstring'i). 90 saniye sonra kullanıcı
-// "Oynat" dediğinde elimizdeki `.m3u8` token'ı çürümüş olur ve kullanıcı,
-// taze bir adres alabilecekken, siyah ekranla karşılaşır.
+// `/sources` ÖNBELLEKLENMEZ (tek işlevi "kaynak şu an sağlıklı mı" demek).
+//
+// AKIŞ LİSTESİ (`/streams/{id}`) ARTIK 60 SN ÖNBELLEKLENİR. Önceden hiç
+// önbelleklenmiyordu ("bayat bir yayın adresi = ölü oynatıcı"); sunucu
+// 1.33.1'den sonra adresleri kendisi tazeliyor ve her kanal açılışında
+// ağ turu atmak TV'de gözle görülür bir gecikme yaratıyordu. TTL sunucunun
+// kendi önbelleğinden KISA tutuldu ve "Yeniden Dene" `force: true` ile
+// önbelleği atlar: sunucudaki bir düzeltme cihaza anında yansır.
 //
 // Arama TTL'si kanal TTL'sinden KISA tutuldu (`TTL_ARAMA_MS`), çünkü sorgu metni
 // önbellek anahtarının parçasıdır: kullanıcı "t" → "tr" → "trt" yazarken
@@ -118,8 +121,9 @@ export const LIVE_ERROR_REASON = {
 // kullanıcı harf ekledikçe eski bir sonuç gösterir. Kategori listesi tek kova
 // olduğu için uzun ömürlü olabilir; aramanın ömrü kısa olmalıdır.
 const TTL_KATEGORI_MS = 120_000; // 2 dk  (sunucu 900 sn)
-const TTL_KANAL_MS = 90_000; // 1,5 dk (sunucu 120 sn)
+const TTL_KANAL_MS = 90_000; // 1,5 dk (sunucu 120 sn) — istek: ≤ 5 dk
 const TTL_ARAMA_MS = 45_000; // 45 sn
+const TTL_AKIS_MS = 60_000; // 60 sn (istek: ≤ 60 sn)
 
 /**
  * Bellek içi önbellek — `api.js` → `apiCache` deseninin aynısı
@@ -135,6 +139,7 @@ const TTL_ARAMA_MS = 45_000; // 45 sn
 const liveCache = {
 	kategoriler: null, // { deger, zaman }
 	kanallar: new Map(), // `${kategori}::${sorgu}` -> { deger, zaman }
+	akislar: new Map(), // kanal_id -> { deger, zaman }
 };
 
 /**
@@ -159,6 +164,7 @@ function tazeKayitOku(kayit, ttl) {
 export function clearLiveCache() {
 	liveCache.kategoriler = null;
 	liveCache.kanallar.clear();
+	liveCache.akislar.clear();
 }
 
 // ─── Alt seviye istek yardımcısı ─────────────────────────────
@@ -450,12 +456,16 @@ export async function fetchLiveChannel(id) {
  * gövde demektir. `LiveChannel` alanlarını taşımadığı için kanal kartı bu
  * cevaptan kurulamaz.
  *
- * ÖNBELLEK YOK — `fetchLiveChannel` ile aynı gerekçe.
+ * ÖNBELLEK: 60 sn (bkz. `TTL_AKIS_MS`). `force: true` ile atlanır —
+ * "Yeniden Dene" bunu kullanır, yoksa kullanıcı bayat bir listeyi tekrar
+ * denerdi.
  *
  * @param {string} id - Stabil kanal slug'ı
+ * @param {object} [parametre]
+ * @param {boolean} [parametre.force=false] - Önbelleği atla (ve tazele)
  * @returns {Promise<object>}
  */
-export async function fetchLiveStreams(id) {
+export async function fetchLiveStreams(id, { force = false } = {}) {
 	const kanalId = String(id ?? "").trim();
 	if (!kanalId) {
 		return {
@@ -466,18 +476,31 @@ export async function fetchLiveStreams(id) {
 		};
 	}
 
+	if (!force) {
+		const kayit = tazeKayitOku(liveCache.akislar.get(kanalId), TTL_AKIS_MS);
+		if (kayit) return kayit.deger;
+	}
+
 	const sonuc = await liveFetch(
 		`/api/live/streams/${encodeURIComponent(kanalId)}`,
 	);
 	if (!sonuc.ok) return sonuc;
 
-	return {
+	const duz = {
 		ok: true,
 		status: sonuc.status,
 		kanal_id: sonuc.data?.kanal_id ?? kanalId,
 		streams: Array.isArray(sonuc.data?.streams) ? sonuc.data.streams : [],
 		total: Number(sonuc.data?.total) || 0,
 	};
+
+	// Boş liste önbelleğe YAZILMAZ: "kanal şu an akışsız" birkaç saniyelik
+	// bir durum olabilir, 60 sn boyunca onu tekrarlamak gereksiz.
+	if (duz.streams.length > 0) {
+		liveCache.akislar.set(kanalId, { deger: duz, zaman: Date.now() });
+	}
+
+	return duz;
 }
 
 /**
@@ -572,6 +595,35 @@ export function toPlayerSource(stream) {
 	// kanalda olduğu, M3U'nun nereye düzeltileceğini söyler.
 	const etiket = kaynak.label || tur;
 
+	/*
+	 * ⚠️ İLK KONTROL `embed`. Bu akışlar HLS değil, bir OYNATICI SAYFASIDIR
+	 * (spor kanallarının çoğu böyle). `react-native-video`'ya verilirse
+	 * ExoPlayer sayfayı playlist sanar (23002/23003) ve iki boşuna ağ turu
+	 * harcanır. Bunlar webview/tarayıcıda açılır: `result.type = "embed"`
+	 * işareti `oynatilabilirAkislaraCevir` tarafından ayrılır.
+	 */
+	if (kaynak.embed === true) {
+		const adres =
+			kaynak.url ||
+			(kaynak.yt_id ? `https://www.youtube.com/embed/${kaynak.yt_id}` : "");
+		if (!adres) {
+			console.warn(`[canlı-tv] Embed akışta adres yok — ${etiket}`);
+			return null;
+		}
+		return {
+			extractor: tur,
+			embed: true,
+			result: {
+				url: adres,
+				name: kaynak.label || "Canlı",
+				type: "embed",
+				is_live: true,
+				headers: {},
+				subtitles: [],
+			},
+		};
+	}
+
 	if (!hlsOynatilabilirMi(kaynak.url)) {
 		console.warn(
 			`[canlı-tv] Oynatılamayan akış elendi — ${etiket}: ` +
@@ -655,7 +707,16 @@ export function toPlayerSources(streams) {
 export function oynatilabilirAkislaraCevir(hamAkislar) {
 	const kaynaklar = toPlayerSources(hamAkislar);
 	const ham = Array.isArray(hamAkislar) ? hamAkislar.length : 0;
-	return { kaynaklar, elenen: ham - kaynaklar.length };
+	/*
+	 * `embed` akışlar AYRI döner: video oynatıcıya verilmezler, tarayıcıda
+	 * açılırlar. `elenen` yalnızca GERÇEKTEN kullanılamayan satırları sayar
+	 * (embed bir hata değil, farklı bir oynatma yoludur).
+	 */
+	return {
+		kaynaklar: kaynaklar.filter((k) => k.embed !== true),
+		embed: kaynaklar.filter((k) => k.embed === true),
+		elenen: ham - kaynaklar.length,
+	};
 }
 
 export default {

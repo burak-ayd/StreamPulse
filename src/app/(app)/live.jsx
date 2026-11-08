@@ -418,9 +418,19 @@ export default function LiveScreen() {
 	const handleChannelPress = useCallback(
 		(channel) => {
 			if (!channel?.id) return;
+			/*
+			 * Karta basınca DOĞRUDAN oynatıcı: 1. kaynak (dizinin ilk elemanı,
+			 * `liveStreamIndex` gönderilmez → oynatıcı varsayılanı 0) ile
+			 * oynatma başlar. Kaynak seçimi oynatıcının "Kaynak" menüsünden
+			 * yapılır; arada bir kanal/akış listesi ekranı YOK.
+			 */
 			router.push({
-				pathname: "/(app)/live/[id]",
-				params: { id: String(channel.id) },
+				pathname: "/(app)/player",
+				params: {
+					live: String(channel.id),
+					title: channel.name || "Canlı",
+					poster: channel.logo || undefined,
+				},
 			});
 		},
 		[router],

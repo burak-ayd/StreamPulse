@@ -23,6 +23,9 @@ export default function useVideoSource({
 	onFormatOverride,
 	// Sabit kalite seçimi: seçilen varyant için yazılan yerel master URI'si.
 	urlOverride = null,
+	// Aynı kaynağı YENİDEN başlatma sayacı (bkz. `VideoPlayer` →
+	// `switchSourceTo`): URI değişmese de anahtar değişsin diye.
+	restartNonce = 0,
 }) {
 	const [overrideType, setOverrideType] = useState(null);
 	const [formatRetryRef, setFormatRetryRef] = useState(false);
@@ -109,9 +112,18 @@ export default function useVideoSource({
 		setOverrideType(null);
 	};
 
+	/*
+	 * ⚠️ Anahtarda `activeSourceIndex` ŞART.
+	 *
+	 * M3U'da yedek satır ana satırın adresini tekrarlayabilir; iki kaynak
+	 * aynı URI'ye çözüldüğünde `key` değişmez → React `<Video>` örneğini
+	 * YENİDEN KULLANIR → ExoPlayer yeni kaynakla başlatılmaz ve yedek
+	 * geçiş sessizce yutulur (ekranda "Kaynak yükleniyor..." kalır).
+	 * İndeks, aynı adreste bile yeni oynatıcı örneği garantiler.
+	 */
 	const key = videoSource
-		? `${videoSource.uri}_${videoSource.type || "auto"}_${overrideType || "none"}`
-		: "none";
+		? `${activeSourceIndex}-${restartNonce}-${videoSource.uri}_${videoSource.type || "auto"}_${overrideType || "none"}`
+		: `none-${activeSourceIndex}-${restartNonce}`;
 
 	return {
 		videoSource,

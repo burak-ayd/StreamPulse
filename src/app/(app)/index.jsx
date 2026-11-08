@@ -617,8 +617,17 @@ export default function Index() {
 	const showSkeletonRows =
 		loadingContent && !isNoneMode && visibleCategories.length === 0;
 
+	/*
+	 * ⚠️ `url` TEK BAŞINA anahtar olamaz: bazı plugin'lerde birden çok
+	 * kategori AYNI adresi paylaşıyor (ArdaSpor: Futbol/Basketbol/Voleybol/TV
+	 * hepsi site kökü `https://ardaspor39.top`) → React "two children with
+	 * the same key" hatası verip satırları düşürüyordu. İndeks de anahtara
+	 * girer: liste yalnızca SONA ekleme yapıyor (`visibleCount` → slice),
+	 * dolayısıyla indeksler kalıcıdır.
+	 */
 	const categoryKeyExtractor = useCallback(
-		(category, index) => category.url || category.name || `cat-${index}`,
+		(category, index) =>
+			`${index}-${category.name || ""}-${category.url || "cat"}`,
 		[],
 	);
 

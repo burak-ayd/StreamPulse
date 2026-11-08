@@ -39,6 +39,8 @@ export default function TrackSelectionModal({
 	videoVariants = [],
 	selectedVariantId = null,
 	onSelectVariant,
+	// "Otomatik" seçeneğinin alt metni (canlıda gerçek ABR, VOD'da sabit en yüksek).
+	autoDescription = "En yüksek kalite (bağlantı hızına göre değişmez)",
 }) {
 	const insets = useSafeAreaInsets();
 
@@ -185,7 +187,7 @@ export default function TrackSelectionModal({
 							Otomatik
 						</Text>
 						<Text style={styles.optionSubtitle}>
-							En yüksek kalite (bağlantı hızına göre değişmez)
+							{autoDescription}
 						</Text>
 					</View>
 				</View>

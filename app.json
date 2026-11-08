@@ -2,7 +2,7 @@
   "expo": {
     "name": "Stream Pulse",
     "slug": "StreamPulse",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "orientation": "default",
     "icon": "./assets/icons/release/icon.png",
     "scheme": "streampulse",

@@ -11,7 +11,9 @@ const { withAppBuildGradle } = require("@expo/config-plugins");
  * "production" APP_VARIANT'ı release sayılır (app.config.js ile aynı eşleme).
  */
 const SPLIT_APK = {
-	development: { abis: ["armeabi-v7a", "arm64-v8a"], universal: true },
+	// x86_64 YALNIZ development'ta: emülatör dev build'i bu ABI olmadan
+	// kurulamaz (APK'da libreactnative.so bulunmaz → açılışta SoLoader çöker).
+	development: { abis: ["armeabi-v7a", "arm64-v8a", "x86_64"], universal: true },
 	preview: { abis: ["armeabi-v7a", "arm64-v8a"], universal: true },
 	release: { abis: ["armeabi-v7a", "arm64-v8a"], universal: true },
 };

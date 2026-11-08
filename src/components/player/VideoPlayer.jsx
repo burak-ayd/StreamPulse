@@ -65,6 +65,17 @@ import useWatchProgress from "./useWatchProgress";
 const TEMEL_GEÇICI_BEKLEME_MS = 1600;
 
 /**
+ * İlk kare zaman aşımı (ms).
+ *
+ * ⚠️ CDN hata döndürmezse `onError` HİÇ gelmez: playlist 200 döner ama
+ * segment/ilk kare asla gelmez. O durumda oynatıcı sonsuza kadar
+ * "Kaynak yükleniyor..." gösteriyordu (kullanıcı raporu). 13 sn: canlı
+ * HLS'te bir TCP/TLS el sıkışması + manifest + ilk segment için rahat
+ * sınır; daha uzunu kullanıcıyı boş ekranda bekletir.
+ */
+const ILK_KARE_ZAMAN_ASIMI_MS = 13_000;
+
+/**
  * ── `VideoPlayer` ─────────────────────────────────────────────
  *
  * Modern streaming player. Bu dosya YALNIZCA orkestrasyon yapar:
@@ -103,6 +114,11 @@ export default function VideoPlayer({
 	plugin = null,
 	isLive = false,
 	initialSourceIndex = 0,
+	// Canlı TV: "Yeniden Dene" sunucudan TAZE akış listesi ister (önbelleği
+	// atlar). Verilmezse düğme yalnızca mevcut listeyi baştan dener.
+	onRetry = null,
+	// `embed: true` kaynak seçildi: `(url) => void` — tarayıcıda açılır.
+	onOpenEmbed = null,
 	// Sonraki bölüme geç: `(nextEpisode) => void` (bkz. `player.jsx`).
 	onNextEpisode = null,
 }) {
@@ -169,6 +185,30 @@ export default function VideoPlayer({
 	const seenSourceErrorsRef = useRef(new Set());
 	const retryCountRef = useRef(new Map());
 	const retryTimerRef = useRef(null);
+	// Bu oturumda ÖLÜ olduğu kanıtlanmış adresler (URL bazında). Otomatik
+	// yedekleme bunlara geri dönmez; "Yeniden Dene" bilinçli bir emirdir.
+	const deadUrlsRef = useRef(new Set());
+	// İlk kare zaman aşımı (bkz. `ILK_KARE_ZAMAN_ASIMI_MS`).
+	const firstFrameTimerRef = useRef(null);
+	/*
+	 * Zaman aşımına düşen kaynağın ikinci denemesi yapıldı mı? İlk kare
+	 * gecikmesi kaynağın ölü olduğunu KANITLAMAZ (soğuk CDN): aynı kaynak
+	 * bir kez yeniden başlatılır, ikinci zaman aşımında sıradakine geçilir.
+	 */
+	const timeoutRetriedRef = useRef(new Set());
+	/*
+	 * Aynı kaynağı yeniden başlatma sayacı. `<Video>` anahtarına girer;
+	 * URI değişmese de (geçici hata tekrarı, zaman aşımı tekrarı) yeni
+	 * oynatıcı örneği kurulur.
+	 */
+	const [restartNonce, setRestartNonce] = useState(0);
+
+	const clearFirstFrameTimer = () => {
+		if (firstFrameTimerRef.current) {
+			clearTimeout(firstFrameTimerRef.current);
+			firstFrameTimerRef.current = null;
+		}
+	};
 	// ⚠️ `originalBrightnessRef` KALDIRILDI. Parlaklık geri yüklemesi
 	// artık native modülde (`resetBrightness`) yapılıyor; JS tarafında
 	// eski değeri tutmak hem gereksiz hem de (izin kontrolü hatası
@@ -271,6 +311,15 @@ export default function VideoPlayer({
 				setVideoVariants(kaliteler);
 				setSelectedVariantId(null);
 				/*
+				 * ⚠️ CANLIDA SABİTLEME YOK ("Otomatik" = GERÇEK ABR).
+				 *
+				 * Tek varyantlı yerel master, en yüksek bitrate'e kilitler.
+				 * Canlıda bu, zayıf bağlantıda kanalın hiç açılmaması demekti
+				 * (kullanıcı elle kalite seçince açılıyordu). Liste yine
+				 * doldurulur: elle kalite seçimi oynatıcıdan yapılabilir.
+				 */
+				if (isLive) return;
+				/*
 				 * "Otomatik" = EN YÜKSEK kalite (indirme modalıyla aynı mantık).
 				 * ExoPlayer'ın ABR'ı ağ yavaşken düşük kalitede takılı kalıyordu
 				 * ("kalite düşük kalıyor, yükseğe geçmiyor") → tek varyantlı yerel
@@ -310,7 +359,7 @@ export default function VideoPlayer({
 		return () => {
 			cancelled = true;
 		};
-	}, [currentSourceData]);
+	}, [currentSourceData, isLive]);
 
 	// Seçilen varyant için yerel master yaz → oynatıcı kaynağı değişir.
 	const selectVariant = useCallback(
@@ -322,6 +371,13 @@ export default function VideoPlayer({
 				currentTimeRef.current || 0,
 				pendingSeekTimeRef.current,
 			);
+			// Canlıda "Otomatik" = ExoPlayer ABR: yerel master bırakılır,
+			// kanalın kendi master'ı oynatılır (kalite bağlantıya uyar).
+			if (isLive && variantId === null) {
+				setSelectedVariantId(null);
+				setVariantMasterUri(null);
+				return;
+			}
 			const hedefVaryant =
 				variantId === null
 					? // "Otomatik" = en yüksek kalite
@@ -357,7 +413,7 @@ export default function VideoPlayer({
 				}
 			})();
 		},
-		[videoVariants, selectedAudioTrackIndex],
+		[videoVariants, selectedAudioTrackIndex, isLive],
 	);
 	const resolvedUrl = currentSourceData?.result?.url || null;
 
@@ -398,6 +454,7 @@ export default function VideoPlayer({
 		activeSourceIndex,
 		currentSourceData,
 		urlOverride: variantMasterUri,
+		restartNonce,
 		onFormatOverride: () => {
 			setHasError(false);
 			setIsLoading(true);
@@ -679,10 +736,13 @@ export default function VideoPlayer({
 	useEffect(() => {
 		seenSourceErrorsRef.current = new Set();
 		retryCountRef.current = new Map();
+		deadUrlsRef.current = new Set();
+		timeoutRetriedRef.current = new Set();
 		if (retryTimerRef.current) {
 			clearTimeout(retryTimerRef.current);
 			retryTimerRef.current = null;
 		}
+		clearFirstFrameTimer();
 	}, [sources]);
 
 	// Bekleyen geçici-hata tekrarını ekrandan çıkarken iptal et: aksi hâlde
@@ -690,6 +750,8 @@ export default function VideoPlayer({
 	useEffect(() => {
 		return () => {
 			if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+			if (firstFrameTimerRef.current)
+				clearTimeout(firstFrameTimerRef.current);
 		};
 	}, []);
 
@@ -829,6 +891,7 @@ export default function VideoPlayer({
 
 	// ── Oynatıcı olayları ───────────────────────────────────
 	const handleLoad = (data) => {
+		clearFirstFrameTimer();
 		setIsLoading(false);
 		setHasError(false);
 		const dur = data.duration || 0;
@@ -990,6 +1053,9 @@ export default function VideoPlayer({
 	 * okur. Bu dosyada bu tuzak daha önce yaşandı.
 	 */
 	const switchSourceTo = (index, secenekler = {}) => {
+		// Eski kaynağın ilk-kare zamanlayıcısı yeni kaynağa taşınmaz.
+		clearFirstFrameTimer();
+
 		// Canlıda "doğru konum" diye bir şey yok; eski konuma atlamak
 		// yayını kaçırır → konum taşınmaz.
 		//
@@ -1026,8 +1092,21 @@ export default function VideoPlayer({
 			? Math.max(currentTimeRef.current || 0, pendingSeekTimeRef.current)
 			: 0;
 		resetOverride();
+		/*
+		 * Kalite sabitlemesi KAYNAĞA özeldir: eski kaynağın yerel master'ı
+		 * bırakılmazsa yeni kaynakta YANLIŞ yayın açılır (canlıda kaynak
+		 * seçimi artık oynatıcıdan yapılıyor). Liste effect'te yeniden dolar;
+		 * burada senkron temizlenir çünkü effect ağ beklemesi içeriyor.
+		 */
+		setVideoVariants([]);
+		setSelectedVariantId(null);
+		setVariantMasterUri(null);
 		setIsLoading(true);
 		setHasError(false);
+		// Aynı indekse dönüş (geçici hata tekrarı, yavaş kaynağın ikinci
+		// şansı) yeni oynatıcı örneği gerektirir: aksi hâlde URI ve dolayısıyla
+		// `<Video>` anahtarı değişmez ve oynatıcı hiç yeniden başlamaz.
+		if (index === activeSourceIndex) setRestartNonce((n) => n + 1);
 		setActiveSourceIndex(index);
 		setAvailableAudioTracks([]);
 		setSelectedAudioTrackIndex(null);
@@ -1055,43 +1134,128 @@ export default function VideoPlayer({
 		if (settings?.autoPlayNext !== false) goNextEpisode();
 	};
 
+	/** `from`dan SONRAKİ, sağlam VİDEO kaynağı (-1: yok). */
+	const sonrakiOynatilabilir = (from) => {
+		for (let i = from + 1; i < sources.length; i += 1) {
+			const url = sources[i]?.result?.url;
+			// `embed` bir web sayfasıdır: oynatıcıya verilmez, otomatik
+			// yedekleme onu atlar (kullanıcı kaynak menüsünden açabilir).
+			if (sources[i]?.result?.embed) continue;
+			if (!url || deadUrlsRef.current.has(url)) continue;
+			// Bu oturumda zaten denenmiş kaynağa otomatik dönülmez.
+			if (seenSourceErrorsRef.current.has(i)) continue;
+			return i;
+		}
+		return -1;
+	};
+
+	/*
+	 * Tüm kaynaklar tükenince gösterilecek metin.
+	 *
+	 * Canlıda teknik ayrıntı ("HTTP hatası", "kodeks") kullanıcıya bir şey
+	 * söylemez: yapabileceği tek şey "Yeniden Dene". Film/dizide ise
+	 * `describePlaybackError` hangi kaynağın neden düştüğünü anlatır.
+	 */
+	const sonHataMesaji = (kaynakEtiketi, error = null) =>
+		isLive
+			? "Yayın şu anda açılamıyor."
+			: describePlaybackError(error, { sourceLabel: kaynakEtiketi });
+
+	/*
+	 * ── İlk kare zaman aşımı ──────────────────────────────────
+	 *
+	 * `onError` gelmeyen sessiz takılma: playlist 200 döner, segment hiç
+	 * gelmez. Kaynak ÖLÜ SAYILMAZ: ilk denemede kare gelmemesi, soğuk
+	 * bağlantı/CDN yavaşlığı demektir. Aynı kaynak BİR kez yeniden
+	 * başlatılır (kullanıcının "kapat-aç" davranışının otomatiği); ikinci
+	 * zaman aşımından sonra sıradaki kaynağa geçilir.
+	 */
+	const handleFirstFrameTimeout = (index) => {
+		firstFrameTimerRef.current = null;
+		const url = sources[index]?.result?.url || "-";
+		console.warn(
+			`[oynatma] hata url=${url} kod=timeout (${ILK_KARE_ZAMAN_ASIMI_MS} ms içinde ilk kare gelmedi)`,
+		);
+
+		if (!timeoutRetriedRef.current.has(index)) {
+			timeoutRetriedRef.current.add(index);
+			console.log(
+				`[oynatma] ${index + 1}. kaynakta ilk kare gecikti — aynı kaynak yeniden başlatılıyor`,
+			);
+			switchSourceTo(index);
+			return;
+		}
+
+		seenSourceErrorsRef.current.add(index);
+		const sonraki = sonrakiOynatilabilir(index);
+		if (sonraki !== -1) {
+			console.log(
+				`[oynatma] ${index + 1}. kaynakta kare gelmedi — sıradaki kaynak deneniyor`,
+			);
+			switchSourceTo(sonraki);
+			return;
+		}
+		setIsLoading(false);
+		setIsBuffering(false);
+		setHasError(true);
+		setErrorMessage(
+			sonHataMesaji(sources[index]?.result?.name || `kaynak ${index + 1}`),
+		);
+	};
+
+	/** Yeni kaynağın ilk karesi için zamanlayıcıyı kurar. */
+	const armFirstFrameTimer = (index) => {
+		clearFirstFrameTimer();
+		firstFrameTimerRef.current = setTimeout(
+			() => handleFirstFrameTimeout(index),
+			ILK_KARE_ZAMAN_ASIMI_MS,
+		);
+	};
+
 	const handleError = (error) => {
+		clearFirstFrameTimer();
 		const bilgi = classifyPlaybackError(error);
+		const kaynakNo = activeSourceIndex;
+		const kaynak = sources[kaynakNo] || {};
 		const kaynakEtiketi =
-			sources[activeSourceIndex]?.result?.name ||
-			sources[activeSourceIndex]?.extractor ||
-			`kaynak ${activeSourceIndex + 1}`;
+			kaynak?.result?.name ||
+			kaynak?.extractor ||
+			`kaynak ${kaynakNo + 1}`;
+		// ⚠️ Hangi ADRESİN düştüğü log'da görünmeli: etiket ("TRT 1
+		// [Canlı HD]") kanalı söyler, M3U'da düzeltilecek satırı söylemez.
+		const url = kaynak?.result?.url || "-";
 
 		console.warn(
-			`[oynatma] Hata — kaynak: ${kaynakEtiketi} | tür: ${bilgi.kind} | ` +
-				`kod: ${bilgi.code ?? "?"} | ölü: ${bilgi.sourceDead} | ` +
-				`geçici: ${bilgi.transient} | ham: ${error?.error?.errorString ?? "-"}`,
+			`[oynatma] hata url=${url} kod=${bilgi.code ?? "?"} | ` +
+				`kaynak: ${kaynakEtiketi} | tür: ${bilgi.kind} | ` +
+				`ölü: ${bilgi.sourceDead} | geçici: ${bilgi.transient} | ` +
+				`ham: ${error?.error?.errorString ?? "-"}`,
 		);
 		setIsLoading(false);
 		setIsBuffering(false);
+
+		// Ölü adres bu oturumda bir daha otomatik denenmez (döngü koruması
+		// + boşa ağ turu). "Yeniden Dene" bu kaydı temizler.
+		if (bilgi.sourceDead && !bilgi.transient) {
+			deadUrlsRef.current.add(url);
+		}
 
 		// ── 1) Aynı kaynağın KENDİSİ bu oturumda zaten öldü mü? ──
 		//
 		// Döngü koruması: kaynak 0 → 1 → 0 gibi bir sıralamada aynı ölü
 		// adres defalarca denenir ve kullanıcı sonsuz "deneniyor" görür.
-		const kaynakNo = activeSourceIndex;
 		if (seenSourceErrorsRef.current.has(kaynakNo)) {
 			// Bu kaynak zaten bir kez denendi ve tutmadı → doğrudan sıradakine.
-			const sonrakiVar = kaynakNo < sources.length - 1;
-			if (sonrakiVar) {
+			const sonraki = sonrakiOynatilabilir(kaynakNo);
+			if (sonraki !== -1) {
 				console.log(
 					`[oynatma] ${kaynakEtiketi} ikinci kez başarısız — sıradaki kaynağa geçiliyor`,
 				);
-				switchSourceTo(kaynakNo + 1);
+				switchSourceTo(sonraki);
 				return;
 			}
 			setHasError(true);
-			setErrorMessage(
-				describePlaybackError(error, {
-					sourceLabel: kaynakEtiketi,
-					hasAlternatives: false,
-				}),
-			);
+			setErrorMessage(sonHataMesaji(kaynakEtiketi, error));
 			return;
 		}
 		seenSourceErrorsRef.current.add(kaynakNo);
@@ -1121,29 +1285,31 @@ export default function VideoPlayer({
 		}
 
 		// ── 4) Kaynak öldü → sıradakine geç ──
-		const hasMoreSources = activeSourceIndex < sources.length - 1;
-		if (hasMoreSources) {
+		const sonraki = sonrakiOynatilabilir(kaynakNo);
+		if (sonraki !== -1) {
 			console.log(
 				`[oynatma] ${kaynakEtiketi} oynatılamadı (${bilgi.kind}) — sıradaki kaynak deneniyor`,
 			);
 			// ⚠️ Konum korunur: bu yol daha önce `pendingSeekTimeRef`'i
 			// yazmıyordu ve video baştan başlıyordu.
-			switchSourceTo(activeSourceIndex + 1);
+			switchSourceTo(sonraki);
 			return;
 		}
 
 		// ── 5) Kaynak kalmadı → anlaşılır mesaj (ham ExoPlayer metni değil) ──
 		setHasError(true);
-		setErrorMessage(
-			describePlaybackError(error, {
-				sourceLabel: kaynakEtiketi,
-				hasAlternatives: false,
-			}),
-		);
+		setErrorMessage(sonHataMesaji(kaynakEtiketi, error));
 	};
 
 	const handleSelectSource = (index) => {
 		if (index === activeSourceIndex) return;
+		// `embed` akış = web oynatıcı sayfası: ExoPlayer'a verilmez,
+		// tarayıcıda açılır (çağıran `player.jsx` açar).
+		if (sources[index]?.result?.embed) {
+			onOpenEmbed?.(sources[index].result.url);
+			setModalType(null);
+			return;
+		}
 		// Konum koruma dahil TÜM kaynak değiştirme mantığı tek yolda.
 		//
 		// ⚠️ `resetErrors` ŞART: kullanıcı listeden kaynak seçtiyse bu bir
@@ -1429,6 +1595,16 @@ export default function VideoPlayer({
 						rate={effectiveRate}
 						volume={1}
 						muted={volume === 0}
+						onLoadStart={() => {
+							/*
+							 * Her yeni kaynak burada görünür: "yedek akışa
+							 * gerçekten geçildi mi" sorusunun tek kanıtı.
+							 */
+							console.log(
+								`[oynatma] kaynak yükleniyor ${activeSourceIndex + 1}/${sources.length} url=${sources[activeSourceIndex]?.result?.url || "-"}`,
+							);
+							armFirstFrameTimer(activeSourceIndex);
+						}}
 						onLoad={handleLoad}
 						onProgress={handleProgress}
 						onBuffer={handleBuffer}
@@ -1828,7 +2004,9 @@ export default function VideoPlayer({
 						size={54}
 						color="#FF453A"
 					/>
-					<Text style={styles.errorTitle}>Oynatma Hatası</Text>
+					<Text style={styles.errorTitle}>
+						{isLive ? "Yayın Açılamıyor" : "Oynatma Hatası"}
+					</Text>
 					<Text style={styles.errorDescription}>{errorMessage}</Text>
 					<View style={styles.errorButtonsRow}>
 						{sources.length > 1 && (
@@ -1848,18 +2026,30 @@ export default function VideoPlayer({
 						<TouchableOpacity
 							style={styles.retryButton}
 							onPress={() => {
-								// Aynı kaynağı yeniden yükle: `switchSourceTo`
-								// konumu da korur (daha önce sıfırlanıyordu).
-								//
-								// ⚠️ `resetErrors` ŞART: kullanıcı "Tekrar Dene"
-								// dediğinde o kaynağın hata kaydı silinir. Aksi
-								// hâlde aynı adres yeniden açılmaya çalışıldığında
-								// `handleError` "bu kaynak zaten öldü" deyip
-								// sıradakine atlar ve kullanıcının denemesi
-								// hiç gerçekleşmez.
-								switchSourceTo(activeSourceIndex, {
-									resetErrors: true,
-								});
+								/*
+								 * "Yeniden Dene" = listeyi ve indeksi SIFIRLA.
+								 *
+								 * Canlıda `onRetry` sunucudan taze akış listesi
+								 * ister (istemci önbelleğini atlar): sunucudaki
+								 * bir düzeltme cihaza hemen yansımalı. Film/
+								 * dizide liste zaten tek seferliktir; hatırlanan
+								 * hata kayıtları temizlenip ilk kaynaktan
+								 * başlanır.
+								 */
+								clearFirstFrameTimer();
+								if (retryTimerRef.current) {
+									clearTimeout(retryTimerRef.current);
+									retryTimerRef.current = null;
+								}
+								if (onRetry) {
+									onRetry();
+									return;
+								}
+								seenSourceErrorsRef.current.clear();
+								retryCountRef.current.clear();
+								deadUrlsRef.current.clear();
+								timeoutRetriedRef.current.clear();
+								switchSourceTo(0, { resetErrors: true });
 							}}>
 							<Ionicons
 								name="refresh"
@@ -1910,6 +2100,11 @@ export default function VideoPlayer({
 				videoVariants={videoVariants}
 				selectedVariantId={selectedVariantId}
 				onSelectVariant={selectVariant}
+				autoDescription={
+					isLive
+						? "Bağlantı hızına göre otomatik seçilir"
+						: undefined
+				}
 			/>
 		</View>
 	);
