@@ -1,0 +1,27 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.subtitlestyle'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.subtitlestyle"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+def safeExtGet(prop, fallback) {
+  rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}
+
+dependencies {
+  // react-native-video ile aynı media3 sürümü; Gradle en yüksek sürümü seçer.
+  implementation "androidx.media3:media3-ui:${safeExtGet('media3Version', '1.8.0')}"
+}

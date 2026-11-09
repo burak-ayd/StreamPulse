@@ -1,0 +1,7 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "name": "StreamPulseSubtitleStyle",
+    "modules": ["expo.modules.subtitlestyle.SubtitleStyleModule"]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "subtitle-style",
+  "version": "1.0.0",
+  "description": "Expo module that applies app subtitle appearance settings to embedded (in-container) subtitle tracks rendered by react-native-video/ExoPlayer",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "expo-module build"
+  },
+  "keywords": ["expo", "expo-module", "android", "subtitle", "caption", "player"],
+  "license": "MIT",
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

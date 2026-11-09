@@ -51,6 +51,7 @@ import usePlayerGestures from "./usePlayerGestures";
 import useSubtitles from "./useSubtitles";
 import useVideoSource from "./useVideoSource";
 import useWatchProgress from "./useWatchProgress";
+import { applySubtitleStyle } from "../../../modules/subtitle-style/src";
 
 /**
  * Geçici ağ hatasından sonra AYNI kaynağı tekrar denemeden önce beklenecek
@@ -130,6 +131,34 @@ export default function VideoPlayer({
 
 	const seekDuration = settings?.seekDuration || 10;
 	const hideTimeoutMs = (settings?.controlsTimeout || 4) * 1000;
+
+	/*
+	 * Gömülü (container içi) altyazılar ExoPlayer'ın kendi SubtitleView'ında
+	 * çizilir; renk/arka plan `subtitleStyle` prop'uyla verilemez. Native
+	 * `SubtitleStyle` modülü o görünümü bulup `CaptionStyleCompat` uygular
+	 * (bkz. modules/subtitle-style).
+	 */
+	const nativeSubtitleStyle = useMemo(
+		() => ({
+			fontSize: settings?.subtitleFontSize || 16,
+			color: settings?.subtitleTextColor || "#FFFFFF",
+			backgroundColor: subtitleBgColorArgb(settings?.subtitleBgColor),
+			edgeColor: "#FF000000",
+			textShadow: settings?.subtitleTextShadow !== false,
+			opacity: 1,
+		}),
+		[
+			settings?.subtitleFontSize,
+			settings?.subtitleTextColor,
+			settings?.subtitleBgColor,
+			settings?.subtitleTextShadow,
+		],
+	);
+
+	// Stili oynatıcı kurulunca ve ayarlar değişince yeniden uygula.
+	useEffect(() => {
+		applySubtitleStyle(nativeSubtitleStyle);
+	}, [nativeSubtitleStyle]);
 
 	// ── Oynatıcı durumu ───────────────────────────────────────
 	const [activeSourceIndex, setActiveSourceIndex] =
@@ -922,6 +951,11 @@ export default function VideoPlayer({
 		if (Array.isArray(data.textTracks) && data.textTracks.length > 0) {
 			subtitles.setStreamTextTracks(data.textTracks);
 		}
+		/*
+		 * Gömülü altyazı görünümü ancak oynatıcı kurulduktan sonra oluşur;
+		 * stili burada (ve ayar değişiminde) uygula.
+		 */
+		applySubtitleStyle(nativeSubtitleStyle);
 
 		/*
 		 * ⚠️ Burada `canSeek` KULLANILMAZ: bu callback `setDuration(dur)`
@@ -2137,6 +2171,24 @@ function subtitleBgColor(mode) {
 		case "semi-black":
 		default:
 			return "rgba(0, 0, 0, 0.78)";
+	}
+}
+
+/**
+ * Aynı arka planın gömülü altyazılar için ARGB karşılığı (#AARRGGBB).
+ * Native `Color.parseColor` CSS `rgba()` kabul etmez.
+ */
+function subtitleBgColorArgb(mode) {
+	switch (mode) {
+		case "solid-black":
+			return "#FF000000";
+		case "blur":
+			return "#EB191B22"; // rgba(25, 27, 34, 0.92)
+		case "transparent":
+			return "#00000000";
+		case "semi-black":
+		default:
+			return "#C7000000"; // rgba(0, 0, 0, 0.78)
 	}
 }
 

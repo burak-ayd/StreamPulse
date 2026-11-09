@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!--
+    Boş manifest, ama DOSYANIN VAR OLMASI ZORUNLUDUR (AGP kitaplık
+    modülünde manifest arar). İzin bildirilmez: modül yalnızca mevcut
+    oynatıcı görünümüne stil yazar.
+  -->
+</manifest>

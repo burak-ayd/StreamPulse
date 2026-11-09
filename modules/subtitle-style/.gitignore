@@ -1,0 +1,7 @@
+node_modules/
+android/build/
+android/.cxx/
+android/.gradle/
+android/gradle/
+android/gradlew
+android/gradlew.bat
