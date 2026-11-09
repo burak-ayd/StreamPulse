@@ -26,6 +26,8 @@ data class EnqueueSpec(
   val posterUrl: String? = null,
   val pluginName: String? = null,
   val contentId: String? = null,
+  /** Eklenti sayfası; yerel dosya cihaza özel olduğu için devam kaydı bunu taşır. */
+  val pageUrl: String? = null,
   val workers: Int? = null,
 )
 
@@ -182,6 +184,7 @@ class DownloadEngine(
         posterUrl = spec.posterUrl,
         pluginName = spec.pluginName,
         contentId = spec.contentId,
+        pageUrl = spec.pageUrl,
         workers = spec.workers,
         status = DownloadStatus.QUEUED,
         createdAt = System.currentTimeMillis(),
@@ -736,6 +739,7 @@ private fun DownloadItem.toSpec() = EnqueueSpec(
   posterUrl = posterUrl,
   pluginName = pluginName,
   contentId = contentId,
+  pageUrl = pageUrl,
   workers = workers,
 )
 

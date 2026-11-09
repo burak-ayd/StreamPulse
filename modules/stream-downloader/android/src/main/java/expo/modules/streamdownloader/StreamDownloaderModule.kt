@@ -203,6 +203,7 @@ private fun Map<String, Any?>.toEnqueueSpec(): EnqueueSpec {
     posterUrl = str("posterUrl"),
     pluginName = str("pluginName"),
     contentId = str("contentId"),
+    pageUrl = str("pageUrl"),
     workers = int("workers"),
   )
 }
@@ -224,6 +225,7 @@ private fun DownloadItem.toWireMap(): Map<String, Any?> = mapOf(
   "posterUrl" to posterUrl,
   "pluginName" to pluginName,
   "contentId" to contentId,
+  "pageUrl" to pageUrl,
   "workers" to workers,
   "exported" to exported,
   "status" to status.wire,

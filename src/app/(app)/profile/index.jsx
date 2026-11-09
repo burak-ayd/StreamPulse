@@ -53,6 +53,7 @@ import {
 	sortItems,
 } from "@/utils/profileFormat";
 import { useReactiveData } from "@/utils/storageListener";
+import { localMediaExists } from "@/utils/localPlayback";
 import { Alert, BackHandler, Platform, ScrollView, StatusBar, StyleSheet, View } from "react-native";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
@@ -294,7 +295,16 @@ export default function ProfileScreen() {
 	);
 
 	const playContinue = useCallback(
-		(item) => {
+		async (item) => {
+			/*
+			 * Yerel indirme kaydı: dosya cihazda yoksa (silinmiş ya da başka
+			 * bir cihazda indirilmiş — indirmeler cihaza özeldir) oynatma
+			 * yerine çevrimiçi detay sayfasına düş.
+			 */
+			if (item.url && !(await localMediaExists(item.url))) {
+				openDetails(item);
+				return;
+			}
 			if (item.url) {
 				router.push({
 					pathname: "/player",
@@ -316,7 +326,7 @@ export default function ProfileScreen() {
 				router.push(`/(app)/MovieDetails/${item.id}`);
 			}
 		},
-		[router],
+		[router, openDetails],
 	);
 
 	const removeFavorite = useCallback(async (item) => {

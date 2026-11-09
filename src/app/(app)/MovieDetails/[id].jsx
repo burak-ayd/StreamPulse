@@ -120,6 +120,12 @@ export default function MovieDetailsScreen() {
 
 	// Dizi için passedMovie'deki seriesUrl veya seriesId, yoksa normal url
 	const movieUrl = useMemo(() => {
+		/*
+		 * Yerel indirme yolu (file://, content://) içerik adresi DEĞİLDİR:
+		 * cihaza özeldir ve dosya silinmiş olabilir. Detay sayfası bununla
+		 * ağ isteği atarsa boş/hatalı sayfa açılır; id'ye düşülür.
+		 */
+		const isRemote = (u) => typeof u === "string" && /^https?:/i.test(u);
 		if (passedMovie?.seriesUrl) return passedMovie.seriesUrl;
 		if (
 			passedMovie?.type === "episode" &&
@@ -129,8 +135,8 @@ export default function MovieDetailsScreen() {
 		) {
 			return passedMovie.seriesId;
 		}
-		if (passedMovie?.url) return passedMovie.url;
-		if (params.url) return params.url;
+		if (isRemote(passedMovie?.url)) return passedMovie.url;
+		if (isRemote(params.url)) return params.url;
 		if (
 			id &&
 			(String(id).startsWith("http") || String(id).startsWith("/"))

@@ -17,6 +17,7 @@ import { useDownload } from "@/context/DownloadContext";
 import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { etaLabel } from "@/utils/downloadEta";
+import { localMediaExists } from "@/utils/localPlayback";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Paths } from "expo-file-system";
@@ -123,7 +124,7 @@ export default function DownloadsScreen() {
 	const router = useRouter();
 	const { contentPaddingLeft } = useNavLayout();
 	const { sp, contentMaxWidth, isWide } = useTvMetrics();
-	const { alert } = useFeedback();
+	const { alert, toast } = useFeedback();
 	const {
 		queue,
 		pauseDownload,
@@ -260,14 +261,25 @@ export default function DownloadsScreen() {
 		}
 	};
 
-	const openPlayer = (item) => {
+	const openPlayer = async (item) => {
 		if (item.status !== "completed" || !item.filePath) return;
+		/*
+		 * Dosya uygulama dışından silinmiş olabilir; native kayıt yine
+		 * "completed" der. Olmayan yolu oynatıcıya verme, kaydı temizle.
+		 */
+		if (!(await localMediaExists(item.filePath))) {
+			toast.info("İndirilen dosya cihazda bulunamadı, kayıt kaldırıldı.");
+			await removeDownload(item.id);
+			return;
+		}
 		const isSeries = item.type === "series";
 		router.push({
 			pathname: "/player",
 			params: {
 				// Yerel kayıt: çıktı URI'sini doğrudan kaynaktır.
 				url: item.filePath,
+				// Devam kaydı buluta cihaza özel dosya yolu yerine bu sayfayı taşır.
+				pageUrl: item.pageUrl || undefined,
 				localSubtitle: item.subtitlePath || undefined,
 				title: item.contentTitle,
 				subtitle: isSeries ? episodeLabel(item) : "",

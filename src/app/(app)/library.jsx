@@ -25,6 +25,7 @@ import {
 	toggleWatchlist,
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
+import { localMediaExists } from "@/utils/localPlayback";
 import { normalizePluginValue } from "@/utils/pluginName";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -812,6 +813,16 @@ export default function LibraryScreen() {
 	// Oynatıcıyı Başlat
 	const handlePlayItem = async (item) => {
 		if (!item) return;
+
+		/*
+		 * Yerel indirme kaydı: dosya cihazda yoksa (silinmiş ya da başka bir
+		 * cihazda indirilmiş — indirmeler cihaza özeldir) oynatma yerine
+		 * çevrimiçi detay sayfasına düş.
+		 */
+		if (item.url && !(await localMediaExists(item.url))) {
+			handleOpenDetails(item);
+			return;
+		}
 
 		// Tek kaynak: `utils/mediaType.js` (bkz. o dosyanın başlığı).
 		// Eskiden buradaki zincir `content_type`'ı ÖNCE okuyordu ve

@@ -32,6 +32,7 @@ import {
 	saveSelectedPlatform,
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
+import { localMediaExists } from "@/utils/localPlayback";
 import { normalizePluginValue } from "@/utils/pluginName";
 import BottomNavigation from "@components/BottomNavigation";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
@@ -493,26 +494,13 @@ export default function Index() {
 		async (item) => {
 			if (item.url) {
 				/*
-				 * Yerel indirme kaydı: dosya test için silinmişse oynatma
-				 * başarısız olur — çevrimiçi kaynağa (detay sayfası) düş.
+				 * Yerel indirme kaydı: dosya cihazda yoksa (silinmiş ya da
+				 * başka bir cihazda indirilmiş — indirmeler cihaza özeldir)
+				 * oynatma yerine çevrimiçi detay sayfasına düş.
 				 */
-				if (!/^https?:/i.test(item.url)) {
-					try {
-						const { File } = await import("expo-file-system");
-						/*
-						 * `parentDirectory.list()` yalnızca `file:` yollarında
-						 * çalışır; dışa aktarılmış indirmeler `content://`
-						 * (MediaStore) adresi taşır ve liste hep boş dönerdi —
-						 * kayıt oynatıcıya değil detay sayfasına gidiyordu.
-						 * `exists` her iki şemada da doğru cevabı verir.
-						 */
-						if (!new File(item.url).exists) {
-							handleMoviePress(item);
-							return;
-						}
-					} catch (_e) {
-						// kontrol edilemiyorsa mevcut davranışa devam
-					}
+				if (!(await localMediaExists(item.url))) {
+					handleMoviePress(item);
+					return;
 				}
 				router.push({
 					pathname: "/player",

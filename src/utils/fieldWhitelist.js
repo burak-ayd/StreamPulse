@@ -97,6 +97,19 @@ export function filterPayload(payload, whitelist = LIBRARY_FIELDS) {
 }
 
 /**
+ * Senkronize edilecek kayıt yükü: beyaz liste + cihaza özel yerel yollar atılır.
+ *
+ * `url` indirilmiş içerikte `file:///...` taşır; bu yol yalnızca o cihazda
+ * geçerlidir. Buluta gönderilirse diğer cihaz indirmediği dosyayı oynatmaya
+ * çalışır. Konum/başlık bilgisi gitmeye devam eder — yalnızca yol düşer.
+ */
+export function filterLibraryPayload(payload) {
+	const filtered = filterPayload(payload);
+	if (filtered.url && !/^https?:/i.test(filtered.url)) delete filtered.url;
+	return filtered;
+}
+
+/**
  * Listeyi boyut kapağına göre kırpar.
  * @param {Array} list - Kayıt listesi
  * @param {number} cap - Maksimum eleman sayısı

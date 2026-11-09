@@ -1547,6 +1547,46 @@ export async function removeContinueWatching(target) {
 }
 
 /**
+ * Yerel dosya yolunu işaret eden devam/geçmiş kayıtlarını siler.
+ *
+ * İndirme silindiğinde o yol hiçbir cihazda açılamaz. Yeni kayıtlarda `url`
+ * SAYFA adresidir (bkz. `player.jsx` → `pageUrl`) ve bu işlev onlara
+ * dokunmaz; yalnızca yerel adres taşıyan eski kayıtlar temizlenir.
+ */
+export async function pruneLocalPlaybackRecords(localUri) {
+	if (!localUri) return;
+
+	const deviceId = await getDeviceId();
+	const anahtarlar = [STORAGE_KEYS.CONTINUE_WATCHING, STORAGE_KEYS.WATCH_HISTORY];
+
+	for (const key of anahtarlar) {
+		await mutate(key, async () => {
+			try {
+				const raw = await AsyncStorage.getItem(key);
+				const list = raw ? JSON.parse(raw) : [];
+				if (!Array.isArray(list) || !list.some((i) => i.url === localUri)) {
+					return list;
+				}
+
+				const hlc = getHlcNow();
+				const updated = list.map((i) =>
+					i.url === localUri
+						? { ...i, _hlc: hlc, _deviceId: deviceId, _deleted: true }
+						: i,
+				);
+				await AsyncStorage.setItem(key, JSON.stringify(updated));
+				const active = updated.filter((i) => !i._deleted);
+				notifyStorageChange(key, active);
+				return active;
+			} catch (error) {
+				console.error("Yerel oynatma kaydı temizlenirken hata:", error);
+				return [];
+			}
+		});
+	}
+}
+
+/**
  * Kayıtlı dizi toplam bölüm sayıları haritasını döndürür
  */
 export async function getSeriesTotalEpisodesMap() {
@@ -3002,6 +3042,7 @@ export default {
 	getContinueWatching,
 	saveContinueWatching,
 	removeContinueWatching,
+	pruneLocalPlaybackRecords,
 	markEpisodeComplete,
 	NONE_PLATFORM,
 	LIVE_TV_PLATFORM,

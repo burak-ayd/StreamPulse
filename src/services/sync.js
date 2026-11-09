@@ -13,7 +13,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authFetch, getAuthOutcome, REFRESH_OUTCOME } from "./apiClient";
 import { getDeviceId, getDeviceName, getDevicePlatform } from "@/utils/deviceId";
 import { now as getHlcNow, update as mergeHlc } from "@/utils/hlc";
-import { filterPayload } from "@/utils/fieldWhitelist";
+import { filterLibraryPayload } from "@/utils/fieldWhitelist";
 import { mergeFavorites } from "@/utils/merge/favorites";
 import { mergeLibraryList } from "@/utils/merge/library";
 import { mergeDocument, mergeSearchHistoryDoc } from "@/utils/merge/documents";
@@ -322,7 +322,7 @@ async function collectLocalPushData() {
 					records.push({
 						item_type: "favorite",
 						content_id: String(item.id || item.url),
-						payload: filterPayload(item),
+						payload: filterLibraryPayload(item),
 						is_deleted: Boolean(item._deleted),
 						hlc: item._hlc || getHlcNow(),
 						device_id: item._deviceId || deviceId,
@@ -345,7 +345,7 @@ async function collectLocalPushData() {
 					records.push({
 						item_type: "watchlist",
 						content_id: String(item.id || item.url),
-						payload: filterPayload(item),
+						payload: filterLibraryPayload(item),
 						is_deleted: Boolean(item._deleted),
 						hlc: item._hlc || getHlcNow(),
 						device_id: item._deviceId || deviceId,
@@ -368,7 +368,7 @@ async function collectLocalPushData() {
 					records.push({
 						item_type: "watch_history",
 						content_id: String(item.id || item.url),
-						payload: filterPayload(item),
+						payload: filterLibraryPayload(item),
 						is_deleted: Boolean(item._deleted),
 						hlc: item._hlc || getHlcNow(),
 						device_id: item._deviceId || deviceId,
@@ -391,7 +391,7 @@ async function collectLocalPushData() {
 					records.push({
 						item_type: "continue_watching",
 						content_id: String(item.id || item.url),
-						payload: filterPayload(item),
+						payload: filterLibraryPayload(item),
 						is_deleted: Boolean(item._deleted),
 						hlc: item._hlc || getHlcNow(),
 						device_id: item._deviceId || deviceId,

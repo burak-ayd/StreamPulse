@@ -68,6 +68,7 @@ class StateStore(private val file: File) : StatePersisting {
     put("subtitleUri", item.subtitleUri ?: JSONObject.NULL)
     put("exported", item.exported ?: JSONObject.NULL)
     put("contentId", item.contentId ?: JSONObject.NULL)
+    put("pageUrl", item.pageUrl ?: JSONObject.NULL)
     put("workers", item.workers ?: JSONObject.NULL)
     put("retryCount", item.retryCount)
     put("createdAt", item.createdAt)
@@ -106,6 +107,7 @@ class StateStore(private val file: File) : StatePersisting {
       subtitleUri = o.str("subtitleUri"),
       exported = o.boolOrNull("exported"),
       contentId = o.str("contentId"),
+      pageUrl = o.str("pageUrl"),
       workers = o.intOrNull("workers"),
       retryCount = o.optInt("retryCount", 0),
       createdAt = o.optLong("createdAt", 0L),

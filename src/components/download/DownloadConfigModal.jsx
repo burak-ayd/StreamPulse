@@ -258,6 +258,8 @@ export default function DownloadConfigModal({
 			await enqueueDownload({
 				contentId: content?.id || content?.url,
 				seriesId: isSeries ? content?.id || content?.url : null,
+				// Yerel dosya cihaza özeldir; devam kaydı bu sayfa adresini taşır.
+				pageUrl: episode?.url || content?.url || null,
 				contentTitle: content?.title || "İçerik",
 				pluginName,
 				type: isSeries ? "series" : "movie",

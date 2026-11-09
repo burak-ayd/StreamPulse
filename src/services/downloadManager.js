@@ -12,6 +12,7 @@
 
 import { getDownloadSettings, getDownloads, getPluginDownloadPref } from "@/utils/storage";
 import { parseMasterPlaylist } from "@/utils/hlsPlaylist";
+import { localMediaExists } from "@/utils/localPlayback";
 import * as streamDownloader from "./streamDownloader";
 
 // ── Durumlar (native wire adlarıyla aynı) ───────────────────────────
@@ -103,6 +104,7 @@ function mapNativeItem(w) {
 		pluginName: w.pluginName || "",
 		contentId: w.contentId || null,
 		posterUrl: w.posterUrl || null,
+		pageUrl: w.pageUrl || null,
 		sourceUrl: w.sourceUrl || "",
 		sourceHeaders: {},
 		filePath: w.outputUri || null,
@@ -197,6 +199,7 @@ async function enqueue(spec) {
 		posterUrl: spec.posterUrl || null,
 		pluginName: spec.pluginName || "",
 		contentId: spec.contentId || null,
+		pageUrl: spec.pageUrl || null,
 		workers: spec.workers || null,
 	});
 }
@@ -292,17 +295,32 @@ async function shouldAskBeforeDownload(pluginName) {
  */
 async function findCompletedDownload(key = {}) {
 	if (!initialized) await initialize();
-	const { url, seriesTitle, season, episode } = key;
+	const { url, contentId, seriesId, seriesTitle, season, episode } = key;
 	const wantSeason = Number(season);
 	const wantEpisode = Number(episode);
 	for (const item of items.values()) {
 		if (item.status !== DOWNLOAD_STATUS.COMPLETED || !item.filePath) continue;
 		// "downloading" anlık görüntüsündekiler hariç: sadece gerçek dosya
 		if (typeof key === "object" && key.includeLegacy === false && item.legacy) continue;
+		/*
+		 * Dosya gerçekten duruyor mu? Native/legacy kayıt, dosya uygulama
+		 * dışından silindiğinde de "completed" kalır; doğrulamadan dönmek
+		 * oynatıcıyı olmayan bir yola gönderir. Silinmişse çevrimiçi yola düş.
+		 */
+		if (!(await localMediaExists(item.filePath))) continue;
 		if (item.type === "series") {
 			if (!Number.isFinite(wantSeason) || !Number.isFinite(wantEpisode)) continue;
 			if (Number(item.seasonNumber) !== wantSeason) continue;
 			if (Number(item.episodeNumber) !== wantEpisode) continue;
+			/*
+			 * `seriesTitle` eşleşmesi eski kayıtlar içindir. Yeni kayıtlarda
+			 * dizi kimliği (`contentId`/`seriesId`) daha güvenilirdir: sayfa
+			 * adresi değişse bile indirme bulunur (çevrimdışı devam).
+			 */
+			const ayniDizi =
+				(seriesId && item.contentId === seriesId) ||
+				(contentId && item.contentId === contentId);
+			if (ayniDizi) return item;
 			if (
 				seriesTitle &&
 				String(item.seriesTitle || "").toLowerCase().trim() ===
@@ -313,6 +331,9 @@ async function findCompletedDownload(key = {}) {
 			continue;
 		}
 		if (url && item.sourceUrl === url) return item;
+		// Sayfa adresi eşleşmesi: kayıt kimliği (slug/URL) farklı biçimdeyse de bulur.
+		if (url && item.pageUrl === url) return item;
+		if (contentId && item.contentId === contentId) return item;
 	}
 	return null;
 }

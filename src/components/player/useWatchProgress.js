@@ -86,6 +86,7 @@ export default function useWatchProgress({
 	title,
 	poster,
 	targetUrl,
+	pageUrl = null,
 	seriesInfo,
 	plugin,
 	subtitle,
@@ -103,6 +104,13 @@ export default function useWatchProgress({
 	const lastObservedTimeRef = useRef(0);
 	// Kullanıcının GERÇEKTEN izlediği süre (seek atladığı süre hariç).
 	const watchedSecondsRef = useRef(0);
+
+	/*
+	 * Kayıtlara yazılan adres SAYFA adresidir. Yerel indirme yolu (`file://`)
+	 * cihaza özeldir; buluta giderse diğer cihaz indirmediği dosyayı arar.
+	 * `pageUrl` yoksa (çevrimiçi oynatma) `targetUrl` zaten sayfa adresidir.
+	 */
+	const recordUrl = pageUrl || targetUrl || resolvedUrl;
 
 	/*
 	 * ⚠️ SORUN 3 VE 4 — ARABELLEK SIKIŞMASI "SEEK" SAYILIYORDU.
@@ -229,7 +237,7 @@ export default function useWatchProgress({
 		if (!id || isLive || hasMarkedCompleteRef.current) return;
 		hasMarkedCompleteRef.current = true;
 
-		const url = targetUrl || resolvedUrl;
+		const url = recordUrl;
 
 		if (contentType === "episode") {
 			markEpisodeComplete(
@@ -270,6 +278,7 @@ export default function useWatchProgress({
 		title,
 		poster,
 		targetUrl,
+		recordUrl,
 		seriesInfo,
 		plugin,
 		subtitle,
@@ -463,7 +472,7 @@ export default function useWatchProgress({
 			currentTime: curTime,
 			duration: totalDuration,
 			progress,
-			url: targetUrl || resolvedUrl,
+			url: recordUrl,
 			seriesId: seriesInfo?.seriesId,
 			seriesTitle: seriesInfo?.seriesTitle,
 			seriesUrl: seriesInfo?.seriesUrl,
@@ -537,7 +546,7 @@ export default function useWatchProgress({
 				currentTime: curTime,
 				duration: totalDuration,
 				progress,
-				url: targetUrl || resolvedUrl,
+				url: recordUrl,
 				seriesId: seriesInfo?.seriesId,
 				seriesTitle: seriesInfo?.seriesTitle,
 				season: seriesInfo?.season,
@@ -549,6 +558,7 @@ export default function useWatchProgress({
 	}, [
 		contentId,
 		targetUrl,
+		recordUrl,
 		title,
 		poster,
 		contentType,

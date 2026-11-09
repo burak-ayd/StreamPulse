@@ -111,6 +111,8 @@ export default function VideoPlayer({
 	contentType = "movie",
 	seriesInfo = null,
 	targetUrl = "",
+	// İçeriğin SAYFA adresi; izleme kayıtlarına yazılan adres (bkz. `player.jsx`).
+	pageUrl = null,
 	plugin = null,
 	isLive = false,
 	initialSourceIndex = 0,
@@ -505,6 +507,7 @@ export default function VideoPlayer({
 		title,
 		poster,
 		targetUrl,
+		pageUrl,
 		seriesInfo,
 		plugin,
 		subtitle,

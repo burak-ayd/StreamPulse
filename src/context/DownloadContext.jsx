@@ -26,6 +26,7 @@ import {
 	getDownloadSettings,
 	saveDownloadSettings as persistDownloadSettings,
 	resetDownloadSettings as persistResetDownloadSettings,
+	pruneLocalPlaybackRecords,
 } from "@/utils/storage";
 
 const DownloadContext = createContext(null);
@@ -174,7 +175,14 @@ export function DownloadProvider({ children }) {
 
 	const removeDownload = useMemo(
 		() => async (downloadId) => {
+			/*
+			 * Kayıt silinmeden ÖNCE dosya yolunu al: o yolu işaret eden
+			 * devam/geçmiş kayıtları da temizlenir, aksi halde kart ölü bir
+			 * dosyayı açmayı dener (silinen indirme hatası).
+			 */
+			const item = DownloadManager.getItem(downloadId);
 			await DownloadManager.remove(downloadId);
+			await pruneLocalPlaybackRecords(item?.filePath).catch(() => {});
 			syncQueue();
 		},
 		[],
@@ -356,6 +364,8 @@ async function quickEnqueueWithPref({ content, episode, pluginName, pref }) {
 	return DownloadManager.enqueue({
 		contentId: content?.id || content?.url,
 		seriesId: isSeries ? content?.id || content?.url : null,
+		// Yerel dosya cihaza özeldir; devam kaydı bu sayfa adresini taşır.
+		pageUrl: episode?.url || content?.url || null,
 		contentTitle: content?.title || "İçerik",
 		pluginName,
 		type: isSeries ? "series" : "movie",

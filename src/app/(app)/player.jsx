@@ -7,6 +7,7 @@ import {
 	oynatilabilirAkislaraCevir,
 } from "@/services/liveApi";
 import { DownloadManager } from "@/services/downloadManager";
+import { localMediaExists } from "@/utils/localPlayback";
 import { matchesResumeEntry } from "@/utils/resumeMatch";
 import { resolvePluginName } from "@/utils/pluginName";
 import { addToWatchHistory, getContinueWatching } from "@/utils/storage";
@@ -66,6 +67,15 @@ export default function PlayerScreen() {
 	const router = useRouter();
 	const pathname = usePathname();
 	const targetUrl = params.url;
+	/*
+	 * İçeriğin SAYFA adresi: kayıtlara (devam et / geçmiş) yazılan tek adres.
+	 * Yerel indirme yolu cihaza özeldir — buluta giderse diğer cihaz
+	 * indirmediği dosyayı oynatmaya çalışır.
+	 */
+	const pageUrl = (() => {
+		const aday = params.pageUrl || targetUrl;
+		return typeof aday === "string" && /^https?:/i.test(aday) ? aday : null;
+	})();
 	const title = params.title || "Video";
 	const subtitle = params.subtitle || "";
 	const poster = params.poster || null;
@@ -341,6 +351,15 @@ const [sources, setSources] = useState([]);
 			// `file://` ya da cihaz içeriği URI'si; HİÇBİR ağ turu yapılmaz.
 			const yerelYol =
 				targetUrl && !/^https?:/i.test(targetUrl) ? targetUrl : null;
+			/*
+			 * Yerel yol ELDE OLMAYABİLİR: kullanıcı indirmeyi sildi ya da kayıt
+			 * başka bir cihazda oluşturuldu (indirmeler cihaza özeldir). Bu
+			 * durumda oynatıcıyı olmayan dosyaya göndermek yerine açık hata
+			 * ver — `kaynakHatasiMesaji` bunu ayrı mesaja çevirir.
+			 */
+			if (yerelYol && !(await localMediaExists(yerelYol))) {
+				return { kaynaklar: [], hata: "local-missing", elenen: 0 };
+			}
 			if (yerelYol) {
 				const yerelAlt = params.localSubtitle || null;
 				const isHlsMaster = yerelYol.endsWith(".m3u8");
@@ -460,6 +479,8 @@ const [sources, setSources] = useState([]);
 	 */
 	const kaynakHatasiMesaji = useCallback(
 		(kaynakHatasi, elenen) => {
+			if (kaynakHatasi === "local-missing")
+				return "İndirilen dosya cihazda bulunamadı. İçeriği çevrimiçi izlemek için indirmeleri açıp kaydı silin.";
 			if (!isCanli) return "Bu içerik için video kaynağı bulunamadı.";
 			if (elenen > 0)
 				return "Bu kanalın yayın adresi geçersiz. Lütfen daha sonra tekrar deneyin.";
@@ -514,7 +535,7 @@ const [sources, setSources] = useState([]);
 							episodeTitle: seriesInfo?.episodeTitle,
 							poster,
 							type: "episode",
-							url: targetUrl,
+							url: pageUrl || targetUrl,
 							totalEpisodes: seriesInfo?.totalEpisodes,
 							overview: subtitle,
 							plugin: params.plugin || seriesInfo?.plugin,
@@ -525,7 +546,7 @@ const [sources, setSources] = useState([]);
 							title,
 							poster,
 							type: "movie",
-							url: targetUrl,
+							url: pageUrl || targetUrl,
 							overview: subtitle,
 							plugin: params.plugin || seriesInfo?.plugin,
 						}).catch(() => {});
@@ -546,6 +567,7 @@ const [sources, setSources] = useState([]);
 		}
 	}, [
 		targetUrl,
+		pageUrl,
 		liveKanalId,
 		isCanli,
 		contentId,
@@ -819,6 +841,7 @@ const [sources, setSources] = useState([]);
 					contentType={contentType}
 					seriesInfo={seriesInfo}
 					targetUrl={targetUrl}
+					pageUrl={pageUrl}
 					plugin={params.plugin || seriesInfo?.plugin}
 					/*
 					 * Canlı TV modu: iki bayrak birlikte gider.

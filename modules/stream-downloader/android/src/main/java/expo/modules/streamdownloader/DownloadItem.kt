@@ -50,6 +50,9 @@ data class DownloadItem(
   val exported: Boolean? = null,
   /** İçerik sayfa kimliği (JS spec.contentId) — İndirilenler'den oynatmada devam eşleşmesi için. */
   val contentId: String? = null,
+  /** İçeriğin EKLENTİ SAYFASI (JS spec.pageUrl). Yerel dosya cihaza özeldir;
+   *  "kaldığın yerden devam et" kaydı buluta giderken bu adres taşınır. */
+  val pageUrl: String? = null,
   /** Bu indirme için paralel segment sayısı (ayar: maxConnectionsPerDownload). */
   val workers: Int? = null,
   /** MP4'e dönüştürmeden HLS segmentleri olarak bırakma (hız deneyi). */
