@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { TextTrackType } from "react-native-video";
+import { isLocalMediaUrl } from "@/utils/localPlayback";
 
 /**
  * Altyazı CDN'leri (örn. Dizilla -> pichive) User-Agent + Referer olmadan
@@ -243,16 +244,19 @@ export default function useSubtitles({
 		let isMounted = true;
 
 		/*
-		 * Yerel altyazı (çevrimdışı oynatma, Faz 5): uri `file://` ise RN
-		 * fetch'in ağ katmanı Android'de bu scheme'i desteklemez → altyazı
-		 * sessizce yüklenmezdi. Dosyayı `expo-file-system` okur ve metni
-		 * aynı ayrıştırıcıya besler.
+		 * Yerel altyazı (çevrimdışı oynatma, Faz 5): RN `fetch` yerel şemaları
+		 * desteklemez. Native motor yolu `File.toURI()` ile **tek slash**
+		 * (`file:/data/...`) üretir, dışa aktarılmış indirmede ise `content://`
+		 * (MediaStore) gelir; eski kontrol yalnızca `file://` arıyorduğu için
+		 * altyazı sessizce yüklenmiyordu (menüde görünür, ekranda çizilmez).
+		 *
+		 * Yeni `File` API'si `file:`, `content:` ve `asset:` şemalarının
+		 * hepsini okur.
 		 */
 		const readFileText = async () => {
-			if (selectedSubtitle.uri.startsWith("file://")) {
-				const { readAsStringAsync } =
-					await import("expo-file-system/legacy");
-				return readAsStringAsync(selectedSubtitle.uri);
+			if (isLocalMediaUrl(selectedSubtitle.uri)) {
+				const { File } = await import("expo-file-system");
+				return new File(selectedSubtitle.uri).text();
 			}
 			const res = await fetch(selectedSubtitle.uri, {
 				headers: subtitleHeaders,

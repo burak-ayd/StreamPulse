@@ -1327,7 +1327,19 @@ export default function VideoPlayer({
 	const videoTextTrackProp = useMemo(() => {
 		const sub = subtitles.selectedSubtitle;
 		if (!sub) return { type: "disabled" };
-		if (sub.title) return { type: "title", value: sub.title };
+		/*
+		 * Yan dosya altyazı (indirme .srt) kendi overlay'imizde çizilir;
+		 * native oynatıcıya verilmez.
+		 */
+		if (sub.isExternal) return { type: "disabled" };
+		/*
+		 * Gömülü (container içi) iz: RNV başlıkla eşleştirmeyi
+		 * `format.label` üzerinden yapar. Etiketsiz izlerde başlık yalnızca
+		 * GÖRÜNTÜ için üretilir ("Track 1") ve eşleşmez — seçim menüde
+		 * görünür ama ekranda hiçbir şey çizilmez. Bu durumda indeks kullan.
+		 */
+		const uretilmisBaslik = /^Track \d+$/.test(String(sub.title || ""));
+		if (sub.title && !uretilmisBaslik) return { type: "title", value: sub.title };
 		if (typeof sub.index === "number")
 			return { type: "index", value: sub.index };
 		return { type: "disabled" };
