@@ -22,7 +22,6 @@ import {
 	StatusBar,
 	StyleSheet,
 	Text,
-	TouchableOpacity,
 	View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1446,6 +1445,16 @@ export default function VideoPlayer({
 
 	// ── Kumanda (TV) ────────────────────────────────────────
 	useTVRemote((eventType) => {
+		/*
+		 * ⚠️ Hata ekranı açıkken kumanda oynatıcıyı YÖNETMEZ.
+		 *
+		 * Neden: aşağıdaki `!showControls` dalı "diğer tuşlar → kontrolleri
+		 * göster" der; hata ekranında kontroller render EDİLMEDİĞİ için bu
+		 * dal her tuşta boşa çalışır ve odak yöneticisi odağı yine
+		 * oynatıcının (kaldırılan) katmanına taşımaya çalışırdı. Ayrıca
+		 * hata anında sol/sağ sarma ve play/pause anlamsızdır.
+		 */
+		if (hasError) return;
 		if (!showControls) {
 			// HUD GİZLİ: Play/Pause, Rewind/FastForward, Left/Right → seek + HUD göster
 			if (
@@ -1735,7 +1744,13 @@ export default function VideoPlayer({
 			 * doğrudan jest yüzeyine geçer (tek dokunma, çift dokunma ve
 			 * sürükleme çalışmaya devam eder), düğmelere ise dokunulur.
 			 */}
-			{showControls && (
+			{/*
+			 * Hata ekranı varken kontrol katmanı RENDER EDİLMEZ: bu katmanın
+			 * oynat/duraklat düğmesi `hasTVPreferredFocus` taşıdığı için
+			 * odak orada kalıyor ve hata ekranındaki düğmeler kumandayla
+			 * seçilemiyordu ("hata çıkınca fokus player butonlarında kalıyor").
+			 */}
+			{showControls && !hasError && (
 				<View
 					style={[
 						// ⚠️ `StyleSheet.absoluteFill` ZORUNLU (kullanıcı:
@@ -2057,10 +2072,20 @@ export default function VideoPlayer({
 						{isLive ? "Yayın Açılamıyor" : "Oynatma Hatası"}
 					</Text>
 					<Text style={styles.errorDescription}>{errorMessage}</Text>
+					{/*
+					 * ⚠️ `TVPressable` + `autoFocus` ŞART: hata ekranı
+					 * açıldığında kumanda odağı buraya TAŞINMALI. Düz
+					 * `TouchableOpacity` odak TALEP ETMEZ; odak oynatıcı
+					 * düğmelerinde kalır ve bu düğmeler OK ile seçilemez.
+					 * Aynı anda tek `hasTVPreferredFocus` olmalı → kaynak
+					 * listesi varsa ona, yoksa "Yeniden Dene"ye verilir.
+					 */}
 					<View style={styles.errorButtonsRow}>
 						{sources.length > 1 && (
-							<TouchableOpacity
+							<TVPressable
+								autoFocus
 								style={styles.switchSourceButton}
+								focusedStyle={styles.switchSourceButtonFocused}
 								onPress={() => setModalType("sources")}>
 								<Ionicons
 									name="server-outline"
@@ -2070,10 +2095,12 @@ export default function VideoPlayer({
 								<Text style={styles.switchSourceButtonText}>
 									{`Farklı Kaynak Seç (${sources.length} Kaynak)`}
 								</Text>
-							</TouchableOpacity>
+							</TVPressable>
 						)}
-						<TouchableOpacity
+						<TVPressable
+							autoFocus={sources.length <= 1}
 							style={styles.retryButton}
+							focusedStyle={styles.retryButtonFocused}
 							onPress={() => {
 								/*
 								 * "Yeniden Dene" = listeyi ve indeksi SIFIRLA.
@@ -2108,7 +2135,7 @@ export default function VideoPlayer({
 							<Text style={styles.retryButtonText}>
 								Yeniden Dene
 							</Text>
-						</TouchableOpacity>
+						</TVPressable>
 					</View>
 				</View>
 			)}
@@ -2406,6 +2433,13 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 16,
 		paddingVertical: 12,
 		borderRadius: 10,
+		// Odak halkası yerleşimi kaydırmasın diye saydam çerçeve rezerve edilir.
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	switchSourceButtonFocused: {
+		borderColor: "#FFFFFF",
+		transform: [{ scale: 1.05 }],
 	},
 	switchSourceButtonText: {
 		color: "#FFFFFF",
@@ -2420,6 +2454,13 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 16,
 		paddingVertical: 12,
 		borderRadius: 10,
+		borderWidth: 2,
+		borderColor: "transparent",
+	},
+	retryButtonFocused: {
+		borderColor: Palette.primary,
+		backgroundColor: "rgba(192, 193, 255, 0.3)",
+		transform: [{ scale: 1.05 }],
 	},
 	retryButtonText: {
 		color: "#FFFFFF",
