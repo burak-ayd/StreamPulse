@@ -31,7 +31,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "tr.net.burakaydogan.streampulse",
-      "versionCode": 41,
+      "versionCode": 42,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -41,7 +41,10 @@
               "scheme": "streampulse"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
