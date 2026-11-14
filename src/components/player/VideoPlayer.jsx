@@ -315,7 +315,10 @@ export default function VideoPlayer({
 	 */
 	const [videoVariants, setVideoVariants] = useState([]);
 	const [selectedVariantId, setSelectedVariantId] = useState(null);
-	const [variantMasterUri, setVariantMasterUri] = useState(null);
+	// Kalite kararı KAYNAĞA BAĞLI tutulur. Ayrı bir "uri" state'i tutulsaydı
+	// kaynak değiştiği ilk render'da eski içeriğin yerel master'ı yeni kaynağa
+	// uygulanır ve YANLIŞ içerik oynatılırdı (ses/video başka filmden).
+	const [kaliteKarari, setKaliteKarari] = useState({ url: null, uri: null });
 
 	// Kaynak değişince kalite listesi yenilenir, seçim sıfırlanır.
 	useEffect(() => {
@@ -326,7 +329,7 @@ export default function VideoPlayer({
 				if (cancelled) return;
 				setVideoVariants([]);
 				setSelectedVariantId(null);
-				setVariantMasterUri(null);
+				setKaliteKarari({ url: url || null, uri: null });
 				return;
 			}
 			try {
@@ -359,7 +362,7 @@ export default function VideoPlayer({
 					(a, b) => (b.bandwidth || 0) - (a.bandwidth || 0),
 				)[0];
 				if (!enYuksek) {
-					setVariantMasterUri(null);
+					setKaliteKarari({ url, uri: null });
 					return;
 				}
 				const sesler = enYuksek.audioTracks || [];
@@ -369,7 +372,10 @@ export default function VideoPlayer({
 					enYuksek,
 					sesler,
 					varsayilanSes,
-					"spd-quality-auto.m3u8",
+					// Benzersiz dosya adı: içerik etiketi + yazım sayacı.
+					// Aynı yol ikinci kez kullanılmaz → önceki içeriğin
+					// kalıntısı yeni içeriğe karışamaz.
+					url,
 				);
 				if (cancelled) return;
 				// Kalite-master rewrite AYNI İÇERİĞİ yeniden montaj eder:
@@ -380,10 +386,15 @@ export default function VideoPlayer({
 					currentTimeRef.current || 0,
 					pendingSeekTimeRef.current,
 				);
-				setVariantMasterUri(uri);
+				setKaliteKarari({ url, uri });
 			} catch (e) {
 				console.warn("Kalite listesi alınamadı:", e?.message);
-				if (!cancelled) setVideoVariants([]);
+				// Karar kesinleşmeli: aksi halde `kaliteBekleniyor` true kalır ve
+				// oynatıcı hiç mount edilmez (ekranda sonsuz "yükleniyor").
+				if (!cancelled) {
+					setVideoVariants([]);
+					setKaliteKarari({ url, uri: null });
+				}
 			}
 		})();
 		return () => {
@@ -405,7 +416,7 @@ export default function VideoPlayer({
 			// kanalın kendi master'ı oynatılır (kalite bağlantıya uyar).
 			if (isLive && variantId === null) {
 				setSelectedVariantId(null);
-				setVariantMasterUri(null);
+				setKaliteKarari({ url: currentSourceData?.result?.url || null, uri: null });
 				return;
 			}
 			const hedefVaryant =
@@ -418,7 +429,7 @@ export default function VideoPlayer({
 			if (!hedefVaryant) {
 				// Varyant yok → kaynağın kendi master'ına dön.
 				setSelectedVariantId(null);
-				setVariantMasterUri(null);
+				setKaliteKarari({ url: currentSourceData?.result?.url || null, uri: null });
 				return;
 			}
 			const sesListesi = hedefVaryant.audioTracks || [];
@@ -434,16 +445,20 @@ export default function VideoPlayer({
 						hedefVaryant,
 						sesListesi,
 						seciliSes,
-						`spd-quality-${hedefVaryant.id}.m3u8`,
+						// Benzersiz ad: her kalite seçimi yeni dosya yazar.
+						currentSourceData?.result?.url || "",
 					);
 					setSelectedVariantId(variantId);
-					setVariantMasterUri(uri);
+					setKaliteKarari({
+						url: currentSourceData?.result?.url || null,
+						uri,
+					});
 				} catch (e) {
 					console.warn("Kalite değiştirilemedi:", e?.message);
 				}
 			})();
 		},
-		[videoVariants, selectedAudioTrackIndex, isLive],
+		[videoVariants, selectedAudioTrackIndex, isLive, currentSourceData],
 	);
 	const resolvedUrl = currentSourceData?.result?.url || null;
 
@@ -472,6 +487,18 @@ export default function VideoPlayer({
 	 */
 	const canSeek = !isLive && duration > 0;
 
+	// ⚠️ Kalite kararı beklenirken oynatıcı BAŞLATILMAZ.
+	// Önceki davranış: oynatıcı master ile başlıyor, ~600 ms sonra yerel
+	// kalite-master yazılınca aynı video için İKİNCİ kez kuruluyordu
+	// (Init → Release → Init; manifest iki kez çekiliyordu).
+	// Karar KAYNAĞA bağlı tutulur: kaynak değişince eski karar geçersizdir,
+	// dolayısıyla önceki içeriğin yerel master'ı yeni kaynağa uygulanamaz.
+	const kaynakUrl = String(currentSourceData?.result?.url || "");
+	const kaliteBekleniyor =
+		!isLive && kaynakUrl.includes(".m3u8") && kaliteKarari.url !== kaynakUrl;
+	const variantMasterUri =
+		kaliteKarari.url === kaynakUrl ? kaliteKarari.uri : null;
+
 	// ── Kaynak çözümlemesi ────────────────────────────────────
 	const {
 		videoSource,
@@ -484,6 +511,7 @@ export default function VideoPlayer({
 		activeSourceIndex,
 		currentSourceData,
 		urlOverride: variantMasterUri,
+		qualityPending: kaliteBekleniyor,
 		restartNonce,
 		onFormatOverride: () => {
 			setHasError(false);
@@ -1136,7 +1164,8 @@ export default function VideoPlayer({
 		 */
 		setVideoVariants([]);
 		setSelectedVariantId(null);
-		setVariantMasterUri(null);
+		// Karar geçersizleşir: yeni kaynak için kalite yeniden belirlenecek.
+		setKaliteKarari({ url: null, uri: null });
 		setIsLoading(true);
 		setHasError(false);
 		// Aynı indekse dönüş (geçici hata tekrarı, yavaş kaynağın ikinci

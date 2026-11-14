@@ -23,6 +23,11 @@ export default function useVideoSource({
 	onFormatOverride,
 	// Sabit kalite seçimi: seçilen varyant için yazılan yerel master URI'si.
 	urlOverride = null,
+	// Kalite kararı henüz kesinleşmedi (bkz. VideoPlayer: kaliteBekleniyor).
+	// True iken kaynak ÜRETİLMEZ: oynatıcı master ile başlayıp sonra yerel
+	// kalite-master'a geçince aynı video için yeniden kuruluyordu
+	// (Init → Release → Init, manifest iki kez çekiliyordu).
+	qualityPending = false,
 	// Aynı kaynağı YENİDEN başlatma sayacı (bkz. `VideoPlayer` →
 	// `switchSourceTo`): URI değişmese de anahtar değişsin diye.
 	restartNonce = 0,
@@ -32,6 +37,7 @@ export default function useVideoSource({
 
 	const videoSource = useMemo(() => {
 		if (!currentSourceData?.result?.url) return null;
+		if (qualityPending) return null;
 
 		// Kalite seçimi aktifse yerel master oynatılır (tek varyant → sabit kalite).
 		const streamUrl = urlOverride || currentSourceData.result.url;
@@ -95,7 +101,7 @@ export default function useVideoSource({
 
 		// Harici altyazılar buraya verilmiyor — bkz. `useSubtitles` başlığı.
 		return { uri: streamUrl, headers, type };
-	}, [currentSourceData, overrideType, urlOverride]);
+	}, [currentSourceData, overrideType, urlOverride, qualityPending]);
 
 	/** Biçim hatası sonrası ters türle tekrar dene. */
 	const toggleOverrideType = useCallback(() => {
@@ -120,9 +126,15 @@ export default function useVideoSource({
 	 * YENİDEN KULLANIR → ExoPlayer yeni kaynakla başlatılmaz ve yedek
 	 * geçiş sessizce yutulur (ekranda "Kaynak yükleniyor..." kalır).
 	 * İndeks, aynı adreste bile yeni oynatıcı örneği garantiler.
+	 *
+	 * ⚠️ KAYNAK URL'si de anahtarda: kalite-master seçiliyken `uri` her içerikte
+	 * AYNI yerel dosya yoludur (`spd-quality-auto.m3u8`). URL olmadan başka bir
+	 * içeriğe geçişte anahtar değişmez, oynatıcı yeniden kurulmaz ve önceki
+	 * içerik sesiyle birlikte oynamaya devam eder.
 	 */
+	const kaynakAnahtari = currentSourceData?.result?.url || "";
 	const key = videoSource
-		? `${activeSourceIndex}-${restartNonce}-${videoSource.uri}_${videoSource.type || "auto"}_${overrideType || "none"}`
+		? `${activeSourceIndex}-${restartNonce}-${kaynakAnahtari}-${videoSource.uri}_${videoSource.type || "auto"}_${overrideType || "none"}`
 		: `none-${activeSourceIndex}-${restartNonce}`;
 
 	return {

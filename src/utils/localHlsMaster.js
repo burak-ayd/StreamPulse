@@ -1,4 +1,5 @@
 import { File, Paths } from "expo-file-system";
+import { kaliteMasterAdi } from "@/utils/localHlsName";
 
 /**
  * Sabit kalite oynatma için YEREL master playlist yazar.
@@ -14,17 +15,25 @@ import { File, Paths } from "expo-file-system";
  * ⚠️ TÜM ses parçaları yazılır (sadece seçili değil): kalite değişse bile
  * ses seçim listesi dolu kalır — aksi halde liste yalnız Türkçe'ye düşer.
  *
+ * ⚠️ HER YAZIM YENİ BİR DOSYA ADI KULLANIR (bkz. `localHlsName`).
+ * Önceden sabit addı (`spd-quality-auto.m3u8`): iki içerik aynı `file://`
+ * yolunu paylaşıyordu ve yeni içeriğin dosyası eskisinden kısa olduğunda
+ * eski içeriğin kuyruğu diskte kalabiliyordu — ExoPlayer onu ikinci bir
+ * varyant olarak okuyup BAŞKA içeriği oynatabiliyordu.
+ */
+
+/**
  * @param {object} variant  {url, bandwidth, resolution, codecs, frameRate}
  * @param {Array} audioTracks  master'daki TÜM ses rendition'ları
  * @param {object|null} seciliSes  DEFAULT=YES işaretlenecek ses parçası
- * @param {string} fileName  cache içindeki dosya adı
+ * @param {string} kaynakUrl  içerik kimliği (dosya adı bundan üretilir)
  * @returns {Promise<string>} file:// URI
  */
 export async function writeLocalMaster(
 	variant,
 	audioTracks = [],
 	seciliSes = null,
-	fileName = "spd-quality.m3u8",
+	kaynakUrl = "",
 ) {
 	const lines = ["#EXTM3U", "#EXT-X-VERSION:3"];
 	for (const track of audioTracks) {
@@ -48,9 +57,17 @@ export async function writeLocalMaster(
 	lines.push(`#EXT-X-STREAM-INF:${streamAttrs.join(",")}`);
 	lines.push(variant.url);
 
-	const file = new File(Paths.cache, fileName);
-	const writer = file.writableStream().getWriter();
-	await writer.write(new TextEncoder().encode(`${lines.join("\n")}\n`));
-	await writer.close();
+	const file = new File(Paths.cache, kaliteMasterAdi(kaynakUrl));
+	/*
+	 * `write` dosyayı sıfırdan yazar (truncate).
+	 *
+	 * ⚠️ `writableStream()` KULLANILMAZ: `FileMode.WriteOnly` ile açıyor ve
+	 * Android tarafında `RandomAccessFile`+`"rw"` demek — TRUNCATE YOK
+	 * (`FileSystemFileHandle.kt`, `rafMode`). O yolla yeni içerik eskisinden
+	 * kısayken dosyanın kuyruğu diskte kalıyordu; ExoPlayer kalıntıyı ikinci
+	 * varyant sanıp BAŞKA içeriği oynatabiliyordu (çok sesli kaynak → tek
+	 * sesli kaynak geçişinde yaşanan "içerik karışması").
+	 */
+	await file.write(`${lines.join("\n")}\n`);
 	return file.uri;
 }
