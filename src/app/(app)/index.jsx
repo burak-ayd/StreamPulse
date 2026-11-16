@@ -1000,22 +1000,17 @@ export default function Index() {
 				<BottomSheetModal
 					visible={isPlatformModalVisible}
 					onClose={() => setIsPlatformModalVisible(false)}
-					snapToHeight={0.78}
+					snapToHeight={Platform.isTV ? 0.9 : 0.8}
 					fitContent={false}
 					title=""
-					opacity={0.7}
-					handle={true}
+					opacity={0.85}
+					handle={!Platform.isTV}
 					closeOnBackdrop={true}
-					swipeable={true}>
+					swipeable={!Platform.isTV}>
 					<PlatformList
 						onSelectPlatform={handleSelectPlatform}
-						onClose={() => setIsPlatformModalVisible(false)}
-						/* Canlı TV kartı `handlePlatformSelect`'e GİRMEZ;
-						   navigasyona çevrilir (bkz. PlatformList →
-						   `canliTvAc`). Rota burada veriliyor çünkü modal
-						   içinden `router.push` çağırmak, ekranın kendi
-						   gezinme yığınını yönetmesi demek. */
 						onOpenLiveTv={() => router.push("/(app)/live")}
+						onClose={() => setIsPlatformModalVisible(false)}
 					/>
 				</BottomSheetModal>
 

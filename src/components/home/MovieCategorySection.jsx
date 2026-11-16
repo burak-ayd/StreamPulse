@@ -1,3 +1,4 @@
+import { SkeletonLine } from "@/components/common/Skeleton";
 import {
 	CARD_POSTER_RATIO,
 	CARD_SUBTITLE_HEIGHT,
@@ -9,10 +10,9 @@ import {
 	ROW_LIST_PAD_H,
 } from "@/components/content/CategoryCard";
 import CategoryCardSkeleton from "@/components/content/CategoryCardSkeleton";
-import { SkeletonLine } from "@/components/common/Skeleton";
 import { FontFamily, Palette } from "@/constants/theme";
 import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import CategoryRowBody from "./CategoryRowBody";
 
@@ -35,11 +35,11 @@ import CategoryRowBody from "./CategoryRowBody";
  * `getItemLayout` (sabit adım) son öğeye doğru kayar.
  */
 const ROW_CARD_HEIGHT =
-	ROW_CARD_WIDTH / CARD_POSTER_RATIO +
-	CARD_TITLE_MARGIN_TOP +
-	CARD_TITLE_HEIGHT +
-	CARD_SUBTITLE_MARGIN_TOP +
-	CARD_SUBTITLE_HEIGHT;
+  ROW_CARD_WIDTH / CARD_POSTER_RATIO +
+  CARD_TITLE_MARGIN_TOP +
+  CARD_TITLE_HEIGHT +
+  CARD_SUBTITLE_MARGIN_TOP +
+  CARD_SUBTITLE_HEIGHT;
 
 /**
  * SORUN 1 — "Tümünü göster" düğmesine ulaşmak zor.
@@ -60,117 +60,110 @@ const ROW_CARD_HEIGHT =
  * sonuna kadar gidildiğinde) aynı işlevi görüyor.
  */
 
-
 /**
  * memo: üst bileşen (ana sayfa) yeniden render olduğunda, prop'ları değişmeyen
  * kategori satırları yeniden render olmaz. index.jsx'deki callback'ler
  * useCallback ile sabitlendiği için bu gerçekten tutarlı çalışır.
  */
 function MovieCategorySection({
-	platformName,
-	category,
-	rowIndex,
-	onMoviePress,
-	onMovieLongPress,
-	onSeeAll,
-	/**
-	 * Odak bir karta geldiğinde çağrılır. Ana sayfa bunu kullanarak
-	 * kendi dikey listesinde satırı ekranın ORTASINA taşır (sorun 5).
-	 */
-	onRowFocused,
-	/** Sol ray bulunan düzenlerde (TV / yatay tablet) satır sonu kutusu. */
-	showSeeAllTile = false,
+  platformName,
+  category,
+  rowIndex,
+  onMoviePress,
+  onMovieLongPress,
+  onSeeAll,
+  /**
+   * Odak bir karta geldiğinde çağrılır. Ana sayfa bunu kullanarak
+   * kendi dikey listesinde satırı ekranın ORTASINA taşır (sorun 5).
+   */
+  onRowFocused,
+  /** Sol ray bulunan düzenlerde (TV / yatay tablet) satır sonu kutusu. */
+  showSeeAllTile = false,
 }) {
-	const initialCached = getCachedCategoryMovies(platformName, category?.url, 1);
-	const [movies, setMovies] = useState(initialCached || []);
-	const [loading, setLoading] = useState(
-		!initialCached || initialCached.length === 0,
-	);
+  const initialCached = getCachedCategoryMovies(platformName, category?.url, 1);
+  const [movies, setMovies] = useState(initialCached || []);
+  const [loading, setLoading] = useState(
+    !initialCached || initialCached.length === 0,
+  );
 
-	// useFocusCentering must be called unconditionally at the top level (hooks rules)
+  // useFocusCentering must be called unconditionally at the top level (hooks rules)
 
-	useEffect(() => {
-		let isMounted = true;
+  useEffect(() => {
+    let isMounted = true;
 
-		async function loadCategoryMovies() {
-			const currentCached = getCachedCategoryMovies(
-				platformName,
-				category?.url,
-				1,
-			);
-			if (currentCached && currentCached.length > 0) {
-				if (isMounted) {
-					setMovies(currentCached);
-					setLoading(false);
-				}
-				return;
-			}
+    async function loadCategoryMovies() {
+      const currentCached = getCachedCategoryMovies(
+        platformName,
+        category?.url,
+        1,
+      );
+      if (currentCached && currentCached.length > 0) {
+        if (isMounted) {
+          setMovies(currentCached);
+          setLoading(false);
+        }
+        return;
+      }
 
-			try {
-				setLoading(true);
-				const data = await fetchPlatformMainPage(
-					platformName,
-					category.url,
-				);
-				const items = Array.isArray(data)
-					? data
-					: data?.results || data?.data || [];
+      try {
+        setLoading(true);
+        const data = await fetchPlatformMainPage(platformName, category.url);
+        const items = Array.isArray(data)
+          ? data
+          : data?.results || data?.data || [];
 
-				if (isMounted) {
-					setMovies(items);
-				}
-			} catch (error) {
-				console.error(
-					`[${category.name}] içerikleri yüklenirken hata:`,
-					error,
-				);
-			} finally {
-				if (isMounted) {
-					setLoading(false);
-				}
-			}
-		}
+        if (isMounted) {
+          setMovies(items);
+        }
+      } catch (error) {
+        console.error(`[${category.name}] içerikleri yüklenirken hata:`, error);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
 
-		if (platformName && category?.url) {
-			loadCategoryMovies();
-		}
+    if (platformName && category?.url) {
+      loadCategoryMovies();
+    }
 
-		return () => {
-			isMounted = false;
-		};
-	}, [platformName, category?.url, category?.name]);
+    return () => {
+      isMounted = false;
+    };
+  }, [platformName, category?.url, category?.name]);
 
-	/*
-	 * Satır yüklenirken spinner DEĞİL, iskelet.
-	 *
-	 * Spinner 140px'lik ince bir şeritti; satırın gerçek yüksekliği
-	 * başlık + 124×182 kart + başlık satırı ≈ 230px. İçerik gelince
-	 * ekran zıplıyordu. `MovieCategoryRowSkeleton` aynı başlığı, aynı
-	 * kenar boşluğunu ve aynı kart boyutunu kullanıyor.
-	 */
-	if (loading) {
-		return <MovieCategoryRowSkeleton categoryName={category?.name} />;
-	}
+  const handleRowFocused = useCallback(() => {
+    onRowFocused?.(rowIndex);
+  }, [onRowFocused, rowIndex]);
 
-	if (!movies || movies.length === 0) {
-		return null;
-	}
+  /*
+   * Satır yüklenirken spinner DEĞİL, iskelet.
+   *
+   * Spinner 140px'lik ince bir şeritti; satırın gerçek yüksekliği
+   * başlık + 124×182 kart + başlık satırı ≈ 230px. İçerik gelince
+   * ekran zıplıyordu. `MovieCategoryRowSkeleton` aynı başlığı, aynı
+   * kenar boşluğunu ve aynı kart boyutunu kullanıyor.
+   */
+  if (loading) {
+    return <MovieCategoryRowSkeleton categoryName={category?.name} />;
+  }
 
-	const handleRowFocused = useCallback(() => {
-		onRowFocused?.(rowIndex);
-	}, [onRowFocused, rowIndex]);
+  if (!movies || movies.length === 0) {
+    return null;
+  }
 
-	return (
-		<CategoryRowBody
-			category={category}
-			movies={movies}
-			onMoviePress={onMoviePress}
-			onMovieLongPress={onMovieLongPress}
-			onSeeAll={onSeeAll}
-			onRowFocused={handleRowFocused}
-			showSeeAllTile={showSeeAllTile}
-		/>
-	);
+  return (
+    <CategoryRowBody
+      category={category}
+      movies={movies}
+      onMoviePress={onMoviePress}
+      onMovieLongPress={onMovieLongPress}
+      onSeeAll={onSeeAll}
+      onRowFocused={handleRowFocused}
+      showSeeAllTile={showSeeAllTile}
+    />
+  );
 }
 
 /**
@@ -190,137 +183,136 @@ function MovieCategorySection({
  * boş gösterirdi, üstelik içerik gelince metin zıplardı.
  */
 export function MovieCategoryRowSkeleton({ categoryName }) {
-	const { width } = useWindowDimensions();
+  const { width } = useWindowDimensions();
 
-	const visibleCount = useMemo(() => {
-		const usable = width - ROW_LIST_PAD_H * 2;
-		const fit = Math.floor(
-			(usable + ROW_CARD_GAP) / (ROW_CARD_WIDTH + ROW_CARD_GAP),
-		);
-		// En az 3: çok dar ekranda bile satır "yükleniyor" gibi görünmeli.
-		return Math.max(3, fit);
-	}, [width]);
+  const visibleCount = useMemo(() => {
+    const usable = width - ROW_LIST_PAD_H * 2;
+    const fit = Math.floor(
+      (usable + ROW_CARD_GAP) / (ROW_CARD_WIDTH + ROW_CARD_GAP),
+    );
+    // En az 3: çok dar ekranda bile satır "yükleniyor" gibi görünmeli.
+    return Math.max(3, fit);
+  }, [width]);
 
-	return (
-		<View style={styles.sectionContainer} pointerEvents="none">
-			<View style={styles.sectionHeader}>
-				<View style={styles.sectionTitleRow}>
-					<View style={styles.sectionDot} />
-					{categoryName ? (
-						<Text style={styles.sectionTitle} numberOfLines={1}>
-							{categoryName}
-						</Text>
-					) : (
-						<SkeletonLine width={140} height={16} />
-					)}
-				</View>
-				{/* "Tümünü Gör" bağlantısı yerine iskelet çubuk. */}
-				<SkeletonLine width={76} height={12} />
-			</View>
+  return (
+    <View style={styles.sectionContainer} pointerEvents="none">
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionTitleRow}>
+          <View style={styles.sectionDot} />
+          {categoryName ? (
+            <Text style={styles.sectionTitle} numberOfLines={1}>
+              {categoryName}
+            </Text>
+          ) : (
+            <SkeletonLine width={140} height={16} />
+          )}
+        </View>
+        {/* "Tümünü Gör" bağlantısı yerine iskelet çubuk. */}
+        <SkeletonLine width={76} height={12} />
+      </View>
 
-			<View style={styles.horizontalList}>
-				<CategoryCardSkeleton
-					variant="row"
-					count={visibleCount}
-					gap={ROW_CARD_GAP}
-				/>
-			</View>
-		</View>
-	);
+      <View style={styles.horizontalList}>
+        <CategoryCardSkeleton
+          variant="row"
+          count={visibleCount}
+          gap={ROW_CARD_GAP}
+        />
+      </View>
+    </View>
+  );
 }
 
 export default memo(MovieCategorySection);
 
 const styles = StyleSheet.create({
-	sectionContainer: {
-		marginBottom: 24,
-	},
-	sectionHeader: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		alignItems: "center",
-		paddingHorizontal: ROW_LIST_PAD_H,
-		marginBottom: 12,
-		gap: 12,
-	},
-	sectionTitleRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 8,
-		flexShrink: 1,
-	},
-	/** Referans: başlığın solundaki 8×8 vurgu noktası. */
-	sectionDot: {
-		width: 8,
-		height: 8,
-		borderRadius: 4,
-		backgroundColor: Palette.primary,
-	},
-	sectionTitle: {
-		color: Palette.onSurface,
-		fontFamily: FontFamily.semiBold,
-		fontSize: 18,
-		lineHeight: 24,
-		letterSpacing: -0.2,
-		flexShrink: 1,
-	},
-	arrowButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 2,
-		paddingVertical: 4,
-		paddingHorizontal: 6,
-		borderRadius: 8,
-		borderWidth: 2,
-		borderColor: "transparent",
-	},
-	arrowButtonFocused: {
-		borderColor: Palette.primary,
-	},
-	arrowText: {
-		color: Palette.primary,
-		fontFamily: FontFamily.medium,
-		fontSize: 13,
-		lineHeight: 18,
-	},
-	horizontalList: {
-		paddingHorizontal: ROW_LIST_PAD_H,
-		gap: ROW_CARD_GAP,
-		paddingVertical: 6,
-	},
+  sectionContainer: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: ROW_LIST_PAD_H,
+    marginBottom: 12,
+    gap: 12,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 1,
+  },
+  /** Referans: başlığın solundaki 8×8 vurgu noktası. */
+  sectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Palette.primary,
+  },
+  sectionTitle: {
+    color: Palette.onSurface,
+    fontFamily: FontFamily.semiBold,
+    fontSize: 18,
+    lineHeight: 24,
+    letterSpacing: -0.2,
+    flexShrink: 1,
+  },
+  arrowButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  arrowButtonFocused: {
+    borderColor: Palette.primary,
+  },
+  arrowText: {
+    color: Palette.primary,
+    fontFamily: FontFamily.medium,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  horizontalList: {
+    paddingHorizontal: ROW_LIST_PAD_H,
+    gap: ROW_CARD_GAP,
+    paddingVertical: 6,
+  },
 
-	// ── Satır sonu "Tümünü İncele" kutusu (sorun 1) ──────────────────
-	// Kartla AYNI yükseklikte ve aynı adımda; bu yüzden `getItemLayout`
-	// dokunulmadan doğru kalır.
-	seeAllTile: {
-		width: ROW_CARD_WIDTH,
-		height: ROW_CARD_HEIGHT,
-		borderRadius: 12,
-		borderWidth: 1,
-		borderColor: "rgba(70, 69, 84, 0.4)",
-		backgroundColor: Palette.surfaceHigh,
-		alignItems: "center",
-		justifyContent: "center",
-		gap: 8,
-		paddingHorizontal: 12,
-	},
-	seeAllTileFocused: {
-		borderColor: Palette.primary,
-	},
-	seeAllIconWrap: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: "rgba(192, 193, 255, 0.1)",
-	},
-	seeAllText: {
-		color: Palette.onSurface,
-		fontFamily: FontFamily.medium,
-		fontSize: 13,
-		lineHeight: 18,
-		textAlign: "center",
-	},
+  // ── Satır sonu "Tümünü İncele" kutusu (sorun 1) ──────────────────
+  // Kartla AYNI yükseklikte ve aynı adımda; bu yüzden `getItemLayout`
+  // dokunulmadan doğru kalır.
+  seeAllTile: {
+    width: ROW_CARD_WIDTH,
+    height: ROW_CARD_HEIGHT,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(70, 69, 84, 0.4)",
+    backgroundColor: Palette.surfaceHigh,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  seeAllTileFocused: {
+    borderColor: Palette.primary,
+  },
+  seeAllIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(192, 193, 255, 0.1)",
+  },
+  seeAllText: {
+    color: Palette.onSurface,
+    fontFamily: FontFamily.medium,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+  },
 });
-

@@ -33,6 +33,10 @@
 
 import { hlsDegilseNeden, hlsOynatilabilirMi } from "@/utils/hlsUrl";
 import Constants from "expo-constants";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const STORAGE_LIVE_CATEGORIES = "streampulse_live_cache_categories";
+const STORAGE_LIVE_CHANNELS_PREFIX = "streampulse_live_cache_channels_";
 
 /**
  * Taban URL — `api.js` ve `apiClient.js` ile BİREBİR AYNI kalıp.
@@ -293,6 +297,41 @@ async function liveFetch(yol) {
  * @param {boolean} [parametre.force=false] - Önbelleği atla (ve tazele)
  * @returns {Promise<object>}
  */
+// ─── Disk Önbelleği (Stale-While-Revalidate / 0ms Açılış) ────
+export async function getCachedLiveCategoriesDisk() {
+	try {
+		const raw = await AsyncStorage.getItem(STORAGE_LIVE_CATEGORIES);
+		if (!raw) return null;
+		return JSON.parse(raw);
+	} catch {
+		return null;
+	}
+}
+
+export async function getCachedLiveChannelsDisk(category = CANLI_TV_KATEGORI_TUMU) {
+	try {
+		const key = `${STORAGE_LIVE_CHANNELS_PREFIX}${category}`;
+		const raw = await AsyncStorage.getItem(key);
+		if (!raw) return null;
+		return JSON.parse(raw);
+	} catch {
+		return null;
+	}
+}
+
+async function setCachedLiveCategoriesDisk(data) {
+	try {
+		await AsyncStorage.setItem(STORAGE_LIVE_CATEGORIES, JSON.stringify(data));
+	} catch {}
+}
+
+async function setCachedLiveChannelsDisk(category, data) {
+	try {
+		const key = `${STORAGE_LIVE_CHANNELS_PREFIX}${category}`;
+		await AsyncStorage.setItem(key, JSON.stringify(data));
+	} catch {}
+}
+
 export async function fetchLiveCategories({ force = false } = {}) {
 	if (!force) {
 		const kayit = tazeKayitOku(liveCache.kategoriler, TTL_KATEGORI_MS);
@@ -302,27 +341,12 @@ export async function fetchLiveCategories({ force = false } = {}) {
 	const sonuc = await liveFetch("/api/live/categories");
 	if (!sonuc.ok) return sonuc;
 
-	/*
-	 * `liveFetch` ham hali `{ ok, status, data }` döndürür. Burada DÜZ
-	 * zarfı yayıyoruz — `fetchLiveChannel` / `fetchLiveStreams` /
-	 * `fetchLiveSourcesStatus` zaten düz döndürüyor ve `player.jsx`
-	 * akış listesini doğrudan `sonuc.streams` diye okuyor.
-	 *
-	 * Önceden bu iki liste fonksiyonu `data` altında bırakıyordu; ekranlar
-	 * `data ?? sonuc` savunması sayesinde yine çalışıyordu, ama aynı
-	 * modüldeki iki aile farklı çalışıyordu. Çağıranın her seferinde
-	 * hangisini bekleyeceğini bilmesi gerekir; tek kural (düz) daha
-	 * az hata üretir. JSDoc zaten düz şekli vaat ediyordu.
-	 */
 	const duz = { ok: true, status: sonuc.status, ...sonuc.data };
 	const kategoriler = Array.isArray(duz.kategoriler) ? duz.kategoriler : [];
 
-	// Boş liste ÖNBELLEĞE YAZILMAZ. 7 kategorilik sabit bir liste boş
-	// dönüyorsa M3U okunamamıştır; 2 dakika boyunca boş liste göstermek
-	// "M3U bozuk" ile "yenileniyor" ayrımının yok eder (api.js →
-	// `fetchPlatformMainPage` içindeki aynı karar).
 	if (kategoriler.length > 0) {
 		liveCache.kategoriler = { deger: duz, zaman: Date.now() };
+		setCachedLiveCategoriesDisk(duz);
 	}
 
 	return duz;
@@ -389,6 +413,9 @@ export async function fetchLiveChannels({ category, q, force = false } = {}) {
 	// bozuktur ve bir sonraki kaydırma denemesi yeniden denemelidir.
 	if (kanallar.length > 0 || sorgu) {
 		liveCache.kanallar.set(anahtar, { deger: duz, zaman: Date.now() });
+		if (!sorgu && kanallar.length > 0) {
+			setCachedLiveChannelsDisk(kategori, duz);
+		}
 	}
 
 	return duz;

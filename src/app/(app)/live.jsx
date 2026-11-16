@@ -63,20 +63,22 @@ import ChannelCardSkeleton from "@/components/live/ChannelCardSkeleton";
 import TVPressable from "@/components/common/TVPressable";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { useTvMetrics } from "@/utils/tvMetrics";
+import { FlashList } from "@shopify/flash-list";
 import {
 	CANLI_TV_KATEGORI_TUMU,
 	LIVE_ERROR_REASON,
 	fetchLiveCategories,
 	fetchLiveChannels,
+	getCachedLiveCategoriesDisk,
+	getCachedLiveChannelsDisk,
 } from "@/services/liveApi";
 import { FontFamily, Palette, ScreenGutter } from "@/constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	BackHandler,
-	FlatList,
 	Platform,
 	StatusBar,
 	StyleSheet,
@@ -282,43 +284,64 @@ export default function LiveScreen() {
 	// Ekrandan çıkarken bekleyen "tekrar ortalama" zamanlayıcısını iptal et.
 	useEffect(() => clearRetry, [clearRetry]);
 
-	// ── Kategoriler (bir kez) ─────────────────────────────────────
+	// ── İlk açılış: Disk önbelleğinden anında okuma (0ms açılış) + paralel taze veri çekme ──
 	useEffect(() => {
 		let iptal = false;
 
-		async function kategorileriYukle() {
+		async function baslat() {
+			// 1. Önce diskteki son veriyi anında ekrana ver
 			try {
-				const sonuc = liveSonuc(await fetchLiveCategories());
+				const [diskCats, diskChans] = await Promise.all([
+					getCachedLiveCategoriesDisk(),
+					getCachedLiveChannelsDisk(CANLI_TV_KATEGORI_TUMU),
+				]);
+
+				if (!iptal && diskChans?.channels?.length > 0) {
+					if (diskCats?.kategoriler?.length > 0) {
+						setKategoriler(diskCats.kategoriler);
+					}
+					setKanallar(diskChans.channels);
+					setYukleniyor(false);
+				}
+			} catch {}
+
+			// 2. Eşzamanlı arka planda ağdan taze veriyi paralel çek (Waterfall yok)
+			try {
+				const [catSonuc, chanSonuc] = await Promise.all([
+					fetchLiveCategories().then(liveSonuc),
+					fetchLiveChannels({ category: CANLI_TV_KATEGORI_TUMU }).then(
+						liveSonuc,
+					),
+				]);
+
 				if (iptal) return;
-				if (sonuc.ok) {
-					/*
-					 * Sunucu `kategoriler` altında döndürüyor (doğrulanmış
-					 * sözleşme); liste boş gelirse ray render edilmez ve
-					 * seçim `CANLI_TV_KATEGORI_TUMU`da kalır — servis
-					 * kategori verilmediğinde aynı değeri varsayılan olarak
-					 * kullanıyor, yani liste yine dolar.
-					 */
-					const liste = Array.isArray(sonuc.veri?.kategoriler)
-						? sonuc.veri.kategoriler
+
+				if (catSonuc.ok) {
+					const liste = Array.isArray(catSonuc.veri?.kategoriler)
+						? catSonuc.veri.kategoriler
 						: [];
 					setKategoriler(liste);
-					/*
-					 * `tum` satırı listede yoksa (yalnız gerçek kategoriler
-					 * dönerse) ilk gerçek kategoriye düşüyoruz; yoksa ray
-					 * boş kalır ve liste hiç çekilmez.
-					 */
-					setSeciliKategori((onceki) =>
-						onceki || (liste[0]?.id ?? ""),
-					);
-				} else {
-					setHata(sonuc);
+				}
+
+				if (chanSonuc.ok) {
+					const channels = Array.isArray(chanSonuc.veri?.channels)
+						? chanSonuc.veri.channels
+						: [];
+					setKanallar(channels);
+					setHata(null);
+				} else if (!kanallar || kanallar.length === 0) {
+					setHata(chanSonuc);
 				}
 			} catch (h) {
-				if (!iptal) setHata({ ...liveSonuc(null), mesaj: h?.message });
+				if (!iptal && (!kanallar || kanallar.length === 0)) {
+					setHata({ ...liveSonuc(null), mesaj: h?.message });
+				}
+			} finally {
+				if (!iptal) setYukleniyor(false);
 			}
 		}
 
-		kategorileriYukle();
+		baslat();
 		return () => {
 			iptal = true;
 		};
@@ -334,24 +357,7 @@ export default function LiveScreen() {
 	}, [arama]);
 
 	// ── Kanal listesi (kategori + arama değişince) ─────────────────
-	//
-	// Ağ ile state uygulaması AYRILDI (bkz. `category.jsx`): aynı kod hem
-	// ilk yükleme hem kategori değişimi hem "tekrar dene" için kullanılır.
-	// `iptal` bayrağı, ekrandan çıkarken uçan isteğin unmount olmuş bir
-	// bileşene setState uygulamasını engeller (derleyici `useEffect`
-	// gövdesinde doğrudan setState'i reddettiği için veri çekme iç içe
-	// async fonksiyona alındı).
 	const kanallariYukle = useCallback(async () => {
-		/*
-		 * Yükleyici SAF olmalı: state'e dokunan tek yer çağıran taraftır
-		 * (aşağıdaki `yukle` ve `handleRetry`). Burada `setKanallar` çağırmak
-		 * "tekrar dene" yolunda listeyi gereksiz yere boşaltırdı.
-		 *
-		 * `seciliKategori` boşsa (kategori listesi yüklenemedi ve ray boş
-		 * kaldı) sunucuya gitmek anlamsız — servis kategori verilmezse
-		 * zaten "tum" varsayılanını kullanır, ama o zaman HİÇBİR şey
-		 * göstermemek yerine bu hatayı yükseltmek dürüst davranış.
-		 */
 		if (!seciliKategori) {
 			return {
 				ok: false,
@@ -378,10 +384,27 @@ export default function LiveScreen() {
 		}
 	}, [seciliKategori, aramaSorgusu]);
 
+	// Kategori veya arama değiştiğinde
+	const ilkMountRef = useRef(true);
 	useEffect(() => {
 		let iptal = false;
 
+		// İlk mount'ta baslat() zaten hallediyor
+		if (ilkMountRef.current) {
+			ilkMountRef.current = false;
+			return;
+		}
+
 		async function yukle() {
+			// Arama yoksa disk önbelleğine hızlıca bakıp anında ekrana ver
+			if (!aramaSorgusu) {
+				const diskCached = await getCachedLiveChannelsDisk(seciliKategori);
+				if (!iptal && diskCached?.channels?.length > 0) {
+					setKanallar(diskCached.channels);
+					setYukleniyor(false);
+				}
+			}
+
 			setYukleniyor(true);
 			const sonuc = await kanallariYukle();
 			if (iptal) return;
@@ -398,7 +421,7 @@ export default function LiveScreen() {
 		return () => {
 			iptal = true;
 		};
-	}, [seciliKategori, kanallariYukle]);
+	}, [seciliKategori, aramaSorgusu, kanallariYukle]);
 
 	// ── Geri ──────────────────────────────────────────────────────
 	const handleBack = useCallback(() => {
@@ -470,14 +493,24 @@ export default function LiveScreen() {
 
 	const renderItem = useCallback(
 		({ item, index }) => (
-			<ChannelCard
-				channel={item}
-				width={kartGenisligi}
-				onPress={() => handleChannelPress(item)}
-				onFocus={() => handleCardFocus(index)}
-			/>
+			<View
+				style={{
+					width: kartGenisligi,
+					marginRight:
+						sutunSayisi > 1 && (index % sutunSayisi) !== sutunSayisi - 1
+							? GRID_GAP
+							: 0,
+					marginBottom: GRID_GAP,
+				}}>
+				<ChannelCard
+					channel={item}
+					width={kartGenisligi}
+					onPress={() => handleChannelPress(item)}
+					onFocus={() => handleCardFocus(index)}
+				/>
+			</View>
 		),
-		[kartGenisligi, handleChannelPress, handleCardFocus],
+		[kartGenisligi, sutunSayisi, handleChannelPress, handleCardFocus],
 	);
 
 	const baslangicKategoriAdi = useMemo(
@@ -733,29 +766,24 @@ export default function LiveScreen() {
 				) : gosterHata ? (
 					renderHataDurumu()
 				) : gosterIzgara ? (
-					<FlatList
+					<FlashList
 						ref={listRef}
-						contentInsetAdjustmentBehavior="automatic"
 						key={`live-cols-${sutunSayisi}`}
 						data={kanallar}
 						renderItem={renderItem}
 						keyExtractor={keyExtractor}
 						numColumns={sutunSayisi}
-						columnWrapperStyle={styles.row}
 						contentContainerStyle={[
 							styles.listContent,
 							kanallar.length === 0 && styles.listContentEmpty,
 							styles.fullWidth,
 						]}
 						showsVerticalScrollIndicator={false}
-						getItemLayout={getItemLayout}
+						estimatedItemSize={satirYuksekligi > 0 ? satirYuksekligi : 120}
+						drawDistance={Platform.isTV ? 800 : 350}
 						onScrollToIndexFailed={onScrollToIndexFailed}
 						onViewableItemsChanged={onViewableItemsChanged}
 						viewabilityConfig={viewabilityConfig}
-						initialNumToRender={Platform.isTV ? 24 : 12}
-						maxToRenderPerBatch={12}
-						windowSize={Platform.isTV ? 9 : 5}
-						removeClippedSubviews={false}
 						ListFooterComponent={
 							yukleniyor && kanallar.length > 0 ? (
 								<View style={styles.footer}>

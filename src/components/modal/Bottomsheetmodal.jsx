@@ -334,8 +334,10 @@ const BottomSheetModal = ({
 							styles.sheet,
 							isTV && styles.sheetTv,
 							{
-								bottom: -altTasma,
-								...(isAuto
+								bottom: isTV ? 0 : -altTasma,
+								...(isTV
+									? { height: "100%", top: 0 }
+									: isAuto
 									? {
 											maxHeight: SCREEN_HEIGHT * 0.85,
 											paddingBottom: altTasma,
@@ -415,18 +417,18 @@ const styles = StyleSheet.create({
 	 * göreli konumlandırma `bottom: 0`'ı iptal edip paneli ortaya atıyordu.
 	 */
 	sheetTv: {
+		top: 0,
+		bottom: 0,
+		left: 0,
+		right: 0,
+		borderTopLeftRadius: 0,
+		borderTopRightRadius: 0,
 		borderBottomLeftRadius: 0,
 		borderBottomRightRadius: 0,
-		borderTopWidth: 1,
-		borderLeftWidth: 1,
-		borderRightWidth: 1,
-		borderBottomWidth: 1,
-		borderColor: "rgba(70, 69, 84, 0.45)",
-		borderBottomColor: Palette.surfaceLowest,
-		shadowOffset: { width: 0, height: -6 },
-		shadowOpacity: 0.45,
-		shadowRadius: 20,
-		elevation: 26,
+		borderWidth: 0,
+		backgroundColor: "#0d0e15",
+		elevation: 0,
+		shadowOpacity: 0,
 	},
 	handleContainer: {
 		alignItems: "center",

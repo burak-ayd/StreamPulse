@@ -68,14 +68,6 @@ const TVFocusTrap = forwardRef(function TVFocusTrap({ active, children, onDeacti
 
 	return (
 		<>
-			{active && (
-				<Pressable
-					style={styles.backdrop}
-					onPress={onDeactivate}
-					accessible={false}
-					importantForAccessibility="no-hide-descendants"
-				/>
-			)}
 			{children}
 		</>
 	);
