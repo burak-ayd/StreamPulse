@@ -3,8 +3,16 @@ import { Palette } from "@/constants/theme";
 import { NAV_RAIL_WIDTH, useNavLayout } from "@/hooks/useNavLayout";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
-import { useEffect } from "react";
-import { StyleSheet, useWindowDimensions, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { StyleSheet, useWindowDimensions, View, findNodeHandle } from "react-native";
+import { useTVFocus } from "@/context/TVFocusContext";
+import Animated, {
+	useSharedValue,
+	useAnimatedStyle,
+	withSpring,
+	interpolate,
+	interpolateColor,
+} from "react-native-reanimated";
 
 /** @deprecated Geriye uyumluluk: artık useNavLayout'ı kullanın. */
 export const TV_NAV_WIDTH = NAV_RAIL_WIDTH;
@@ -84,6 +92,21 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 	// Tek kaynak: TV + tablet yatay → sol ray; telefon ve tablet dikey → alt bar.
 	const { isSideRail } = useNavLayout();
 	const { height } = useWindowDimensions();
+	const { registerSideRailView, firstContentViewTag } = useTVFocus();
+
+	// Reanimated shared values for rail item focus animations
+	const railFocusProgress = useSharedValue(0);
+
+	const railLogoRef = useRef(null);
+	const railItemRefs = useRef([]);
+
+	// Yan rayın ilk öğesini (logo) kaydet — içerik alanı `nextFocusLeft` için
+	useEffect(() => {
+		if (isSideRail && railLogoRef.current) {
+			const tag = findNodeHandle(railLogoRef.current);
+			if (tag != null) registerSideRailView(tag);
+		}
+	}, [isSideRail, registerSideRailView]);
 
 	const activeSection = NAV_ITEMS.find((i) => i.route === activeRoute)?.id;
 
@@ -96,6 +119,10 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 			goToSection(router, item.route);
 		}
 	};
+
+	// Netflix tarzı spring konfigürasyonu
+	const FOCUS_SPRING = { damping: 18, stiffness: 200, mass: 0.8 };
+	const BLUR_SPRING = { damping: 22, stiffness: 160, mass: 0.8 };
 
 	// Sol tarafta dikey ray: TV ve tablet (yatay)
 	if (isSideRail) {
@@ -135,38 +162,83 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 				</TVPressable>
 
 				<View style={styles.railNavList}>
-					{NAV_ITEMS.map((item) => {
+					{NAV_ITEMS.map((item, index) => {
 						const isActive =
 							item.route && activeRoute === item.route;
+						// Per-item focus progress for independent animations
+						const focusProgress = useSharedValue(0);
+
+						const animatedIconBoxStyle = useAnimatedStyle(() => {
+							const scale = interpolate(focusProgress.value, [0, 1], [1, 1.08]);
+							const backgroundColor = interpolateColor(
+								focusProgress.value,
+								[0, 1],
+								[isActive ? Palette.surfaceHigh : "transparent", "rgba(192, 193, 255, 0.18)"]
+							);
+							const borderColor = interpolateColor(
+								focusProgress.value,
+								[0, 1],
+								[isActive ? Palette.primary : "transparent", Palette.primary]
+							);
+							const borderWidth = interpolate(focusProgress.value, [0, 1], [0, 3]);
+							const shadowOpacity = interpolate(focusProgress.value, [0, 1], [0, 0.4]);
+							const shadowRadius = interpolate(focusProgress.value, [0, 1], [0, 8]);
+							const elevation = interpolate(focusProgress.value, [0, 1], [0, 4]);
+							return {
+								transform: [{ scale }],
+								backgroundColor,
+								borderColor,
+								borderWidth,
+								shadowColor: Palette.primary,
+								shadowOffset: { width: 0, height: 0 },
+								shadowOpacity,
+								shadowRadius,
+								elevation,
+							};
+						});
+
+						const animatedIconColor = useAnimatedStyle(() => {
+							const color = interpolateColor(
+								focusProgress.value,
+								[0, 1],
+								[isActive ? Palette.primary : Palette.onSurfaceVariant, Palette.primary]
+							);
+							return { color };
+						});
+
 						return (
 							<TVPressable
 								key={item.id}
 								onPress={() => handleAction(item)}
 								style={styles.railItem}
 								focusedStyle={null}
-								accessibilityLabel={item.id}>
+								accessibilityLabel={item.id}
+								onFocus={() => {
+									focusProgress.value = withSpring(1, FOCUS_SPRING);
+								}}
+								onBlur={() => {
+									focusProgress.value = withSpring(0, BLUR_SPRING);
+								}}
+								nextFocusRight={firstContentViewTag}>
 								{({ focused }) => (
-									<View
+									<Animated.View
 										style={[
 											styles.railIconBox,
-											isActive &&
-												styles.railIconBoxActive,
-											focused && styles.railIconBoxFocused,
+											isActive && styles.railIconBoxActive,
+											animatedIconBoxStyle,
 										]}>
-										<Ionicons
-											name={
-												isActive
-													? item.icon
-													: `${item.icon}-outline`
-											}
-											size={24}
-											color={
-												isActive || focused
-													? Palette.primary
-													: Palette.onSurfaceVariant
-											}
-										/>
-									</View>
+										<Animated.View style={animatedIconColor}>
+											<Ionicons
+												name={
+													isActive
+														? item.icon
+														: `${item.icon}-outline`
+												}
+												size={24}
+												color={isActive || focused ? Palette.primary : Palette.onSurfaceVariant}
+											/>
+										</Animated.View>
+									</Animated.View>
 								)}
 							</TVPressable>
 						);
@@ -201,32 +273,53 @@ export default function BottomNavigation({ activeRoute, onOpenPlatforms }) {
 		<View style={styles.container}>
 			{NAV_ITEMS.map((item) => {
 				const isActive = item.route && activeRoute === item.route;
+				const focusProgress = useSharedValue(0);
+
+				const FOCUS_SPRING = { damping: 18, stiffness: 200, mass: 0.8 };
+				const BLUR_SPRING = { damping: 22, stiffness: 160, mass: 0.8 };
+
+				const animatedNavItemStyle = useAnimatedStyle(() => {
+					const scale = interpolate(focusProgress.value, [0, 1], [1, 1.12]);
+					return { transform: [{ scale }] };
+				});
+
+				const animatedIconColor = useAnimatedStyle(() => {
+					const color = interpolateColor(
+						focusProgress.value,
+						[0, 1],
+						[isActive ? Palette.primary : Palette.onSurfaceVariant, Palette.primary]
+					);
+					return { color };
+				});
+
 				return (
 					<TVPressable
 						key={item.id}
 						onPress={() => handleAction(item)}
 						style={styles.navItem}
-						focusedStyle={styles.navItemFocused}>
+						focusedStyle={null}
+						onFocus={() => {
+							focusProgress.value = withSpring(1, FOCUS_SPRING);
+						}}
+						onBlur={() => {
+							focusProgress.value = withSpring(0, BLUR_SPRING);
+						}}>
 						{({ focused }) => (
-							<View
-								style={[
-									styles.navIconBox,
-									isActive && styles.navIconBoxActive,
-								]}>
-								<Ionicons
-									name={
-										isActive
-											? item.icon
-											: `${item.icon}-outline`
-									}
-									size={24}
-									color={
-										isActive || focused
-											? Palette.primary
-											: Palette.onSurfaceVariant
-									}
-								/>
-							</View>
+							<Animated.View style={animatedNavItemStyle}>
+								<View style={styles.navIconBox}>
+									<Animated.View style={animatedIconColor}>
+										<Ionicons
+											name={
+												isActive
+													? item.icon
+													: `${item.icon}-outline`
+											}
+											size={24}
+											color={isActive || focused ? Palette.primary : Palette.onSurfaceVariant}
+										/>
+									</Animated.View>
+								</View>
+							</Animated.View>
 						)}
 					</TVPressable>
 				);
@@ -297,12 +390,8 @@ const styles = StyleSheet.create({
 	railIconBoxActive: {
 		backgroundColor: Palette.surfaceHigh,
 	},
-	// TV performans: odakta elevation DEĞİŞTİRİLMEZ, sadece kenar + zemin.
-	railIconBoxFocused: {
-		backgroundColor: "rgba(192, 193, 255, 0.12)",
-		borderColor: Palette.primary,
-		borderWidth: 2,
-	},
+	// TV performans: odak animasyonu Reanimated ile UI thread'de (railIconBoxFocused artık kullanılmıyor)
+	// Animated style'lar scale, backgroundColor, borderColor, borderWidth, shadow, elevation yönetiyor
 	railProfile: {
 		width: 40,
 		height: 40,
@@ -329,9 +418,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		height: 44,
 	},
-	navItemFocused: {
-		transform: [{ scale: 1.12 }],
-	},
+	// TV odak animasyonu Reanimated ile UI thread'de (navItemFocused artık kullanılmıyor)
 	navIconBox: {
 		width: 44,
 		height: 44,

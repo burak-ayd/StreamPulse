@@ -17,7 +17,7 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
 	BackHandler,
 	Modal,
@@ -29,6 +29,8 @@ import {
 	Vibration,
 	View,
 } from "react-native";
+import TVFocusTrap from "@/components/common/TVFocusTrap";
+import { useTVFocusRestore } from "@/hooks/useTVFocusRestore";
 
 const STATUS_CHIPS = [
 	{ key: "watching", label: "İzleniyor", color: Palette.primary },
@@ -58,6 +60,10 @@ export default function QuickPreviewModal({
 	 */
 	const { isTV, sp, focusScale, height, width: windowWidth } = useTvMetrics();
 	const { requestDownload } = useDownload();
+
+	// TV focus restore for this modal
+	const focusRestore = useTVFocusRestore("quickpreview");
+	const contentRef = useRef(null);
 
 	const [enrichedMovie, setEnrichedMovie] = useState(movie || null);
 	const [isFav, setIsFav] = useState(false);
@@ -317,7 +323,7 @@ export default function QuickPreviewModal({
 					episode: Number(first.episode || first.episode_number || 1),
 					episodeTitle: first.title || null,
 					url: first.url,
-				};
+				}
 			}
 		}
 
@@ -809,7 +815,10 @@ export default function QuickPreviewModal({
 							{title}
 						</Text>
 						<View
-							style={[styles.headerIconActions, { gap: sp(8) }]}>
+							style={[
+								styles.headerIconActions,
+								{ gap: sp(8) },
+							]}>
 							<TVPressable
 								style={[
 									styles.iconCircleBtn,
@@ -967,587 +976,592 @@ export default function QuickPreviewModal({
 					if (isTVPressSuppressed()) return;
 					onClose?.();
 				}}>
-				<Pressable
-					style={[
-						styles.sheetContainer,
-						isTV && {
-							// TV: alt yapışmak yerine ortalanmış, iki kolonlu panel.
-							maxWidth: tvPanelMaxWidth,
-							width: "100%",
-							maxHeight: tvDialogMaxHeight,
-							borderTopLeftRadius: sp(22),
-							borderTopRightRadius: sp(22),
-							borderTopWidth: 0,
-							borderWidth: 1,
-							borderColor: "rgba(255, 255, 255, 0.14)",
-							paddingTop: 0,
-							backgroundColor: Palette.surfaceLow,
-							shadowOpacity: 0.75,
-						},
-						// Telefon: daha uzun bottom-sheet, tam yuvarlak üst köşeler.
-						isPhone && {
-							maxHeight: "92%",
-							borderTopLeftRadius: 24,
-							borderTopRightRadius: 24,
-						},
-					]}
-					onPress={(e) => e.stopPropagation()}>
-					{/* 1. Üst Tutamaç (Drag Handle) — telefonda sürükleme
-					    göstergesi, TV'de anlamsız. */}
-					{!isTV ? <View style={styles.dragHandle} /> : null}
-					{/* Telefon: backdrop'a dokunmak zor — sağ üstte kapatma (X). */}
-					{isPhone ? (
-						<TVPressable
-							onPress={onClose}
-							style={styles.phoneCloseBtn}
-							focusedStyle={{
-								borderWidth: 2,
-								borderColor: Palette.primary,
-								transform: [{ scale: focusScale }],
-							}}
-							activeOpacity={0.75}>
-							<Ionicons
-								name="close"
-								size={sp(18)}
-								color={Palette.onSurface}
-							/>
-						</TVPressable>
-					) : null}
-
-					{/* 2. Toast Bildirim Banner'ı (Screen 2) */}
-					{toastInfo && (
-						<View
-							style={[
-								styles.toastBanner,
-								{
-									marginHorizontal: isTV ? sp(22) : 16,
-									marginBottom: sp(12),
-									paddingHorizontal: sp(14),
-									paddingVertical: sp(10),
-									borderRadius: sp(12),
-								},
-							]}>
-							<View style={[styles.toastLeft, { gap: sp(8) }]}>
-								<Ionicons
-									name="checkmark-circle"
-									size={sp(18)}
-									color="#10B981"
-								/>
-								<Text
-									style={[
-										styles.toastText,
-										{ fontSize: sp(13) },
-									]}
-									numberOfLines={1}>
-									{toastInfo.text}
-								</Text>
-							</View>
+				<TVFocusTrap
+					active={visible && isTV}
+					onDeactivate={onClose}
+					contentRef={contentRef}>
+					<Pressable
+						style={[
+							styles.sheetContainer,
+							isTV && {
+								// TV: alt yapışmak yerine ortalanmış, iki kolonlu panel.
+								maxWidth: tvPanelMaxWidth,
+								width: "100%",
+								maxHeight: tvDialogMaxHeight,
+								borderTopLeftRadius: sp(22),
+								borderTopRightRadius: sp(22),
+								borderTopWidth: 0,
+								borderWidth: 1,
+								borderColor: "rgba(255, 255, 255, 0.14)",
+								paddingTop: 0,
+								backgroundColor: Palette.surfaceLow,
+								shadowOpacity: 0.75,
+							},
+							// Telefon: daha uzun bottom-sheet, tam yuvarlak üst köşeler.
+							isPhone && {
+								maxHeight: "92%",
+								borderTopLeftRadius: 24,
+								borderTopRightRadius: 24,
+							},
+						]}
+						onPress={(e) => e.stopPropagation()}>
+						{/* 1. Üst Tutamaç (Drag Handle) — telefonda sürükleme
+						    göstergesi, TV'de anlamsız. */}
+						{!isTV ? <View style={styles.dragHandle} /> : null}
+						{/* Telefon: backdrop'a dokunmak zor — sağ üstte kapatma (X). */}
+						{isPhone ? (
 							<TVPressable
-								onPress={handleUndoToast}
-								style={styles.undoButton}
+								onPress={onClose}
+								style={styles.phoneCloseBtn}
 								focusedStyle={{
 									borderWidth: 2,
-									borderColor: Palette.onSurface,
-									borderRadius: sp(8),
+									borderColor: Palette.primary,
 									transform: [{ scale: focusScale }],
 								}}
-								activeOpacity={0.7}>
-								<Text
-									style={[
-										styles.undoButtonText,
-										{ fontSize: sp(13) },
-									]}>
-									Geri Al
-								</Text>
+								activeOpacity={0.75}>
+								<Ionicons
+									name="close"
+									size={sp(18)}
+									color={Palette.onSurface}
+								/>
 							</TVPressable>
-						</View>
-					)}
+						) : null}
 
-					<ScrollView
-						showsVerticalScrollIndicator={false}
-						bounces={false}
-						scrollEnabled={!isTV}
-						contentContainerStyle={[
-							styles.scrollContent,
-							{
-								paddingHorizontal: isTV ? sp(24) : 16,
-								paddingBottom: isTV ? sp(24) : 24,
-								paddingTop: isTV ? sp(22) : 0,
-							},
-						]}>
-						{/* 3. Fragman / Video Önizleme Durumu (Screen 3) */}
-						{showTrailerPreview ? (
+						{/* 2. Toast Bildirim Banner'ı (Screen 2) */}
+						{toastInfo && (
 							<View
 								style={[
-									styles.trailerPreviewBox,
+									styles.toastBanner,
 									{
-										/*
-										 * TV'de poster ve fragman önizlemesi aynı
-										 * işlevi görüyor (içeriğin "medya" görünümü),
-										 * üst üste binmelerine gerek yok. Açıkken
-										 * önizleme kutusu posterin yerini alır ve
-										 * özet metni altında kalır — böylece açık
-										 * durumda da panel tek ekrana sığar.
-										 */
-										height: isTV
-											? sp(260)
-											: isPhone
-												? 200
-												: 180,
-										borderRadius: sp(16),
-										marginBottom: sp(18),
+										marginHorizontal: isTV ? sp(22) : 16,
+										marginBottom: sp(12),
+										paddingHorizontal: sp(14),
+										paddingVertical: sp(10),
+										borderRadius: sp(12),
 									},
 								]}>
-								<Image
-									source={{ uri: backdropUri }}
-									style={styles.trailerBackdrop}
-									contentFit="cover"
-								/>
+								<View style={[styles.toastLeft, { gap: sp(8) }]}>
+									<Ionicons
+										name="checkmark-circle"
+										size={sp(18)}
+										color="#10B981"
+									/>
+									<Text
+										style={[
+											styles.toastText,
+											{ fontSize: sp(13) },
+										]}
+										numberOfLines={1}>
+										{toastInfo.text}
+									</Text>
+								</View>
+								<TVPressable
+									onPress={handleUndoToast}
+									style={styles.undoButton}
+									focusedStyle={{
+										borderWidth: 2,
+										borderColor: Palette.onSurface,
+										borderRadius: sp(8),
+										transform: [{ scale: focusScale }],
+									}}
+									activeOpacity={0.7}>
+									<Text
+										style={[
+											styles.undoButtonText,
+											{ fontSize: sp(13) },
+										]}>
+										Geri Al
+									</Text>
+								</TVPressable>
+							</View>
+						)}
+
+						<ScrollView
+							showsVerticalScrollIndicator={false}
+							bounces={false}
+							scrollEnabled={!isTV}
+							contentContainerStyle={[
+								styles.scrollContent,
+								{
+									paddingHorizontal: isTV ? sp(24) : 16,
+									paddingBottom: isTV ? sp(24) : 24,
+									paddingTop: isTV ? sp(22) : 0,
+								},
+							]}>
+							{/* 3. Fragman / Video Önizleme Durumu (Screen 3) */}
+							{showTrailerPreview ? (
 								<View
 									style={[
-										styles.trailerOverlay,
-										{ padding: sp(14) },
+										styles.trailerPreviewBox,
+										{
+											/*
+											 * TV'de poster ve fragman önizlemesi aynı
+											 * işlevi görüyor (içeriğin "medya" görünümü),
+											 * üst üste binmelerine gerek yok. Açıkken
+											 * önizleme kutusu posterin yerini alır ve
+											 * özet metni altında kalır — böylece açık
+											 * durumda da panel tek ekrana sığar.
+											 */
+											height: isTV
+												? sp(260)
+												: isPhone
+													? 200
+													: 180,
+											borderRadius: sp(16),
+											marginBottom: sp(18),
+										},
 									]}>
-									{/* Canlı Gösterge Rozeti */}
-									<View style={styles.trailerTopRow}>
-										<View style={styles.liveBadge}>
-											<View style={styles.liveDot} />
-											<Text
-												style={[
-													styles.liveBadgeText,
-													{ fontSize: sp(11) },
-												]}>
-												Fragman Oynatılıyor
-											</Text>
-										</View>
-										<View style={styles.top10Badge}>
-											<Text
-												style={[
-													styles.top10Text,
-													{ fontSize: sp(10) },
-												]}>
-												TOP 10
-											</Text>
-										</View>
-									</View>
-
-									{/* Ortada Oynat/Durdur */}
-									<TVPressable
+									<Image
+										source={{ uri: backdropUri }}
+										style={styles.trailerBackdrop}
+										contentFit="cover"
+									/>
+									<View
 										style={[
-											styles.centerPlayBtn,
-											{
-												width: sp(60),
-												height: sp(60),
-												borderRadius: sp(30),
-											},
-										]}
-										focusedStyle={{
-											borderWidth: 2,
-											borderColor: Palette.onSurface,
-											backgroundColor: Palette.primaryContainer,
-											transform: [
-												{ scale: focusScale + 0.08 },
-											],
-										}}
-										onPress={handleTrailerClick}
-										activeOpacity={0.85}>
-										<Ionicons
-											name="play"
-											size={sp(30)}
-											color={Palette.onSurface}
-										/>
-									</TVPressable>
-
-									{/* Alt İlerleme Çubuğu ve Ses */}
-									<View style={styles.trailerBottomBar}>
-										<View
-											style={[
-												styles.trailerProgressContainer,
-												{ gap: sp(8) },
-											]}>
-											<View
-												style={
-													styles.trailerProgressBar
-												}>
-												<View
-													style={
-														styles.trailerProgressFill
-													}
-												/>
+											styles.trailerOverlay,
+											{ padding: sp(14) },
+										]}>
+										{/* Canlı Gösterge Rozeti */}
+										<View style={styles.trailerTopRow}>
+											<View style={styles.liveBadge}>
+												<View style={styles.liveDot} />
+												<Text
+													style={[
+														styles.liveBadgeText,
+														{ fontSize: sp(11) },
+													]}>
+													Fragman Oynatılıyor
+												</Text>
 											</View>
-											<Text
-												style={[
-													styles.trailerTimeText,
-													{ fontSize: sp(11) },
-												]}>
-												0:14 / 1:45
-											</Text>
+											<View style={styles.top10Badge}>
+												<Text
+													style={[
+														styles.top10Text,
+														{ fontSize: sp(10) },
+													]}>
+													TOP 10
+												</Text>
+											</View>
 										</View>
+
+										{/* Ortada Oynat/Durdur */}
 										<TVPressable
-											onPress={() =>
-												setIsMuted((m) => !m)
-											}
-											style={styles.muteButton}
+											style={[
+												styles.centerPlayBtn,
+												{
+													width: sp(60),
+													height: sp(60),
+													borderRadius: sp(30),
+												},
+											]}
 											focusedStyle={{
 												borderWidth: 2,
 												borderColor: Palette.onSurface,
-												borderRadius: sp(20),
+												backgroundColor: Palette.primaryContainer,
 												transform: [
-													{ scale: focusScale },
+													{ scale: focusScale + 0.08 },
 												],
-											}}>
+											}}
+											onPress={handleTrailerClick}
+											activeOpacity={0.85}>
 											<Ionicons
-												name={
-													isMuted
-														? "volume-mute-outline"
-														: "volume-high-outline"
-												}
-												size={sp(20)}
+												name="play"
+												size={sp(30)}
 												color={Palette.onSurface}
 											/>
 										</TVPressable>
-									</View>
-								</View>
-							</View>
-						) : null}
 
-						{/*
-						 * 4. Başlık bölümü — TV + TABLET iki kolonlu (dokunma).
-						 *
-						 * TV: SOL kolon = poster (+ özet), SAĞ kolon = başlık,
-						 * rozetler ve TÜM eylemler. Telefonda bunun yerine
-						 * dikey stack kullanılır (renderPhoneTop/Bottom) — dar
-						 * kolonda (~200dp) ezilme olmasın diye.
-						 */}
-						{isPhone ? renderPhoneTop() : null}
-						{!isPhone ? (
-							<View
-								style={[
-									styles.previewHeaderRow,
-									{ gap: sp(18) },
-								]}>
-								{/* ── SOL KOLON ── */}
-								<View
-									style={[
-										isTV
-											? styles.tvLeftColumn
-											: styles.posterSlot,
-										{ gap: sp(12) },
-									]}>
-									{/* Sol Afiş (Poster) */}
-									<TVPressable
-										style={[
-											styles.posterWrapper,
-											{
-												width: sp(140),
-												height: sp(210),
-												borderRadius: sp(14),
-											},
-										]}
-										focusedStyle={{
-											borderWidth: 2,
-											borderColor: Palette.primary,
-											transform: [
-												{ scale: focusScale + 0.04 },
-											],
-										}}
-										activeOpacity={0.9}
-										onPress={handleTrailerClick}>
-										<Image
-											source={{ uri: posterUri }}
-											style={styles.posterImage}
-											contentFit="cover"
-											transition={200}
-										/>
-										{/* Top 10 Rozeti */}
-										<View
-											style={[
-												styles.posterTopBadge,
-												{
-													top: sp(8),
-													left: sp(8),
-													paddingHorizontal: sp(6),
-													paddingVertical: sp(3),
-													borderRadius: sp(4),
-												},
-											]}>
-											<Text
+										{/* Alt İlerleme Çubuğu ve Ses */}
+										<View style={styles.trailerBottomBar}>
+											<View
 												style={[
-													styles.posterTopBadgeText,
-													{ fontSize: sp(9) },
+													styles.trailerProgressContainer,
+													{ gap: sp(8) },
 												]}>
-												TOP 10
-											</Text>
-										</View>
-										{/* HD Rozeti */}
-										<View
-											style={[
-												styles.posterHdBadge,
-												{
-													bottom: sp(8),
-													right: sp(8),
-													paddingHorizontal: sp(5),
-													paddingVertical: sp(2),
-													borderRadius: sp(4),
-												},
-											]}>
-											<Text
-												style={[
-													styles.posterHdText,
-													{ fontSize: sp(9) },
-												]}>
-												HD
-											</Text>
-										</View>
-									</TVPressable>
-
-									{/*
-									 * TV: özet posterin ALTINDA, sol kolonda.
-									 * Sağ kolonda posterle yan yana satır uzunluğu
-									 * daralıp başlığı 2–3 satıra bölüyordu.
-									 */}
-									{isTV ? (
-										<Text
-											style={[
-												styles.synopsisText,
-												{
-													fontSize: sp(12.5),
-													lineHeight: sp(17),
-												},
-											]}
-											numberOfLines={4}>
-											{synopsis}
-										</Text>
-									) : null}
-								</View>
-
-								{/* ── SAĞ KOLON: başlık, rozetler, TÜM eylemler ── */}
-								<View
-									style={[
-										styles.detailsColumn,
-										/**
-										 * TV'de altı blok (durum çipleri, aksiyon
-										 * grid'i, CTA, alt eylemler…) bu sütunda alt
-										 * alta diziliyor. `gap` TEK boşluk kaynağı:
-										 * blokların kendi `marginTop`ları TV'de
-										 * sıfırlanır. Aksi halde her blok kendi
-										 * boşluğunu ekleyip paneli ekranın
-										 * dışına taşıyordu — kullanıcı kaydırmak
-										 * zorunda kalıyordu.
-										 */
-										isTV && { gap: sp(10) },
-									]}>
-									{/* Başlık & Hızlı İkonlar */}
-									<View
-										style={[
-											styles.titleRow,
-											{
-												marginBottom: isTV ? 0 : sp(8),
-												gap: sp(8),
-											},
-										]}>
-										<Text
-											style={[
-												styles.movieTitle,
-												{
-													fontSize: sp(
-														isTV ? 20 : 22,
-													),
-												},
-											]}
-											numberOfLines={2}>
-											{title}
-										</Text>
-										<View
-											style={[
-												styles.headerIconActions,
-												{ gap: sp(8) },
-											]}>
-											{/* Bildirim Çanı */}
+												<View
+													style={
+														styles.trailerProgressBar
+													}>
+													<View
+														style={
+															styles.trailerProgressFill
+														}
+													/>
+												</View>
+												<Text
+													style={[
+														styles.trailerTimeText,
+														{ fontSize: sp(11) },
+													]}>
+													0:14 / 1:45
+												</Text>
+											</View>
 											<TVPressable
-												style={[
-													styles.iconCircleBtn,
-													{
-														width: sp(38),
-														height: sp(38),
-														borderRadius: sp(19),
-													},
-												]}
+												onPress={() =>
+													setIsMuted((m) => !m)
+												}
+												style={styles.muteButton}
 												focusedStyle={{
 													borderWidth: 2,
-													borderColor: Palette.primary,
-													backgroundColor:
-														"rgba(229, 9, 20, 0.2)",
+													borderColor: Palette.onSurface,
+													borderRadius: sp(20),
 													transform: [
 														{ scale: focusScale },
 													],
-												}}
-												onPress={
-													handleToggleNotification
-												}
-												activeOpacity={0.75}>
+												}}>
 												<Ionicons
 													name={
-														isNotificationOn
-															? "notifications"
-															: "notifications-outline"
+														isMuted
+															? "volume-mute-outline"
+															: "volume-high-outline"
 													}
 													size={sp(20)}
-													color={
-														isNotificationOn
-															? Palette.primary
-															: Palette.onSurface
-													}
-												/>
-											</TVPressable>
-											{/* Favori Kalp */}
-											<TVPressable
-												style={[
-													styles.iconCircleBtn,
-													{
-														width: sp(38),
-														height: sp(38),
-														borderRadius: sp(19),
-													},
-												]}
-												focusedStyle={{
-													borderWidth: 2,
-													borderColor: Palette.primary,
-													backgroundColor:
-														"rgba(229, 9, 20, 0.2)",
-													transform: [
-														{ scale: focusScale },
-													],
-												}}
-												onPress={handleToggleFavorite}
-												activeOpacity={0.75}>
-												<Ionicons
-													name={
-														isFav
-															? "heart"
-															: "heart-outline"
-													}
-													size={sp(21)}
-													color={
-														isFav
-															? Palette.primary
-															: Palette.onSurface
-													}
+													color={Palette.onSurface}
 												/>
 											</TVPressable>
 										</View>
 									</View>
+								</View>
+							) : null}
 
-									{/* Rozetler ve Puanlar */}
+							{/*
+							 * 4. Başlık bölümü — TV + TABLET iki kolonlu (dokunma).
+							 *
+							 * TV: SOL kolon = poster (+ özet), SAĞ kolon = başlık,
+							 * rozetler ve TÜM eylemler. Telefonda bunun yerine
+							 * dikey stack kullanılır (renderPhoneTop/Bottom) — dar
+							 * kolonda (~200dp) ezilme olmasın diye.
+							 */}
+							{isPhone ? renderPhoneTop() : null}
+							{!isPhone ? (
+								<View
+									style={[
+										styles.previewHeaderRow,
+										{ gap: sp(18) },
+									]}>
+									{/* ── SOL KOLON ── */}
 									<View
 										style={[
-											styles.metaBadgesRow,
-											{
-												marginBottom: isTV ? 0 : sp(10),
-												gap: sp(8),
-											},
+											isTV
+												? styles.tvLeftColumn
+												: styles.posterSlot,
+											{ gap: sp(12) },
 										]}>
-										<View
+										{/* Sol Afiş (Poster) */}
+										<TVPressable
 											style={[
-												styles.typeBadge,
+												styles.posterWrapper,
 												{
-													paddingHorizontal: sp(9),
-													paddingVertical: sp(3),
-													borderRadius: sp(6),
-												},
-											]}>
-											<Text
-												style={[
-													styles.typeBadgeText,
-													{ fontSize: sp(11) },
-												]}>
-												{typeBadgeText}
-											</Text>
-										</View>
-										<Text
-											style={[
-												styles.metaYearText,
-												{ fontSize: sp(12) },
-											]}>
-											{yearText}
-										</Text>
-										<Text
-											style={[
-												styles.metaDot,
-												{ fontSize: sp(11) },
-											]}>
-											•
-										</Text>
-										<View style={styles.ratingBox}>
-											<Ionicons
-												name="star"
-												size={sp(14)}
-												color="#F5C518"
-											/>
-											<Text
-												style={[
-													styles.ratingText,
-													{ fontSize: sp(12) },
-												]}>
-												{rating}
-											</Text>
-										</View>
-										<Text
-											style={[
-												styles.metaDot,
-												{ fontSize: sp(11) },
-											]}>
-											•
-										</Text>
-										<View style={styles.hdrBadge}>
-											<Text
-												style={[
-													styles.hdrText,
-													{ fontSize: sp(10) },
-												]}>
-												4K HDR
-											</Text>
-										</View>
-									</View>
-
-									{/* Sinopsis — TV'de sol kolonda (poster altı), telefonda burada */}
-									{!isTV ? (
-										<Text
-											style={[
-												styles.synopsisText,
-												{
-													fontSize: sp(13.5),
-													lineHeight: sp(19),
+													width: sp(140),
+													height: sp(210),
+													borderRadius: sp(14),
 												},
 											]}
-											numberOfLines={3}>
-											{synopsis}
-										</Text>
-									) : null}
+											focusedStyle={{
+												borderWidth: 2,
+												borderColor: Palette.primary,
+												transform: [
+													{ scale: focusScale + 0.04 },
+												],
+											}}
+											activeOpacity={0.9}
+											onPress={handleTrailerClick}>
+											<Image
+												source={{ uri: posterUri }}
+												style={styles.posterImage}
+												contentFit="cover"
+												transition={200}
+											/>
+											{/* Top 10 Rozeti */}
+											<View
+												style={[
+													styles.posterTopBadge,
+													{
+														top: sp(8),
+														left: sp(8),
+														paddingHorizontal: sp(6),
+														paddingVertical: sp(3),
+														borderRadius: sp(4),
+													},
+												]}>
+												<Text
+													style={[
+														styles.posterTopBadgeText,
+														{ fontSize: sp(9) },
+													]}>
+													TOP 10
+												</Text>
+											</View>
+											{/* HD Rozeti */}
+											<View
+												style={[
+													styles.posterHdBadge,
+													{
+														bottom: sp(8),
+														right: sp(8),
+														paddingHorizontal: sp(5),
+														paddingVertical: sp(2),
+														borderRadius: sp(4),
+													},
+												]}>
+												<Text
+													style={[
+														styles.posterHdText,
+														{ fontSize: sp(9) },
+													]}>
+													HD
+												</Text>
+											</View>
+										</TVPressable>
 
-									{/* 5. DURUMU GÜNCELLE Çip Seçici (Screen 2) */}
-									{renderStatusSection(false)}
+										{/*
+										 * TV: özet posterin ALTINDA, sol kolonda.
+										 * Sağ kolonda posterle yan yana satır uzunluğu
+										 * daralıp başlığı 2–3 satıra bölüyordu.
+										 */}
+										{isTV ? (
+											<Text
+												style={[
+													styles.synopsisText,
+													{
+														fontSize: sp(12.5),
+														lineHeight: sp(17),
+													},
+												]}
+												numberOfLines={4}>
+												{synopsis}
+											</Text>
+										) : null}
+									</View>
 
-									{/* 6. Ana Eylem Butonları Izgarası (Screen 1 & 2) */}
-									{renderActionGrid(false)}
+									{/* ── SAĞ KOLON: başlık, rozetler, TÜM eylemler ── */}
+									<View
+										style={[
+											styles.detailsColumn,
+											/**
+											 * TV'de altı blok (durum çipleri, aksiyon
+											 * grid'i, CTA, alt eylemler…) bu sütunda alt
+											 * alta diziliyor. `gap` TEK boşluk kaynağı:
+											 * blokların kendi `marginTop`ları TV'de
+											 * sıfırlanır. Aksi halde her blok kendi
+											 * boşluğunu ekleyip paneli ekranın
+											 * dışına taşıyordu — kullanıcı kaydırmak
+											 * zorunda kalıyordu.
+											 */
+											isTV && { gap: sp(10) },
+										]}>
+										{/* Başlık & Hızlı İkonlar */}
+										<View
+											style={[
+												styles.titleRow,
+												{
+													marginBottom: isTV ? 0 : sp(8),
+													gap: sp(8),
+												},
+											]}>
+											<Text
+												style={[
+													styles.movieTitle,
+													{
+														fontSize: sp(
+															isTV ? 20 : 22,
+														),
+													},
+												]}
+												numberOfLines={2}>
+												{title}
+											</Text>
+											<View
+												style={[
+													styles.headerIconActions,
+													{ gap: sp(8) },
+												]}>
+												{/* Bildirim Çanı */}
+												<TVPressable
+													style={[
+														styles.iconCircleBtn,
+														{
+															width: sp(38),
+															height: sp(38),
+															borderRadius: sp(19),
+														},
+													]}
+													focusedStyle={{
+														borderWidth: 2,
+														borderColor: Palette.primary,
+														backgroundColor:
+															"rgba(229, 9, 20, 0.2)",
+														transform: [
+															{ scale: focusScale },
+														],
+													}}
+													onPress={
+														handleToggleNotification
+													}
+													activeOpacity={0.75}>
+													<Ionicons
+														name={
+															isNotificationOn
+																? "notifications"
+																: "notifications-outline"
+														}
+														size={sp(20)}
+														color={
+															isNotificationOn
+																? Palette.primary
+																: Palette.onSurface
+														}
+													/>
+												</TVPressable>
+												{/* Favori Kalp */}
+												<TVPressable
+													style={[
+														styles.iconCircleBtn,
+														{
+															width: sp(38),
+															height: sp(38),
+															borderRadius: sp(19),
+														},
+													]}
+													focusedStyle={{
+														borderWidth: 2,
+														borderColor: Palette.primary,
+														backgroundColor:
+															"rgba(229, 9, 20, 0.2)",
+														transform: [
+															{ scale: focusScale },
+														],
+													}}
+													onPress={handleToggleFavorite}
+													activeOpacity={0.75}>
+													<Ionicons
+														name={
+															isFav
+																? "heart"
+																: "heart-outline"
+														}
+														size={sp(21)}
+														color={
+															isFav
+																? Palette.primary
+																: Palette.onSurface
+														}
+													/>
+												</TVPressable>
+											</View>
+										</View>
 
-									{/* 7. Büyük Kırmızı CTA (Hemen İzle) */}
-									{renderCtaButton(false)}
+										{/* Rozetler ve Puanlar */}
+										<View
+											style={[
+												styles.metaBadgesRow,
+												{
+													marginBottom: isTV ? 0 : sp(10),
+													gap: sp(8),
+												},
+											]}>
+											<View
+												style={[
+													styles.typeBadge,
+													{
+														paddingHorizontal: sp(9),
+														paddingVertical: sp(3),
+														borderRadius: sp(6),
+													},
+												]}>
+												<Text
+													style={[
+														styles.typeBadgeText,
+														{ fontSize: sp(11) },
+													]}>
+													{typeBadgeText}
+												</Text>
+											</View>
+											<Text
+												style={[
+													styles.metaYearText,
+													{ fontSize: sp(12) },
+												]}>
+												{yearText}
+											</Text>
+											<Text
+												style={[
+													styles.metaDot,
+													{ fontSize: sp(11) },
+												]}>
+												•
+											</Text>
+											<View style={styles.ratingBox}>
+												<Ionicons
+													name="star"
+													size={sp(14)}
+													color="#F5C518"
+												/>
+												<Text
+													style={[
+														styles.ratingText,
+														{ fontSize: sp(12) },
+													]}>
+													{rating}
+												</Text>
+											</View>
+											<Text
+												style={[
+													styles.metaDot,
+													{ fontSize: sp(11) },
+												]}>
+												•
+											</Text>
+											<View style={styles.hdrBadge}>
+												<Text
+													style={[
+														styles.hdrText,
+														{ fontSize: sp(10) },
+													]}>
+													4K HDR
+												</Text>
+											</View>
+										</View>
 
-									{/* 8. Alt Hızlı Eylemler (İndir, Paylaş, Fragman, Detaylar) */}
-									{renderQuickActions(false)}
+										{/* Sinopsis — TV'de sol kolonda (poster altı), telefonda burada */}
+										{!isTV ? (
+											<Text
+												style={[
+													styles.synopsisText,
+													{
+														fontSize: sp(13.5),
+														lineHeight: sp(19),
+													},
+												]}
+												numberOfLines={3}>
+												{synopsis}
+											</Text>
+										) : null}
+
+										{/* 5. DURUMU GÜNCELLE Çip Seçici (Screen 2) */}
+										{renderStatusSection(false)}
+
+										{/* 6. Ana Eylem Butonları Izgarası (Screen 1 & 2) */}
+										{renderActionGrid(false)}
+
+										{/* 7. Büyük Kırmızı CTA (Hemen İzle) */}
+										{renderCtaButton(false)}
+
+										{/* 8. Alt Hızlı Eylemler (İndir, Paylaş, Fragman, Detaylar) */}
+										{renderQuickActions(false)}
+									</View>
 								</View>
-							</View>
-						) : null}
-						{/* 4b. TELEFON alt blokları: tam genişlikte status/grid/CTA/quick */}
-						{isPhone ? renderPhoneBottom() : null}
+							) : null}
+							{/* 4b. TELEFON alt blokları: tam genişlikte status/grid/CTA/quick */}
+							{isPhone ? renderPhoneBottom() : null}
 
-						{/* Home Bar Indicator Spacer — telefonda var, TV'de anlamsız. */}
-						{!isTV ? (
-							<View style={styles.homeIndicatorBar} />
-						) : null}
-					</ScrollView>
-				</Pressable>
+							{/* Home Bar Indicator Spacer — telefonda var, TV'de anlamsız. */}
+							{!isTV ? (
+								<View style={styles.homeIndicatorBar} />
+							) : null}
+						</ScrollView>
+					</Pressable>
+				</TVFocusTrap>
 			</Pressable>
 
 			{/* Liste Seçim Modalı */}

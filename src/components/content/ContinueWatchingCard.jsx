@@ -1,9 +1,10 @@
 import TVPressable from "@/components/common/TVPressable";
 import { FontFamily, Palette } from "@/constants/theme";
 import { resolvePluginName } from "@/utils/storage";
+import { cardImageUri } from "@/utils/imageQuality";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { PixelRatio, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 /**
  * "İzlemeye Devam Et" kartı — 16:9 yatay küçük resim.
@@ -38,7 +39,7 @@ export default function ContinueWatchingCard({
 		),
 	);
 
-	const posterUri =
+	const rawPosterUri =
 		item.poster ||
 		item.poster_url ||
 		item.backdrop ||
@@ -46,6 +47,8 @@ export default function ContinueWatchingCard({
 		item.image ||
 		item.thumbnail ||
 		"https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=60";
+	// Kart görselini ekranda kaplayacağı piksel genişliğine indir.
+	const posterUri = cardImageUri(rawPosterUri, CONTINUE_CARD_WIDTH * PixelRatio.get());
 
 	const isEpisode =
 		item.type === "episode" || Boolean(item.season || item.episode);
@@ -118,6 +121,10 @@ export default function ContinueWatchingCard({
 						{onRemove && (
 							<TouchableOpacity
 								style={styles.removeButton}
+								// TV: küçük "×" DPAD odağını çalıyor ve stilsiz
+								// kaldığı için odak görünmez oluyordu. Kaldırma
+								// işlemi uzun basma menüsünden yapılabilir.
+								focusable={false}
 								onPress={(e) => {
 									e.stopPropagation();
 									onRemove(item.id);
@@ -153,6 +160,11 @@ export default function ContinueWatchingCard({
 							{subtitle || " "}
 						</Text>
 					</View>
+
+					{/* Odak halkası: ölçümü değiştirmeden, yalnızca odakta. */}
+					{focused ? (
+						<View style={styles.focusRing} pointerEvents="none" />
+					) : null}
 				</View>
 			)}
 		</TVPressable>
@@ -168,7 +180,14 @@ const styles = StyleSheet.create({
 	},
 	cardFocused: {
 		// Ölçek, satırdaki boşluk sayesinde komşunun altına girmiyor.
-		transform: [{ scale: 1.04 }],
+		transform: [{ scale: 1.06 }],
+	},
+	/** Odak halkası — mutlak konum: ölçüm/relayout yok, sadece draw. */
+	focusRing: {
+		...StyleSheet.absoluteFillObject,
+		borderRadius: 12,
+		borderWidth: 3,
+		borderColor: Palette.primary,
 	},
 	thumbnailWrapper: {
 		width: CONTINUE_CARD_WIDTH,

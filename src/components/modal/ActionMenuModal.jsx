@@ -3,7 +3,8 @@ import TVPressable, {
 } from "@/components/common/TVPressable";
 import { FontFamily, Palette } from "@/constants/theme";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
+import { Platform } from "react-native";
 import {
 	BackHandler,
 	Modal,
@@ -13,6 +14,8 @@ import {
 	Text,
 	View,
 } from "react-native";
+import TVFocusTrap from "@/components/common/TVFocusTrap";
+import { useTVFocusRestore } from "@/hooks/useTVFocusRestore";
 
 /**
  * ActionMenuModal — Genel "bağlam menüsü" (context menu) alt sayfası.
@@ -48,6 +51,10 @@ export default function ActionMenuModal({
 	subtitle,
 	actions = [],
 }) {
+	// TV focus restore for this modal
+	const focusRestore = useTVFocusRestore("actionmenu");
+	const contentRef = useRef(null);
+
 	useEffect(() => {
 		if (!visible) return;
 		const onBackPress = () => {
@@ -76,92 +83,97 @@ export default function ActionMenuModal({
 					if (isTVPressSuppressed()) return;
 					onClose?.();
 				}}>
-				<Pressable
-					style={styles.sheet}
-					onPress={(e) => e.stopPropagation()}>
-					<View style={styles.dragHandle} />
+				<TVFocusTrap
+					active={visible && Platform.isTV}
+					onDeactivate={onClose}
+					contentRef={contentRef}>
+					<Pressable
+						style={styles.sheet}
+						onPress={(e) => e.stopPropagation()}>
+						<View style={styles.dragHandle} />
 
-					{Boolean(title) && (
-						<View style={styles.header}>
-							<Text style={styles.title} numberOfLines={2}>
-								{title}
-							</Text>
-							{Boolean(subtitle) && (
-								<Text style={styles.subtitle} numberOfLines={1}>
-									{subtitle}
+						{Boolean(title) && (
+							<View style={styles.header}>
+								<Text style={styles.title} numberOfLines={2}>
+									{title}
 								</Text>
-							)}
-						</View>
-					)}
+								{Boolean(subtitle) && (
+									<Text style={styles.subtitle} numberOfLines={1}>
+										{subtitle}
+									</Text>
+								)}
+							</View>
+						)}
 
-					<ScrollView
-						style={styles.actionsScroll}
-						contentContainerStyle={styles.actionsList}
-						showsVerticalScrollIndicator={false}>
-						{actions.map((action, index) => (
-							<TVPressable
-								key={action.key || String(index)}
-								style={[
-									styles.actionRow,
-									action.destructive &&
-										styles.destructiveRow,
-								]}
-								focusedStyle={
-									action.destructive
-										? styles.actionRowDestructiveFocused
-										: styles.actionRowFocused
-								}
-								autoFocus={index === 0}
-								onPress={() => {
-									onClose?.();
-									action.onPress?.();
-								}}
-								activeOpacity={0.75}>
-								<View
+						<ScrollView
+							style={styles.actionsScroll}
+							contentContainerStyle={styles.actionsList}
+							showsVerticalScrollIndicator={false}>
+							{actions.map((action, index) => (
+								<TVPressable
+									key={action.key || String(index)}
 									style={[
-										styles.iconWrapper,
-										{
-											backgroundColor:
-												action.iconBg ||
-												"rgba(56, 189, 248, 0.15)",
-										},
-									]}>
-									<Ionicons
-										name={
-											action.icon || "ellipse-outline"
-										}
-										size={19}
-										color={action.iconColor || Palette.secondary}
-									/>
-								</View>
-								<View style={styles.actionTextCol}>
-									<Text
+										styles.actionRow,
+										action.destructive &&
+											styles.destructiveRow,
+									]}
+									focusedStyle={
+										action.destructive
+											? styles.actionRowDestructiveFocused
+											: styles.actionRowFocused
+									}
+									autoFocus={index === 0}
+									onPress={() => {
+										onClose?.();
+										action.onPress?.();
+									}}
+									activeOpacity={0.75}>
+									<View
 										style={[
-											styles.actionTitle,
-											action.destructive && {
-												color: "#f43f5e",
+											styles.iconWrapper,
+											{
+												backgroundColor:
+													action.iconBg ||
+													"rgba(56, 189, 248, 0.15)",
 											},
 										]}>
-										{action.label}
-									</Text>
-									{Boolean(action.description) && (
-										<Text style={styles.actionDesc}>
-											{action.description}
+										<Ionicons
+											name={
+												action.icon || "ellipse-outline"
+											}
+											size={19}
+											color={action.iconColor || Palette.secondary}
+										/>
+									</View>
+									<View style={styles.actionTextCol}>
+										<Text
+											style={[
+												styles.actionTitle,
+												action.destructive && {
+													color: "#f43f5e",
+												},
+											]}>
+											{action.label}
 										</Text>
-									)}
-								</View>
-							</TVPressable>
-						))}
-					</ScrollView>
+										{Boolean(action.description) && (
+											<Text style={styles.actionDesc}>
+												{action.description}
+											</Text>
+										)}
+									</View>
+								</TVPressable>
+							))}
+						</ScrollView>
 
-					<TVPressable
-						style={styles.cancelButton}
-						focusedStyle={styles.cancelButtonFocused}
-						onPress={onClose}
-						activeOpacity={0.8}>
-						<Text style={styles.cancelButtonText}>Vazgeç</Text>
-					</TVPressable>
-				</Pressable>
+						<TVPressable
+							style={styles.cancelButton}
+							focusedStyle={styles.cancelButtonFocused}
+							onPress={onClose}
+							activeOpacity={0.8}>
+							<Text style={styles.cancelButtonText}>Vazgeç</Text>
+						</TVPressable>
+					</Pressable>
+				</TVFocusTrap>
 			</Pressable>
 		</Modal>
 	);

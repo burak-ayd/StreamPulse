@@ -56,11 +56,11 @@
  */
 
 import CategoryRail from "@/components/live/CategoryRail";
-import ChannelCard from "@/components/live/ChannelCard";
+import ChannelCard, {
+	CHANNEL_TILE_ASPECT,
+} from "@/components/live/ChannelCard";
 import ChannelCardSkeleton from "@/components/live/ChannelCardSkeleton";
-import FeaturedChannel from "@/components/live/FeaturedChannel";
 import TVPressable from "@/components/common/TVPressable";
-import { useNavLayout } from "@/hooks/useNavLayout";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import {
@@ -186,11 +186,9 @@ function hataMesaji(hata) {
 
 export default function LiveScreen() {
 	const router = useRouter();
-	// Sol ray (TV / yatay tablet) varken içerik sola kayar — tüm ekranlar
-	// aynı kararı vermek zorunda (bkz. hooks/useNavLayout.js).
-	const { contentPaddingLeft } = useNavLayout();
-	// TV: kanal ızgarası ortalanmış sütuna alınır (bkz. utils/tvMetrics.js).
-	const { contentMaxWidth, sp, isWide, height } = useTvMetrics();
+	// Canlı TV tam ekran bir görünümdür, sol ray bu ekranda yer almaz.
+	// Dolayısıyla ekranın tüm genişliğine yayılır.
+	const { sp, isWide } = useTvMetrics();
 
 	// ── Kategori ──────────────────────────────────────────────────
 	const [kategoriler, setKategoriler] = useState([]);
@@ -211,29 +209,28 @@ export default function LiveScreen() {
 	/** `{ reason, mesaj, retryable }` veya `null`. */
 	const [hata, setHata] = useState(null);
 
-	/** Ölçülen içerik genişliği (kenar boşluğu ve ray çıkarılmış). */
+	/** Ölçülen içerik genişliği (kenar boşlukları çıkarılmış, tam ekran yayılım). */
 	const [icerikGenisligi, setIcerikGenisligi] = useState(0);
 
-	// ── TV Odak Ortalama (Sorun 5) ──────────────────────────────────
+	// ── TV Odak Ortalama ──────────────────────────────────────────
 	const onLayout = useCallback(
 		(e) => {
-			const w =
-				e.nativeEvent.layout.width -
-				contentPaddingLeft -
-				ScreenGutter * 2;
+			const w = e.nativeEvent.layout.width - ScreenGutter * 2;
 			setIcerikGenisligi((prev) => (Math.abs(prev - w) < 0.5 ? prev : w));
 		},
-		[contentPaddingLeft],
+		[],
 	);
 
 	// ── Sütun sayısı ──────────────────────────────────────────────
+	// TV'de ekranın tamamına yayılması için MAX_SUTUN'u 8'e çıkarıyoruz (1080p TV'de ferah ızgara).
+	const MAX_COLS = Platform.isTV ? 8 : MAX_SUTUN;
 	const sutunSayisi = useMemo(() => {
 		if (icerikGenisligi <= 0) return 0; // ölçüm yoksa ızgara render edilmez
 		const ham = Math.floor(
 			(icerikGenisligi + GRID_GAP) / (HEDEF_KART + GRID_GAP),
 		);
-		return Math.max(MIN_SUTUN, Math.min(MAX_SUTUN, ham));
-	}, [icerikGenisligi]);
+		return Math.max(MIN_SUTUN, Math.min(MAX_COLS, ham));
+	}, [icerikGenisligi, MAX_COLS]);
 
 	const kartGenisligi = useMemo(() => {
 		if (sutunSayisi <= 0) return 0;
@@ -243,16 +240,42 @@ export default function LiveScreen() {
 	}, [icerikGenisligi, sutunSayisi]);
 
 	/*
-	 * SORUN 5 — odaklanan kanalın SATIRI ekranın dikey ortasına taşınır.
+	 * KESİN SATIR YÜKSEKLİĞİ VE GETITEMLAYOUT (Atlama/zıplama sorununu kökten çözer)
 	 *
-	 * Kart indeksi tek başına hedef olamaz: kartın bulunduğu satırın
-	 * yatayda da görüş alanında olması gerekir. Bu yüzden satırın İLK
-	 * kartına geçiş yapılır (`columns: sutunSayisi`).
+	 * Kart aspectRatio 4/3'tür; yükseklik = genişlik / (4/3) = genişlik * 0.75.
+	 * Satır aralığı GRID_GAP eklenince her satırın yüksekliği matematiksel olarak
+	 * KESİNDİR. Bu sayede FlatList tam satır ofsetini bilir ve asla onScrollToIndexFailed'a
+	 * düşüp ekranı rastgele yerlere fırlatmaz.
+	 */
+	const satirYuksekligi = useMemo(() => {
+		if (kartGenisligi <= 0) return 0;
+		return kartGenisligi / CHANNEL_TILE_ASPECT + GRID_GAP;
+	}, [kartGenisligi]);
+
+	const getItemLayout = useCallback(
+		(data, index) => {
+			if (satirYuksekligi <= 0 || sutunSayisi <= 0) {
+				return { length: 0, offset: 0, index };
+			}
+			const rowIndex = Math.floor(index / sutunSayisi);
+			return {
+				length: satirYuksekligi,
+				offset: satirYuksekligi * rowIndex,
+				index,
+			};
+		},
+		[satirYuksekligi, sutunSayisi],
+	);
+
+	/*
+	 * SORUN 5 — odaklanan kanalın SATIRI ekranın dengeli dikey görüş alanına taşınır.
 	 */
 	const {
 		listRef,
 		handleItemFocus: handleCardFocus,
 		onScrollToIndexFailed,
+		onViewableItemsChanged,
+		viewabilityConfig,
 		clearRetry,
 	} = useFocusCentering({ columns: sutunSayisi });
 
@@ -462,21 +485,6 @@ export default function LiveScreen() {
 		[kategoriler, seciliKategori],
 	);
 
-	/*
-	 * Vitrin kartı: seçili kategorinin İLK kanalı. Arama sırasında
-	 * gösterilmez — kullanıcı zaten belirli bir sonuç arıyor ve vitrin
-	 * ekranın üstünü gereksiz kaplardı.
-	 */
-	const oneCikan = useMemo(
-		() => (aramaSorgusu ? null : kanallar[0] || null),
-		[aramaSorgusu, kanallar],
-	);
-	/*
-	 * Kısa ekranlarda (örn. yatay telefon, 720p TV) vitrin gizlenir:
-	 * üst blok ızgaraya yer bırakmazsa ekran "sadece tanıtım" olur.
-	 */
-	const vitrin = isWide && height < 480 ? null : oneCikan;
-
 	const renderArama = () => (
 		<View
 			style={[
@@ -618,7 +626,6 @@ export default function LiveScreen() {
 					styles.safeArea,
 					{
 						backgroundColor: Palette.surfaceLowest,
-						paddingLeft: contentPaddingLeft,
 					},
 				]}>
 				{/*
@@ -668,26 +675,7 @@ export default function LiveScreen() {
 					<View style={styles.searchWrap}>{renderArama()}</View>
 				) : null}
 
-				{/* Vitrin: seçili kategorinin ilk kanalı */}
-				{vitrin ? (
-					<View style={styles.featuredWrap}>
-						<FeaturedChannel
-							channel={vitrin}
-							categoryName={baslangicKategoriAdi}
-							onPress={() => handleChannelPress(vitrin)}
-						/>
-					</View>
-				) : null}
-
 				{/* Kategori rayı */}
-				{/*
-				 * Kategori değişiminde arama METNİ SİLİNMEZ. Kullanıcı
-				 * "spor" filtreliyken başka bir kategoriye geçip aynı
-				 * filtreyi sürdürmek isteyebilir; metni düşürürsek arama
-				 * kutusu ile gerçek `q` arasındaki bağ kopar ve kullanıcı
-				 * neden sonuç gelmediğini anlamaz. Bölüm başlığındaki
-				 * sayaç etkin filtreyi açıkça yazar.
-				 */}
 				<CategoryRail
 					categories={kategoriler}
 					selectedId={seciliKategori}
@@ -722,24 +710,8 @@ export default function LiveScreen() {
 
 				{/* Gövde — üç ayrı durum + ızgara */}
 				{gosterYukleniyor ? (
-					/*
-					 * Izgara iskeleti. Aynı `sutunSayisi` / `kartGenisligi`
-					 * hesabını kullanıyor; kanallar geldiğinde birebir yerine
-					 * oturuyor. Önceden "Kanallar yükleniyor" yazısı vardı —
-					 * o metin yerine gerçek yerleşim çiziliyor.
-					 */
 					<View
-						style={[
-							styles.listContent,
-							styles.skeletonGrid,
-							contentMaxWidth
-								? {
-										alignSelf: "center",
-										width: "100%",
-										maxWidth: contentMaxWidth,
-									}
-								: null,
-						]}
+						style={[styles.listContent, styles.skeletonGrid, styles.fullWidth]}
 						pointerEvents="none">
 						{Array.from({
 							length: sutunSayisi * (isWide ? 2 : 3),
@@ -764,15 +736,6 @@ export default function LiveScreen() {
 					<FlatList
 						ref={listRef}
 						contentInsetAdjustmentBehavior="automatic"
-						/*
-						 * `numColumns` çalışma anında değişir (dönme / TV-mobil
-						 * geçişi). React Native bunu desteklemez ve "Changing
-						 * numColumns on the fly is not supported" uyarısı
-						 * basıp ölçümü bozar; `key` ile liste kasten
-						 * yeniden kurulur. Kayıp tek şey kaydırma konumu ve
-						 * odak — ikisi de sütun sayısı değiştiğinde zaten
-						 * anlamsız.
-						 */
 						key={`live-cols-${sutunSayisi}`}
 						data={kanallar}
 						renderItem={renderItem}
@@ -782,38 +745,17 @@ export default function LiveScreen() {
 						contentContainerStyle={[
 							styles.listContent,
 							kanallar.length === 0 && styles.listContentEmpty,
-							// TV: kanal ızgarası ortalanmış sütunda kalsın.
-							contentMaxWidth
-								? {
-										alignSelf: "center",
-										width: "100%",
-										maxWidth: contentMaxWidth,
-									}
-								: null,
+							styles.fullWidth,
 						]}
 						showsVerticalScrollIndicator={false}
+						getItemLayout={getItemLayout}
 						onScrollToIndexFailed={onScrollToIndexFailed}
-						/*
-						 * `getItemLayout` YOK. Kategori ekranında (sonsuz
-						 * kaydırma) kullanılıyor çünkü 20'şer sayfa geliyor;
-						 * burada liste 138 kanalda BİTER ve kart yüksekliği
-						 * kanal adının 1–2 satıra düşmesine göre değişir.
-						 * Yanlış bir `getItemLayout` (yüksekliği olduğundan
-						 * büyük hesaplayan) kaydırmayı zıplatırdı; 138
-						 * elemanı sanallaştırmak zaten sorun değil.
-						 */
-						initialNumToRender={Platform.isTV ? 40 : 12}
+						onViewableItemsChanged={onViewableItemsChanged}
+						viewabilityConfig={viewabilityConfig}
+						initialNumToRender={Platform.isTV ? 24 : 12}
 						maxToRenderPerBatch={12}
-						windowSize={7}
-						/*
-						 * `removeClippedSubviews` false: TV'de odaklı kartın
-						 * detache olması kumanda odağını kaybettirir
-						 * (bkz. `library.jsx` ana ızgara notu).
-						 */
+						windowSize={Platform.isTV ? 9 : 5}
 						removeClippedSubviews={false}
-						// Yenileme sırasında eski liste ekranda kalıyor;
-						// kaydırma sonuna gelen kullanıcı boş ekranla
-						// karşılaşmasın diye altta küçük gösterge.
 						ListFooterComponent={
 							yukleniyor && kanallar.length > 0 ? (
 								<View style={styles.footer}>
@@ -923,12 +865,6 @@ const styles = StyleSheet.create({
 		borderColor: Palette.primary,
 	},
 
-	// Vitrin
-	featuredWrap: {
-		paddingHorizontal: ScreenGutter,
-		paddingTop: 6,
-	},
-
 	// Liste başlığı
 	subHeader: {
 		flexDirection: "row",
@@ -950,6 +886,9 @@ const styles = StyleSheet.create({
 	},
 
 	// Izgara
+	fullWidth: {
+		width: "100%",
+	},
 	listContent: {
 		paddingHorizontal: ScreenGutter,
 		paddingTop: 12,

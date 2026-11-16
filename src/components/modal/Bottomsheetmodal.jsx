@@ -13,6 +13,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FontFamily, Palette } from "@/constants/theme";
+import TVFocusTrap from "@/components/common/TVFocusTrap";
+import { useTVFocusRestore } from "@/hooks/useTVFocusRestore";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -64,6 +66,10 @@ const BottomSheetModal = ({
 	const insets = useSafeAreaInsets();
 	const isAuto = fitContent || snapToHeight === "auto";
 	const isTV = Platform.isTV;
+
+	// TV focus restore for this modal
+	const focusRestore = useTVFocusRestore("bottomsheet");
+	const contentRef = useRef(null);
 
 	/**
 	 * Alt taşma — panelin alt kenarı bu kadar EKSİĞE çekilir.
@@ -315,55 +321,61 @@ const BottomSheetModal = ({
 				/>
 			</Animated.View>
 
-			{/* Sheet */}
-			<View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-				<Animated.View
-					onLayout={handleLayout}
-					style={[
-						styles.sheet,
-						isTV && styles.sheetTv,
-						{
-							bottom: -altTasma,
-							...(isAuto
-								? {
-										maxHeight: SCREEN_HEIGHT * 0.85,
-										paddingBottom: altTasma,
-									}
-								: { height: sheetHeight + altTasma }),
-						},
-						{ transform: [{ translateY }] },
-					]}
-					{...panResponder.panHandlers}>
-					{/* Drag handle — telefonda var, TV'de anlamsız */}
-					{handle && !isTV ? (
-						<View style={styles.handleContainer}>
-							<View style={styles.handle} />
-						</View>
-					) : null}
-
-					{/* Başlık */}
-					{title ? (
-						<View style={styles.titleRow}>
-							<Text style={styles.titleText}>{title}</Text>
-						</View>
-					) : null}
-
-					{/* İçerik — alt boşluk kasıtlı olarak dar.
-					    Panel artık `altTasma` kadar ekranın altına taşıyor
-					    (bkz. `altTasma`), buraya da tam inset kadar pay
-					    verilirse son kart navigasyon çubuğunun arkasına
-					    gömülür. Çubuk yokken 10dp: son kart ekranın
-kabına yapışmasın diye yeterli, "kalın ölü şerit" de bırakmıyor. */}
-					<View
+			{/* Sheet with TV Focus Trap */}
+			<TVFocusTrap
+				active={visible && isTV}
+				onDeactivate={onClose}
+				contentRef={contentRef}>
+				<View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+					<Animated.View
+						onLayout={handleLayout}
+						ref={contentRef}
 						style={[
-							styles.content,
-							isAuto && styles.autoContent,
-							{ paddingBottom: Math.max(insets.bottom, 10) },
-						]}>
-						{children}
-					</View>
-				</Animated.View>
-			</View>
+							styles.sheet,
+							isTV && styles.sheetTv,
+							{
+								bottom: -altTasma,
+								...(isAuto
+									? {
+											maxHeight: SCREEN_HEIGHT * 0.85,
+											paddingBottom: altTasma,
+										}
+									: { height: sheetHeight + altTasma }),
+							},
+							{ transform: [{ translateY }] },
+						]}
+						{...panResponder.panHandlers}>
+						{/* Drag handle — telefonda var, TV'de anlamsız */}
+						{handle && !isTV ? (
+							<View style={styles.handleContainer}>
+								<View style={styles.handle} />
+							</View>
+						) : null}
+
+						{/* Başlık */}
+						{title ? (
+							<View style={styles.titleRow}>
+								<Text style={styles.titleText}>{title}</Text>
+							</View>
+						) : null}
+
+						{/* İçerik — alt boşluk kasıtlı olarak dar.
+						    Panel artık `altTasma` kadar ekranın altına taşıyor
+						    (bkz. `altTasma`), buraya da tam inset kadar pay
+						    verilirse son kart navigasyon çubuğunun arkasına
+						    gömülür. Çubuk yokken 10dp: son kart ekranın
+						kabına yapışmasın diye yeterli, "kalın ölü şerit" de bırakmıyor. */}
+						<View
+							style={[
+								styles.content,
+								isAuto && styles.autoContent,
+								{ paddingBottom: Math.max(insets.bottom, 10) },
+							]}>
+							{children}
+						</View>
+					</Animated.View>
+				</View>
+			</TVFocusTrap>
 		</Modal>
 	);
 };

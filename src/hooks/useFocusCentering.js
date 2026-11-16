@@ -55,11 +55,6 @@ export function useFocusCentering(options = {}) {
 		 * `scrollToIndex` yerine `scrollTo({ y })` kullanır.
 		 */
 		itemHeight = null,
-		/**
-		 * Odağı ekranın YARIM ALTINDA tutmak isteyen ekranlar için
-		 * dikey `viewPosition` (0 = üst, 0.5 = orta, 1 = alt).
-		 */
-		viewPosition = 0.5,
 		/** Mobil/dokunmatik cihazlarda devre dışı bırakmak için. */
 		enabled = Platform.isTV,
 		/**
@@ -75,6 +70,51 @@ export function useFocusCentering(options = {}) {
 	/** Henüz ölçülmediği için başarısız hedef (retry için saklanır). */
 	const pendingIndexRef = useRef(null);
 	const retryTimerRef = useRef(null);
+	/** D-pad hızlı navigasyonunda scroll'i debounce etmek için (80ms). */
+	const scrollDebounceTimerRef = useRef(null);
+	/**
+	 * En son ortalanan hedef. Aynı satır içinde SOL/SAĞ gezinirken dikey
+	 * liste zaten o konumdadır; `scrollToIndex`'i tekrar çalıştırmak TV'de
+	 * her tuşta boşuna bir animasyon + ölçüm demek (kullanıcı: "aşağı yukarı
+	 * hareket ederken ufak takılmalar"). Aynı hedefse atlanır.
+	 */
+	const lastTargetRef = useRef(null);
+	/**
+	 * Görünür öğe aralığı (`first..last`) — liste `onViewableItemsChanged`
+	 * ile günceller.
+	 *
+	 * ⚠️ Netflix/Prime/CloudStream davranışı: odaklanan öğe ZATEN görünürse
+	 * liste HİÇ kaymaz. Kaydırma yalnızca öğe bu aralığın dışına çıkınca ve
+	 * o zaman da "tam ortala" değil, öğeyi görüş alanının ilgili kenarına
+	 * getirecek kadar yapılır. Eskiden her odak değişiminde ortalama
+	 * yapıldığı için kullanıcı "önce odak, sonra ekstra bir kayma" görüyordu.
+	 *
+	 * Başlangıçta `last` = -1: ölçüm gelene kadar hiçbir şey "görünür"
+	 * sayılmaz, yani ilk odakta kaydırma yapılmaz (liste zaten başında).
+	 */
+	const visibleRef = useRef({ first: 0, last: -1 });
+
+	const onViewableItemsChanged = useCallback(({ viewableItems }) => {
+		if (!viewableItems || viewableItems.length === 0) return;
+		let first = Infinity;
+		let last = -1;
+		for (const token of viewableItems) {
+			if (token?.index == null || token.isViewable === false) continue;
+			if (token.index < first) first = token.index;
+			if (token.index > last) last = token.index;
+		}
+		if (last >= 0) visibleRef.current = { first, last };
+	}, []);
+
+	/*
+	 * Yatayda odaklanan kart ekranın ortasına değil, kenara yakın durur;
+	 * böylece sağında/solunda "sıradaki" kartlar görünür kalır. Dikeyde ise
+	 * satır çok uçlara (0.06 veya 0.94) fırlatılmamalı; aksi takdirde aşağı/yukarı
+	 * her geçişte devasa sıçramalar yaşanır. Netflix/Prime tarzı ekranın ~%28-%32
+	 * bölgesinde dengeli tutulmalıdır.
+	 */
+	const forwardAlign = horizontal ? 0.65 : 0.3;
+	const backwardAlign = horizontal ? 0.25 : 0.25;
 
 	/**
 	 * Geçici zamanlayıcıları temizle.
@@ -89,10 +129,41 @@ export function useFocusCentering(options = {}) {
 		}
 	}, []);
 
+	/**
+	 * Debounce zamanlayıcısını temizle.
+	 */
+	const clearDebounce = useCallback(() => {
+		if (scrollDebounceTimerRef.current) {
+			clearTimeout(scrollDebounceTimerRef.current);
+			scrollDebounceTimerRef.current = null;
+		}
+	}, []);
+
 	const scrollRowToCenter = useCallback(
 		(targetIndex) => {
 			const node = listRef.current;
 			if (!node) return;
+
+			// Aynı hedef hem yatay hem dikeyde tekrar ortalanmasın.
+			if (lastTargetRef.current === targetIndex) return;
+
+			// ── Görünürse hiç kaydırma (asıl akıcılık kazancı) ──
+			const { first, last } = visibleRef.current;
+			if (last >= 0 && targetIndex >= first && targetIndex <= last) {
+				lastTargetRef.current = targetIndex;
+				onCentered?.(targetIndex);
+				return;
+			}
+
+			lastTargetRef.current = targetIndex;
+
+			/*
+			 * Öğe görüş alanının dışında. İlerleme yönüne göre "yetir"
+			 * hizalaması: aşağı/sağa gidiyorsak öğeyi görüş alanının
+			 * ileri kenarına, yukarı/sola gidiyorsak geri kenarına getir.
+			 */
+			const align =
+				last >= 0 && targetIndex > last ? forwardAlign : backwardAlign;
 
 			// ── `ScrollView` yolu (itemHeight verilmişse) ──
 			if (itemHeight) {
@@ -111,7 +182,7 @@ export function useFocusCentering(options = {}) {
 			try {
 				node.scrollToIndex({
 					index: targetIndex,
-					viewPosition,
+					viewPosition: align,
 					animated: true,
 				});
 				onCentered?.(targetIndex);
@@ -119,7 +190,7 @@ export function useFocusCentering(options = {}) {
 				// Ölçüm henüz yok → `onScrollToIndexFailed` devreye girer.
 			}
 		},
-		[itemHeight, viewPosition, onCentered],
+		[itemHeight, forwardAlign, backwardAlign, onCentered],
 	);
 
 	/**
@@ -145,7 +216,17 @@ export function useFocusCentering(options = {}) {
 				? index
 				: Math.floor(index / colCount) * colCount;
 
-			scrollRowToCenter(target);
+			// ⚡ DEBOUNCE: Hızlı D-pad tutuşunda (saniyede ~10 tuş) her tuşta
+			// scrollToIndex tetiklenmesin — 80ms bekle, kullanıcı bırakınca
+			// veya 80ms sonra son hedefe kaydır.
+			// Netflix/Prime ~60-100ms arası; 80ms iyi denge (algılanan gecikme < 100ms).
+			if (scrollDebounceTimerRef.current) {
+				clearTimeout(scrollDebounceTimerRef.current);
+			}
+			scrollDebounceTimerRef.current = setTimeout(() => {
+				scrollDebounceTimerRef.current = null;
+				scrollRowToCenter(target);
+			}, 80);
 		},
 		[columns, horizontal, scrollRowToCenter, enabled],
 	);
@@ -160,6 +241,9 @@ export function useFocusCentering(options = {}) {
 		(info) => {
 			const node = listRef.current;
 			if (!node) return;
+
+			// Retry aynı indeksle gelecek; "aynı hedef" atlaması engellemesin.
+			lastTargetRef.current = null;
 
 			// Tahmini konuma atla (animasyonsuz — kullanıcı görmesin).
 			if (typeof node.scrollToOffset === "function") {
@@ -189,6 +273,16 @@ export function useFocusCentering(options = {}) {
 		[scrollRowToCenter, clearRetry],
 	);
 
+	/*
+	 * Görünürlük eşiği: öğenin %92'si görünüyorsa "yeterince görünür"
+	 * sayılır. Yatayda %70 yeter — kart tam görünmese de okunur durumdadır
+	 * ve eşiği yükseltmek gereksiz kaydırma üretir.
+	 */
+	const viewabilityConfig = useRef({
+		itemVisiblePercentThreshold: horizontal ? 70 : 92,
+		minimumViewTime: 32,
+	}).current;
+
 	return {
 		/** `FlatList`/`ScrollView`'a verilecek ref. */
 		listRef,
@@ -196,10 +290,16 @@ export function useFocusCentering(options = {}) {
 		handleItemFocus,
 		/** `FlatList`'a verilir. */
 		onScrollToIndexFailed,
+		/** Listeye verilir — görünür aralığı bu günceller. */
+		onViewableItemsChanged,
+		/** Listeye verilir. */
+		viewabilityConfig,
 		/** Elle ortalama (dışarıdan tetiklemek için). */
 		scrollRowToCenter,
 		/** Bekleyen retry varsa onu iptal eder (unmount temizliği). */
 		clearRetry,
+		/** Debounce zamanlayıcısını iptal eder (unmount temizliği). */
+		clearDebounce,
 	};
 }
 

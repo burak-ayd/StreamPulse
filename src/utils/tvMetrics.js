@@ -46,6 +46,9 @@ import { Platform, useWindowDimensions } from "react-native";
 /** Kısa kenar referansı: 450dp → 1.2 ham ölçek (1080p TV). */
 const SHORT_SIDE_REFERENCE = 450;
 
+/** TV safe area (overscan) percentage — %3 her kenardan. */
+export const TV_SAFE_AREA_PERCENT = 0.03;
+
 /**
  * Geniş ekran eşiği — `useNavLayout.TABLET_MIN_SIDE` ile aynı sayı:
  * yatay telefon, tablet ve TV bu eşiğin üstünde kalır.
@@ -131,6 +134,14 @@ export function useTvMetrics() {
 	/** Odak ölçeği — TV'de biraz daha belirgin olsun. */
 	const focusScale = isTV ? 1.08 : 1;
 
+	/** TV overscan için güvenli alan padding'i — %3 her kenardan. */
+	const tvSafeArea = isTV ? {
+		paddingTop: height * TV_SAFE_AREA_PERCENT,
+		paddingBottom: height * TV_SAFE_AREA_PERCENT,
+		paddingLeft: width * TV_SAFE_AREA_PERCENT,
+		paddingRight: width * TV_SAFE_AREA_PERCENT,
+	} : {};
+
 	return {
 		isTV,
 		scale,
@@ -144,6 +155,7 @@ export function useTvMetrics() {
 		contentMaxWidth,
 		textMaxWidth,
 		focusScale,
+		tvSafeArea,
 	};
 }
 

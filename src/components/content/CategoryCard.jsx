@@ -32,6 +32,7 @@
  * değişimi outline/clip-path'i geçersiz kılar ve gölge katmanını yeniden
  * rasterize eder; kumandaya her basışta bunu yapmak geçişleri takılı kılar.
  * Border + ölçek aynı görünümü GPU'da neredeyse bedava verir.
+ * Reanimated worklet ile elevation/border/scale UI thread'de animasyon.
  */
 
 import { FontFamily, Palette } from "@/constants/theme";
@@ -47,6 +48,13 @@ import {
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import { memo } from "react";
+import Animated, {
+	useSharedValue,
+	useAnimatedStyle,
+	withSpring,
+	interpolate,
+	interpolateColor,
+} from "react-native-reanimated";
 import { StyleSheet, Text, View } from "react-native";
 
 /** Ana sayfa yatay satırının sabit kart genişliği. */
@@ -97,6 +105,10 @@ export function gridCardStride(width, gap) {
 	return width / CARD_POSTER_RATIO + CARD_GRID_TEXT_BLOCK + gap;
 }
 
+// Netflix tarzı spring konfigürasyonu
+const FOCUS_SPRING = { damping: 18, stiffness: 200, mass: 0.8 };
+const BLUR_SPRING = { damping: 22, stiffness: 160, mass: 0.8 };
+
 function CategoryCard({
 	item,
 	/** "row" (ana sayfa) | "grid" (kategori sayfası) */
@@ -122,6 +134,9 @@ function CategoryCard({
 	const lang = languageOf(item);
 	const year = isRow ? null : yearOf(item);
 
+	/** Reanimated shared values — UI thread'de animasyon */
+	const focusProgress = useSharedValue(0);
+
 	/**
 	 * Bölüm kartı mı? (Son Bölümler kategorisi)
 	 *
@@ -136,94 +151,137 @@ function CategoryCard({
 
 	const cardWidth = isRow ? ROW_CARD_WIDTH : width;
 
+	// Animated styles for focus — UI thread'de çalışır
+	const animatedCardStyle = useAnimatedStyle(() => {
+		const scale = interpolate(focusProgress.value, [0, 1], [1, 1.06]);
+		return {
+			transform: [{ scale }],
+			zIndex: focusProgress.value > 0 ? 10 : 1,
+		};
+	});
+
+	const animatedPosterStyle = useAnimatedStyle(() => {
+		const borderWidth = interpolate(focusProgress.value, [0, 1], [1, 2.5]);
+		const borderColor = interpolateColor(
+			focusProgress.value,
+			[0, 1],
+			["rgba(70, 69, 84, 0.6)", Palette.primary]
+		);
+		const shadowOpacity = interpolate(focusProgress.value, [0, 1], [0, 0.6]);
+		const shadowRadius = interpolate(focusProgress.value, [0, 1], [0, 12]);
+		return {
+			borderWidth,
+			borderColor,
+			shadowColor: Palette.primary,
+			shadowOffset: { width: 0, height: 0 },
+			shadowOpacity,
+			shadowRadius,
+		};
+	});
+
+	const animatedTitleStyle = useAnimatedStyle(() => {
+		const color = interpolateColor(
+			focusProgress.value,
+			[0, 1],
+			[Palette.onSurface, Palette.primary]
+		);
+		return { color };
+	});
+
 	return (
-		<TVPressable
-			style={[styles.card, { width: cardWidth }]}
-			focusedStyle={styles.cardFocused}
-			onPress={onPress}
-			onLongPress={onLongPress}
-			onFocus={onFocus}
-			onBlur={onBlur}
-			accessibilityLabel={[title, year].filter(Boolean).join(", ")}>
-			{({ focused }) => (
-				<View>
-					<View
-						style={[
-							styles.poster,
-							focused && styles.posterFocused,
-						]}>
-						<Image
-							source={{ uri: posterUri }}
-							style={styles.posterImage}
-							contentFit="cover"
-							contentPosition="center"
-							// Sanallaştırılmış listede her kart için crossfade
-							// çalıştırmak decode animasyonu kuyruğunu dolduruyor.
-							// `recyclingKey` Glide'ın view-recycling davranışını
-							// tetikliyor — CloudStream'in sharedPool mantığının karşılığı.
-							recyclingKey={posterUri}
-							transition={0}
-							cachePolicy="memory-disk"
-						/>
-
-						{/* Alt kenar karartması: rozetler ve metin okunur kalsın. */}
-						<View style={styles.posterScrim} pointerEvents="none" />
-
-						{rating ? (
-							<View style={styles.ratingBadge} pointerEvents="none">
-								<Ionicons
-									name="star"
-									size={10}
-									color={Palette.tertiary}
-								/>
-								<Text style={styles.ratingText}>{rating}</Text>
-							</View>
-						) : null}
-
-						{lang ? (
-							<LanguageBadge
-								language={lang}
-								size="small"
-								style={styles.langBadge}
-								textStyle={styles.langBadgeText}
+		<Animated.View style={animatedCardStyle}>
+			<TVPressable
+				style={[styles.card, { width: cardWidth }]}
+				focusedStyle={null} // Animated style kullanıyoruz, TVPressable scale/border yapmasın
+				onPress={onPress}
+				onLongPress={onLongPress}
+				onFocus={() => {
+					focusProgress.value = withSpring(1, FOCUS_SPRING);
+					onFocus?.();
+				}}
+				onBlur={() => {
+					focusProgress.value = withSpring(0, BLUR_SPRING);
+					onBlur?.();
+				}}
+				accessibilityLabel={[title, year].filter(Boolean).join(", ")}>
+				{({ focused, pressed }) => (
+					<View>
+						<Animated.View
+							style={[
+								styles.poster,
+								animatedPosterStyle,
+							]}>
+							<Image
+								source={{ uri: posterUri }}
+								style={styles.posterImage}
+								contentFit="cover"
+								contentPosition="center"
+								// Sanallaştırılmış listede her kart için crossfade
+								// çalıştırmak decode animasyonu kuyruğunu dolduruyor.
+								// `recyclingKey` Glide'ın view-recycling davranışını
+								// tetikliyor — CloudStream'in sharedPool mantığının karşılığı.
+								recyclingKey={posterUri}
+								transition={0}
+								cachePolicy="memory-disk"
 							/>
-						) : null}
+
+							{/* Alt kenar karartması: rozetler ve metin okunur kalsın. */}
+							<View style={styles.posterScrim} pointerEvents="none" />
+
+							{rating ? (
+								<View style={styles.ratingBadge} pointerEvents="none">
+									<Ionicons
+										name="star"
+										size={10}
+										color={Palette.tertiary}
+									/>
+									<Text style={styles.ratingText}>{rating}</Text>
+								</View>
+							) : null}
+
+							{lang ? (
+								<LanguageBadge
+									language={lang}
+									size="small"
+									style={styles.langBadge}
+									textStyle={styles.langBadgeText}
+								/>
+							) : null}
+						</Animated.View>
+
+						<Animated.View style={styles.title}>
+							<Animated.Text
+								style={animatedTitleStyle}
+								numberOfLines={1}>
+								{title}
+							</Animated.Text>
+						</Animated.View>
+
+						{/*
+					 * ⚠️ SORUN 2 — "Izgara satırları yüklendikçe ekran atlıyor".
+					 *
+					 * Kategori sayfasındaki `FlatList` sabit adımlı
+					 * `getItemLayout` kullanıyor (TV'de ölçüm atlamak için
+					 * şart). Bu, ancak TÜM kartlar aynı yükseklikteyse doğrudur.
+					 * Yılı olmayan kartta yıl satırı hiç çizilmediği için
+					 * o satır 12px daha kısa oluyor, `getItemLayout` yanlış
+					 * ofset üretiyor ve yeni sayfa geldiğinde liste kayıyordu.
+					 *
+					 * Çözüm: yıl satırı DAIMA yer ayırır; veri yoksa boş
+					 * (saydam) bir satır basılır. Görsel değişmez, yükseklik
+					 * sabitlenir.
+					 */}
+						<View style={styles.subtitle}>
+							<Text
+								style={ep ? styles.subtitleEpisode : undefined}
+								numberOfLines={1}>
+								{subtitle || " "}
+							</Text>
+						</View>
 					</View>
-
-					<Text
-						style={[
-							styles.title,
-							focused && styles.titleFocused,
-						]}
-						numberOfLines={1}>
-						{title}
-					</Text>
-
-					{/*
-				 * ⚠️ SORUN 2 — "Izgara satırları yüklendikçe ekran atlıyor".
-				 *
-				 * Kategori sayfasındaki `FlatList` sabit adımlı
-				 * `getItemLayout` kullanıyor (TV'de ölçüm atlamak için
-				 * şart). Bu, ancak TÜM kartlar aynı yükseklikteyse doğrudur.
-				 * Yılı olmayan kartta yıl satırı hiç çizilmediği için
-				 * o satır 12px daha kısa oluyor, `getItemLayout` yanlış
-				 * ofset üretiyor ve yeni sayfa geldiğinde liste kayıyordu.
-				 *
-				 * Çözüm: yıl satırı DAIMA yer ayırır; veri yoksa boş
-				 * (saydam) bir satır basılır. Görsel değişmez, yükseklik
-				 * sabitlenir.
-				 */}
-					<Text
-						style={[
-							styles.subtitle,
-							ep && styles.subtitleEpisode,
-						]}
-						numberOfLines={1}>
-						{subtitle || " "}
-					</Text>
-				</View>
-			)}
-		</TVPressable>
+				)}
+			</TVPressable>
+		</Animated.View>
 	);
 }
 
@@ -238,11 +296,16 @@ const styles = StyleSheet.create({
 	card: {
 		// genişlik dışarıdan verilir
 	},
+	// Animated style'lar transform, elevation, shadow, border'ı yönetiyor
+	// Bu cardFocused sadece fallback (non-TV veya Reanimated çalışmadığında)
 	cardFocused: {
-		// zIndex kaldırıldı: kardeş sıralamasını değiştirmek odak başına ayrı
-		// bir commit demek. Ölçek + listedeki boşluk sayesinde kart komşusunun
-		// altına girmez, görsel olarak da yeterince belirgin.
-		transform: [{ scale: 1.06 }],
+		transform: [{ scale: 1.08 }],
+		shadowColor: Palette.primary,
+		shadowOffset: { width: 0, height: 0 },
+		shadowOpacity: 0.5,
+		shadowRadius: 12,
+		elevation: 6,
+		zIndex: 1,
 	},
 	poster: {
 		width: "100%",
@@ -256,8 +319,10 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		borderColor: "rgba(70, 69, 84, 0.6)",
 	},
+	// Animated poster style borderWidth/borderColor yönetiyor
 	posterFocused: {
 		borderColor: Palette.primary,
+		borderWidth: 3,
 	},
 	posterImage: {
 		width: "100%",
@@ -314,6 +379,7 @@ const styles = StyleSheet.create({
 		marginTop: CARD_TITLE_MARGIN_TOP,
 		letterSpacing: -0.1,
 	},
+	// Animated title style color yönetiyor
 	titleFocused: {
 		color: Palette.primary,
 	},

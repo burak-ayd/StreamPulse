@@ -155,6 +155,56 @@ export function smartImageUri(uri) {
 	return prefix + TMDB_SIZES[target] + suffix;
 }
 
+/**
+ * Kart görseli için hedef piksel genişliğine göre uygun TMDB boyutu
+ * seçer / özel CDN'leri küçültür.
+ *
+ * - TMDB: `targetPx` piksel genişliğine en yakın *küçük* TMDB boyutunu
+ *   seçer (w92, w154, w185, w342, w500...). Mevcut URL'deki boyuttan
+ *   daha büyük bir boyut ASLA seçmez (upscale yok).
+ * - hdfilmcehennemi `@2x.webp`: `targetPx` < 400 ise `@2x.` kısmını
+ *   atar (1x versiyonu) — 2x görseller 2× decode maliyeti getirirdi.
+ * - Diğer CDN'ler: dokunmaz.
+ *
+ * @param {string} uri
+ * @param {number} targetPx  hedef piksel genişlik (ör. kartGenişliği * PixelRatio)
+ * @returns {string}
+ */
+export function cardImageUri(uri, targetPx) {
+	if (typeof uri !== "string" || uri.length === 0) return uri;
+
+	// TMDB URL'si
+	const tmdbMatch = uri.match(
+		/^(https:\/\/image\.tmdb\.org\/t\/p\/)([^/]+)(\/.+)$/,
+	);
+	if (tmdbMatch) {
+		const [, prefix, size, suffix] = tmdbMatch;
+		const idx = TMDB_SIZES.indexOf(size);
+		if (idx === -1) return uri;
+
+		// TMDB boyutları piksel genişliği (approx): w92, w154, w185, w342, w500...
+		// En küçük ≥ targetPx olanı seç ama mevcut indeksten büyüme.
+		for (let i = 0; i < TMDB_SIZES.length && i <= idx; i++) {
+			const s = TMDB_SIZES[i];
+			const px = parseInt(s.slice(1), 10); // "w342" → 342
+			if (Number.isFinite(px) && px >= targetPx) {
+				if (i === idx) return uri; // zaten o boyutta
+				return prefix + s + suffix;
+			}
+		}
+		// Hepsi küçükse mevcut boyutu kullan (en büyük ≤ idx)
+		return prefix + TMDB_SIZES[idx] + suffix;
+	}
+
+	// hdfilmcehennemi @2x → 1x (targetPx küçükse)
+	if (targetPx < 400) {
+		const at2x = uri.replace(/@2x\./, ".");
+		if (at2x !== uri) return at2x;
+	}
+
+	return uri;
+}
+
 /** Küçük kartlar (liste satırı, küçük kapak) için düşük kalite sınırı. */
 export function isLowQuality() {
 	return quality === "low";

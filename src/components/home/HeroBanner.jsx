@@ -2,6 +2,7 @@ import LanguageBadge from "@/components/common/LanguageBadge";
 import RozetNokta from "@/components/common/RozetNokta";
 import TVPressable from "@/components/common/TVPressable";
 import { useAppUpdate } from "@/context/AppUpdateContext";
+import { useTVFocus } from "@/context/TVFocusContext";
 import {
 	SkeletonBlock,
 	SkeletonLine,
@@ -13,8 +14,8 @@ import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState } from "react";
-import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Platform, StyleSheet, Text, View, useWindowDimensions, findNodeHandle } from "react-native";
 import { okunmamisSayisiGetir, rozetAbone } from "@/services/bildirimApi";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -65,6 +66,12 @@ export default function HeroBanner({
 	 * banner kapandığında kullanıcı yön tuşlarıyla hero'ya zaten geçebilir.
 	 */
 	const { bannerVisible } = useAppUpdate();
+	const { registerFirstContentView, sideRailViewTag } = useTVFocus();
+	// Local state to trigger re-render when sideRailViewTag becomes available
+	const [sideRailTag, setSideRailTag] = useState(sideRailViewTag);
+	useEffect(() => {
+		if (sideRailViewTag != null) setSideRailTag(sideRailViewTag);
+	}, [sideRailViewTag]);
 
 	/*
 	 * Okunmamış bildirim sayacı — zilin rozet değeri. Serviste modül
@@ -236,6 +243,28 @@ export default function HeroBanner({
 		</View>
 	);
 
+	const playButtonRef = useRef(null);
+
+	// TV: oynat düğmesini "ilk içerik görünümü" olarak kaydet — yan ray SOL navigasyonu için
+	useEffect(() => {
+		if (!Platform.isTV || skeleton || bannerVisible) return;
+		if (playButtonRef.current) {
+			const tag = findNodeHandle(playButtonRef.current);
+			if (tag != null) registerFirstContentView(tag);
+		}
+	}, [skeleton, bannerVisible, registerFirstContentView]);
+
+	
+
+	// TV: ilk karede oynat düğmesine odak ver — Netflix/Disney+ davranışı
+	useEffect(() => {
+		if (!Platform.isTV || skeleton || bannerVisible) return;
+		const t = setTimeout(() => {
+			playButtonRef.current?.focus?.();
+		}, 50);
+		return () => clearTimeout(t);
+	}, [skeleton, bannerVisible]);
+
 	const renderContent = () => {
 		if (skeleton) {
 			return (
@@ -311,10 +340,13 @@ export default function HeroBanner({
 
 				<View style={styles.buttonsRow}>
 					<TVPressable
+						ref={playButtonRef}
 						autoFocus={!skeleton && !bannerVisible}
 						style={styles.playButton}
 						focusedStyle={styles.playButtonFocused}
-						onPress={onPlayPress}>
+						onPress={onPlayPress}
+						// İçerik alanından SOL basınca yan rayın logo'suna git
+						nextFocusLeft={sideRailTag}>
 						<Ionicons
 							name="play"
 							size={20}
@@ -586,7 +618,9 @@ const styles = StyleSheet.create({
 		borderColor: "transparent",
 	},
 	playButtonFocused: {
-		borderColor: Palette.primary,
+		// Butonun zemini `primaryContainer` (mor). `primary` halka mor
+		// üstünde kayboluyordu → beyaz halka TV mesafesinden net görünür.
+		borderColor: "#FFFFFF",
 	},
 	playButtonText: {
 		color: Palette.onPrimaryContainer,

@@ -56,7 +56,7 @@ function ChannelCard({ channel, onPress, width, onFocus, onBlur }) {
 	return (
 		<TVPressable
 			style={{ width }}
-			focusedStyle={styles.cardFocused}
+			focusedStyle={null}
 			onPress={onPress}
 			onFocus={onFocus}
 			onBlur={onBlur}

@@ -1,4 +1,4 @@
-import CategoryCard, {
+import {
 	CARD_POSTER_RATIO,
 	CARD_SUBTITLE_HEIGHT,
 	CARD_SUBTITLE_MARGIN_TOP,
@@ -9,22 +9,12 @@ import CategoryCard, {
 	ROW_LIST_PAD_H,
 } from "@/components/content/CategoryCard";
 import CategoryCardSkeleton from "@/components/content/CategoryCardSkeleton";
-import TVPressable from "@/components/common/TVPressable";
 import { SkeletonLine } from "@/components/common/Skeleton";
 import { FontFamily, Palette } from "@/constants/theme";
 import { fetchPlatformMainPage, getCachedCategoryMovies } from "@/services/api";
-import { contentKey } from "@/utils/contentMeta";
-import { useFocusCentering } from "@/hooks/useFocusCentering";
-import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import {
-	FlatList,
-	Platform,
-	StyleSheet,
-	Text,
-	View,
-	useWindowDimensions,
-} from "react-native";
+import { memo, useEffect, useMemo, useState } from "react";
+import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import CategoryRowBody from "./CategoryRowBody";
 
 /**
  * Ana sayfadaki tek kategori satırı (yatay kart dizisi).
@@ -37,8 +27,6 @@ import {
  * Kart geometrisi tek kaynaktan yönetilir (`CategoryCard`); hem stiller hem
  * `getItemLayout` aynı sabitleri kullanır, böylece ölçüm kaymaz.
  */
-const CARD_STRIDE = ROW_CARD_WIDTH + ROW_CARD_GAP;
-
 /**
  * Bir "row" kartının gerçek yüksekliği: 2:3 poster + başlık satırı +
  * alt satır (sezon/bölüm ya da yıl).
@@ -71,31 +59,7 @@ const ROW_CARD_HEIGHT =
  * Başlıktaki ok korunuyor: dokunmatik cihazlarda (ve TV'de satırın
  * sonuna kadar gidildiğinde) aynı işlevi görüyor.
  */
-/**
- * Satır sonu kutusunu işaretleyen özel değer.
- *
- * ⚠️ Neden `Symbol` ve neden bir dize DEĞİL: satırdaki gerçek
- * içerikler `contentKey` ile anahtarlanıyor ve bazı eklentiler başlığı
- * boş/işaretli gelebiliyor. `Symbol` hiçbir içerikle eşleşemez.
- */
-const SEE_ALL_SENTINEL = Symbol("see-all");
 
-function SeeAllTile({ onPress }) {
-	return (
-		<TVPressable
-			onPress={onPress}
-			style={styles.seeAllTile}
-			focusedStyle={styles.seeAllTileFocused}
-			accessibilityLabel="Kategorinin tümünü göster">
-			<View style={styles.seeAllIconWrap}>
-				<Ionicons name="arrow-forward" size={20} color={Palette.primary} />
-			</View>
-			<Text style={styles.seeAllText} numberOfLines={2}>
-				Tümünü İncele
-			</Text>
-		</TVPressable>
-	);
-}
 
 /**
  * memo: üst bileşen (ana sayfa) yeniden render olduğunda, prop'ları değişmeyen
@@ -105,6 +69,7 @@ function SeeAllTile({ onPress }) {
 function MovieCategorySection({
 	platformName,
 	category,
+	rowIndex,
 	onMoviePress,
 	onMovieLongPress,
 	onSeeAll,
@@ -121,6 +86,8 @@ function MovieCategorySection({
 	const [loading, setLoading] = useState(
 		!initialCached || initialCached.length === 0,
 	);
+
+	// useFocusCentering must be called unconditionally at the top level (hooks rules)
 
 	useEffect(() => {
 		let isMounted = true;
@@ -189,6 +156,10 @@ function MovieCategorySection({
 		return null;
 	}
 
+	const handleRowFocused = useCallback(() => {
+		onRowFocused?.(rowIndex);
+	}, [onRowFocused, rowIndex]);
+
 	return (
 		<CategoryRowBody
 			category={category}
@@ -196,152 +167,11 @@ function MovieCategorySection({
 			onMoviePress={onMoviePress}
 			onMovieLongPress={onMovieLongPress}
 			onSeeAll={onSeeAll}
-			onRowFocused={onRowFocused}
+			onRowFocused={handleRowFocused}
 			showSeeAllTile={showSeeAllTile}
 		/>
 	);
 }
-
-/**
- * Satır gövdesi — veri geldiğinde ayrı bileşen olarak render edilir ki
- * `useRef`/`useCallback` kancaları koşullu dönüşten sonra da
- * (yeniden render edilen) aynı sırada kalsın. Aksi hâlde "Hooks
- * sırası değişti" hatası oluşurdu.
- */
-function CategoryRowBody({
-	category,
-	movies,
-	onMoviePress,
-	onMovieLongPress,
-	onSeeAll,
-	onRowFocused,
-	showSeeAllTile,
-}) {
-	// React Compiler, `category?.name` okumasını `category.name` olarak
-	// çıkarıyor; elle yazılan bağımlılık listesiyle birebir örtüşmesi için
-	// isim bir kez burada çözülüyor.
-	const categoryName = category?.name;
-
-	const handleSeeAll = useCallback(() => {
-		onSeeAll?.(category);
-	}, [onSeeAll, category]);
-
-	/*
-	 * SORUN 5 — kart odaklandığında ekrana ORTALANIR.
-	 *
-	 * Android TV odaklanan öğeyi yalnızca EKRANA GETİRİR (en az kaydırma);
-	 * kart satırın kenarına yapışır ve kullanıcı "önce kaydı, sonra
-	 * seçti" diye tarif ettiği gibi yarım görünür.
-	 *
-	 * Ortak kanca (`useFocusCentering`) bu davranışı TEK yerden verir;
-	 * `horizontal: true` ile kart yatayda satırın ortasına sabitlenir.
-	 * Satırın kendisini dikeyde ortalamak `onRowFocused` ile ana sayfa
-	 * listesine bırakılır (o listenin `scrollToIndex`'i kendi ref'indedir).
-	 */
-	const {
-		listRef,
-		handleItemFocus: centerOnScreen,
-		onScrollToIndexFailed,
-		clearRetry,
-	} = useFocusCentering({ horizontal: true });
-
-	useEffect(() => clearRetry, [clearRetry]);
-
-	const handleCardFocus = useCallback(
-		(index) => {
-			centerOnScreen(index);
-			// Satırın kendisini dikeyde de ortala (ana sayfa listesi).
-			onRowFocused?.();
-		},
-		[centerOnScreen, onRowFocused],
-	);
-
-	const rowData = useMemo(
-		() => (showSeeAllTile ? [...movies, SEE_ALL_SENTINEL] : movies),
-		[movies, showSeeAllTile],
-	);
-
-	const keyExtractor = useCallback(
-		(item, index) =>
-			item === SEE_ALL_SENTINEL
-				? `see-all-${categoryName || "cat"}`
-				: `${contentKey(item, index)}-${categoryName || "movie"}`,
-		[categoryName],
-	);
-
-	const renderItem = useCallback(
-		({ item, index }) => {
-			if (item === SEE_ALL_SENTINEL) {
-				return <SeeAllTile onPress={handleSeeAll} />;
-			}
-			return (
-				<CategoryCard
-					item={item}
-					variant="row"
-					onPress={() => onMoviePress(item)}
-					onLongPress={() => onMovieLongPress?.(item)}
-					onFocus={() => handleCardFocus(index)}
-				/>
-			);
-		},
-		[handleCardFocus, handleSeeAll, onMovieLongPress, onMoviePress],
-	);
-
-	return (
-		<View style={styles.sectionContainer}>
-			{/* Section Header */}
-			<View style={styles.sectionHeader}>
-				<View style={styles.sectionTitleRow}>
-					<View style={styles.sectionDot} />
-					<Text style={styles.sectionTitle} numberOfLines={1}>
-						{category.name}
-					</Text>
-				</View>
-				<TVPressable
-					onPress={handleSeeAll}
-					style={styles.arrowButton}
-					focusedStyle={styles.arrowButtonFocused}
-					accessibilityLabel="Kategorinin tümünü göster">
-					<Text style={styles.arrowText}>Tümünü Gör</Text>
-					<Ionicons
-						name="chevron-forward"
-						size={16}
-						color={Palette.primary}
-					/>
-				</TVPressable>
-			</View>
-
-			{/* Horizontal List of Cards */}
-			<FlatList
-				ref={listRef}
-				data={rowData}
-				keyExtractor={keyExtractor}
-				horizontal
-				showsHorizontalScrollIndicator={false}
-				contentContainerStyle={styles.horizontalList}
-				initialNumToRender={6}
-				maxToRenderPerBatch={6}
-				windowSize={7}
-				/*
-				 * SORUN 2 — TV'de kırpma KAPALI.
-				 *
-				 * Android'de `removeClippedSubviews`, ekran dışındaki
-				 * hücreyi native tarafta detach eder. Odaklı kart
-				 * detach olursa kumanda odağı düşer ve Android listedeki
-				 * BAŞKA bir öğeye odaklanır — kullanıcının "seçili içerik
-				 * değişti" dediği davranışın bir parçası. Dokunmatik
-				 * cihazlarda kırpma bellek için değerli, TV'de değil.
-				 */
-				removeClippedSubviews={!Platform.isTV}
-				getItemLayout={getItemLayout}
-				onScrollToIndexFailed={onScrollToIndexFailed}
-				renderItem={renderItem}
-			/>
-		</View>
-	);
-}
-
-export default memo(MovieCategorySection);
 
 /**
  * Yüklenen kategori satırının iskeleti.
@@ -399,17 +229,7 @@ export function MovieCategoryRowSkeleton({ categoryName }) {
 	);
 }
 
-/**
- * Kart yüksekliği sabit olduğu için ölçüm hesabı tamamen atlanabilir.
- * `gap` içerik konteynerinde olduğu için adım uzunluğuna eklenmeli.
- */
-function getItemLayout(_data, index) {
-	return {
-		length: CARD_STRIDE,
-		offset: ROW_LIST_PAD_H + CARD_STRIDE * index,
-		index,
-	};
-}
+export default memo(MovieCategorySection);
 
 const styles = StyleSheet.create({
 	sectionContainer: {
@@ -461,6 +281,7 @@ const styles = StyleSheet.create({
 		color: Palette.primary,
 		fontFamily: FontFamily.medium,
 		fontSize: 13,
+		lineHeight: 18,
 	},
 	horizontalList: {
 		paddingHorizontal: ROW_LIST_PAD_H,
@@ -502,3 +323,4 @@ const styles = StyleSheet.create({
 		textAlign: "center",
 	},
 });
+

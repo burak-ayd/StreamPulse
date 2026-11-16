@@ -42,9 +42,10 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import TVPressable from "@/components/common/TVPressable";
+import { FlashList } from "@shopify/flash-list";
 import {
+	AppState,
 	BackHandler,
-	FlatList,
 	Platform,
 	RefreshControl,
 	ScrollView,
@@ -112,6 +113,25 @@ export default function Index() {
 		);
 		return () => sub.remove();
 	}, [isPlatformModalVisible, isPreviewModalVisible, isHeroListSelectVisible]);
+
+	/*
+	 * Temiz yeniden başlatma — listeyi en başa getir.
+	 *
+	 * Arka plandan öne gelindiğinde home listesi en başa kayar ve
+	 * scroll memory sıfırlanır (root layout de memory temizler; burada
+	 * da liste ofseti zorla 0 yapılır).
+	 */
+	useEffect(() => {
+		const subscription = AppState.addEventListener("change", (nextState) => {
+			if (AppState.currentState === "background" && nextState === "active") {
+				homeListRef.current?.scrollToOffset({
+					offset: 0,
+					animated: false,
+				});
+			}
+		});
+		return () => subscription.remove();
+	}, []);
 
 	const isNoneMode =
 		!selectedPlatform ||
@@ -652,12 +672,25 @@ export default function Index() {
 	 */
 	const {
 		listRef: homeListRef,
-		scrollRowToCenter: centerRowOnScreen,
+		handleItemFocus: centerRowOnScreen,
 		onScrollToIndexFailed: handleHomeScrollToIndexFailed,
+		onViewableItemsChanged,
+		viewabilityConfig,
 		clearRetry,
+		clearDebounce,
 	} = useFocusCentering();
 
 	useEffect(() => clearRetry, [clearRetry]);
+	useEffect(() => clearDebounce, [clearDebounce]);
+
+	const handleRowFocused = useCallback(
+		(rowIndex) => {
+			if (Platform.isTV) {
+				centerRowOnScreen(rowIndex);
+			}
+		},
+		[centerRowOnScreen],
+	);
 
 	// useCallback: kimliği her render'da değişirse FlatList tüm satırları
 	// yeniden render eder (TV'de kaydırma takılır).
@@ -666,6 +699,7 @@ export default function Index() {
 			<MovieCategorySection
 				platformName={selectedPlatform?.name}
 				category={category}
+				rowIndex={rowIndex}
 				onMoviePress={handleMoviePress}
 				onMovieLongPress={handleMovieLongPress}
 				onSeeAll={handleSeeAllCategory}
@@ -673,11 +707,7 @@ export default function Index() {
 				// odaklanabilir "Tümünü Gör" kutusu.
 				showSeeAllTile={isSideRail}
 				// Sorun 5: odaklanan satır ekranın ortasına taşınır.
-				onRowFocused={
-					Platform.isTV
-						? () => centerRowOnScreen(rowIndex)
-						: undefined
-				}
+				onRowFocused={handleRowFocused}
 			/>
 		),
 		[
@@ -686,7 +716,7 @@ export default function Index() {
 			handleMovieLongPress,
 			handleSeeAllCategory,
 			isSideRail,
-			centerRowOnScreen,
+			handleRowFocused,
 		],
 	);
 
@@ -743,13 +773,14 @@ export default function Index() {
 						}
 					/>
 				) : (
-					<FlatList
+					<FlashList
 						ref={homeListRef}
-						contentInsetAdjustmentBehavior="automatic"
 						data={visibleCategories}
 						keyExtractor={categoryKeyExtractor}
 						renderItem={renderCategoryRow}
 						onScrollToIndexFailed={handleHomeScrollToIndexFailed}
+						onViewableItemsChanged={onViewableItemsChanged}
+						viewabilityConfig={viewabilityConfig}
 						onScroll={rememberScroll.onScroll}
 						scrollEventThrottle={rememberScroll.scrollEventThrottle}
 						onContentSizeChange={() =>
@@ -758,15 +789,10 @@ export default function Index() {
 						ListFooterComponent={homeListFooter}
 						showsVerticalScrollIndicator={false}
 						contentContainerStyle={styles.scrollContent}
-						// TV: satır sanallaştırması. ScrollView tüm kategori satırlarını
-						// aynı anda mount ediyordu; CloudStream tek bir RecyclerView +
-						// paylaşımlı view pool kullanıyor. removeClippedSubviews TV'de
-						// false KALMALI: odaklı kartın detache olması kumanda odağını
-						// kaybettirir.
-						initialNumToRender={2}
-						maxToRenderPerBatch={2}
-						windowSize={3}
-						removeClippedSubviews={false}
+						// TV: FlashList native RecyclerView kullanıyor, removeClippedSubviews
+						// prop'u kaldırıldı — FlashList kendi view pool'unu yönetir.
+						estimatedItemSize={270}
+						drawDistance={Platform.isTV ? 800 : 350}
 						refreshControl={
 							<RefreshControl
 								refreshing={refreshing}

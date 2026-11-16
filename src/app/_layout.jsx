@@ -5,6 +5,7 @@ import { PlayerSettingsProvider } from "@/context/PlayerSettingsContext";
 import { DownloadProvider } from "@/context/DownloadContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AppUpdateProvider } from "@/context/AppUpdateContext";
+import { TVFocusProvider } from "@/context/TVFocusContext";
 import UpdateBanner from "@/components/update/UpdateBanner";
 import UpdateSheet from "@/components/update/UpdateSheet";
 import SplashOverlay from "@/components/splash/SplashOverlay";
@@ -18,11 +19,13 @@ import {
 	useFonts,
 } from "@expo-google-fonts/inter";
 import { Stack } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { Platform } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import { AppState, Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { startNetworkQualityWatch } from "@/utils/imageQuality";
 import { pushTepkisiBagla } from "@/services/pushApi";
+import { clearScreenMemory } from "@/utils/scrollMemory";
+import { useRouter } from "expo-router";
 
 /*
  * ⚠️ Bu import YALNIZCA isimler için değil: modül YÜKLENİRKEN
@@ -141,6 +144,43 @@ export default function RootLayout() {
 	}, []);
 
 	/*
+	 * ── Temiz yeniden başlatma (arka plan → ön plan) ───────────────
+	 *
+	 * Kullanıcı geri tuşuyla uygulamadan çıktığında Activity finish olur
+	 * ama süreç genelde canlı kalır. Tekrar açıldığında React state'i
+	 * (scroll memory, router stack) aynen kalıyor → kullanıcı "kaldığı
+	 * yerden" açılıyor. İstenen: **temiz açılış** (ana sayfa, en üstte).
+	 *
+	 * Yapılanlar:
+	 *   1. `clearScreenMemory()` — kaydırma ofsetlerini sıfırla.
+	 *   2. Router '/' değilse `router.replace("/")` — yığını sıfırla ve
+	 *      ana sayfaya dön (Stack mount koruma kalsın, sadece konum sıfırla).
+	 */
+	const router = useRouter();
+	const appStateRef = useRef(AppState.currentState);
+
+	useEffect(() => {
+		const subscription = AppState.addEventListener("change", (nextState) => {
+			const prev = appStateRef.current;
+			appStateRef.current = nextState;
+
+			// Arka plandan öne gelindiğinde
+			if (prev === "background" && nextState === "active") {
+				clearScreenMemory();
+				try {
+					// Zaten anasayfadaysak tekrar replace etme (gereksiz remount)
+					if (router.canGoBack()) {
+						router.replace("/");
+					}
+				} catch {
+					// Router henüz hazır değilse yut
+				}
+			}
+		});
+		return () => subscription.remove();
+	}, [router]);
+
+	/*
 	 * ── OTA güncellemeleri (expo-updates · custom server) ───────────
 	 *
 	 * APK yeniden derlemeye gerek bırakmayan JS sürüm akışı: kontrol
@@ -163,6 +203,7 @@ export default function RootLayout() {
 			{/* Uygulama geneli onay diyaloğu + toast katmanı. En dışta:
 			    aşağıdaki tüm provider'lar `useFeedback()` kullanabilsin. */}
 			<AppFeedbackProvider>
+			<TVFocusProvider>
 			<OtaUpdateWatcher />
 			{/*
 			 * AppUpdateProvider en dışta: hem banner hem ayarlar satırı
@@ -230,6 +271,7 @@ export default function RootLayout() {
 					</SyncProvider>
 				</AuthProvider>
 			</AppUpdateProvider>
+			</TVFocusProvider>
 			</AppFeedbackProvider>
 		</ThemeProvider>
 	);

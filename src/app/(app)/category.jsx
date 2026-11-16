@@ -44,10 +44,10 @@ import {
 	useRouter,
 } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FlashList } from "@shopify/flash-list";
 import {
 	ActivityIndicator,
 	BackHandler,
-	FlatList,
 	Platform,
 	StatusBar,
 	StyleSheet,
@@ -187,10 +187,14 @@ export default function CategoryScreen() {
 		listRef,
 		handleItemFocus: handleCardFocus,
 		onScrollToIndexFailed,
+		onViewableItemsChanged,
+		viewabilityConfig,
 		clearRetry,
+		clearDebounce,
 	} = useFocusCentering({ columns: layout.columns });
 
 	useEffect(() => clearRetry, [clearRetry]);
+	useEffect(() => clearDebounce, [clearDebounce]);
 
 	const handleBack = useCallback(() => {
 		if (router.canGoBack()) router.back();
@@ -713,10 +717,8 @@ export default function CategoryScreen() {
 						</Text>
 					</View>
 				) : (
-					<FlatList
+					<FlashList
 						ref={listRef}
-						contentInsetAdjustmentBehavior="automatic"
-						key={layout.columns}
 						data={items}
 						keyExtractor={keyExtractor}
 						renderItem={renderItem}
@@ -728,47 +730,23 @@ export default function CategoryScreen() {
 							styles.listContent,
 							{ rowGap: GAP },
 						]}
-						getItemLayout={getItemLayout}
 						onScrollToIndexFailed={onScrollToIndexFailed}
+						onViewableItemsChanged={onViewableItemsChanged}
+						viewabilityConfig={viewabilityConfig}
 						onScroll={rememberScroll.onScroll}
 						scrollEventThrottle={rememberScroll.scrollEventThrottle}
 						onContentSizeChange={() =>
 							rememberScroll.restoreOffset(listRef)
 						}
 						onEndReached={loadMore}
-						// Prefetch eşiği biraz düşürüldü: 0.6 pratikte liste
-						// bittiğinden çok önce tetikleniyor ve kullanıcı
-						// kaydırırken arka planda sürekli yeni sayfa
-						// isteği uçuyordu. 0.4 aynı işi daha az istekle yapar.
-						onEndReachedThreshold={0.4}
+						// FlashList native view pool yönetiyor, removeClippedSubviews/windowSize gerekmez
+						estimatedItemSize={gridCardStride(cardWidth, GAP)}
+						overrideItemLayout={(layout) => {
+							layout.size = gridCardStride(cardWidth, GAP);
+						}}
+						drawDistance={Platform.isTV ? 600 : 250}
 						ListFooterComponent={footer}
 						showsVerticalScrollIndicator={false}
-						initialNumToRender={12}
-						maxToRenderPerBatch={8}
-						/*
-						 * SORUN 2 — `windowSize` büyütüldü.
-						 *
-						 * 5 pencerelik kısa pencere, TV'de kumandayla hızlı
-						 * gezinirken ölçülmemiş satırların boş kalmasına
-						 * ("içerik değişti" hissi) yol açıyordu. 9 pencerenin
-						 * maliyeti ihmal edilebilir, kazanımı belirgin.
-						 */
-						windowSize={9}
-						/*
-						 * SORUN 2 — `removeClippedSubviews` KAPALI.
-						 *
-						 * Android'de kırpma, ekran dışına çıkan hücreyi
-						 * native tarafta DETACH eder. Odaklı kart detache
-						 * olursa kumanda odağı düşer ve Android listedeki
-						 * başka bir öğeye odaklanır — kullanıcının gördüğü
-						 * tam olarak "seçilmiş içerik kendiliğinden değişti"
-						 * davranışıdır.
-						 *
-						 * TV'de zaten kesinlikle kapatılmalıydı; ızgara
-						 * hücrelerinin bellek maliyeti makul olduğu için
-						 * telefon/ tablette de kapalı bırakıldı.
-						 */
-						removeClippedSubviews={false}
 					/>
 				)}
 			</SafeAreaView>
@@ -856,8 +834,11 @@ const styles = StyleSheet.create({
 
 	listContent: {
 		paddingHorizontal: GUTTER,
-		paddingTop: LIST_PAD_TOP,
-		paddingBottom: 40,
+		// Izgara kartı odakta 1.08× büyüyor (~40px üst/alt). Liste
+		// kırpma yaptığı için pay bu büyümeyi karşılamalı; aksi hâlde
+		// kartın üstü başlığın/üst boşluğun altına kalıyordu.
+		paddingTop: 24,
+		paddingBottom: 50,
 	},
 	row: { gap: GAP },
 

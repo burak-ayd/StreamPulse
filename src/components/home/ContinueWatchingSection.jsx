@@ -1,24 +1,20 @@
-import ContinueWatchingCard, {
-	CONTINUE_CARD_WIDTH,
-} from "@/components/content/ContinueWatchingCard";
+import ContinueWatchingCard from "@/components/content/ContinueWatchingCard";
 import TVPressable from "@/components/common/TVPressable";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { useCallback, useEffect } from "react";
-import { FlatList, Platform, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useRef } from "react";
+import { FlashList } from "@shopify/flash-list";
+import { Platform, StyleSheet, Text, View } from "react-native";
 
 const CARD_GAP = 12;
 const LIST_PAD_H = 16;
-const CARD_STRIDE = CONTINUE_CARD_WIDTH + CARD_GAP;
+// Continue watching kart genişliği (yaklaşık 200px) + gap
+const ESTIMATED_CONTINUE_CARD_SIZE = 220;
 
-/** Kart yüksekliği sabit → dinamik ölçümü atla. */
-function getItemLayout(_data, index) {
-	return {
-		length: CARD_STRIDE,
-		offset: LIST_PAD_H + CARD_STRIDE * index,
-		index,
-	};
+/** FlashList v2 `gap` desteklemez — kart aralığı separator ile verilir. */
+function ItemSeparator() {
+	return <View style={styles.itemSeparator} />;
 }
 
 export default function ContinueWatchingSection({
@@ -29,28 +25,55 @@ export default function ContinueWatchingSection({
 	onSeeAllPress,
 	onRowFocused,
 }) {
-	/*
-	 * SORUN 5 — kart odaklanınca satırın yatay ORTASINA taşınır.
-	 *
-	 * Android TV odaklanan öğeyi yalnızca ekrana getirir; kart satırın
-	 * kenarına yapışıp başlığı yarım görünür. Ortak kanca bu davranışı
-	 * `category.jsx` / `MovieCategorySection.jsx` ile aynı yerden verir.
-	 */
+	const rowFocusTimerRef = useRef(null);
+
 	const {
 		listRef,
 		handleItemFocus: centerOnScreen,
 		onScrollToIndexFailed,
+		onViewableItemsChanged,
+		viewabilityConfig,
 		clearRetry,
 	} = useFocusCentering({ horizontal: true });
 
-	useEffect(() => clearRetry, [clearRetry]);
+	useEffect(() => {
+		return () => {
+			clearRetry();
+			if (rowFocusTimerRef.current) {
+				clearTimeout(rowFocusTimerRef.current);
+			}
+		};
+	}, [clearRetry]);
 
 	const handleItemFocus = useCallback(
 		(index) => {
 			centerOnScreen(index);
-			onRowFocused?.();
+			if (rowFocusTimerRef.current) {
+				clearTimeout(rowFocusTimerRef.current);
+			}
+			rowFocusTimerRef.current = setTimeout(() => {
+				onRowFocused?.();
+			}, 90);
 		},
 		[centerOnScreen, onRowFocused],
+	);
+
+	const keyExtractor = useCallback(
+		(item, index) => item.id || item.url || `continue-${index}`,
+		[],
+	);
+
+	const renderItem = useCallback(
+		({ item, index }) => (
+			<ContinueWatchingCard
+				item={item}
+				onPress={onItemPress}
+				onLongPress={onItemLongPress}
+				onRemove={onRemoveItem}
+				onFocus={() => handleItemFocus(index)}
+			/>
+		),
+		[onItemPress, onItemLongPress, onRemoveItem, handleItemFocus],
 	);
 
 	if (!items || items.length === 0) {
@@ -78,32 +101,20 @@ export default function ContinueWatchingSection({
 			</View>
 
 			{/* Horizontal List */}
-			<FlatList
+			<FlashList
 				ref={listRef}
 				data={items}
-				keyExtractor={(item, index) =>
-					item.id || item.url || `continue-${index}`
-				}
+				keyExtractor={keyExtractor}
 				horizontal
 				showsHorizontalScrollIndicator={false}
 				contentContainerStyle={styles.listContent}
-				initialNumToRender={6}
-				maxToRenderPerBatch={6}
-				windowSize={7}
-				// SORUN 2: TV'de kırpma, ekran dışındaki kartı detach
-				// edip odaklı kartın odağını düşürüyordu.
-				removeClippedSubviews={!Platform.isTV}
-				getItemLayout={getItemLayout}
+				ItemSeparatorComponent={ItemSeparator}
+				estimatedItemSize={ESTIMATED_CONTINUE_CARD_SIZE}
+				drawDistance={Platform.isTV ? 600 : 250}
 				onScrollToIndexFailed={onScrollToIndexFailed}
-				renderItem={({ item, index }) => (
-					<ContinueWatchingCard
-						item={item}
-						onPress={onItemPress}
-						onLongPress={onItemLongPress}
-						onRemove={onRemoveItem}
-						onFocus={() => handleItemFocus(index)}
-					/>
-				)}
+				onViewableItemsChanged={onViewableItemsChanged}
+				viewabilityConfig={viewabilityConfig}
+				renderItem={renderItem}
 			/>
 		</View>
 	);
@@ -148,7 +159,11 @@ const styles = StyleSheet.create({
 	},
 	listContent: {
 		paddingHorizontal: LIST_PAD_H,
-		gap: CARD_GAP,
-		paddingVertical: 4,
+		// Odakta kart 1.06× büyüyor; liste kendi sınırlarına kırptığı için
+		// pay bu büyümeyi karşılamalı.
+		paddingVertical: 14,
+	},
+	itemSeparator: {
+		width: CARD_GAP,
 	},
 });
