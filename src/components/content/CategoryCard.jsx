@@ -45,17 +45,11 @@ import {
 	ratingOf,
 	yearOf,
 } from "@/utils/contentMeta";
+import { cardImageUri, POSTER_QUALITY_FACTOR } from "@/utils/imageQuality";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import { memo } from "react";
-import Animated, {
-	useSharedValue,
-	useAnimatedStyle,
-	withSpring,
-	interpolate,
-	interpolateColor,
-} from "react-native-reanimated";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, PixelRatio } from "react-native";
 
 /** Ana sayfa yatay satırının sabit kart genişliği. */
 export const ROW_CARD_WIDTH = 144;
@@ -106,9 +100,6 @@ export function gridCardStride(width, gap) {
 }
 
 // Netflix tarzı spring konfigürasyonu
-const FOCUS_SPRING = { damping: 18, stiffness: 200, mass: 0.8 };
-const BLUR_SPRING = { damping: 22, stiffness: 160, mass: 0.8 };
-
 function CategoryCard({
 	item,
 	/** "row" (ana sayfa) | "grid" (kategori sayfası) */
@@ -129,13 +120,10 @@ function CategoryCard({
 	onBlur,
 }) {
 	const isRow = variant === "row";
-	const posterUri = posterOf(item);
+	const rawPosterUri = posterOf(item);
 	const rating = ratingOf(item);
 	const lang = languageOf(item);
 	const year = isRow ? null : yearOf(item);
-
-	/** Reanimated shared values — UI thread'de animasyon */
-	const focusProgress = useSharedValue(0);
 
 	/**
 	 * Bölüm kartı mı? (Son Bölümler kategorisi)
@@ -151,111 +139,74 @@ function CategoryCard({
 
 	const cardWidth = isRow ? ROW_CARD_WIDTH : width;
 
-	// Animated styles for focus — UI thread'de çalışır
-	const animatedCardStyle = useAnimatedStyle(() => {
-		const scale = interpolate(focusProgress.value, [0, 1], [1, 1.06]);
-		return {
-			transform: [{ scale }],
-			zIndex: focusProgress.value > 0 ? 10 : 1,
-		};
-	});
-
-	const animatedPosterStyle = useAnimatedStyle(() => {
-		const borderWidth = interpolate(focusProgress.value, [0, 1], [1, 2.5]);
-		const borderColor = interpolateColor(
-			focusProgress.value,
-			[0, 1],
-			["rgba(70, 69, 84, 0.6)", Palette.primary]
-		);
-		const shadowOpacity = interpolate(focusProgress.value, [0, 1], [0, 0.6]);
-		const shadowRadius = interpolate(focusProgress.value, [0, 1], [0, 12]);
-		return {
-			borderWidth,
-			borderColor,
-			shadowColor: Palette.primary,
-			shadowOffset: { width: 0, height: 0 },
-			shadowOpacity,
-			shadowRadius,
-		};
-	});
-
-	const animatedTitleStyle = useAnimatedStyle(() => {
-		const color = interpolateColor(
-			focusProgress.value,
-			[0, 1],
-			[Palette.onSurface, Palette.primary]
-		);
-		return { color };
-	});
+	// Posteri kartın ekranda kapladığı piksel genişliğine indir: decode
+	// maliyeti ve bellek düşer (TMDB w342 → w185, hdfc @2x → 1x).
+	const posterUri = cardImageUri(
+		rawPosterUri,
+		cardWidth * PixelRatio.get() * POSTER_QUALITY_FACTOR,
+	);
 
 	return (
-		<Animated.View style={animatedCardStyle}>
-			<TVPressable
-				style={[styles.card, { width: cardWidth }]}
-				focusedStyle={null} // Animated style kullanıyoruz, TVPressable scale/border yapmasın
-				onPress={onPress}
-				onLongPress={onLongPress}
-				onFocus={() => {
-					focusProgress.value = withSpring(1, FOCUS_SPRING);
-					onFocus?.();
-				}}
-				onBlur={() => {
-					focusProgress.value = withSpring(0, BLUR_SPRING);
-					onBlur?.();
-				}}
-				accessibilityLabel={[title, year].filter(Boolean).join(", ")}>
-				{({ focused, pressed }) => (
-					<View>
-						<Animated.View
-							style={[
-								styles.poster,
-								animatedPosterStyle,
-							]}>
-							<Image
-								source={{ uri: posterUri }}
-								style={styles.posterImage}
-								contentFit="cover"
-								contentPosition="center"
-								// Sanallaştırılmış listede her kart için crossfade
-								// çalıştırmak decode animasyonu kuyruğunu dolduruyor.
-								// `recyclingKey` Glide'ın view-recycling davranışını
-								// tetikliyor — CloudStream'in sharedPool mantığının karşılığı.
-								recyclingKey={posterUri}
-								transition={0}
-								cachePolicy="memory-disk"
-							/>
+		<TVPressable
+			style={({ focused }) => [
+				styles.card,
+				{ width: cardWidth },
+				focused && (isRow ? styles.cardFocused : styles.cardFocusedGrid),
+			]}
+			focusedStyle={null}
+			onPress={onPress}
+			onLongPress={onLongPress}
+			onFocus={onFocus}
+			onBlur={onBlur}
+			accessibilityLabel={[title, year].filter(Boolean).join(", ")}>
+			{({ focused }) => (
+				<View>
+					<View style={[styles.poster, focused && styles.posterFocused]}>
+						<Image
+							source={{ uri: posterUri }}
+							style={styles.posterImage}
+							contentFit="cover"
+							contentPosition="center"
+							// Sanallaştırılmış listede her kart için crossfade
+							// çalıştırmak decode animasyonu kuyruğunu dolduruyor.
+							// `recyclingKey` Glide'ın view-recycling davranışını
+							// tetikliyor — CloudStream'in sharedPool mantığının karşılığı.
+							recyclingKey={posterUri}
+							transition={0}
+							cachePolicy="memory-disk"
+						/>
 
-							{/* Alt kenar karartması: rozetler ve metin okunur kalsın. */}
-							<View style={styles.posterScrim} pointerEvents="none" />
+						{/* Alt kenar karartması: rozetler ve metin okunur kalsın. */}
+						<View style={styles.posterScrim} pointerEvents="none" />
 
-							{rating ? (
-								<View style={styles.ratingBadge} pointerEvents="none">
-									<Ionicons
-										name="star"
-										size={10}
-										color={Palette.tertiary}
-									/>
-									<Text style={styles.ratingText}>{rating}</Text>
-								</View>
-							) : null}
-
-							{lang ? (
-								<LanguageBadge
-									language={lang}
-									size="small"
-									style={styles.langBadge}
-									textStyle={styles.langBadgeText}
+						{rating ? (
+							<View style={styles.ratingBadge} pointerEvents="none">
+								<Ionicons
+									name="star"
+									size={10}
+									color={Palette.tertiary}
 								/>
-							) : null}
-						</Animated.View>
+								<Text style={styles.ratingText}>{rating}</Text>
+							</View>
+						) : null}
 
-						<Animated.View style={styles.title}>
-							<Animated.Text
-								style={animatedTitleStyle}
-								numberOfLines={1}>
-								{title}
-							</Animated.Text>
-						</Animated.View>
+						{lang ? (
+							<LanguageBadge
+								language={lang}
+								size="small"
+								style={styles.langBadge}
+								textStyle={styles.langBadgeText}
+							/>
+						) : null}
+					</View>
+
+					<View style={styles.title}>
+						<Text
+							style={[styles.titleText, focused && styles.titleFocused]}
+							numberOfLines={1}>
+							{title}
+						</Text>
+					</View>
 
 						{/*
 					 * ⚠️ SORUN 2 — "Izgara satırları yüklendikçe ekran atlıyor".
@@ -271,9 +222,9 @@ function CategoryCard({
 					 * (saydam) bir satır basılır. Görsel değişmez, yükseklik
 					 * sabitlenir.
 					 */}
-						<View style={styles.subtitle}>
+						<View style={styles.subtitleWrap}>
 							<Text
-								style={ep ? styles.subtitleEpisode : undefined}
+								style={[styles.subtitle, ep && styles.subtitleEpisode]}
 								numberOfLines={1}>
 								{subtitle || " "}
 							</Text>
@@ -281,7 +232,6 @@ function CategoryCard({
 					</View>
 				)}
 			</TVPressable>
-		</Animated.View>
 	);
 }
 
@@ -307,6 +257,14 @@ const styles = StyleSheet.create({
 		elevation: 6,
 		zIndex: 1,
 	},
+	/*
+	 * Izgarada ölçek YOK: komşu kart aralığı 10px, 1.08 ölçek kartı
+	 * komşusunun üstüne bindiriyordu ("kartlar iç içe geçmiş").
+	 * Odak göstergesi yalnız 3px halka.
+	 */
+	cardFocusedGrid: {
+		zIndex: 1,
+	},
 	poster: {
 		width: "100%",
 		// Ana sayfada 124×182 ≈ 2:3 idi; ızgara da 2:3. Tek oran kullanmak
@@ -316,13 +274,12 @@ const styles = StyleSheet.create({
 		overflow: "hidden",
 		backgroundColor: Palette.surfaceLow,
 		// Referans: `ring-1 ring-outline-variant/30`.
-		borderWidth: 1,
+		// Kalınlık SABİT 3px: odakta yalnız renk değişir (relayout yok).
+		borderWidth: 3,
 		borderColor: "rgba(70, 69, 84, 0.6)",
 	},
-	// Animated poster style borderWidth/borderColor yönetiyor
 	posterFocused: {
 		borderColor: Palette.primary,
-		borderWidth: 3,
 	},
 	posterImage: {
 		width: "100%",
@@ -372,14 +329,15 @@ const styles = StyleSheet.create({
 		letterSpacing: 0,
 	},
 	title: {
+		marginTop: CARD_TITLE_MARGIN_TOP,
+	},
+	titleText: {
 		color: Palette.onSurface,
 		fontFamily: FontFamily.semiBold,
 		fontSize: 14,
 		lineHeight: CARD_TITLE_HEIGHT,
-		marginTop: CARD_TITLE_MARGIN_TOP,
 		letterSpacing: -0.1,
 	},
-	// Animated title style color yönetiyor
 	titleFocused: {
 		color: Palette.primary,
 	},
@@ -388,13 +346,18 @@ const styles = StyleSheet.create({
 	 *
 	 * Satır HER ZAMAN yer ayırır (veri yoksa boş) — kart yüksekliği sabit
 	 * kalmalı, yoksa `getItemLayout` ofsetleri kayar (bkz. SORUN 2).
+	 *
+	 * ⚠️ Renk/font SATIRDA değil METİNDE: stil metne uygulanmazsa React
+	 * Native varsayılan siyahı kullanır ve koyu zeminde yıl okunmaz.
 	 */
+	subtitleWrap: {
+		marginTop: CARD_SUBTITLE_MARGIN_TOP,
+	},
 	subtitle: {
 		color: Palette.onSurfaceVariant,
 		fontFamily: FontFamily.regular,
 		fontSize: 12,
 		lineHeight: CARD_SUBTITLE_HEIGHT,
-		marginTop: CARD_SUBTITLE_MARGIN_TOP,
 	},
 	subtitleEpisode: {
 		color: Palette.primary,

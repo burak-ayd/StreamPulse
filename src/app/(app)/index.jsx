@@ -38,9 +38,10 @@ import BottomNavigation from "@components/BottomNavigation";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { useNavLayout } from "@/hooks/useNavLayout";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
+import { clearScreenMemory } from "@/utils/scrollMemory";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TVPressable from "@/components/common/TVPressable";
 import { FlashList } from "@shopify/flash-list";
 import {
@@ -117,18 +118,28 @@ export default function Index() {
 	/*
 	 * Temiz yeniden başlatma — listeyi en başa getir.
 	 *
-	 * Arka plandan öne gelindiğinde home listesi en başa kayar ve
-	 * scroll memory sıfırlanır (root layout de memory temizler; burada
-	 * da liste ofseti zorla 0 yapılır).
+	 * Kullanıcı geri tuşuyla çıkıp uygulamayı yeniden açtığında süreç
+	 * ayakta kalıyor: JS belleği (scroll memory) ve React state yaşıyor,
+	 * ekran "kaldığı yerden" açılıyordu. Arka plandan öne gelindiğinde
+	 * hem kaydırma belleği silinir hem liste 0'a çekilir.
+	 *
+	 * ⚠️ Önceki durum REF'te tutulur: `AppState.currentState` olay
+	 * gönderildiğinde çoktan yeni değere dönmüş oluyor, o yüzden
+	 * `currentState === "background"` koşulu hiç tutmuyordu.
 	 */
+	const appStateRef = useRef(AppState.currentState);
+
 	useEffect(() => {
 		const subscription = AppState.addEventListener("change", (nextState) => {
-			if (AppState.currentState === "background" && nextState === "active") {
-				homeListRef.current?.scrollToOffset({
-					offset: 0,
-					animated: false,
-				});
-			}
+			const prev = appStateRef.current;
+			appStateRef.current = nextState;
+			if (prev !== "background" || nextState !== "active") return;
+
+			clearScreenMemory();
+			homeListRef.current?.scrollToOffset({
+				offset: 0,
+				animated: false,
+			});
 		});
 		return () => subscription.remove();
 	}, []);

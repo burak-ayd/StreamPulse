@@ -1,7 +1,7 @@
 import TVPressable from "@/components/common/TVPressable";
 import { FontFamily, Palette } from "@/constants/theme";
 import { resolvePluginName } from "@/utils/storage";
-import { cardImageUri } from "@/utils/imageQuality";
+import { cardImageUri, POSTER_QUALITY_FACTOR } from "@/utils/imageQuality";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import { PixelRatio, StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -48,7 +48,10 @@ export default function ContinueWatchingCard({
 		item.thumbnail ||
 		"https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=60";
 	// Kart görselini ekranda kaplayacağı piksel genişliğine indir.
-	const posterUri = cardImageUri(rawPosterUri, CONTINUE_CARD_WIDTH * PixelRatio.get());
+	const posterUri = cardImageUri(
+		rawPosterUri,
+		CONTINUE_CARD_WIDTH * PixelRatio.get() * POSTER_QUALITY_FACTOR,
+	);
 
 	const isEpisode =
 		item.type === "episode" || Boolean(item.season || item.episode);
@@ -160,11 +163,6 @@ export default function ContinueWatchingCard({
 							{subtitle || " "}
 						</Text>
 					</View>
-
-					{/* Odak halkası: ölçümü değiştirmeden, yalnızca odakta. */}
-					{focused ? (
-						<View style={styles.focusRing} pointerEvents="none" />
-					) : null}
 				</View>
 			)}
 		</TVPressable>
@@ -177,16 +175,14 @@ const styles = StyleSheet.create({
 		borderRadius: 12,
 		backgroundColor: Palette.surfaceLow,
 		overflow: "hidden",
+		// Odak halkası kalınlığı SABİT; odakta yalnız rengi değişir
+		// (kalınlık değişimi relayout + geçişte takılma demek).
+		borderWidth: 3,
+		borderColor: "transparent",
 	},
 	cardFocused: {
 		// Ölçek, satırdaki boşluk sayesinde komşunun altına girmiyor.
 		transform: [{ scale: 1.06 }],
-	},
-	/** Odak halkası — mutlak konum: ölçüm/relayout yok, sadece draw. */
-	focusRing: {
-		...StyleSheet.absoluteFillObject,
-		borderRadius: 12,
-		borderWidth: 3,
 		borderColor: Palette.primary,
 	},
 	thumbnailWrapper: {

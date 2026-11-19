@@ -31,6 +31,8 @@ import {
 	revokeDevice as executeRevokeDevice,
 	schedulePush,
 	pushImmediately,
+	SYNC_GROUPS,
+	SYNCED_DOC_GROUPS,
 } from "@/services/sync";
 import { runMigrationIfNeeded } from "@/utils/migrate";
 import { subscribeStorage } from "@/utils/storageListener";
@@ -214,13 +216,18 @@ export function SyncProvider({ children }) {
 		// A) ANLIK kaydedilenler — kullanıcı tercihi değiştirdiği anda hesabına
 		//    yazılsın. Bunlar seyrek değişir (birkaç dokunuş), debounce'un
 		//    getireceği "birazdan olacak" gecikmesi gereksiz.
+		// Yalnızca eşitlenen belgelerin anahtarları tetikler; localde kalan
+		// ayarlar boşuna ağ turu açmasın (bkz. `SYNCED_DOC_GROUPS`).
+		const SYNCED_DOC_KEYS = SYNCED_DOC_GROUPS.map(
+			(group) => SYNC_GROUPS[group].key,
+		);
 		const IMMEDIATE_KEYS = [
 			"user_profile",                 // profil (avatar, ad, bio...)
 			"app_player_settings",          // oynatıcı / altyazı ayarları
 			"streampulse_plugin_visibility",   // eklenti görünürlüğü
 			"streampulse_category_visibility", // kategori görünürlüğü
 			"user_search_history",             // arama yapıldıkça eklenir
-		];
+		].filter((key) => SYNCED_DOC_KEYS.includes(key));
 
 		// B) DEBOUNCE'lu kaydedilenler — video oynatılırken ilerleme her saniye
 		//    değişir; her değişiklikte istek atmak bağlantıyı/pili yakar.

@@ -23,6 +23,8 @@ export const STORAGE_KEYS = {
 	DOWNLOADS: "streampulse_downloads_list",
 	// İndirme sistemi ayarları (bkz. download_feature_plan.md §2.1)
 	DOWNLOAD_SETTINGS: "app_download_settings",
+	// Düzen tercihleri: kategori ızgarasında sütun sayısı (Ayarlar → Düzen)
+	LAYOUT_SETTINGS: "app_layout_settings",
 	// Eklenti başına indirme tercihleri (bkz. download_feature_plan.md §2.2)
 	PLUGIN_DOWNLOAD_PREFS: "app_plugin_download_prefs",
 	CONTINUE_WATCHING: "user_continue_watching",
@@ -1295,6 +1297,61 @@ function clampRange(target, key, min, max) {
 			? Math.min(max, Math.max(min, Math.floor(v)))
 			: undefined;
 	}
+}
+
+/**
+ * ── DÜZEN TERCİHLERİ ──────────────────────────────────────────────
+ *
+ * Kategori sayfasında yan yana kaç kart gösterileceği. Ayarlar → Düzen
+ * modalından seçilir; `category.jsx` bu değeri okur.
+ *
+ * `0` = OTOMATİK: geniş ekranda (≥720dp) 6, dar ekranda 3 sütun — eski
+ * davranış. Diğer değerler kullanıcının açık seçimidir.
+ */
+export const LAYOUT_COLUMN_CHOICES = [0, 3, 4, 5, 6];
+
+export const DEFAULT_LAYOUT_SETTINGS = {
+	categoryColumns: 0,
+};
+
+export async function getLayoutSettings() {
+	try {
+		const data = await AsyncStorage.getItem(STORAGE_KEYS.LAYOUT_SETTINGS);
+		if (data) {
+			return { ...DEFAULT_LAYOUT_SETTINGS, ...JSON.parse(data) };
+		}
+		await AsyncStorage.setItem(
+			STORAGE_KEYS.LAYOUT_SETTINGS,
+			JSON.stringify(DEFAULT_LAYOUT_SETTINGS),
+		);
+		return DEFAULT_LAYOUT_SETTINGS;
+	} catch (error) {
+		console.error("Düzen ayarları okunurken hata:", error);
+		return DEFAULT_LAYOUT_SETTINGS;
+	}
+}
+
+export async function saveLayoutSettings(updates) {
+	return mutate(STORAGE_KEYS.LAYOUT_SETTINGS, async () => {
+		try {
+			const current = await getLayoutSettings();
+			const next = { ...current, ...updates };
+			const cols = Number(next.categoryColumns);
+			// Diskteki bozuk/eski bir kayıt geçerli seçeneğe çekilir.
+			next.categoryColumns = LAYOUT_COLUMN_CHOICES.includes(cols)
+				? cols
+				: DEFAULT_LAYOUT_SETTINGS.categoryColumns;
+			await AsyncStorage.setItem(
+				STORAGE_KEYS.LAYOUT_SETTINGS,
+				JSON.stringify(next),
+			);
+			notifyStorageChange(STORAGE_KEYS.LAYOUT_SETTINGS, next);
+			return next;
+		} catch (error) {
+			console.error("Düzen ayarları kaydedilirken hata:", error);
+			throw error;
+		}
+	});
 }
 
 /**
@@ -3034,6 +3091,10 @@ export default {
 	savePlayerSettings,
 	resetPlayerSettings,
 	DEFAULT_PLAYER_SETTINGS,
+	getLayoutSettings,
+	saveLayoutSettings,
+	DEFAULT_LAYOUT_SETTINGS,
+	LAYOUT_COLUMN_CHOICES,
 	getSelectedPlatform,
 	saveSelectedPlatform,
 	getDownloads,

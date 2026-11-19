@@ -114,7 +114,9 @@ export function useFocusCentering(options = {}) {
 	 * bölgesinde dengeli tutulmalıdır.
 	 */
 	const forwardAlign = horizontal ? 0.65 : 0.3;
-	const backwardAlign = horizontal ? 0.25 : 0.25;
+	// Yukarı/sola giderken hedef, görüş alanının "geri" kenarına yakın
+	// durmalı: dikeyde satır alt-%70'e, yatayda kart sol kenara yakın.
+	const backwardAlign = horizontal ? 0.25 : 0.7;
 
 	/**
 	 * Geçici zamanlayıcıları temizle.
@@ -279,6 +281,10 @@ export function useFocusCentering(options = {}) {
 	 * ve eşiği yükseltmek gereksiz kaydırma üretir.
 	 */
 	const viewabilityConfig = useRef({
+		// Eşik %92: satır neredeyse tam görünmüyorsa (altta/üstte kırpılmış)
+		// odak ona geldiğinde liste kaydırılır, aksi hâlde HİÇ kaymaz.
+		// Eşiği düşürmek (ör. %85) odaklanan satırı ekranın altında yarım
+		// bırakıyordu — kırpılan kart kullanıcıya "görünmüyor" olarak döner.
 		itemVisiblePercentThreshold: horizontal ? 70 : 92,
 		minimumViewTime: 32,
 	}).current;

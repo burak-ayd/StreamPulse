@@ -358,7 +358,7 @@ export default function SyncSettingsScreen() {
 											Şimdi Senkronize Et
 										</Text>
 										<Text style={[styles.statusValue, { color: Palette.onSurfaceVariant }]}>
-											Favori, liste ve ayarları sunucuyla eşitle
+											Favori, liste, geçmiş ve profili sunucuyla eşitle. Diğer ayarlar bu cihazda kalır
 										</Text>
 									</View>
 								</View>

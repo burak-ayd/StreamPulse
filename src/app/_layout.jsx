@@ -159,6 +159,21 @@ export default function RootLayout() {
 	const router = useRouter();
 	const appStateRef = useRef(AppState.currentState);
 
+	/*
+	 * Activity yeniden kurulduğunda (geri tuşuyla çıkış = `finish()`,
+	 * sonra tekrar açılış) RN JS bağlamı yaşamaya devam ediyor ama
+	 * `AppState` "background → active" geçişi HİÇ gelmiyor: yeni Activity
+	 * doğrudan "active" başlıyor. Bu yüzden kaydırma belleği yukarıdaki
+	 * dinleyiciyle temizlenmiyordu ve ana sayfa kaldığı yerden açılıyordu.
+	 *
+	 * Kök bileşen her Activity kurulumunda yeniden mount olur; temizlik
+	 * burada yapılır. Çocuk ekranların `restoreOffset` çağrısı
+	 * `onContentSizeChange` ile daha SONRA geldiği için sıra güvenli.
+	 */
+	useEffect(() => {
+		clearScreenMemory();
+	}, []);
+
 	useEffect(() => {
 		const subscription = AppState.addEventListener("change", (nextState) => {
 			const prev = appStateRef.current;

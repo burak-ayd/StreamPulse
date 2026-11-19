@@ -69,6 +69,14 @@ export const SYNC_GROUPS = {
 /** Tüm grup adları (varsayılan: hepsi = global). */
 export const ALL_SYNC_GROUPS = Object.keys(SYNC_GROUPS);
 
+/**
+ * Cihazlar arasında eşitlenen belge grupları. `user_profile` (avatar, ad, bio)
+ * hesaba bağlı olduğu için eşitlenir; diğer ayarlar (oynatıcı, arama geçmişi,
+ * eklenti/kategori görünürlüğü) localde kalır. Kodu silmedik — bir grubu
+ * tekrar açmak için listeye ekle.
+ */
+export const SYNCED_DOC_GROUPS = ["user_profile"];
+
 // ─── Belge (document) damga yönetimi ──────────────────────────────────
 //
 // ⚠️ NEDEN GEREKLİ? Belge türü kayıtlar (favori/liste/geçmiş) DEĞİLDİR:
@@ -461,11 +469,9 @@ async function collectLocalPushData() {
 		}
 	};
 
-	await doc("user_profile");
-	await doc("player_settings");
-	await doc("search_history");
-	await doc("plugin_visibility");
-	await doc("category_visibility");
+	for (const group of SYNCED_DOC_GROUPS) {
+		await doc(group);
+	}
 
 	return { records, documents, sentGroups: sent, pendingDocMeta };
 }
@@ -477,7 +483,13 @@ async function collectLocalPushData() {
  */
 async function applyPullData(pullData, { full = false } = {}) {
 	if (!pullData) return;
-	const { records = [], documents = {} } = pullData;
+	// Yalnızca eşitlenen belge grupları uygulanır; diğer ayarlar localde kalır.
+	const { records = [], documents: remoteDocuments = {} } = pullData;
+	const documents = {};
+	for (const group of SYNCED_DOC_GROUPS) {
+		const docName = SYNC_GROUPS[group].doc;
+		if (remoteDocuments[docName]) documents[docName] = remoteDocuments[docName];
+	}
 
 	/*
 	 * Çekilen her belge için yerel "temel damga" kurulur. Bu olmadan belge
@@ -674,7 +686,7 @@ async function applyPullData(pullData, { full = false } = {}) {
 	 */
 	const fullPull = full;
 	if (fullPull) {
-		for (const group of Object.keys(SYNC_GROUPS)) {
+		for (const group of SYNCED_DOC_GROUPS) {
 			if (nextDocMeta[group]) continue;
 			const groupMeta = SYNC_GROUPS[group];
 			const raw = await AsyncStorage.getItem(groupMeta.key);

@@ -170,6 +170,15 @@ export function smartImageUri(uri) {
  * @param {number} targetPx  hedef piksel genişlik (ör. kartGenişliği * PixelRatio)
  * @returns {string}
  */
+/**
+ * Kart posterinde kaynak piksel = görüntülenen fiziksel piksel × bu oran.
+ *
+ * 0.6 → kart posterinde TMDB w342 yerine w185 istenir (piksel ~%45 az;
+ * 1080p TV'de kart ~150dp geniş, gözle fark edilmez). 1 yapılırsa tam
+ * çözünürlük (eski davranış) geri gelir.
+ */
+export const POSTER_QUALITY_FACTOR = 0.6;
+
 export function cardImageUri(uri, targetPx) {
 	if (typeof uri !== "string" || uri.length === 0) return uri;
 
@@ -179,21 +188,21 @@ export function cardImageUri(uri, targetPx) {
 	);
 	if (tmdbMatch) {
 		const [, prefix, size, suffix] = tmdbMatch;
-		const idx = TMDB_SIZES.indexOf(size);
-		if (idx === -1) return uri;
 
-		// TMDB boyutları piksel genişliği (approx): w92, w154, w185, w342, w500...
-		// En küçük ≥ targetPx olanı seç ama mevcut indeksten büyüme.
-		for (let i = 0; i < TMDB_SIZES.length && i <= idx; i++) {
-			const s = TMDB_SIZES[i];
+		// "w1280"/"w92" gibi listeye yazılmamış boyutlar da geliyor
+		// (backdrop'lar `posterOf` üzerinden poster yerine geçebiliyor).
+		const currentPx = /^w(\d+)$/.test(size)
+			? parseInt(size.slice(1), 10)
+			: Infinity; // "original" veya bilinmeyen → sınır yok
+
+		for (const s of TMDB_SIZES) {
 			const px = parseInt(s.slice(1), 10); // "w342" → 342
-			if (Number.isFinite(px) && px >= targetPx) {
-				if (i === idx) return uri; // zaten o boyutta
-				return prefix + s + suffix;
-			}
+			if (!Number.isFinite(px)) continue; // "original"
+			if (px < targetPx) continue; // çok küçük
+			if (px > currentPx) break; // büyütme yok
+			return s === size ? uri : prefix + s + suffix;
 		}
-		// Hepsi küçükse mevcut boyutu kullan (en büyük ≤ idx)
-		return prefix + TMDB_SIZES[idx] + suffix;
+		return uri;
 	}
 
 	// hdfilmcehennemi @2x → 1x (targetPx küçükse)

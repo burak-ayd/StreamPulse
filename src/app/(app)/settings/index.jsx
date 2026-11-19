@@ -25,9 +25,15 @@ import { openLogin } from "@/utils/authRoutes";
 import { buildPermissionRows, getPermissionStatuses } from "@/utils/permissions";
 import {
 	clearAllUserData,
+	DEFAULT_LAYOUT_SETTINGS,
+	LAYOUT_COLUMN_CHOICES,
+	STORAGE_KEYS,
+	getLayoutSettings,
 	getPluginVisibilitySettings,
 	getSelectedPlatform,
+	saveLayoutSettings,
 } from "@/utils/storage";
+import { useStorageListener } from "@/utils/storageListener";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
@@ -374,7 +380,25 @@ export default function SettingsScreen() {
 	// Modals for sub-settings
 	const [generalModalVisible, setGeneralModalVisible] = useState(false);
 	const [layoutModalVisible, setLayoutModalVisible] = useState(false);
-	const [compactLayout, setCompactLayout] = useState(false);
+
+	/*
+	 * Kategori ızgarasının sütun sayısı (Ayarlar → Düzen). Kalıcı:
+	 * `storage.js` → LAYOUT_SETTINGS. `useStorageListener` sayesinde
+	 * kategori ekranı da aynı değişikliği anında görür.
+	 */
+	const [layoutSettings] = useStorageListener(
+		STORAGE_KEYS.LAYOUT_SETTINGS,
+		getLayoutSettings,
+	);
+	const categoryColumns =
+		layoutSettings?.categoryColumns ??
+		DEFAULT_LAYOUT_SETTINGS.categoryColumns;
+
+	const setCategoryColumns = useCallback((value) => {
+		saveLayoutSettings({ categoryColumns: value }).catch((error) =>
+			console.warn("Sütun sayısı kaydedilemedi:", error),
+		);
+	}, []);
 
 	// Fetch dynamic data when screen is focused
 	useFocusEffect(
@@ -675,7 +699,12 @@ export default function SettingsScreen() {
 						<SettingRow
 							icon="grid-outline"
 							label="Düzen"
-							subtitle="Ana sayfa yerleşimi ve kart boyutları"
+							subtitle="Kategori sayfasında yan yana kart sayısı"
+							badgeText={
+								categoryColumns === 0
+									? "Otomatik"
+									: `${categoryColumns} sütun`
+							}
 							onPress={() => setLayoutModalVisible(true)}
 						/>
 
@@ -1205,25 +1234,66 @@ export default function SettingsScreen() {
 											styles.modalRowTitle,
 											{ color: Palette.onSurface },
 										]}>
-										Kompakt Kart Düzeni
+										Kategori Sayfası Sütun Sayısı
 									</Text>
 									<Text
 										style={[
 											styles.modalRowSubtitle,
 											{ color: Palette.onSurfaceVariant },
 										]}>
-										Daha fazla içeriği ekranda göster
+										Kategori sayfasında yan yana kaç
+										kart görüneceği. Otomatik: geniş
+										ekranda 6, dar ekranda 3.
 									</Text>
 								</View>
-								<Switch
-									value={compactLayout}
-									onValueChange={setCompactLayout}
-									trackColor={{
-										false: "#374151",
-										true: Palette.primary,
-									}}
-									thumbColor="#ffffff"
-								/>
+							</View>
+
+							{/*
+							 * TV'de Switch yerine seçenek düğmeleri: kumandayla
+							 * sayı seçmek, tek bir anahtarı açıp kapatmaktan
+							 * net. Seçim anında kaydedilir (Kaydet yalnızca
+							 * pencereyi kapatır).
+							 */}
+							<View style={styles.optionRow}>
+								{LAYOUT_COLUMN_CHOICES.map((value) => {
+									const active = categoryColumns === value;
+									return (
+										<TVPressable
+											key={`col-${value}`}
+											style={[
+												styles.optionChip,
+												active && {
+													backgroundColor:
+														Palette.primaryContainer,
+												},
+											]}
+											focusedStyle={
+												styles.optionChipFocused
+											}
+											onPress={() =>
+												setCategoryColumns(value)
+											}
+											accessibilityLabel={
+												value === 0
+													? "Sütun sayısı Otomatik"
+													: `Sütun sayısı ${value}`
+											}>
+											<Text
+												style={[
+													styles.optionChipText,
+													{
+														color: active
+															? Palette.onPrimaryContainer
+															: Palette.onSurface,
+													},
+												]}>
+												{value === 0
+													? "Otomatik"
+													: String(value)}
+											</Text>
+										</TVPressable>
+									);
+								})}
 							</View>
 
 							<TVPressable
@@ -1693,6 +1763,31 @@ const styles = StyleSheet.create({
 	modalDivider: {
 		height: 1,
 		marginVertical: 4,
+	},
+	/** Düzen modalı: sütun sayısı seçenekleri (kumanda ile seçilir). */
+	optionRow: {
+		flexDirection: "row",
+		flexWrap: "wrap",
+		gap: 10,
+		paddingVertical: 12,
+	},
+	optionChip: {
+		minWidth: 96,
+		paddingHorizontal: 18,
+		paddingVertical: 10,
+		borderRadius: 12,
+		borderWidth: 2,
+		borderColor: "transparent",
+		backgroundColor: "#26262b",
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	optionChipFocused: {
+		borderColor: Palette.primary,
+	},
+	optionChipText: {
+		fontSize: 15,
+		fontFamily: FontFamily.semiBold,
 	},
 	modalCloseButton: {
 		height: 46,
