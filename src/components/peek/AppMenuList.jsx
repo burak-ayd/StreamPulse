@@ -2,7 +2,13 @@ import { FontFamily, Palette } from "@/constants/theme";
 import TVPressable from "@/components/common/TVPressable";
 import Image from "@/components/common/SmartImage";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import {
+	ScrollView,
+	StyleSheet,
+	Text,
+	View,
+	useWindowDimensions,
+} from "react-native";
 
 /**
  * Peek menüsünün görünümü — telefon, tablet ve TV için TEK liste.
@@ -26,14 +32,14 @@ export default function AppMenuList({
 	items = [],
 	onItemPress,
 	autoFocusFirst = false,
-	width = 320,
+	width,
 	columnMaxHeight,
 }) {
-	const { height: windowHeight } = useWindowDimensions();
-	// Kolon kendi içinde kayar: menü ekran yüksekliğini aşmaz. TV panelinde
-	// dış ScrollView zaten var; bu tavan yalnızca uzun listeleri sınırlar.
-	const maxColumnHeight =
-		columnMaxHeight ?? Math.min(windowHeight * 0.52, 420);
+	const { width: windowWidth } = useWindowDimensions();
+	// Menü telefon genişliğine göre ölçeklenir (Netflix tarzı geniş menü):
+	// iki kolon rahat sığsın diye ekranın %90'ı, tablette 520dp tavan.
+	const resolvedWidth = width ?? Math.min(windowWidth * 0.9, 520);
+	const maxColumnHeight = columnMaxHeight ?? null;
 	const renderRow = (item, index, { compact = false, autoFocus = false } = {}) => {
 		if (item.type === "header") {
 			return (
@@ -177,7 +183,7 @@ export default function AppMenuList({
 	};
 
 	return (
-		<View style={[styles.menu, { width, maxWidth: "100%" }]}>
+		<View style={[styles.menu, { width: resolvedWidth, maxWidth: "100%" }]}>
 			{items.map((item, index) => {
 				if (item.type === "columns") {
 					return (
@@ -194,11 +200,16 @@ export default function AppMenuList({
 										</Text>
 									)}
 									<ScrollView
-										style={{ maxHeight: maxColumnHeight }}
+										style={
+											maxColumnHeight
+												? { maxHeight: maxColumnHeight }
+												: undefined
+										}
 										contentContainerStyle={
 											styles.columnScrollContent
 										}
 										nestedScrollEnabled
+										scrollEnabled={Boolean(maxColumnHeight)}
 										showsVerticalScrollIndicator={false}>
 										{group.items.map((sub, subIndex) =>
 											renderRow(sub, subIndex, {
@@ -331,12 +342,10 @@ const styles = StyleSheet.create({
 		borderColor: "transparent",
 	},
 	rowCompact: {
-		flexDirection: "column",
-		alignItems: "stretch",
-		gap: 2,
-		paddingVertical: 6,
-		paddingHorizontal: 8,
-		borderRadius: 9,
+		gap: 8,
+		paddingVertical: 7,
+		paddingHorizontal: 9,
+		borderRadius: 10,
 	},
 	rowSelected: {
 		backgroundColor: "rgba(192, 193, 255, 0.10)",
@@ -360,9 +369,9 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	iconBoxCompact: {
-		width: 24,
-		height: 24,
-		borderRadius: 7,
+		width: 26,
+		height: 26,
+		borderRadius: 8,
 	},
 	textCol: {
 		flex: 1,
@@ -374,7 +383,7 @@ const styles = StyleSheet.create({
 		color: Palette.onSurface,
 	},
 	titleCompact: {
-		fontSize: 12,
+		fontSize: 12.5,
 	},
 	titleSelected: {
 		color: Palette.primary,

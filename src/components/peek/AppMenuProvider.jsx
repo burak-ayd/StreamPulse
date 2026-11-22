@@ -105,7 +105,7 @@ function TVMenuPanel({ menu, onClose }) {
 
 	if (!menu) return null;
 
-	const panelWidth = Math.min(sp(560), width - sp(80));
+	const panelWidth = Math.min(sp(760), width - sp(140));
 	// Satırlar 1.12× ölçeklendiği için liste kutusu o orana bölünür;
 	// aksi hâlde menü panelin kenarından taşar.
 	const scale = 1.12;
