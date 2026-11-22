@@ -325,56 +325,79 @@ export function ContentMenuBody({ spec, close, autoFocus = false, width }) {
 			posterUri,
 		},
 		{
-			key: "play",
-			title: "Oynat",
-			icon: "play",
-			iconColor: Palette.onPrimaryContainer,
-			iconBg: Palette.primaryContainer,
-			onPress: handlePlay,
-		},
-		{
-			key: "details",
-			title: "Detay Sayfası",
-			icon: "information-circle-outline",
-			onPress: handleDetails,
-		},
-		...libraryMenuItems({
-			status,
-			isFavorite: favorite,
-			onStatus: handleStatus,
-			onFavorite: handleFavorite,
-		}),
-		{
-			key: "download",
-			title: series ? "Bölüm İndir" : "İndir",
-			description: "Kaynak ve altyazı seçimiyle kuyruğa ekle",
-			icon: downloaded ? "checkmark-done-outline" : "download-outline",
-			iconColor: downloaded ? Palette.success : Palette.secondary,
-			iconBg: downloaded
-				? "rgba(16, 185, 129, 0.15)"
-				: "rgba(76, 215, 246, 0.15)",
-			value: downloadValue,
-			valueColor: Palette.secondary,
-			onPress: handleDownload,
-		},
-		{
-			key: "trailer",
-			title: "Fragman",
-			icon: "film-outline",
-			onPress: handleTrailer,
-		},
-		{
-			key: "share",
-			title: "Paylaş",
-			icon: "share-social-outline",
-			onPress: handleShare,
-		},
-		{
-			key: "notification",
-			title: notificationOn ? "Bildirimi Kapat" : "Bildirimi Aç",
-			icon: notificationOn ? "notifications" : "notifications-outline",
-			value: notificationOn ? "Açık" : undefined,
-			onPress: handleNotification,
+			key: "content-cols",
+			type: "columns",
+			groups: [
+				{
+					key: "library",
+					title: "KİTAPLIK",
+					items: libraryMenuItems({
+						status,
+						isFavorite: favorite,
+						onStatus: handleStatus,
+						onFavorite: handleFavorite,
+					}).filter((i) => i.type !== "label"),
+				},
+				{
+					key: "actions",
+					title: "EYLEMLER",
+					items: [
+						{
+							key: "play",
+							title: "Oynat",
+							icon: "play",
+							iconColor: Palette.onPrimaryContainer,
+							iconBg: Palette.primaryContainer,
+							onPress: handlePlay,
+						},
+						{
+							key: "details",
+							title: "Detay",
+							icon: "information-circle-outline",
+							onPress: handleDetails,
+						},
+						{
+							key: "download",
+							title: series ? "Bölüm İndir" : "İndir",
+							icon: downloaded
+								? "checkmark-done-outline"
+								: "download-outline",
+							iconColor: downloaded
+								? Palette.success
+								: Palette.secondary,
+							iconBg: downloaded
+								? "rgba(16, 185, 129, 0.15)"
+								: "rgba(76, 215, 246, 0.15)",
+							value: downloadValue,
+							valueColor: Palette.secondary,
+							onPress: handleDownload,
+						},
+						{
+							key: "trailer",
+							title: "Fragman",
+							icon: "film-outline",
+							onPress: handleTrailer,
+						},
+						{
+							key: "share",
+							title: "Paylaş",
+							icon: "share-social-outline",
+							onPress: handleShare,
+						},
+						{
+							key: "notification",
+							title: notificationOn
+								? "Bildirim Kapat"
+								: "Bildirim Aç",
+							icon: notificationOn
+								? "notifications"
+								: "notifications-outline",
+							value: notificationOn ? "Açık" : undefined,
+							onPress: handleNotification,
+						},
+					],
+				},
+			],
 		},
 	];
 

@@ -1384,26 +1384,46 @@ export default function VideoPlayer({
 		switchSourceTo(index, { resetErrors: true });
 	};
 
-	const sourceMenuItems = () => [
-		{
-			key: "src-label",
-			type: "label",
-			title: "VİDEO KAYNAKLARI",
-		},
-		...sources.map((s, i) => ({
+	const sourceMenuItems = () => {
+		const half = Math.ceil(sources.length / 2);
+		const rows = sources.map((s, i) => ({
 			key: `src-${i}`,
 			title: s.result?.name || s.extractor || `Kaynak ${i + 1}`,
-			description:
-				(s.result?.subtitles?.length || 0) > 0
-					? `${s.result.subtitles.length} altyazı dili`
-					: "Harici altyazı yok",
 			icon: "server-outline",
 			selected: activeSourceIndex === i,
 			value: activeSourceIndex === i ? "Aktif" : undefined,
 			// eslint-disable-next-line react-hooks/refs -- işleyici yalnızca basınca çalışır
 			onPress: () => handleSelectSource(i),
-		})),
-	];
+		}));
+		return [
+			{
+				key: "src-cols",
+				type: "columns",
+				groups: [
+					{ key: "src-a", title: "KAYNAKLAR", items: rows.slice(0, half) },
+					{ key: "src-b", title: "", items: rows.slice(half) },
+				],
+			},
+		];
+	};
+
+	/** Oynatma hızları: iki kolon (ekran taşmasın). */
+	const playbackRateGroups = () => {
+		const rows = PLAYBACK_RATES.map((rate) => ({
+			key: `rate-${rate}`,
+			title: rate === 1 ? "Normal" : `${rate}×`,
+			icon: "speedometer-outline",
+			selected: Math.abs(playbackRate - rate) < 0.01,
+			value:
+				Math.abs(playbackRate - rate) < 0.01 ? "Aktif" : undefined,
+			onPress: () => selectRate(rate),
+		}));
+		const half = Math.ceil(rows.length / 2);
+		return [
+			{ key: "rate-a", title: "HIZ", items: rows.slice(0, half) },
+			{ key: "rate-b", title: "", items: rows.slice(half) },
+		];
+	};
 
 	// ── Altyazı / ses izi prop'ları ─────────────────────────
 	const videoTextTrackProp = useMemo(() => {
@@ -1982,116 +2002,107 @@ export default function VideoPlayer({
 										label: "Altyazı senkronu",
 										active: subtitles.subtitleOffset !== 0,
 										menuItems: [
-											...(subtitles.selectedSubtitle
-												? [
-														{
-															key: "sync-info",
-															type: "info",
-															title: "Senkronizasyon",
-															value: `${
-																subtitles.subtitleOffset >
-																0
-																	? "+"
-																	: ""
-															}${subtitles.subtitleOffset.toFixed(1)} sn`,
-														},
-														{
-															key: "sync-label",
-															type: "label",
-															title: "GECİKME",
-														},
-														...[-0.5, -0.1, 0, 0.1, 0.5].map(
-															(v) => ({
-																key: `sync-${v}`,
-																title:
-																	v === 0
-																		? "Sıfırla"
-																		: `${v > 0 ? "+" : ""}${v}s`,
-																icon: "time-outline",
+											{
+												key: "subsync-cols",
+												type: "columns",
+												groups: [
+													{
+														key: "subs",
+														title: "ALTYAZI",
+														items: [
+															{
+																key: "sub-off",
+																title: "Kapalı",
+																icon: "close-circle-outline",
+																selected:
+																	!subtitles.selectedSubtitle,
+																value: !subtitles.selectedSubtitle
+																	? "Seçili"
+																	: undefined,
 																onPress: () =>
-																	subtitles.updateOffset(
-																		v,
-																		v === 0,
+																	subtitles.selectSubtitle(
+																		null,
 																	),
-															}),
-														),
-													]
-												: []),
-											{
-												key: "sub-label",
-												type: "label",
-												title: "ALTYAZI",
+															},
+															...subtitles.allSubtitles.map(
+																(s, i) => ({
+																	key: `sub-${i}`,
+																	title:
+																		s.title ||
+																		s.language ||
+																		`Altyazı ${i + 1}`,
+																	icon: "chatbubble-ellipses-outline",
+																	selected:
+																		subtitles.selectedSubtitle ===
+																		s,
+																	value:
+																		subtitles.selectedSubtitle ===
+																		s
+																			? "Seçili"
+																			: undefined,
+																	onPress: () =>
+																		subtitles.selectSubtitle(
+																			s,
+																		),
+																}),
+															),
+														],
+													},
+													...(subtitles.selectedSubtitle
+														? [
+																{
+																	key: "delay",
+																	title: "GECİKME",
+																	items: [
+																		{
+																			key: "sync-info",
+																			type: "info",
+																			title: "Şu an",
+																			value: `${
+																				subtitles.subtitleOffset >
+																				0
+																					? "+"
+																					: ""
+																			}${subtitles.subtitleOffset.toFixed(1)} sn`,
+																		},
+																		...[
+																			-0.5,
+																			-0.1,
+																			0,
+																			0.1,
+																			0.5,
+																		].map(
+																			(v) => ({
+																				key: `sync-${v}`,
+																				title:
+																					v === 0
+																						? "Sıfırla"
+																						: `${v > 0 ? "+" : ""}${v}s`,
+																				icon: "time-outline",
+																				selected:
+																					v === 0 &&
+																					subtitles.subtitleOffset ===
+																						0,
+																				onPress: () =>
+																					subtitles.updateOffset(
+																						v,
+																						v === 0,
+																					),
+																			}),
+																		),
+																	],
+																},
+															]
+														: []),
+												],
 											},
-											{
-												key: "sub-off",
-												title: "Kapalı",
-												icon: "close-circle-outline",
-												selected:
-													!subtitles.selectedSubtitle,
-												value: !subtitles.selectedSubtitle
-													? "Seçili"
-													: undefined,
-												onPress: () =>
-													subtitles.selectSubtitle(
-														null,
-													),
-											},
-											...subtitles.allSubtitles.map(
-												(s, i) => ({
-													key: `sub-${i}`,
-													title:
-														s.title ||
-														s.language ||
-														`Altyazı ${i + 1}`,
-													icon: "chatbubble-ellipses-outline",
-													selected:
-														subtitles.selectedSubtitle ===
-														s,
-													value:
-														subtitles.selectedSubtitle ===
-														s
-															? "Seçili"
-															: undefined,
-													onPress: () =>
-														subtitles.selectSubtitle(
-															s,
-														),
-												}),
-											),
 										],
 									},
 									{
 										key: "source",
 										icon: "server-outline",
 										label: "Kaynak",
-										menuItems: [
-											{
-												key: "src-label",
-												type: "label",
-												title: "VİDEO KAYNAKLARI",
-											},
-											...sources.map((s, i) => ({
-												key: `src-${i}`,
-												title:
-													s.result?.name ||
-													s.extractor ||
-													`Kaynak ${i + 1}`,
-												description:
-													(s.result?.subtitles
-														?.length || 0) > 0
-														? `${s.result.subtitles.length} altyazı dili`
-														: "Harici altyazı yok",
-												icon: "server-outline",
-												selected:
-													activeSourceIndex === i,
-												value:
-													activeSourceIndex === i
-														? "Aktif"
-														: undefined,
-												onPress: () =>
-													handleSelectSource(i),
-											})),
-										],
+										menuItems: sourceMenuItems(),
 									},
 									{
 										key: "tracks",
@@ -2101,86 +2112,92 @@ export default function VideoPlayer({
 											selectedAudioTrackIndex !== null,
 										menuItems: [
 											{
-												key: "v-label",
-												type: "label",
-												title: "VİDEO KALİTESİ",
+												key: "tracks-cols",
+												type: "columns",
+												groups: [
+													{
+														key: "video",
+														title: "VİDEO KALİTESİ",
+														items: [
+															{
+																key: "v-auto",
+																title: "Otomatik",
+																icon: "sparkles-outline",
+																selected:
+																	selectedVariantId === null,
+																value:
+																	selectedVariantId === null
+																		? "Aktif"
+																		: undefined,
+																onPress: () =>
+																	selectVariant?.(
+																		null,
+																	),
+															},
+															...videoVariants.map(
+																(v) => ({
+																	key: `variant-${v.id}`,
+																	title:
+																		v.resolution ||
+																		"Kalite",
+																	icon: "videocam-outline",
+																	selected:
+																		selectedVariantId ===
+																		v.id,
+																	value:
+																		selectedVariantId ===
+																		v.id
+																			? "Aktif"
+																			: undefined,
+																	onPress: () =>
+																		selectVariant?.(
+																			v.id,
+																		),
+																}),
+															),
+														],
+													},
+													{
+														key: "audio",
+														title: "SES PARÇALARI",
+														items: availableAudioTracks.map(
+															(track, index) => {
+																const trackId =
+																	typeof track.index ===
+																	"number"
+																		? track.index
+																		: index;
+																const isSelected =
+																	selectedAudioTrackIndex ===
+																		trackId ||
+																	(selectedAudioTrackIndex ===
+																		null &&
+																		track.selected);
+																return {
+																	key: `audio-${index}`,
+																	title:
+																		track.title ||
+																		(track.language
+																			? `Ses (${track.language.toUpperCase()})`
+																			: `Ses ${index + 1}`),
+																	icon: "volume-high-outline",
+																	selected:
+																		isSelected,
+																	value: isSelected
+																		? "Aktif"
+																		: undefined,
+																	onPress: () => {
+																		setSelectedAudioTrackIndex(
+																			trackId,
+																		);
+																		subtitles.resetUserChoice();
+																	},
+																};
+															},
+														),
+													},
+												],
 											},
-											{
-												key: "v-auto",
-												title: "Otomatik",
-												description: isLive
-													? "Bağlantı hızına göre otomatik seçilir"
-													: "En yüksek kalite (sabit)",
-												icon: "sparkles-outline",
-												selected:
-													selectedVariantId === null,
-												value:
-													selectedVariantId === null
-														? "Aktif"
-														: undefined,
-												onPress: () =>
-													selectVariant?.(null),
-											},
-											...videoVariants.map((v) => ({
-												key: `variant-${v.id}`,
-												title:
-													v.resolution || "Kalite",
-												description: v.bandwidth
-													? `${Math.round(v.bandwidth / 1000)} kbps`
-													: undefined,
-												icon: "videocam-outline",
-												selected:
-													selectedVariantId === v.id,
-												value:
-													selectedVariantId === v.id
-														? "Aktif"
-														: undefined,
-												onPress: () =>
-													selectVariant?.(v.id),
-											})),
-											{
-												key: "a-label",
-												type: "label",
-												title: "SES PARÇALARI",
-											},
-											...availableAudioTracks.map(
-												(track, index) => {
-													const trackId =
-														typeof track.index ===
-														"number"
-															? track.index
-															: index;
-													const isSelected =
-														selectedAudioTrackIndex ===
-															trackId ||
-														(selectedAudioTrackIndex ===
-															null &&
-															track.selected);
-													return {
-														key: `audio-${index}`,
-														title:
-															track.title ||
-															(track.language
-																? `Ses (${track.language.toUpperCase()})`
-																: `Ses Parçası ${index + 1}`),
-														description:
-															track.bitrate
-																? `${Math.round(track.bitrate / 1000)} kbps`
-																: undefined,
-														icon: "volume-high-outline",
-														selected: isSelected,
-														value: isSelected
-															? "Aktif"
-															: undefined,
-														onPress: () => {
-															setSelectedAudioTrackIndex(
-																trackId,
-															);
-															subtitles.resetUserChoice();
-														},
-													};
-												},
-											),
 										],
 									},
 									{
@@ -2192,28 +2209,13 @@ export default function VideoPlayer({
 												: `${playbackRate}×`,
 										active: playbackRate !== 1,
 										disabled: isLive,
-										menuItems: PLAYBACK_RATES.map(
-											(rate) => ({
-												key: `rate-${rate}`,
-												title:
-													rate === 1
-														? "Normal"
-														: `${rate}×`,
-												icon: "speedometer-outline",
-												selected:
-													Math.abs(
-														playbackRate - rate,
-													) < 0.01,
-												value:
-													Math.abs(
-														playbackRate - rate,
-													) < 0.01
-														? "Aktif"
-														: undefined,
-												onPress: () =>
-													selectRate(rate),
-											}),
-										),
+										menuItems: [
+											{
+												key: "rate-cols",
+												type: "columns",
+												groups: playbackRateGroups(),
+											},
+										],
 									},
 									// Sonraki bölüm (yalnızca dizi + sonraki bölüm biliniyorsa)
 									nextEpisode && onNextEpisode
