@@ -55,6 +55,24 @@ const patchPlugins = (plugins, p) =>
 		const opts = Array.isArray(entry) && entry[1] ? entry[1] : {};
 
 		switch (name) {
+			case "expo-build-properties":
+				return [
+					"expo-build-properties",
+					{
+						...opts,
+						android: {
+							...(opts.android ?? {}),
+							// Windows'ta Android SDK'nin varsayılan CMake 3.22.1'i
+							// (ninja 1.10) 260 karakter sınırına takılıyor; long-path
+							// destekli 3.31.6'ya geçilir (bkz. Expo "windows-long-paths").
+							// Linux/EAS build'lerinde bu anahtar yazılmaz.
+							...(process.platform === "win32"
+								? { cmakeVersion: "3.31.6" }
+								: {}),
+						},
+					},
+				];
+
 			case "expo-notifications":
 				return [
 					"expo-notifications",
@@ -172,7 +190,7 @@ export default ({ config }) => {
 		//
 		// "3" — peek menü: gesture-handler 3 / reanimated 4.7 native tarafı
 		// değişti. Bu modülleri içermeyen APK'lar OTA almamalı.
-		runtimeVersion: "2",
+		runtimeVersion: "3",
 		...{
 			updates: {
 				url: "https://ota.burakaydogan.net.tr/manifest",
