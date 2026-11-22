@@ -107,7 +107,8 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	const { sp, isWide, isTV, isLandscape, width, gutter, contentMaxWidth } =
 		useTvMetrics();
 	const { alert, toast } = useFeedback();
-	const { requestDownload, isDownloaded } = useDownload();
+	const { requestDownload, isDownloaded, getDownloadState, isDownloadPending } =
+		useDownload();
 	const router = useRouter();
 
 	/*
@@ -414,6 +415,22 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 		});
 		if (epIndirildiMi) {
 			toast.info(`"${epTitle}" zaten indirildi.`);
+			return;
+		}
+		const dlKey = {
+			contentId: seriesContent.id,
+			seriesId: seriesContent.id,
+			season: selectedSeason,
+			episode: epNumber,
+		};
+		// Kaynak aranırken/indirme sürerken ikinci kez kuyruğa eklenmesin.
+		const dlState = getDownloadState(dlKey);
+		if (
+			isDownloadPending(dlKey) ||
+			dlState?.status === "downloading" ||
+			dlState?.status === "queued"
+		) {
+			toast.info(`"${epTitle}" zaten indiriliyor.`);
 			return;
 		}
 		requestDownload({
@@ -1247,6 +1264,32 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 						season: selectedSeason,
 						episode: epNumber,
 					});
+					const dlKey = {
+						contentId: content?.id || content?.url || seriesTitle,
+						seriesId: content?.id || content?.url || seriesTitle,
+						season: selectedSeason,
+						episode: epNumber,
+					};
+					const epDlPending = isDownloadPending(dlKey);
+					const epDl = getDownloadState(dlKey);
+					const epDlPct = Math.max(
+						0,
+						Math.min(100, Math.round((epDl?.progress || 0) * 100)),
+					);
+					const epDlBusy =
+						epDl?.status === "downloading" || epDl?.status === "merging";
+					const epDlWaiting =
+						epDlPending || epDl?.status === "queued";
+					const epDlColor =
+						epDl?.status === "failed"
+							? Palette.error
+							: epDl?.status === "paused"
+								? Palette.tertiary
+								: epDlBusy || epIndirildi
+									? Palette.secondary
+									: isInProgress
+										? Palette.background
+										: Palette.onSurfaceVariant;
 
 					const epKey = `s${selectedSeason}_e${epNumber}`;
 					const epProgress =
@@ -1738,21 +1781,38 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 													left: 8,
 													right: 8,
 												}}>
-												<Ionicons
-													name={
-														epIndirildi
-															? "checkmark-done-outline"
-															: "download-outline"
-													}
-													size={sp(18)}
-													color={
-														isInProgress
-															? Palette.background
-															: epIndirildi
-																? Palette.secondary
-																: Palette.onSurfaceVariant
-													}
-												/>
+												{epDlWaiting ? (
+													<ActivityIndicator
+														size="small"
+														color={Palette.secondary}
+													/>
+												) : epDlBusy ? (
+													<Text
+														style={[
+															styles.downloadPct,
+															{
+																fontSize: sp(9),
+																color: Palette.secondary,
+															},
+														]}>
+														{`%${epDlPct}`}
+													</Text>
+												) : (
+													<Ionicons
+														name={
+															epDl?.status === "paused"
+																? "pause"
+																: epDl?.status ===
+																		"failed"
+																	? "alert-circle"
+																	: epIndirildi
+																		? "checkmark-done"
+																		: "download-outline"
+														}
+														size={sp(18)}
+														color={epDlColor}
+													/>
+												)}
 											</TVPressable>
 										)}
 									</View>
@@ -2120,6 +2180,10 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		backgroundColor: Palette.surfaceHigh,
 		flexShrink: 0,
+	},
+	downloadPct: {
+		fontFamily: FontFamily.bold,
+		letterSpacing: -0.2,
 	},
 	/* Sezon seçici modal */
 	modalOverlay: {

@@ -7,7 +7,7 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { formatTime } from "@utils/formatters";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { Alert, Linking, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, StyleSheet, Text, View } from "react-native";
 
 import { isSeriesContent } from "@/utils/mediaType";
 
@@ -32,7 +32,8 @@ export default function ActionButtons({
 }) {
 	const { toast } = useFeedback();
 	const router = useRouter();
-	const { requestDownload, isDownloaded } = useDownload();
+	const { requestDownload, isDownloaded, getDownloadState, isDownloadPending } =
+		useDownload();
 
 	// TV: punto, yükseklik ve odak ölçeği büyür (bkz. utils/tvMetrics.js).
 	const { sp, isTV, isLandscape } = useTvMetrics();
@@ -265,7 +266,15 @@ export default function ActionButtons({
 	 * İndirme tetikleyicisi: akışın tamamı DownloadContext'te.
 	 * (Hızlı yol / modal kararı, ses-altyazı seçenekleri ve kuyruk orada.)
 	 */
+	const downloadKey = { contentId: content?.id || content?.url };
+	const downloadState = getDownloadState(downloadKey);
+	const downloadPending = isDownloadPending(downloadKey);
+
 	const handleDownload = () => {
+		// Kaynak aranıyor ya da indirme sürüyor: mükerrer kuyruk kaydı açma.
+		if (downloadPending || downloadState?.status === "downloading" || downloadState?.status === "queued") {
+			return;
+		}
 		const targetEpisode = isSeries ? resolveDownloadEpisode() : null;
 		if (isSeries && !targetEpisode?.url) {
 			toast.info("İndirme için oynatılabilir bölüm bağlantısı bulunamadı.");
@@ -303,6 +312,36 @@ export default function ActionButtons({
 		watchlistLabel = "Planlandı";
 	}
 
+	/*
+	 * İndirme butonunun canlı durumu: kaynak aranırken spinner, indirirken
+	 * yüzde, duraklatılınca duraklat simgesi, bitince onay simgesi.
+	 */
+	let downloadIcon = episodeDownloaded
+		? "checkmark-done-outline"
+		: "download-outline";
+	let downloadLabel = episodeDownloaded ? "İndirildi" : "İndir";
+	let downloadBusy = downloadPending;
+	let downloadActive = episodeDownloaded;
+	if (downloadPending) {
+		downloadLabel = "Kaynak aranıyor…";
+	} else if (
+		downloadState?.status === "downloading" ||
+		downloadState?.status === "queued" ||
+		downloadState?.status === "merging"
+	) {
+		const pct = Math.max(0, Math.min(100, Math.round((downloadState.progress || 0) * 100)));
+		downloadIcon = "cloud-download-outline";
+		downloadLabel = downloadState.status === "queued" ? "Sırada…" : `%${pct}`;
+		downloadActive = true;
+	} else if (downloadState?.status === "paused") {
+		downloadIcon = "pause-circle-outline";
+		downloadLabel = "Duraklatıldı";
+		downloadActive = true;
+	} else if (downloadState?.status === "failed") {
+		downloadIcon = "alert-circle-outline";
+		downloadLabel = "Hata";
+	}
+
 	const actions = [
 		{
 			key: "watchlist",
@@ -321,12 +360,11 @@ export default function ActionButtons({
 		{
 			key: "download",
 			// Dizi bölümleri bölüm listesindeki indirmeye girer.
-			icon: episodeDownloaded
-				? "checkmark-done-outline"
-				: "download-outline",
-			label: episodeDownloaded ? "İndirildi" : "İndir",
+			icon: downloadIcon,
+			label: downloadLabel,
 			onPress: handleDownload,
-			active: episodeDownloaded,
+			active: downloadActive,
+			busy: downloadBusy,
 			hidden: isSeries,
 		},
 		{
@@ -440,15 +478,19 @@ export default function ActionButtons({
 						focusedStyle={styles.focusRing}
 						onPress={action.onPress}
 						activeOpacity={0.85}>
-						<Ionicons
-							name={action.icon}
-							size={sp(18)}
-							color={
-								action.active
-									? Palette.primary
-									: Palette.onSurface
-							}
-						/>
+						{action.busy ? (
+							<ActivityIndicator size="small" color={Palette.onSurface} />
+						) : (
+							<Ionicons
+								name={action.icon}
+								size={sp(18)}
+								color={
+									action.active
+										? Palette.primary
+										: Palette.onSurface
+								}
+							/>
+						)}
 						<Text
 							style={[
 								styles.pillText,
@@ -543,15 +585,22 @@ export default function ActionButtons({
 						focusedStyle={styles.focusRing}
 						onPress={action.onPress}
 						activeOpacity={0.85}>
-						<Ionicons
-							name={action.icon}
-							size={sp(21)}
-							color={
-								action.active
-									? Palette.primary
-									: Palette.onSurfaceVariant
-							}
-						/>
+						{action.busy ? (
+							<ActivityIndicator
+								size="small"
+								color={Palette.onSurfaceVariant}
+							/>
+						) : (
+							<Ionicons
+								name={action.icon}
+								size={sp(21)}
+								color={
+									action.active
+										? Palette.primary
+										: Palette.onSurfaceVariant
+								}
+							/>
+						)}
 						<Text
 							style={[
 								styles.tileLabel,

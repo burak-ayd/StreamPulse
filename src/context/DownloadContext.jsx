@@ -31,6 +31,30 @@ import {
 
 const DownloadContext = createContext(null);
 
+/** Kuyruk öğesinin kullanıcıya gösterilen kısa adı: dizi → "The Strain", film → ad. */
+function downloadItemLabel(item) {
+	if (!item) return "İçerik";
+	if (item.type === "series" && item.seasonNumber && item.episodeNumber) {
+		const s = String(item.seasonNumber).padStart(2, "0");
+		const e = String(item.episodeNumber).padStart(2, "0");
+		return `${item.seriesTitle || item.contentTitle} S${s} B${e}`;
+	}
+	return item.contentTitle || "İçerik";
+}
+
+/** İndirme başladı bildirimi: dizide sezon/bölüm de yazılır. */
+function downloadStartMessage(spec) {
+	if (!spec) return "İndirme başladı.";
+	const isSeries = spec.type === "series";
+	if (isSeries) {
+		const s = String(Number(spec.seasonNumber) || 1).padStart(2, "0");
+		const e = String(Number(spec.episodeNumber) || 1).padStart(2, "0");
+		const ep = spec.episodeTitle ? ` · ${spec.episodeTitle}` : "";
+		return `"${spec.contentTitle || "Dizi"}" S${s} B${e}${ep} indiriliyor…`;
+	}
+	return `"${spec.contentTitle || "İçerik"}" indiriliyor…`;
+}
+
 /** İndirme kimliği: film → içerik, dizi → seriesId + S/E (kaynak URL değil). */
 export function buildDownloadKey({ contentId, seriesId, season, episode }) {
 	if (season && episode) {
@@ -44,7 +68,19 @@ export function DownloadProvider({ children }) {
 	const [queue, setQueue] = useState([]);
 	const [settings, setSettings] = useState(null);
 	const [modal, setModal] = useState(null); // { content, episode } | null
+	// Kaynakları aranan / kuyruğa yazılan indirme anahtarları: butonlar bu
+	// sırada spinner gösterir (buildDownloadKey ile aynı anahtar).
+	const [pendingKeys, setPendingKeys] = useState(() => new Set());
 	const readyRef = useRef(false);
+
+	const markPending = useCallback((key, on) => {
+		setPendingKeys((prev) => {
+			const next = new Set(prev);
+			if (on) next.add(key);
+			else next.delete(key);
+			return next;
+		});
+	}, []);
 
 	// Kuyruk state'ini manager'ın düz dizisinden tazeleyen yardımcı
 	const syncQueue = () => setQueue(DownloadManager.getQueue());
@@ -68,22 +104,47 @@ export function DownloadProvider({ children }) {
 		})();
 
 		const unsubProgress = DownloadManager.onProgress(() => syncQueue());
-		const unsubStatus = DownloadManager.onStatusChange(() => syncQueue());
+		const unsubStatus = DownloadManager.onStatusChange(
+			(_id, status, item) => {
+				syncQueue();
+				// İndirme hatası sessiz kalmasın: toast ile bildir.
+				if (
+					status === "failed" &&
+					item &&
+					!item.legacy &&
+					readyRef.current
+				) {
+					toast.error(
+						`İndirme başarısız: "${downloadItemLabel(item)}"${
+							item.error ? ` — ${item.error}` : ""
+						}`,
+					);
+				}
+			},
+		);
 
 		return () => {
 			disposed = true;
 			unsubProgress();
 			unsubStatus();
 		};
-	}, []);
+	}, [toast]);
 
 	const enqueueDownload = useMemo(
 		() => async (spec) => {
-			const id = await DownloadManager.enqueue(spec);
-			syncQueue();
-			return id;
+			try {
+				const id = await DownloadManager.enqueue(spec);
+				syncQueue();
+				toast.info(downloadStartMessage(spec));
+				return id;
+			} catch (e) {
+				toast.error(
+					`İndirme başlatılamadı${e?.message ? `: ${e.message}` : "."}`,
+				);
+				throw e;
+			}
 		},
-		[],
+		[toast],
 	);
 
 	/**
@@ -105,6 +166,16 @@ export function DownloadProvider({ children }) {
 				return { enqueued: false };
 			}
 
+			// Kaynak aranırken tetikleyici buton spinner gösterir.
+			const key = buildDownloadKey({
+				contentId: content?.id || content?.url || content?.title,
+				seriesId: episode
+					? content?.id || content?.url || content?.title
+					: null,
+				season: episode?.season,
+				episode: episode?.episode,
+			});
+			markPending(key, true);
 			try {
 				const ask = await DownloadManager.shouldAskBeforeDownload(pluginName);
 				if (!ask) {
@@ -117,20 +188,36 @@ export function DownloadProvider({ children }) {
 						pref,
 					});
 					if (id) {
-						toast.info(`"${content?.title}" kuyruğa eklendi.`);
 						syncQueue();
+						toast.info(
+							downloadStartMessage({
+								contentTitle: content?.title,
+								type:
+									episode?.season && episode?.episode
+										? "series"
+										: "movie",
+								seasonNumber: episode?.season,
+								episodeNumber: episode?.episode,
+								episodeTitle: episode?.episodeTitle,
+							}),
+						);
 						return { enqueued: true, id };
 					}
 					// Kaynak bulunamadı → modal'a düş
 				}
 			} catch (e) {
 				console.warn("Hızlı indirme yolu hatası:", e?.message);
+				toast.error(
+					`İndirme başlatılamadı${e?.message ? `: ${e.message}` : "."}`,
+				);
+			} finally {
+				markPending(key, false);
 			}
 
 			setModal({ content, episode });
 			return { enqueued: false };
 		},
-		[toast],
+		[toast, markPending],
 	);
 
 	const pauseDownload = useMemo(
@@ -239,6 +326,47 @@ export function DownloadProvider({ children }) {
 		[queue],
 	);
 
+	/**
+	 * Anahtar → son indirme durumu. Detay ekranındaki indirme butonları
+	 * (film hapı, bölüm dairesi) bu haritadan canlı durum/ilerleme okur.
+	 */
+	const downloadStates = useMemo(() => {
+		const map = new Map();
+		(queue || []).forEach((item) => {
+			if (!item?.contentId) return;
+			map.set(
+				buildDownloadKey({
+					contentId: item.contentId,
+					seriesId: item.seriesId,
+					season: item.seasonNumber,
+					episode: item.episodeNumber,
+				}),
+				{
+					status: item.status,
+					progress: Number(item.progress || 0),
+					error: item.error || null,
+				},
+			);
+		});
+		return map;
+	}, [queue]);
+
+	const getDownloadState = useCallback(
+		({ contentId, seriesId, season, episode }) =>
+			downloadStates.get(
+				buildDownloadKey({ contentId, seriesId, season, episode }),
+			) || null,
+		[downloadStates],
+	);
+
+	const isDownloadPending = useCallback(
+		({ contentId, seriesId, season, episode }) =>
+			pendingKeys.has(
+				buildDownloadKey({ contentId, seriesId, season, episode }),
+			),
+		[pendingKeys],
+	);
+
 	const value = useMemo(
 		() => ({
 			queue,
@@ -255,6 +383,8 @@ export function DownloadProvider({ children }) {
 			updateSettings,
 			resetSettings,
 			isDownloaded,
+			isDownloadPending,
+			getDownloadState,
 			downloadedKeys,
 			openDownloadModal: (payload) => setModal(payload),
 			shouldAskBeforeDownload: DownloadManager.shouldAskBeforeDownload,
@@ -274,6 +404,8 @@ export function DownloadProvider({ children }) {
 			updateSettings,
 			resetSettings,
 			isDownloaded,
+			isDownloadPending,
+			getDownloadState,
 			downloadedKeys,
 		],
 	);

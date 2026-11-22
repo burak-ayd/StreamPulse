@@ -280,13 +280,17 @@ function onStatusChange(callback) {
 
 /**
  * Eklenti tercihine göre indirme kararını verir (plan §5 akışı).
+ *
+ * Kayıtlı eklenti tercihi varsa karar ONA aittir: modal yalnız tercihteki
+ * "her seferinde sor" açıksa gösterilir. Genel ayar (alwaysAskBeforeDownload)
+ * yalnız hiç tercih kaydedilmemişken devreye girer — aksi halde varsayılan
+ * `true` değeri, kaydedilmiş ayara rağmen modalı her seferinde açıyordu.
  */
 async function shouldAskBeforeDownload(pluginName) {
+	const pref = pluginName ? await getPluginDownloadPref(pluginName) : null;
+	if (pref) return pref.alwaysAsk === true;
 	const settings = await getDownloadSettings();
-	if (settings.alwaysAskBeforeDownload) return true;
-	const pref = await getPluginDownloadPref(pluginName);
-	if (!pref) return true;
-	return pref.alwaysAsk !== false;
+	return settings.alwaysAskBeforeDownload !== false;
 }
 
 /**

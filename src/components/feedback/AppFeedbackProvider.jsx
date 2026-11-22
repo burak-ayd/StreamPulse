@@ -49,7 +49,7 @@ const FALLBACK_FEEDBACK = {
 	},
 };
 
-const TOAST_MS = 2600;
+const TOAST_MS = 3200;
 
 const TOAST_STYLE = {
 	success: { icon: "checkmark-circle", color: Palette.secondary },
@@ -149,13 +149,22 @@ export function AppFeedbackProvider({ children }) {
 				{toastState ? (
 					<Animated.View
 						pointerEvents="none"
-						style={[styles.toast, { opacity }]}>
-						<Ionicons
-							name={toastMeta.icon}
-							size={16}
-							color={toastMeta.color}
-						/>
-						<Text style={styles.toastText} numberOfLines={2}>
+						style={[
+							styles.toast,
+							{ opacity, borderColor: `${toastMeta.color}55` },
+						]}>
+						<View
+							style={[
+								styles.toastIcon,
+								{ backgroundColor: `${toastMeta.color}22` },
+							]}>
+							<Ionicons
+								name={toastMeta.icon}
+								size={22}
+								color={toastMeta.color}
+							/>
+						</View>
+						<Text style={styles.toastText} numberOfLines={3}>
 							{toastState.message}
 						</Text>
 					</Animated.View>
@@ -257,19 +266,34 @@ const styles = StyleSheet.create({
 		bottom: 88,
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 8,
-		paddingHorizontal: 14,
-		paddingVertical: 11,
-		borderRadius: 12,
+		gap: 12,
+		paddingHorizontal: 16,
+		paddingVertical: 14,
+		borderRadius: 16,
+		borderWidth: 1,
+		borderColor: "rgba(229, 225, 228, 0.14)",
 		backgroundColor: Palette.surfaceHigh,
 		alignSelf: "center",
-		maxWidth: 520,
+		maxWidth: 560,
+		shadowColor: "#000",
+		shadowOpacity: 0.35,
+		shadowRadius: 12,
+		shadowOffset: { width: 0, height: 4 },
+		elevation: 8,
+	},
+	toastIcon: {
+		width: 36,
+		height: 36,
+		borderRadius: 18,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 	toastText: {
 		flex: 1,
 		color: Palette.onSurface,
-		fontFamily: FontFamily.medium,
-		fontSize: 12,
+		fontFamily: FontFamily.semiBold,
+		fontSize: 14,
+		lineHeight: 19,
 	},
 
 	backdrop: {

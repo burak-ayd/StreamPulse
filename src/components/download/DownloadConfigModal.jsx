@@ -20,9 +20,11 @@
 
 import { FontFamily, Palette } from "@/constants/theme";
 import TVPressable from "@/components/common/TVPressable";
+import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import { extractVideoSources } from "@/services/api";
 import { DownloadManager } from "@/services/downloadManager";
 import {
+	deletePluginDownloadPref,
 	getDownloadSettings,
 	getPluginDownloadPref,
 	saveDownloadSettings,
@@ -72,6 +74,9 @@ export default function DownloadConfigModal({
 	const [remember, setRemember] = useState(false);
 	const [alwaysAsk, setAlwaysAsk] = useState(false);
 	const [starting, setStarting] = useState(false);
+	// Açılışta kayıtlı tercih var mıydı? "Hatırla" kaldırılırsa eski tercih silinir.
+	const [hadPref, setHadPref] = useState(false);
+	const { toast } = useFeedback();
 	// HLS ses rendition'ları (master playlist'ten): izlerken görülen
 	// "Türkçe/Français" seçenekleri buradan gelir.
 	const [audioTracks, setAudioTracks] = useState([]);
@@ -127,10 +132,12 @@ export default function DownloadConfigModal({
 			const pref = pluginName ? await getPluginDownloadPref(pluginName) : null;
 			if (cancelled) return;
 			if (pref) {
+				setHadPref(true);
 				setRemember(true);
 				setAlwaysAsk(pref.alwaysAsk === true);
 				setDownloadSubtitle(pref.downloadSubtitle !== false);
 			} else {
+				setHadPref(false);
 				setRemember(false);
 				setAlwaysAsk(false);
 				setDownloadSubtitle(true);
@@ -222,7 +229,10 @@ export default function DownloadConfigModal({
 		const aktifKaynak = selectedSource?.result?.url
 			? selectedSource
 			: sources.find((s) => Boolean(s?.result?.url));
-		if (!aktifKaynak?.result?.url) return;
+		if (!aktifKaynak?.result?.url) {
+			toast.error("Seçili kaynaktan indirilebilir bir adres bulunamadı.");
+			return;
+		}
 		setStarting(true);
 		try {
 			if (remember && pluginName) {
@@ -240,6 +250,10 @@ export default function DownloadConfigModal({
 					downloadSubtitle,
 					alwaysAsk,
 				});
+			} else if (hadPref && pluginName) {
+				// "Hatırla" kaldırıldı: eski tercih silinir, sonraki indirmede
+				// modal yeniden sorar (eski kayıt sessizce yürürlükte kalmasın).
+				await deletePluginDownloadPref(pluginName);
 			}
 			const isSeries = Boolean(episode && episode.season && episode.episode);
 			const secilenSes = sesSecenekleri[selectedAudioIdx] || null;
@@ -256,8 +270,10 @@ export default function DownloadConfigModal({
 				console.warn("lastDownloadQuality kaydedilemedi:", e);
 			}
 			await enqueueDownload({
-				contentId: content?.id || content?.url,
-				seriesId: isSeries ? content?.id || content?.url : null,
+				contentId: content?.id || content?.url || content?.title,
+				seriesId: isSeries
+					? content?.id || content?.url || content?.title
+					: null,
 				// Yerel dosya cihaza özeldir; devam kaydı bu sayfa adresini taşır.
 				pageUrl: episode?.url || content?.url || null,
 				contentTitle: content?.title || "İçerik",
@@ -295,6 +311,12 @@ export default function DownloadConfigModal({
 				posterUrl: content?.poster_url || content?.backdrop_url || null,
 			});
 			onClose?.();
+		} catch (e) {
+			// Kuyruk hatası modalı kapatmaz: kullanıcı ayarlarıyla tekrar dener.
+			toast.error(
+				`İndirme başlatılamadı${e?.message ? `: ${e.message}` : "."}`,
+			);
+			console.warn("İndirme başlatılamadı:", e?.message);
 		} finally {
 			setStarting(false);
 		}

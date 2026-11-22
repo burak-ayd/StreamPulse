@@ -19,6 +19,7 @@ import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState, useRef } from "react";
 import {
+	ActivityIndicator,
 	BackHandler,
 	Modal,
 	Pressable,
@@ -59,7 +60,7 @@ export default function QuickPreviewModal({
 	 * tablette davranış ve ölçüler BİREBİR aynı kalır (`isTV ? … : …`).
 	 */
 	const { isTV, sp, focusScale, height, width: windowWidth } = useTvMetrics();
-	const { requestDownload } = useDownload();
+	const { requestDownload, getDownloadState, isDownloadPending } = useDownload();
 
 	// TV focus restore for this modal
 	const focusRestore = useTVFocusRestore("quickpreview");
@@ -298,11 +299,59 @@ export default function QuickPreviewModal({
 	};
 
 
+	/*
+	 * İndirme butonunun canlı durumu (kaynak aranırken spinner).
+	 * Tıklama ile AYNI hedef anahtarı üretir: dizide ilk oynatılabilir bölüm.
+	 */
+	const downloadKeyInfo = (() => {
+		const contentId = currentItem.id || currentItem.url || movieId;
+		if (!isSeries || !currentItem.seasons) {
+			return { contentId, seriesId: null, season: null, episode: null };
+		}
+		const seasonKey = Object.keys(currentItem.seasons).sort(
+			(a, b) => Number(a) - Number(b),
+		)[0];
+		const first =
+			(currentItem.seasons[seasonKey] || []).find((e) => e?.url) ||
+			(currentItem.seasons[seasonKey] || [])[0];
+		return {
+			contentId,
+			seriesId: contentId,
+			season: Number(seasonKey),
+			episode: Number(first?.episode || first?.episode_number || 1),
+		};
+	})();
+	const downloadPending = isDownloadPending(downloadKeyInfo);
+	const downloadState = getDownloadState(downloadKeyInfo);
+
+	const downloadUi = downloadPending
+		? { icon: "download-outline", label: "Kaynak aranıyor…", busy: true }
+		: downloadState?.status === "downloading" ||
+			  downloadState?.status === "queued" ||
+			  downloadState?.status === "merging"
+			? {
+					icon: "cloud-download-outline",
+					label: `%${Math.round((downloadState.progress || 0) * 100)}`,
+					busy: false,
+				}
+			: downloadState?.status === "paused"
+				? { icon: "pause-circle-outline", label: "Duraklatıldı", busy: false }
+				: downloadState?.status === "completed"
+					? { icon: "checkmark-done", label: "İndirildi", busy: false }
+					: { icon: "download-outline", label: "İndir", busy: false };
+
 	/**
 	 * İndirme: merkezi akış (DownloadContext.requestDownload).
 	 * Dizide ilk oynatılabilir bölüm hedeflenir; film doğrudan içerik.
 	 */
 	const handleDownload = () => {
+		if (
+			downloadPending ||
+			downloadState?.status === "downloading" ||
+			downloadState?.status === "queued"
+		) {
+			return;
+		}
 		const content = {
 			id: currentItem.id || currentItem.url || movieId,
 			url: currentItem.url,
@@ -670,8 +719,9 @@ export default function QuickPreviewModal({
 			},
 			{
 				key: "download",
-				icon: "download-outline",
-				label: "İndir",
+				icon: downloadUi.icon,
+				label: downloadUi.label,
+				busy: downloadUi.busy,
 				onPress: handleDownload,
 			},
 			{
@@ -717,11 +767,18 @@ export default function QuickPreviewModal({
 						}}
 						onPress={item.onPress}
 						activeOpacity={0.75}>
-						<Ionicons
-							name={item.icon}
-							size={phone ? sp(22) : sp(21)}
-							color={Palette.onSurface}
-						/>
+						{item.busy ? (
+							<ActivityIndicator
+								size="small"
+								color={Palette.onSurface}
+							/>
+						) : (
+							<Ionicons
+								name={item.icon}
+								size={phone ? sp(22) : sp(21)}
+								color={Palette.onSurface}
+							/>
+						)}
 						<Text
 							style={[
 								styles.subActionLabel,
