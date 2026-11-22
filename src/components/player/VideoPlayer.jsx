@@ -77,6 +77,17 @@ const TEMEL_GEÇICI_BEKLEME_MS = 1600;
 const ILK_KARE_ZAMAN_ASIMI_MS = 13_000;
 
 /**
+ * Yükleme geri sayımı (ms).
+ *
+ * ⚠️ Kullanıcı isteği: kaynak geç yüklendiğinde ekran "Kaynak yükleniyor..."ta
+ * kalıyordu ve hata ekranı HİÇ gelmiyordu. Bu sayaç oynatma gerçekten
+ * başlayana kadar (ilk kare) ekranda geri sayar; süre dolunca hata ekranı
+ * gösterilir → kullanıcı "Yeniden Dene" / "Farklı Kaynak" ile çıkabilir.
+ * Her yeni yükleme denemesinde (videoKey değişimi) sıfırdan başlar.
+ */
+const YUKLEME_GERI_SAYIM_MS = 60_000;
+
+/**
  * ── `VideoPlayer` ─────────────────────────────────────────────
  *
  * Modern streaming player. Bu dosya YALNIZCA orkestrasyon yapar:
@@ -169,6 +180,12 @@ export default function VideoPlayer({
 	const [playableDuration, setPlayableDuration] = useState(0);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isBuffering, setIsBuffering] = useState(false);
+	// Yükleme geri sayımının kalan saniyesi (null = sayaç çalışmıyor).
+	const [kalanSaniye, setKalanSaniye] = useState(
+		YUKLEME_GERI_SAYIM_MS / 1000,
+	);
+	const playbackStartedRef = useRef(false);
+	const loadCountdownRef = useRef(null);
 	const [hasError, setHasError] = useState(false);
 	const [errorMessage, setErrorMessage] = useState("");
 	const [isLocked, setIsLocked] = useState(false);
@@ -238,6 +255,20 @@ export default function VideoPlayer({
 			clearTimeout(firstFrameTimerRef.current);
 			firstFrameTimerRef.current = null;
 		}
+	};
+
+	/** Yükleme geri sayımını durdurur (hata gösterildi / oynatma başladı). */
+	const clearLoadCountdown = () => {
+		if (loadCountdownRef.current) {
+			clearInterval(loadCountdownRef.current);
+			loadCountdownRef.current = null;
+		}
+		setKalanSaniye(null);
+	};
+	// Oynatma başladı: sayaç bir daha çalışmaz (yeni kaynak seçilirse yeniden).
+	const markPlaybackStarted = () => {
+		playbackStartedRef.current = true;
+		clearLoadCountdown();
 	};
 	// ⚠️ `originalBrightnessRef` KALDIRILDI. Parlaklık geri yüklemesi
 	// artık native modülde (`resetBrightness`) yapılıyor; JS tarafında
@@ -1078,6 +1109,8 @@ export default function VideoPlayer({
 
 		setCurrentTime(curTime);
 		currentTimeRef.current = curTime;
+		// İlk ilerleme = oynatma gerçekten başladı → geri sayım durur.
+		if (curTime > 0 && !playbackStartedRef.current) markPlaybackStarted();
 		// `onLoad` gecikirse (yerel büyük dosya) ses çoktan başlamış olur;
 		// gösterge gerçek oynatma ilerlediğinde kalksın.
 		if (isLoading && curTime > 0) setIsLoading(false);
@@ -1158,14 +1191,23 @@ export default function VideoPlayer({
 		resetOverride();
 		/*
 		 * Kalite sabitlemesi KAYNAĞA özeldir: eski kaynağın yerel master'ı
-		 * bırakılmazsa yeni kaynakta YANLIŞ yayın açılır (canlıda kaynak
-		 * seçimi artık oynatıcıdan yapılıyor). Liste effect'te yeniden dolar;
-		 * burada senkron temizlenir çünkü effect ağ beklemesi içeriyor.
+		 * bırakılmazsa yeni kaynakta YANLIŞ yayın açılır.
+		 *
+		 * ⚠️ KÖK NEDEN (kullanıcı: "kaynak geç yüklenince Kaynak
+		 * yükleniyor...'da takılıyor, çıkıp girince oynuyor"):
+		 * AYNI kaynağın yeniden denemesinde de karar sıfırlanıyordu.
+		 * `kaliteBekleniyor` true olunca `videoSource` null oluyor,
+		 * `<Video>` sökülüyor — ve kaliteyi çözen effect `[currentSourceData,
+		 * isLive]`e bağlı olduğu için (ikisi de değişmedi) BİR DAHA
+		 * ÇALIŞMIYOR: oynatıcı sonsuza kadar kurulmuyordu. Karar yalnızca
+		 * kaynak GERÇEKTEN değişince geçersizleşmeli; sıra değişince
+		 * `currentSourceData` değişir, effect kendisi yeniden çalışır.
 		 */
-		setVideoVariants([]);
-		setSelectedVariantId(null);
-		// Karar geçersizleşir: yeni kaynak için kalite yeniden belirlenecek.
-		setKaliteKarari({ url: null, uri: null });
+		if (index !== activeSourceIndex) {
+			setVideoVariants([]);
+			setSelectedVariantId(null);
+			setKaliteKarari({ url: null, uri: null });
+		}
 		setIsLoading(true);
 		setHasError(false);
 		// Aynı indekse dönüş (geçici hata tekrarı, yavaş kaynağın ikinci
@@ -1227,6 +1269,39 @@ export default function VideoPlayer({
 			: describePlaybackError(error, { sourceLabel: kaynakEtiketi });
 
 	/*
+	 * ── Yükleme geri sayımı ───────────────────────────────────
+	 *
+	 * Kullanıcı raporu: kaynak geç yüklenince ekran "Kaynak yükleniyor..."ta
+	 * takılı kalıyor, ancak oynatıcıdan çıkıp girince video oynuyordu.
+	 * `ILK_KARE_ZAMAN_ASIMI_MS` yalnızca `<Video>` mount olduktan SONRA
+	 * başlar; oynatıcı hiç kurulmazsa (kalite kararı, kaynak hazırlığı)
+	 * hiçbir zamanlayıcı çalışmıyordu. Bu sayaç `videoKey` ile başlar:
+	 * oynatıcı ne durumda olursa olsun 60 sn sonra hata ekranı çıkar.
+	 */
+	useEffect(() => {
+		playbackStartedRef.current = false;
+		const bitis = Date.now() + YUKLEME_GERI_SAYIM_MS;
+		loadCountdownRef.current = setInterval(() => {
+			const kalan = Math.max(0, Math.ceil((bitis - Date.now()) / 1000));
+			setKalanSaniye(kalan);
+			if (kalan > 0 || playbackStartedRef.current) return;
+			clearLoadCountdown();
+			console.warn(
+				`[oynatma] hata url=${currentSourceData?.result?.url || "-"} kod=loading-timeout (${YUKLEME_GERI_SAYIM_MS} ms içinde oynatma başlamadı)`,
+			);
+			setIsLoading(false);
+			setIsBuffering(false);
+			setHasError(true);
+			setErrorMessage(
+				isLive
+					? "Yayın şu anda açılamıyor."
+					: `Video ${YUKLEME_GERI_SAYIM_MS / 1000} saniye içinde başlamadı. Kaynak yanıt vermiyor olabilir; tekrar deneyin veya başka bir kaynak seçin.`,
+			);
+		}, 1000);
+		return () => clearInterval(loadCountdownRef.current);
+	}, [videoKey, currentSourceData, isLive]);
+
+	/*
 	 * ── İlk kare zaman aşımı ──────────────────────────────────
 	 *
 	 * `onError` gelmeyen sessiz takılma: playlist 200 döner, segment hiç
@@ -1237,6 +1312,7 @@ export default function VideoPlayer({
 	 */
 	const handleFirstFrameTimeout = (index) => {
 		firstFrameTimerRef.current = null;
+		clearLoadCountdown();
 		const url = sources[index]?.result?.url || "-";
 		console.warn(
 			`[oynatma] hata url=${url} kod=timeout (${ILK_KARE_ZAMAN_ASIMI_MS} ms içinde ilk kare gelmedi)`,
@@ -1279,6 +1355,7 @@ export default function VideoPlayer({
 
 	const handleError = (error) => {
 		clearFirstFrameTimer();
+		clearLoadCountdown();
 		const bilgi = classifyPlaybackError(error);
 		const kaynakNo = activeSourceIndex;
 		const kaynak = sources[kaynakNo] || {};
@@ -1724,6 +1801,7 @@ export default function VideoPlayer({
 							armFirstFrameTimer(activeSourceIndex);
 						}}
 						onLoad={handleLoad}
+						onReadyForDisplay={markPlaybackStarted}
 						onProgress={handleProgress}
 						onBuffer={handleBuffer}
 						onEnd={handleEnd}
@@ -2289,7 +2367,9 @@ export default function VideoPlayer({
 					<ActivityIndicator size="large" color={Palette.primary} />
 					<Text style={styles.loadingText}>
 						{isLoading
-							? "Kaynak yükleniyor..."
+							? kalanSaniye != null
+								? `Kaynak yükleniyor... ${kalanSaniye} sn`
+								: "Kaynak yükleniyor..."
 							: "Ara belleğe alınıyor..."}
 					</Text>
 				</View>
