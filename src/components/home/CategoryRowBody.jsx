@@ -1,5 +1,5 @@
 import { FlashList } from "@shopify/flash-list";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback } from "react";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import CategoryCard, { ROW_CARD_WIDTH } from "@/components/content/CategoryCard";
 import TVPressable from "@/components/common/TVPressable";
@@ -12,6 +12,8 @@ import { Platform, StyleSheet, Text, View } from "react-native";
 /** Kartlar arası boşluk. FlashList v2 `gap` desteklemediği için separator ile verilir. */
 const ROW_CARD_GAP = 12;
 const ESTIMATED_CARD_SIZE = ROW_CARD_WIDTH + ROW_CARD_GAP;
+/** Listenin sol/sağ boşluğu — `contentContainerStyle.paddingHorizontal` ile aynı. */
+const ROW_LIST_PAD_H = 16;
 
 function RowSeparator() {
 	return <View style={styles.rowSeparator} />;
@@ -31,6 +33,7 @@ export default function CategoryRowBody({
 	onMovieLongPress,
 	onSeeAll,
 	onRowFocused,
+	onRowMeasured,
 	showSeeAllTile,
 }) {
 	const categoryName = category?.name;
@@ -39,37 +42,27 @@ export default function CategoryRowBody({
 		onSeeAll?.(category);
 	}, [onSeeAll, category]);
 
-	const rowFocusTimerRef = useRef(null);
+	/*
+	 * Yatayda da çapa: odaklanan kart ekranın solundan ~%22'de durur,
+	 * satır onun altında kayar. Hedef offset sabit kart adımından
+	 * (`genişlik + aralık`) hesaplandığı için native `scrollToOffset`
+	 * kullanılır — animasyon kuyruğu yok.
+	 */
+	const { listRef, handleItemFocus: centerOnScreen } = useFocusCentering({
+		horizontal: true,
+		itemSize: ESTIMATED_CARD_SIZE,
+		startOffset: ROW_LIST_PAD_H,
+	});
 
-	const {
-		listRef,
-		handleItemFocus: centerOnScreen,
-		onScrollToIndexFailed,
-		onViewableItemsChanged,
-		viewabilityConfig,
-		clearRetry,
-	} = useFocusCentering({ horizontal: true });
-
-	useEffect(() => {
-		return () => {
-			clearRetry();
-			if (rowFocusTimerRef.current) {
-				clearTimeout(rowFocusTimerRef.current);
-			}
-		};
-	}, [clearRetry]);
-
+	/*
+	 * Kart ve satır kaydırması AYNI karede verilir (P4). Eskiden dikey
+	 * satır hizalaması 90 ms geciktiriliyordu; iki animasyon üst üste
+	 * binip titreme üretiyordu.
+	 */
 	const handleCardFocus = useCallback(
 		(index) => {
 			centerOnScreen(index);
-			// Dikey satır ortalaması (onRowFocused) ile yatay kart ortalamasının
-			// aynı anda tetiklenip GPU/JS thread'i boğmaması için hafif bir gecikme ekliyoruz.
-			if (rowFocusTimerRef.current) {
-				clearTimeout(rowFocusTimerRef.current);
-			}
-			rowFocusTimerRef.current = setTimeout(() => {
-				onRowFocused?.();
-			}, 90);
+			onRowFocused?.();
 		},
 		[centerOnScreen, onRowFocused],
 	);
@@ -106,7 +99,9 @@ export default function CategoryRowBody({
 	);
 
 	return (
-		<View style={styles.sectionContainer}>
+		<View
+			style={styles.sectionContainer}
+			onLayout={(e) => onRowMeasured?.(e.nativeEvent.layout.height)}>
 			<View style={styles.sectionHeader}>
 				<View style={styles.sectionTitleRow}>
 					<View style={styles.sectionDot} />
@@ -136,11 +131,7 @@ export default function CategoryRowBody({
 				showsHorizontalScrollIndicator={false}
 				contentContainerStyle={styles.horizontalList}
 				ItemSeparatorComponent={RowSeparator}
-				estimatedItemSize={ESTIMATED_CARD_SIZE}
 				drawDistance={Platform.isTV ? 600 : 250}
-				onScrollToIndexFailed={onScrollToIndexFailed}
-				onViewableItemsChanged={onViewableItemsChanged}
-				viewabilityConfig={viewabilityConfig}
 				renderItem={renderItem}
 			/>
 		</View>

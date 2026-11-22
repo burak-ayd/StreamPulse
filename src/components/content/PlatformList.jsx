@@ -63,17 +63,15 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv, onClose }
 
 	const yoklamaRef = useRef(null);
 
-	// TV odak ortalama: D-pad ile dikeyde gezerken liste düzgün kaysın
-	const {
-		listRef,
-		handleItemFocus,
-		onScrollToIndexFailed,
-		onViewableItemsChanged,
-		viewabilityConfig,
-		clearRetry,
-	} = useFocusCentering({ columns: 1 });
-
-	useEffect(() => clearRetry, [clearRetry]);
+	/*
+	 * Dikey liste: satır yüksekliği 38 + aralık 2 = 40 px sabit adım,
+	 * içerik üst boşluğu 4 px. `scrollToOffset` bu geometriden hesaplanır.
+	 */
+	const { listRef, handleItemFocus } = useFocusCentering({
+		columns: 1,
+		itemSize: 40,
+		startOffset: 4,
+	});
 
 	const loadPlatforms = useCallback(async () => {
 		try {
@@ -352,9 +350,6 @@ export default function PlatformList({ onSelectPlatform, onOpenLiveTv, onClose }
 					removeClippedSubviews={false}
 					initialNumToRender={Platform.isTV ? 35 : 20}
 					windowSize={11}
-					onScrollToIndexFailed={onScrollToIndexFailed}
-					onViewableItemsChanged={onViewableItemsChanged}
-					viewabilityConfig={viewabilityConfig}
 				/>
 			)}
 

@@ -62,6 +62,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 /** Stabil referans: useMemo içinde yeni dizi üretmemek için. */
 const EMPTY_ARRAY = [];
 
+/** Ana sayfa satırları arası dikey boşluk — `CategoryRowBody.sectionContainer.marginBottom`. */
+const ROW_SECTION_GAP = 24;
+/** `styles.scrollContent.paddingTop` ile aynı. */
+const CONTENT_PAD_TOP = 0;
+/** Henüz ölçülmemiş satır için kaba yükseklik (kart + başlık + pay). */
+const FALLBACK_ROW_HEIGHT = 350;
+
 export default function Index() {
 	const router = useRouter();
 	// Giriş yapılmışsa hesap resmi avatar önceliğine sahiptir
@@ -129,20 +136,10 @@ export default function Index() {
 	 */
 	const appStateRef = useRef(AppState.currentState);
 
-	useEffect(() => {
-		const subscription = AppState.addEventListener("change", (nextState) => {
-			const prev = appStateRef.current;
-			appStateRef.current = nextState;
-			if (prev !== "background" || nextState !== "active") return;
-
-			clearScreenMemory();
-			homeListRef.current?.scrollToOffset({
-				offset: 0,
-				animated: false,
-			});
-		});
-		return () => subscription.remove();
-	}, []);
+	/*
+	 * ⚠️ Bu effect `homeListRef`'ten SONRA tanımlanır (aşağıda): React
+	 * Compiler, hook kimliği oluşmadan ref'e erişilmesini reddediyor.
+	 */
 
 	const isNoneMode =
 		!selectedPlatform ||
@@ -670,29 +667,56 @@ export default function Index() {
 	const rememberScroll = useScrollMemory("home");
 
 	/*
-	 * SORUN 5 dikey yarısı — ortak kanca (`useFocusCentering`).
+	 * Ana sayfa dikey listesi — sabit çapa (P2).
 	 *
-	 * Bu ana liste bir "satır listesi" (her satır bir kategori yatay
-	 * dizisi); dolayısıyla ızgara sütun çevirisi YOKTUR ve
-	 * `scrollRowToCenter` doğrudan hedef satırın indeksini alır.
-	 *
-	 * Aynı kanca `category.jsx`, `live.jsx`,
-	 * `MovieCategorySection.jsx` ve `ContinueWatchingSection.jsx`
-	 * içinde elle kopyalanmış dört ayrı örnekten oluşuyordu; kanca
-	 * tek doğruluk kaynağı oldu.
+	 * Satır yükseklikleri `onLayout` ile ölçülür (`rowHeightsRef`), hero
+	 * başlığının yüksekliği de aynı şekilde (`headerHeightRef`). Offset
+	 * bunların toplamından hesaplanır ve native `scrollToOffset` ile
+	 * kaydırılır; odaklanan satır ekranın üstünden ~%30'da sabit kalır.
 	 */
-	const {
-		listRef: homeListRef,
-		handleItemFocus: centerRowOnScreen,
-		onScrollToIndexFailed: handleHomeScrollToIndexFailed,
-		onViewableItemsChanged,
-		viewabilityConfig,
-		clearRetry,
-		clearDebounce,
-	} = useFocusCentering();
+	const headerHeightRef = useRef(0);
+	const rowHeightsRef = useRef([]);
 
-	useEffect(() => clearRetry, [clearRetry]);
-	useEffect(() => clearDebounce, [clearDebounce]);
+	const handleHeaderLayout = useCallback((e) => {
+		headerHeightRef.current = e.nativeEvent.layout.height;
+	}, []);
+
+	const handleRowMeasured = useCallback((rowIndex, height) => {
+		rowHeightsRef.current[rowIndex] = height;
+	}, []);
+
+	/*
+	 * İçerik koordinatı: [ListHeaderComponent] + contentContainer paddingTop
+	 * + önceki satırların yükseklikleri (+ aralarındaki `sectionContainer`
+	 * marginBottom).
+	 */
+	const getHomeOffset = useCallback((index) => {
+		let y = headerHeightRef.current + CONTENT_PAD_TOP;
+		for (let i = 0; i < index; i += 1) {
+			y +=
+				(rowHeightsRef.current[i] ?? FALLBACK_ROW_HEIGHT) +
+				ROW_SECTION_GAP;
+		}
+		return y;
+	}, []);
+
+	const { listRef: homeListRef, handleItemFocus: centerRowOnScreen } =
+		useFocusCentering({ getOffset: getHomeOffset });
+
+	useEffect(() => {
+		const subscription = AppState.addEventListener("change", (nextState) => {
+			const prev = appStateRef.current;
+			appStateRef.current = nextState;
+			if (prev !== "background" || nextState !== "active") return;
+
+			clearScreenMemory();
+			homeListRef.current?.scrollToOffset({
+				offset: 0,
+				animated: false,
+			});
+		});
+		return () => subscription.remove();
+	}, [homeListRef]);
 
 	const handleRowFocused = useCallback(
 		(rowIndex) => {
@@ -717,8 +741,10 @@ export default function Index() {
 				// Sorun 1: sol ray bulunan düzende satır sonunda
 				// odaklanabilir "Tümünü Gör" kutusu.
 				showSeeAllTile={isSideRail}
-				// Sorun 5: odaklanan satır ekranın ortasına taşınır.
+				// Sorun 5: odaklanan satır sabit çapaya taşınır.
 				onRowFocused={handleRowFocused}
+				// Offset hesabı için satır yüksekliği ölçümü.
+				onRowMeasured={handleRowMeasured}
 			/>
 		),
 		[
@@ -728,29 +754,19 @@ export default function Index() {
 			handleSeeAllCategory,
 			isSideRail,
 			handleRowFocused,
+			handleRowMeasured,
 		],
 	);
 
-	const handleLoadMore = useCallback(() => {
-		setVisibleCount((prev) => prev + 5);
-	}, []);
-
-	const homeListFooter = useMemo(() => {
-		if (isNoneMode || visibleCount >= categories.length) return null;
-		return (
-			<View style={styles.loadMoreContainer}>
-				<TVPressable
-					style={styles.loadMoreButton}
-					focusedStyle={styles.loadMoreButtonFocused}
-					onPress={handleLoadMore}>
-					<Text style={styles.loadMoreText}>
-						Daha Fazla Kategori Göster (
-						{categories.length - visibleCount})
-					</Text>
-				</TVPressable>
-			</View>
+	/*
+	 * P5 — "Daha Fazla Kategori" düğmesi kaldırıldı: kumandayla ölü bir
+	 * odak durağı oluşturuyordu. Liste sonuna gelindiğinde otomatik yüklenir.
+	 */
+	const handleEndReached = useCallback(() => {
+		setVisibleCount((prev) =>
+			prev >= categories.length ? prev : Math.min(prev + 10, categories.length),
 		);
-	}, [isNoneMode, visibleCount, categories.length, handleLoadMore]);
+	}, [categories.length]);
 
 	return (
 		<>
@@ -789,20 +805,17 @@ export default function Index() {
 						data={visibleCategories}
 						keyExtractor={categoryKeyExtractor}
 						renderItem={renderCategoryRow}
-						onScrollToIndexFailed={handleHomeScrollToIndexFailed}
-						onViewableItemsChanged={onViewableItemsChanged}
-						viewabilityConfig={viewabilityConfig}
+						onEndReached={handleEndReached}
+						onEndReachedThreshold={0.8}
 						onScroll={rememberScroll.onScroll}
 						scrollEventThrottle={rememberScroll.scrollEventThrottle}
 						onContentSizeChange={() =>
 							rememberScroll.restoreOffset(homeListRef)
 						}
-						ListFooterComponent={homeListFooter}
 						showsVerticalScrollIndicator={false}
 						contentContainerStyle={styles.scrollContent}
 						// TV: FlashList native RecyclerView kullanıyor, removeClippedSubviews
 						// prop'u kaldırıldı — FlashList kendi view pool'unu yönetir.
-						estimatedItemSize={270}
 						drawDistance={Platform.isTV ? 800 : 350}
 						refreshControl={
 							<RefreshControl
@@ -813,7 +826,7 @@ export default function Index() {
 							/>
 						}
 						ListHeaderComponent={
-							<>
+							<View onLayout={handleHeaderLayout}>
 						{/* 1. Hero Featured Banner */}
 						<HeroBanner
 							movie={featuredMovie}
@@ -995,11 +1008,11 @@ export default function Index() {
 									/>
 								)}
 
-								{/* Kategori satırları artık FlatList'in data'sı;
-								    "daha fazla" butonu da footer olarak taşındı. */}
+								{/* Kategori satırları artık FlashList'in data'sı;
+								    liste sonuna gelindiğinde otomatik yüklenir. */}
 							</>
 							)}
-							</>
+							</View>
 						}
 					/>
 				)}
@@ -1147,27 +1160,6 @@ const styles = StyleSheet.create({
 	selectPlatformBtnText: {
 		color: Palette.onPrimaryContainer,
 		fontSize: 14,
-		fontFamily: FontFamily.semiBold,
-	},
-	loadMoreContainer: {
-		paddingVertical: 16,
-		alignItems: "center",
-	},
-	loadMoreButton: {
-		paddingVertical: 10,
-		paddingHorizontal: 22,
-		borderRadius: 20,
-		borderWidth: 2,
-		borderColor: "transparent",
-		backgroundColor: Palette.surfaceLow,
-	},
-	loadMoreButtonFocused: {
-		backgroundColor: Palette.surfaceHigh,
-		borderColor: Palette.primary,
-	},
-	loadMoreText: {
-		color: Palette.primary,
-		fontSize: 13,
 		fontFamily: FontFamily.semiBold,
 	},
 });

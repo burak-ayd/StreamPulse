@@ -1,16 +1,16 @@
-import ContinueWatchingCard from "@/components/content/ContinueWatchingCard";
+import ContinueWatchingCard, {
+	CONTINUE_CARD_WIDTH,
+} from "@/components/content/ContinueWatchingCard";
 import TVPressable from "@/components/common/TVPressable";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback } from "react";
 import { FlashList } from "@shopify/flash-list";
 import { Platform, StyleSheet, Text, View } from "react-native";
 
 const CARD_GAP = 12;
 const LIST_PAD_H = 16;
-// Continue watching kart genişliği (yaklaşık 200px) + gap
-const ESTIMATED_CONTINUE_CARD_SIZE = 220;
 
 /** FlashList v2 `gap` desteklemez — kart aralığı separator ile verilir. */
 function ItemSeparator() {
@@ -25,35 +25,20 @@ export default function ContinueWatchingSection({
 	onSeeAllPress,
 	onRowFocused,
 }) {
-	const rowFocusTimerRef = useRef(null);
+	const { listRef, handleItemFocus: centerOnScreen } = useFocusCentering({
+		horizontal: true,
+		itemSize: CONTINUE_CARD_WIDTH + CARD_GAP,
+		startOffset: LIST_PAD_H,
+	});
 
-	const {
-		listRef,
-		handleItemFocus: centerOnScreen,
-		onScrollToIndexFailed,
-		onViewableItemsChanged,
-		viewabilityConfig,
-		clearRetry,
-	} = useFocusCentering({ horizontal: true });
-
-	useEffect(() => {
-		return () => {
-			clearRetry();
-			if (rowFocusTimerRef.current) {
-				clearTimeout(rowFocusTimerRef.current);
-			}
-		};
-	}, [clearRetry]);
-
+	/*
+	 * Yatay kart ve dikey satır kaydırması aynı karede (P4) — 90 ms
+	 * gecikme kaldırıldı.
+	 */
 	const handleItemFocus = useCallback(
 		(index) => {
 			centerOnScreen(index);
-			if (rowFocusTimerRef.current) {
-				clearTimeout(rowFocusTimerRef.current);
-			}
-			rowFocusTimerRef.current = setTimeout(() => {
-				onRowFocused?.();
-			}, 90);
+			onRowFocused?.();
 		},
 		[centerOnScreen, onRowFocused],
 	);
@@ -109,11 +94,7 @@ export default function ContinueWatchingSection({
 				showsHorizontalScrollIndicator={false}
 				contentContainerStyle={styles.listContent}
 				ItemSeparatorComponent={ItemSeparator}
-				estimatedItemSize={ESTIMATED_CONTINUE_CARD_SIZE}
 				drawDistance={Platform.isTV ? 600 : 250}
-				onScrollToIndexFailed={onScrollToIndexFailed}
-				onViewableItemsChanged={onViewableItemsChanged}
-				viewabilityConfig={viewabilityConfig}
 				renderItem={renderItem}
 			/>
 		</View>

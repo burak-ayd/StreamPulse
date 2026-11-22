@@ -96,6 +96,9 @@ const ARAMA_DEBOUNCE_MS = 300;
 /** Kategori değişimi / arama sırasında eski listede ne kadar süre kalınır. */
 const GRID_GAP = 10;
 
+/** Liste içeriğinin üst boşluğu — `styles.listContent.paddingTop` ile aynı. */
+const LIVE_LIST_PAD_TOP = 12;
+
 /**
  * Platform hedef kart genişliği (dp).
  *
@@ -254,35 +257,16 @@ export default function LiveScreen() {
 		return kartGenisligi / CHANNEL_TILE_ASPECT + GRID_GAP;
 	}, [kartGenisligi]);
 
-	const getItemLayout = useCallback(
-		(data, index) => {
-			if (satirYuksekligi <= 0 || sutunSayisi <= 0) {
-				return { length: 0, offset: 0, index };
-			}
-			const rowIndex = Math.floor(index / sutunSayisi);
-			return {
-				length: satirYuksekligi,
-				offset: satirYuksekligi * rowIndex,
-				index,
-			};
-		},
-		[satirYuksekligi, sutunSayisi],
-	);
-
 	/*
-	 * SORUN 5 — odaklanan kanalın SATIRI ekranın dengeli dikey görüş alanına taşınır.
+	 * Sabit çapa (P2): odaklanan kanalın SATIRI ekranın üstünden ~%30'da
+	 * durur. Offset satır yüksekliğinden (`satirYuksekligi`) hesaplandığı
+	 * için native `scrollToOffset` kullanılır.
 	 */
-	const {
-		listRef,
-		handleItemFocus: handleCardFocus,
-		onScrollToIndexFailed,
-		onViewableItemsChanged,
-		viewabilityConfig,
-		clearRetry,
-	} = useFocusCentering({ columns: sutunSayisi });
-
-	// Ekrandan çıkarken bekleyen "tekrar ortalama" zamanlayıcısını iptal et.
-	useEffect(() => clearRetry, [clearRetry]);
+	const { listRef, handleItemFocus: handleCardFocus } = useFocusCentering({
+		columns: sutunSayisi,
+		itemSize: satirYuksekligi,
+		startOffset: LIVE_LIST_PAD_TOP,
+	});
 
 	// ── İlk açılış: Disk önbelleğinden anında okuma (0ms açılış) + paralel taze veri çekme ──
 	useEffect(() => {
@@ -779,11 +763,7 @@ export default function LiveScreen() {
 							styles.fullWidth,
 						]}
 						showsVerticalScrollIndicator={false}
-						estimatedItemSize={satirYuksekligi > 0 ? satirYuksekligi : 120}
 						drawDistance={Platform.isTV ? 800 : 350}
-						onScrollToIndexFailed={onScrollToIndexFailed}
-						onViewableItemsChanged={onViewableItemsChanged}
-						viewabilityConfig={viewabilityConfig}
 						ListFooterComponent={
 							yukleniyor && kanallar.length > 0 ? (
 								<View style={styles.footer}>

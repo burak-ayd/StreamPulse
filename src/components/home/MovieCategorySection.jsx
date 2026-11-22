@@ -77,6 +77,8 @@ function MovieCategorySection({
    * kendi dikey listesinde satırı ekranın ORTASINA taşır (sorun 5).
    */
   onRowFocused,
+  /** Satır yüksekliği ölçüldüğünde çağrılır (ana sayfa offset hesabı için). */
+  onRowMeasured,
   /** Sol ray bulunan düzenlerde (TV / yatay tablet) satır sonu kutusu. */
   showSeeAllTile = false,
 }) {
@@ -137,6 +139,13 @@ function MovieCategorySection({
     onRowFocused?.(rowIndex);
   }, [onRowFocused, rowIndex]);
 
+  const handleRowMeasured = useCallback(
+    (height) => {
+      onRowMeasured?.(rowIndex, height);
+    },
+    [onRowMeasured, rowIndex],
+  );
+
   /*
    * Satır yüklenirken spinner DEĞİL, iskelet.
    *
@@ -161,6 +170,7 @@ function MovieCategorySection({
       onMovieLongPress={onMovieLongPress}
       onSeeAll={onSeeAll}
       onRowFocused={handleRowFocused}
+      onRowMeasured={handleRowMeasured}
       showSeeAllTile={showSeeAllTile}
     />
   );

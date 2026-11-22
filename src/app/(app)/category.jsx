@@ -73,8 +73,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const GAP = 10;
 const GUTTER = 14;
-/** Liste içeriğinin üst boşluğu — `getItemLayout` ile Aynı değer. */
-const LIST_PAD_TOP = GAP + 2;
+/** Liste içeriğinin üst boşluğu — `styles.listContent.paddingTop` ile aynı. */
+const LIST_PAD_TOP = 24;
 /** Kategori adı çok uzunsa tek satırda kısalır. */
 const MAX_TITLE_CHARS = 22;
 
@@ -197,25 +197,15 @@ export default function CategoryScreen() {
   const rememberScroll = useScrollMemory(scrollKey);
 
   /*
-   * SORUN 5 — odaklanan kartın satırı ekranın dikey ortasına taşınır.
-   *
-   * Davranış artık ortak kancada (`useFocusCentering`); bu ekran yalnızca
-   * sütun sayısını verir. Aynı mantık `live.jsx`,
-   * `MovieCategorySection.jsx` ve `ContinueWatchingSection.jsx` içinde
-   * ayrı ayrı kopyalanmıştı; kanca tek doğruluk kaynağı oldu.
+   * Sabit çapa (P2): odaklanan kartın SATIRI ekranın üstünden ~%30'da
+   * durur. Offset, sabit kart adımından (`cardStride`) hesaplandığı için
+   * native `scrollToOffset` ile tek karede kaydırılır.
    */
-  const {
-    listRef,
-    handleItemFocus: handleCardFocus,
-    onScrollToIndexFailed,
-    onViewableItemsChanged,
-    viewabilityConfig,
-    clearRetry,
-    clearDebounce,
-  } = useFocusCentering({ columns });
-
-  useEffect(() => clearRetry, [clearRetry]);
-  useEffect(() => clearDebounce, [clearDebounce]);
+  const { listRef, handleItemFocus: handleCardFocus } = useFocusCentering({
+    columns,
+    itemSize: cardStride,
+    startOffset: LIST_PAD_TOP,
+  });
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -515,22 +505,6 @@ export default function CategoryScreen() {
   );
 
   /**
-   * Sabit adımlı ölçüm. Kart yüksekliği artık veriden bağımsız
-   * (`gridCardStride`), dolayısıyla ofset kayması yok.
-   */
-  const getItemLayout = useCallback(
-    (data, index) => {
-      const row = Math.floor(index / columns);
-      return {
-        length: cardStride,
-        offset: LIST_PAD_TOP + cardStride * row,
-        index,
-      };
-    },
-    [columns, cardStride],
-  );
-
-  /**
    * İlk yükleme iskeleti.
    *
    * Spinner'sün yerine: ekranın gerçek ızgara geometrisi (GUTTER, GAP,
@@ -723,15 +697,11 @@ export default function CategoryScreen() {
             numColumns={columns}
             columnWrapperStyle={columns > 1 ? styles.row : undefined}
             contentContainerStyle={[styles.listContent, { rowGap: GAP }]}
-            onScrollToIndexFailed={onScrollToIndexFailed}
-            onViewableItemsChanged={onViewableItemsChanged}
-            viewabilityConfig={viewabilityConfig}
             onScroll={rememberScroll.onScroll}
             scrollEventThrottle={rememberScroll.scrollEventThrottle}
             onContentSizeChange={() => rememberScroll.restoreOffset(listRef)}
             onEndReached={loadMore}
             // FlashList native view pool yönetiyor, removeClippedSubviews/windowSize gerekmez
-            estimatedItemSize={gridCardStride(cardWidth, GAP)}
             overrideItemLayout={(layout) => {
               layout.size = gridCardStride(cardWidth, GAP);
             }}

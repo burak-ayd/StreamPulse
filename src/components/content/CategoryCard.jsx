@@ -50,6 +50,18 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import Image from "@/components/common/SmartImage";
 import { memo } from "react";
 import { StyleSheet, Text, View, PixelRatio } from "react-native";
+import Animated, {
+	interpolateColor,
+	useAnimatedStyle,
+	useSharedValue,
+	withSpring,
+} from "react-native-reanimated";
+
+/** Netflix tarzı odak yayları — hızlı yanıt, minimal salınım. */
+const FOCUS_SPRING = { damping: 18, stiffness: 200, mass: 0.8 };
+const BLUR_SPRING = { damping: 22, stiffness: 160, mass: 0.8 };
+/** Odaksız poster kenarlığı (`styles.poster.borderColor`). */
+const POSTER_BORDER_IDLE = "rgba(70, 69, 84, 0.6)";
 
 /** Ana sayfa yatay satırının sabit kart genişliği. */
 export const ROW_CARD_WIDTH = 144;
@@ -109,12 +121,12 @@ function CategoryCard({
 	onPress,
 	onLongPress,
 	/**
-	 * Odak callbacks'i (TV odak ortalama — sorun 5).
+	 * Odak callbacks'i.
 	 *
-	 * Çağıran liste, kart odaklandığında `scrollToIndex` çağırarak
-	 * kartı ekranın ortasına getirir. `TVPressable` zaten `onFocus`/
-	 * `onBlur` destekliyor; bu ikisi kart görünümüne DEĞİL, gezinme
-	 * katmanına ait olduğu için buradan açıkça geçiriyoruz.
+	 * Çağıran liste, kart odaklandığında kendi kaydırma hizasını uygular
+	 * (`useFocusCentering`). `TVPressable` zaten `onFocus`/`onBlur`
+	 * destekliyor; bu ikisi kart görünümüne DEĞİL, gezinme katmanına ait
+	 * olduğu için buradan açıkça geçiriyoruz.
 	 */
 	onFocus,
 	onBlur,
@@ -146,92 +158,121 @@ function CategoryCard({
 		cardWidth * PixelRatio.get() * POSTER_QUALITY_FACTOR,
 	);
 
+	/*
+	 * Odak görselleri UI thread'de (P3): `useState` ile odak tutmak her
+	 * D-pad basışında kartın tüm alt ağacını React'te yeniden çiziyordu.
+	 * Burada ölçek, kenarlık ve başlık rengi Reanimated worklet'lerinde
+	 * animasyonlanır; `TVPressable`'a statik çocuk verilir ki kendi
+	 * state değişimi alt ağacı yeniden render etmesin.
+	 */
+	const focus = useSharedValue(0);
+
+	const cardStyle = useAnimatedStyle(() => ({
+		// Izgarada ölçek yok: komşu kart aralığı dar (bkz. eski not).
+		transform: [{ scale: isRow ? 1 + focus.value * 0.08 : 1 }],
+	}));
+
+	const posterStyle = useAnimatedStyle(() => ({
+		borderColor: interpolateColor(
+			focus.value,
+			[0, 1],
+			[POSTER_BORDER_IDLE, Palette.primary],
+		),
+	}));
+
+	const titleStyle = useAnimatedStyle(() => ({
+		color: interpolateColor(
+			focus.value,
+			[0, 1],
+			[Palette.onSurface, Palette.primary],
+		),
+	}));
+
 	return (
 		<TVPressable
-			style={({ focused }) => [
-				styles.card,
-				{ width: cardWidth },
-				focused && (isRow ? styles.cardFocused : styles.cardFocusedGrid),
-			]}
+			style={[styles.card, { width: cardWidth }]}
 			focusedStyle={null}
 			onPress={onPress}
 			onLongPress={onLongPress}
-			onFocus={onFocus}
-			onBlur={onBlur}
+			onFocus={() => {
+				focus.set(withSpring(1, FOCUS_SPRING));
+				onFocus?.();
+			}}
+			onBlur={() => {
+				focus.set(withSpring(0, BLUR_SPRING));
+				onBlur?.();
+			}}
 			accessibilityLabel={[title, year].filter(Boolean).join(", ")}>
-			{({ focused }) => (
-				<View>
-					<View style={[styles.poster, focused && styles.posterFocused]}>
-						<Image
-							source={{ uri: posterUri }}
-							style={styles.posterImage}
-							contentFit="cover"
-							contentPosition="center"
-							// Sanallaştırılmış listede her kart için crossfade
-							// çalıştırmak decode animasyonu kuyruğunu dolduruyor.
-							// `recyclingKey` Glide'ın view-recycling davranışını
-							// tetikliyor — CloudStream'in sharedPool mantığının karşılığı.
-							recyclingKey={posterUri}
-							transition={0}
-							cachePolicy="memory-disk"
-						/>
+			<Animated.View style={cardStyle}>
+				<Animated.View style={[styles.poster, posterStyle]}>
+					<Image
+						source={{ uri: posterUri }}
+						style={styles.posterImage}
+						contentFit="cover"
+						contentPosition="center"
+						// Sanallaştırılmış listede her kart için crossfade
+						// çalıştırmak decode animasyon kuyruğunu dolduruyor.
+						// `recyclingKey` Glide'ın view-recycling davranışını
+						// tetikliyor — CloudStream'in sharedPool mantığının karşılığı.
+						recyclingKey={posterUri}
+						transition={0}
+						cachePolicy="memory-disk"
+					/>
 
-						{/* Alt kenar karartması: rozetler ve metin okunur kalsın. */}
-						<View style={styles.posterScrim} pointerEvents="none" />
+					{/* Alt kenar karartması: rozetler ve metin okunur kalsın. */}
+					<View style={styles.posterScrim} pointerEvents="none" />
 
-						{rating ? (
-							<View style={styles.ratingBadge} pointerEvents="none">
-								<Ionicons
-									name="star"
-									size={10}
-									color={Palette.tertiary}
-								/>
-								<Text style={styles.ratingText}>{rating}</Text>
-							</View>
-						) : null}
-
-						{lang ? (
-							<LanguageBadge
-								language={lang}
-								size="small"
-								style={styles.langBadge}
-								textStyle={styles.langBadgeText}
+					{rating ? (
+						<View style={styles.ratingBadge} pointerEvents="none">
+							<Ionicons
+								name="star"
+								size={10}
+								color={Palette.tertiary}
 							/>
-						) : null}
-					</View>
-
-					<View style={styles.title}>
-						<Text
-							style={[styles.titleText, focused && styles.titleFocused]}
-							numberOfLines={1}>
-							{title}
-						</Text>
-					</View>
-
-						{/*
-					 * ⚠️ SORUN 2 — "Izgara satırları yüklendikçe ekran atlıyor".
-					 *
-					 * Kategori sayfasındaki `FlatList` sabit adımlı
-					 * `getItemLayout` kullanıyor (TV'de ölçüm atlamak için
-					 * şart). Bu, ancak TÜM kartlar aynı yükseklikteyse doğrudur.
-					 * Yılı olmayan kartta yıl satırı hiç çizilmediği için
-					 * o satır 12px daha kısa oluyor, `getItemLayout` yanlış
-					 * ofset üretiyor ve yeni sayfa geldiğinde liste kayıyordu.
-					 *
-					 * Çözüm: yıl satırı DAIMA yer ayırır; veri yoksa boş
-					 * (saydam) bir satır basılır. Görsel değişmez, yükseklik
-					 * sabitlenir.
-					 */}
-						<View style={styles.subtitleWrap}>
-							<Text
-								style={[styles.subtitle, ep && styles.subtitleEpisode]}
-								numberOfLines={1}>
-								{subtitle || " "}
-							</Text>
+							<Text style={styles.ratingText}>{rating}</Text>
 						</View>
-					</View>
-				)}
-			</TVPressable>
+					) : null}
+
+					{lang ? (
+						<LanguageBadge
+							language={lang}
+							size="small"
+							style={styles.langBadge}
+							textStyle={styles.langBadgeText}
+						/>
+					) : null}
+				</Animated.View>
+
+				<View style={styles.title}>
+					<Animated.Text
+						style={[styles.titleText, titleStyle]}
+						numberOfLines={1}>
+						{title}
+					</Animated.Text>
+				</View>
+
+				{/*
+				 * ⚠️ SORUN 2 — "Izgara satırları yüklendikçe ekran atlıyor".
+				 *
+				 * Kategori sayfasındaki liste sabit adımlı ölçüm kullanıyor
+				 * (TV'de ölçüm atlamak için şart). Bu, ancak TÜM kartlar aynı
+				 * yükseklikteyse doğrudur. Yılı olmayan kartta yıl satırı hiç
+				 * çizilmediği için o satır 12px daha kısa oluyor ve ofset
+				 * kayıyordu.
+				 *
+				 * Çözüm: yıl satırı DAIMA yer ayırır; veri yoksa boş
+				 * (saydam) bir satır basılır. Görsel değişmez, yükseklik
+				 * sabitlenir.
+				 */}
+				<View style={styles.subtitleWrap}>
+					<Text
+						style={[styles.subtitle, ep && styles.subtitleEpisode]}
+						numberOfLines={1}>
+						{subtitle || " "}
+					</Text>
+				</View>
+			</Animated.View>
+		</TVPressable>
 	);
 }
 
@@ -246,25 +287,6 @@ const styles = StyleSheet.create({
 	card: {
 		// genişlik dışarıdan verilir
 	},
-	// Animated style'lar transform, elevation, shadow, border'ı yönetiyor
-	// Bu cardFocused sadece fallback (non-TV veya Reanimated çalışmadığında)
-	cardFocused: {
-		transform: [{ scale: 1.08 }],
-		shadowColor: Palette.primary,
-		shadowOffset: { width: 0, height: 0 },
-		shadowOpacity: 0.5,
-		shadowRadius: 12,
-		elevation: 6,
-		zIndex: 1,
-	},
-	/*
-	 * Izgarada ölçek YOK: komşu kart aralığı 10px, 1.08 ölçek kartı
-	 * komşusunun üstüne bindiriyordu ("kartlar iç içe geçmiş").
-	 * Odak göstergesi yalnız 3px halka.
-	 */
-	cardFocusedGrid: {
-		zIndex: 1,
-	},
 	poster: {
 		width: "100%",
 		// Ana sayfada 124×182 ≈ 2:3 idi; ızgara da 2:3. Tek oran kullanmak
@@ -276,10 +298,7 @@ const styles = StyleSheet.create({
 		// Referans: `ring-1 ring-outline-variant/30`.
 		// Kalınlık SABİT 3px: odakta yalnız renk değişir (relayout yok).
 		borderWidth: 3,
-		borderColor: "rgba(70, 69, 84, 0.6)",
-	},
-	posterFocused: {
-		borderColor: Palette.primary,
+		borderColor: POSTER_BORDER_IDLE,
 	},
 	posterImage: {
 		width: "100%",
@@ -337,9 +356,6 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		lineHeight: CARD_TITLE_HEIGHT,
 		letterSpacing: -0.1,
-	},
-	titleFocused: {
-		color: Palette.primary,
 	},
 	/**
 	 * Alt satır: bölüm kartlarında "S. Sezon E. Bölüm", diğerlerinde yıl.
