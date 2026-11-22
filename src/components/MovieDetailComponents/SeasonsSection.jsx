@@ -4,7 +4,8 @@ import { useDownload } from "@/context/DownloadContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
 import Image from "@components/common/SmartImage";
 import TVPressable from "@components/common/TVPressable";
-import ActionMenuModal from "@components/modal/ActionMenuModal";
+import AppPeekMenu from "@/components/peek/AppPeekMenu";
+import { useAppMenu } from "@/components/peek/AppMenuProvider";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { useRouter } from "expo-router";
 import {
@@ -20,8 +21,6 @@ import {
 	ActivityIndicator,
 	BackHandler,
 	findNodeHandle,
-	Modal,
-	Pressable,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -120,6 +119,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 ) {
 	const { sp, isWide, isTV, isLandscape, width, gutter, contentMaxWidth } =
 		useTvMetrics();
+	const { open: openAppMenu } = useAppMenu();
 	const { alert, toast } = useFeedback();
 	const { requestDownload, isDownloaded, getDownloadState, isDownloadPending } =
 		useDownload();
@@ -169,7 +169,6 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	const seasonPillRef = useRef(null);
 	const [headerTag, setHeaderTag] = useState(undefined);
 
-	const [isSeasonModalOpen, setIsSeasonModalOpen] = useState(false);
 	const [sortOrder, setSortOrder] = useState("asc"); // 'asc' (1->N) | 'desc' (N->1)
 
 	// ─── "İzlendi işaretle" durumu ─────────────────────────────────────────
@@ -177,7 +176,6 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	// yalnızca seçim/bağlam menüsü arayüzünü yönetir.
 	const [isSelectionMode, setIsSelectionMode] = useState(false);
 	const [selectedEpisodes, setSelectedEpisodes] = useState({});
-	const [menuState, setMenuState] = useState(null); // {type:'season'} | {type:'episode', ep, index}
 	const [isApplyingMarks, setIsApplyingMarks] = useState(false);
 	const [feedbackMessage, setFeedbackMessage] = useState("");
 
@@ -680,27 +678,18 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 	}, [allSelected, sortedEpisodes, episodeSelectionKey]);
 
 	const enterSelectionMode = useCallback((preselectKey) => {
-		setMenuState(null);
 		setIsSelectionMode(true);
 		setSelectedEpisodes(preselectKey ? { [preselectKey]: true } : {});
 	}, []);
 
 	const cancelSelection = useCallback(() => {
-		if (isSeasonModalOpen) {
-			setIsSeasonModalOpen(false);
-			return true;
-		}
-		if (menuState) {
-			setMenuState(null);
-			return true;
-		}
 		if (isSelectionMode) {
 			setIsSelectionMode(false);
 			setSelectedEpisodes({});
 			return true;
 		}
 		return false;
-	}, [isSeasonModalOpen, menuState, isSelectionMode]);
+	}, [isSelectionMode]);
 
 	// Üst ekran (MovieDetails) geri tuşunda önce bunu çağırır: seçim/menü
 	// açıkken geri tuşu ekrandan çıkmaz, yalnızca seçimi kapatır.
@@ -738,31 +727,37 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 		sortedEpisodes.length > 0 &&
 		sortedEpisodes.every((ep, index) => isEpisodeCompleted(ep, index));
 
-	const menuTitle = useMemo(() => {
-		if (!menuState) return "";
-		if (menuState.type === "season") return `${selectedSeason}. Sezon`;
+	const buildMenuTitle = (state) => {
+		if (!state) return "";
+		if (state.type === "season") return `${selectedSeason}. Sezon`;
 
-		const { ep, index } = menuState;
+		const { ep, index } = state;
 		const epNumber = ep.episode || ep.episode_number || index + 1;
 		const rawTitle = ep.title ? ep.title.trim() : "";
 		return rawTitle
 			? `${epNumber}. ${rawTitle}`
 			: `${selectedSeason}. ${epNumber}. Bölüm`;
-	}, [menuState, selectedSeason]);
+	};
 
-	const menuSubtitle = useMemo(() => {
-		if (!menuState) return "";
+	const buildMenuSubtitle = (state) => {
+		if (!state) return "";
 		const title = seriesTitle || content?.title || "Dizi";
-		if (menuState.type === "season") {
+		if (state.type === "season") {
 			return `${title} • ${sortedEpisodes.length} Bölüm`;
 		}
 		return title;
-	}, [menuState, seriesTitle, content, sortedEpisodes.length]);
+	};
 
-	const menuActions = useMemo(() => {
-		if (!menuState) return [];
+	/**
+	 * Bölüm/sezon eylemleri — peek menü satırları.
+	 *
+	 * Telefonda satır: `AppPeekMenu` kartın üzerinde açar. TV'de aynı
+	 * satırlar merkezî panelde açılır (`useAppMenu().open`).
+	 */
+	const buildMenuActions = (state) => {
+		if (!state) return [];
 
-		if (menuState.type === "season") {
+		if (state.type === "season") {
 			return [
 				seasonAllCompleted
 					? {
@@ -799,14 +794,13 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 					iconColor: "#38bdf8",
 					iconBg: "rgba(56, 189, 248, 0.15)",
 					onPress: () => {
-						setMenuState(null);
 						handleDownloadSeason();
 					},
 				},
 			];
 		}
 
-		const { ep, index } = menuState;
+		const { ep, index } = state;
 		const done = isEpisodeCompleted(ep, index);
 		const buBolumIndirildi = isDownloaded({
 			contentId: content?.id || content?.url || seriesTitle,
@@ -833,7 +827,6 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 					? "rgba(16, 185, 129, 0.15)"
 					: "rgba(56, 189, 248, 0.15)",
 				onPress: () => {
-					setMenuState(null);
 					handleDownloadEpisode(
 						ep,
 						ep.episode || ep.episode_number || index + 1,
@@ -870,24 +863,42 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 					enterSelectionMode(episodeSelectionKey(ep, index)),
 			},
 		];
-	}, [
-		menuState,
-		seasonAllCompleted,
-		selectedSeason,
-		sortedEpisodes.length,
-		seasonMarksAll,
-		applyMarks,
-		enterSelectionMode,
-		isEpisodeCompleted,
-		buildMarksForKeyList,
-		isDownloaded,
-		handleDownloadEpisode,
-		handleDownloadSeason,
-		seriesTitle,
-		content?.id,
-		content?.url,
-		episodeSelectionKey,
-	]);
+};
+
+	/** Menü item listesi: başlık + eylemler (peek menüsü `title` bekler). */
+	const menuItemsFor = (state) => {
+		if (!state) return [];
+		return [
+			{
+				key: "header",
+				type: "header",
+				title: buildMenuTitle(state),
+				subtitle: buildMenuSubtitle(state),
+			},
+			...buildMenuActions(state).map((a) => ({
+				...a,
+				title: a.label,
+			})),
+		];
+	};
+
+	/** TV: merkezî panelde aç. Telefon: `AppPeekMenu` kendi açar. */
+	const openMenuFor = (state) => {
+		if (!isTV) return;
+		openAppMenu({ items: menuItemsFor(state) });
+	};
+
+	/** Sezon seçici satırları (eski sezon Modalı'nın yerini alır). */
+	const seasonMenuItems = () =>
+		seasonKeys.map((sKey) => ({
+			key: `season-${sKey}`,
+			title: `Sezon ${sKey}`,
+			description: `${normalizedSeasons[sKey]?.length || 0} Bölüm`,
+			icon: "albums-outline",
+			selected: selectedSeason === sKey,
+			value: selectedSeason === sKey ? "Aktif" : undefined,
+			onPress: () => handleSeasonSelect(sKey),
+		}));
 
 	if (loading && (!normalizedSeasons || seasonKeys.length === 0)) {
 		return (
@@ -1057,6 +1068,9 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 						]}>
 						<View style={[styles.headerControls, { gap: sp(8) }]}>
 							{/* Sezon seçici */}
+							<AppPeekMenu
+								items={seasonMenuItems()}
+								activateOn="tap">
 							<TVPressable
 								style={({ focused }) => [
 									styles.seasonPill,
@@ -1067,7 +1081,15 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 									},
 									focused && styles.focusRing,
 								]}
-								onPress={() => setIsSeasonModalOpen(true)}
+								disabled={!isTV}
+								onPress={
+									isTV
+										? () =>
+												openAppMenu({
+													items: seasonMenuItems(),
+												})
+										: undefined
+								}
 								ref={seasonPillRef}
 								nextFocusDown={
 									focusTags[tvFocusIndex] || focusTags[0]
@@ -1090,6 +1112,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 									color={Palette.onSurfaceVariant}
 								/>
 							</TVPressable>
+							</AppPeekMenu>
 
 							{/* Sıralama (artan / azalan) */}
 							<TVPressable
@@ -1154,34 +1177,46 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 							</TVPressable>
 
 							{/* Sezon işlemleri */}
-							<TVPressable
-								style={({ focused }) => [
-									styles.iconButton,
-									{
-										width: sp(32),
-										height: sp(32),
-										borderRadius: sp(16),
-									},
-									focused && styles.focusRing,
-								]}
-								onPress={() => setMenuState({ type: "season" })}
-								activeOpacity={0.75}
-								accessibilityLabel="Sezon işlemleri"
-								nextFocusDown={
-									focusTags[tvFocusIndex] || focusTags[0]
-								}
-								hitSlop={{
-									top: 8,
-									bottom: 8,
-									left: 8,
-									right: 8,
-								}}>
-								<Ionicons
-									name="ellipsis-vertical"
-									size={sp(16)}
-									color={Palette.onSurfaceVariant}
-								/>
-							</TVPressable>
+							<AppPeekMenu
+								items={menuItemsFor({ type: "season" })}
+								activateOn="tap">
+								<TVPressable
+									style={({ focused }) => [
+										styles.iconButton,
+										{
+											width: sp(32),
+											height: sp(32),
+											borderRadius: sp(16),
+										},
+										focused && styles.focusRing,
+									]}
+									disabled={!isTV}
+									onPress={
+										isTV
+											? () =>
+													openMenuFor({
+														type: "season",
+													})
+											: undefined
+									}
+									activeOpacity={0.75}
+									accessibilityLabel="Sezon işlemleri"
+									nextFocusDown={
+										focusTags[tvFocusIndex] || focusTags[0]
+									}
+									hitSlop={{
+										top: 8,
+										bottom: 8,
+										left: 8,
+										right: 8,
+									}}>
+									<Ionicons
+										name="ellipsis-vertical"
+										size={sp(16)}
+										color={Palette.onSurfaceVariant}
+									/>
+								</TVPressable>
+							</AppPeekMenu>
 						</View>
 					</View>
 					{/* TV: odaklanan bölümün adı/özeti/süresi (tasarım). */}
@@ -1388,6 +1423,17 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 					const isTvFocus = tvEpisodes && index === tvFocusIndex;
 
 					return (
+						<AppPeekMenu
+							key={
+								ep.url ||
+								`${selectedSeason}-${epNumber}-${index}`
+							}
+							items={menuItemsFor({
+								type: "episode",
+								ep,
+								index,
+							})}
+							activateOn="hold">
 						<TVPressable
 							key={
 								ep.url ||
@@ -1446,7 +1492,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 							}}
 							onLongPress={() => {
 								if (isSelectionMode) return;
-								setMenuState({ type: "episode", ep, index });
+								openMenuFor({ type: "episode", ep, index });
 							}}
 							activeOpacity={0.75}>
 							{/* Aktif bölüm hapı YALNIZCA telefonda: ızgarada aynı
@@ -1832,168 +1878,10 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 								)}
 							</View>
 						</TVPressable>
+						</AppPeekMenu>
 					);
 				})}
 			</ScrollView>
-
-			{/* Sezon Seçici Modal (Açılır Menü / Bottom Sheet) */}
-			<Modal
-				visible={isSeasonModalOpen}
-				transparent
-				animationType="fade"
-				onRequestClose={() => setIsSeasonModalOpen(false)}>
-				<Pressable
-					style={styles.modalOverlay}
-					onPress={() => setIsSeasonModalOpen(false)}>
-					<Pressable
-						style={[
-							styles.modalContent,
-							{
-								backgroundColor: Palette.surface,
-								borderColor: Palette.outlineVariant,
-								borderRadius: sp(20),
-								padding: sp(16),
-							},
-						]}>
-						{/* Modal Başlık */}
-						<View
-							style={[
-								styles.modalHeader,
-								{
-									paddingBottom: sp(12),
-									marginBottom: sp(8),
-								},
-							]}>
-							<Text
-								style={[
-									styles.modalTitle,
-									{
-										color: Palette.onSurface,
-										fontSize: sp(16),
-									},
-								]}>
-								Sezon Seçin
-							</Text>
-							<TVPressable
-								style={({ focused }) => [
-									styles.iconButton,
-									{
-										width: sp(32),
-										height: sp(32),
-										borderRadius: sp(16),
-									},
-									focused && styles.focusRing,
-								]}
-								onPress={() => setIsSeasonModalOpen(false)}
-								hitSlop={{
-									top: 8,
-									bottom: 8,
-									left: 8,
-									right: 8,
-								}}>
-								<Ionicons
-									name="close"
-									size={sp(20)}
-									color={Palette.onSurfaceVariant}
-								/>
-							</TVPressable>
-						</View>
-
-						{/* Sezonlar Listesi */}
-						<ScrollView
-							style={styles.modalList}
-							showsVerticalScrollIndicator={false}>
-							{seasonKeys.map((sKey) => {
-								const isSelected = selectedSeason === sKey;
-								const count =
-									normalizedSeasons[sKey]?.length || 0;
-
-								return (
-									<TVPressable
-										key={sKey}
-										autoFocus={isSelected}
-										style={({ focused }) => [
-											styles.modalSeasonItem,
-											{
-												paddingVertical: sp(11),
-												paddingHorizontal: sp(12),
-												borderRadius: sp(12),
-											},
-											isSelected && {
-												backgroundColor:
-													"rgba(192,193,255,0.14)",
-											},
-											focused && styles.focusRing,
-										]}
-										onPress={() => {
-											handleSeasonSelect(sKey);
-											setIsSeasonModalOpen(false);
-										}}
-										activeOpacity={0.7}>
-										<View
-											style={[
-												styles.modalSeasonLeft,
-												{ gap: sp(10) },
-											]}>
-											<Ionicons
-												name="albums-outline"
-												size={sp(18)}
-												color={
-													isSelected
-														? Palette.primary
-														: Palette.onSurfaceVariant
-												}
-											/>
-											<Text
-												style={[
-													styles.modalSeasonName,
-													{
-														color: isSelected
-															? Palette.primary
-															: Palette.onSurface,
-														fontFamily: isSelected
-															? FontFamily.semiBold
-															: FontFamily.medium,
-														fontSize: sp(15),
-													},
-												]}>
-												Sezon {sKey}
-											</Text>
-											<Text
-												style={[
-													styles.modalSeasonCount,
-													{
-														color: Palette.onSurfaceVariant,
-														fontSize: sp(12.5),
-													},
-												]}>
-												({count} Bölüm)
-											</Text>
-										</View>
-
-										{isSelected && (
-											<Ionicons
-												name="checkmark"
-												size={sp(20)}
-												color={Palette.primary}
-											/>
-										)}
-									</TVPressable>
-								);
-							})}
-						</ScrollView>
-					</Pressable>
-				</Pressable>
-			</Modal>
-
-			{/* Bölüm/Sezon işlem menüsü (TV + dokunmatik ortak) */}
-			<ActionMenuModal
-				visible={Boolean(menuState)}
-				onClose={() => setMenuState(null)}
-				title={menuTitle}
-				subtitle={menuSubtitle}
-				actions={menuActions}
-			/>
 
 			{/* Geçici geri bildirim balonu ("3 bölüm işaretlendi") */}
 			{Boolean(feedbackMessage) && (

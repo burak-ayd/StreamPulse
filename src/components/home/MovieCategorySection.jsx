@@ -166,6 +166,7 @@ function MovieCategorySection({
     <CategoryRowBody
       category={category}
       movies={movies}
+      platformName={platformName}
       onMoviePress={onMoviePress}
       onMovieLongPress={onMovieLongPress}
       onSeeAll={onSeeAll}

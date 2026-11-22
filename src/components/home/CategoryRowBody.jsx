@@ -2,6 +2,7 @@ import { FlashList } from "@shopify/flash-list";
 import { useCallback } from "react";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import CategoryCard, { ROW_CARD_WIDTH } from "@/components/content/CategoryCard";
+import ContentPeekMenu from "@/components/peek/ContentPeekMenu";
 import TVPressable from "@/components/common/TVPressable";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { contentKey } from "@/utils/contentMeta";
@@ -29,8 +30,8 @@ function RowSeparator() {
 export default function CategoryRowBody({
 	category,
 	movies,
+	platformName,
 	onMoviePress,
-	onMovieLongPress,
 	onSeeAll,
 	onRowFocused,
 	onRowMeasured,
@@ -86,16 +87,33 @@ export default function CategoryRowBody({
 				return <SeeAllTile onPress={handleSeeAll} />;
 			}
 			return (
-				<CategoryCard
+				<ContentPeekMenu
 					item={item}
-					variant="row"
-					onPress={() => onMoviePress(item)}
-					onLongPress={() => onMovieLongPress?.(item)}
-					onFocus={() => handleCardFocus(index)}
-				/>
+					platformName={platformName}
+					onPlay={onMoviePress}
+					onDetails={onMoviePress}>
+					{(peek) => (
+						<CategoryCard
+							item={item}
+							variant="row"
+							onPress={() => onMoviePress(item)}
+							onLongPress={
+								Platform.isTV
+									? () => peek.openMenu()
+									: undefined
+							}
+							onFocus={() => handleCardFocus(index)}
+						/>
+					)}
+				</ContentPeekMenu>
 			);
 		},
-		[handleSeeAll, onMoviePress, onMovieLongPress, handleCardFocus],
+		[
+			handleSeeAll,
+			onMoviePress,
+			handleCardFocus,
+			platformName,
+		],
 	);
 
 	return (

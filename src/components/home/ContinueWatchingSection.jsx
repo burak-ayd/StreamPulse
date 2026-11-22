@@ -1,6 +1,7 @@
 import ContinueWatchingCard, {
 	CONTINUE_CARD_WIDTH,
 } from "@/components/content/ContinueWatchingCard";
+import ContentPeekMenu from "@/components/peek/ContentPeekMenu";
 import TVPressable from "@/components/common/TVPressable";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
@@ -19,8 +20,8 @@ function ItemSeparator() {
 
 export default function ContinueWatchingSection({
 	items = [],
+	platformName,
 	onItemPress,
-	onItemLongPress,
 	onRemoveItem,
 	onSeeAllPress,
 	onRowFocused,
@@ -50,15 +51,32 @@ export default function ContinueWatchingSection({
 
 	const renderItem = useCallback(
 		({ item, index }) => (
-			<ContinueWatchingCard
+			<ContentPeekMenu
 				item={item}
-				onPress={onItemPress}
-				onLongPress={onItemLongPress}
-				onRemove={onRemoveItem}
-				onFocus={() => handleItemFocus(index)}
-			/>
+				platformName={platformName}
+				onPlay={onItemPress}
+				onDetails={onItemPress}>
+				{(peek) => (
+					<ContinueWatchingCard
+						item={item}
+						onPress={onItemPress}
+						onLongPress={
+							Platform.isTV
+								? () => peek.openMenu()
+								: undefined
+						}
+						onRemove={onRemoveItem}
+						onFocus={() => handleItemFocus(index)}
+					/>
+				)}
+			</ContentPeekMenu>
 		),
-		[onItemPress, onItemLongPress, onRemoveItem, handleItemFocus],
+		[
+			platformName,
+			onItemPress,
+			onRemoveItem,
+			handleItemFocus,
+		],
 	);
 
 	if (!items || items.length === 0) {

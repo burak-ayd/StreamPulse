@@ -169,6 +169,9 @@ export default ({ config }) => {
 		// Native modül (stream-downloader) eklendi: eski APK'lar (runtime "1")
 		// bu modülü içermez, OTA ile yeni JS gelirse çökerdi. Belgelenen
 		// appVersion politikası ile eski APK'lar OTA almaz.
+		//
+		// "3" — peek menü: gesture-handler 3 / reanimated 4.7 native tarafı
+		// değişti. Bu modülleri içermeyen APK'lar OTA almamalı.
 		runtimeVersion: "2",
 		...{
 			updates: {

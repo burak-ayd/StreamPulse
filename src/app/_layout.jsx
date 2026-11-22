@@ -1,4 +1,6 @@
 import { AuthProvider } from "@/context/AuthContext";
+import { LibraryStatusProvider } from "@/context/LibraryStatusContext";
+import { AppMenuProvider } from "@/components/peek/AppMenuProvider";
 import { SyncProvider } from "@/context/SyncContext";
 import { LanguageDisplayProvider } from "@/context/LanguageDisplayContext";
 import { PlayerSettingsProvider } from "@/context/PlayerSettingsContext";
@@ -232,6 +234,8 @@ export default function RootLayout() {
 							<DownloadProvider>
 							<LanguageDisplayProvider>
 								<SafeAreaProvider>
+									<LibraryStatusProvider>
+									<AppMenuProvider>
 									{/*
 									 * ⚠️ SORUN 4 (GENEL) — `<Slot/>` → `<Stack/>`.
 									 *
@@ -279,6 +283,8 @@ export default function RootLayout() {
 									 * açılış ekranının kendisidir.
 									 */}
 									<SplashOverlay visible={splashVisible} />
+									</AppMenuProvider>
+									</LibraryStatusProvider>
 								</SafeAreaProvider>
 							</LanguageDisplayProvider>
 						</DownloadProvider>

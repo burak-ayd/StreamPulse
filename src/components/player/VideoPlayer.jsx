@@ -31,10 +31,13 @@ import {
 	describePlaybackError,
 } from "../../utils/playbackError";
 import BrightnessVolumeHud from "./BrightnessVolumeHud";
+import AppPeekMenu from "@/components/peek/AppPeekMenu";
+import { useAppMenu } from "@/components/peek/AppMenuProvider";
 import {
 	MAX_PLAYBACK_RATE,
 	MIN_BRIGHTNESS,
 	MIN_PLAYBACK_RATE,
+	PLAYBACK_RATES,
 	RESIZE_MODE_ICONS,
 	RESIZE_MODES,
 	SEEK_SETTLE_MS,
@@ -43,9 +46,7 @@ import { DoubleTapFeedback, SpeedUpIndicator } from "./GestureFeedback";
 import PlayerActionBar from "./PlayerActionBar";
 import PlayerControls from "./PlayerControls";
 import PlayerTopBar from "./PlayerTopBar";
-import SpeedSheet from "./SpeedSheet";
 import SwipeSeekPreview from "./SwipeSeekPreview";
-import TrackSelectionModal from "./TrackSelectionModal";
 import usePlayerGestures from "./usePlayerGestures";
 import useSubtitles from "./useSubtitles";
 import useVideoSource from "./useVideoSource";
@@ -185,9 +186,8 @@ export default function VideoPlayer({
 	);
 	const [volume, setVolume] = useState(1);
 	const [brightnessDim, setBrightnessDim] = useState(0);
-	const [isSpeedSheetOpen, setSpeedSheetOpen] = useState(false);
-	const [modalType, setModalType] = useState(null);
 	const [availableAudioTracks, setAvailableAudioTracks] = useState([]);
+	const { open: openAppMenu } = useAppMenu();
 	const [selectedAudioTrackIndex, setSelectedAudioTrackIndex] =
 		useState(null);
 	const [isPipActive, setPipActive] = useState(false);
@@ -1372,7 +1372,6 @@ export default function VideoPlayer({
 		// tarayıcıda açılır (çağıran `player.jsx` açar).
 		if (sources[index]?.result?.embed) {
 			onOpenEmbed?.(sources[index].result.url);
-			setModalType(null);
 			return;
 		}
 		// Konum koruma dahil TÜM kaynak değiştirme mantığı tek yolda.
@@ -1384,6 +1383,27 @@ export default function VideoPlayer({
 		// hiç denenmez.
 		switchSourceTo(index, { resetErrors: true });
 	};
+
+	const sourceMenuItems = () => [
+		{
+			key: "src-label",
+			type: "label",
+			title: "VİDEO KAYNAKLARI",
+		},
+		...sources.map((s, i) => ({
+			key: `src-${i}`,
+			title: s.result?.name || s.extractor || `Kaynak ${i + 1}`,
+			description:
+				(s.result?.subtitles?.length || 0) > 0
+					? `${s.result.subtitles.length} altyazı dili`
+					: "Harici altyazı yok",
+			icon: "server-outline",
+			selected: activeSourceIndex === i,
+			value: activeSourceIndex === i ? "Aktif" : undefined,
+			// eslint-disable-next-line react-hooks/refs -- işleyici yalnızca basınca çalışır
+			onPress: () => handleSelectSource(i),
+		})),
+	];
 
 	// ── Altyazı / ses izi prop'ları ─────────────────────────
 	const videoTextTrackProp = useMemo(() => {
@@ -1584,15 +1604,6 @@ export default function VideoPlayer({
 	// ── Donanım geri tuşu hiyerarşisi ───────────────────────
 	useEffect(() => {
 		const onBackPress = () => {
-			if (isSpeedSheetOpen) {
-				setSpeedSheetOpen(false);
-				return true;
-			}
-			if (modalType !== null) {
-				setModalType(null);
-				startHideTimerRef.current?.();
-				return true;
-			}
 			if (showControls) {
 				setShowControls(false);
 				return true;
@@ -1608,7 +1619,7 @@ export default function VideoPlayer({
 			onBackPress,
 		);
 		return () => sub.remove();
-	}, [isSpeedSheetOpen, modalType, showControls, onClose]);
+	}, [showControls, onClose]);
 
 	// ── Çubuk sürükleme ─────────────────────────────────────
 	/*
@@ -1970,19 +1981,117 @@ export default function VideoPlayer({
 										icon: "chatbubble-ellipses-outline",
 										label: "Altyazı senkronu",
 										active: subtitles.subtitleOffset !== 0,
-										onPress: () => {
-											startHideTimerRef.current?.();
-											setModalType("subtitles");
-										},
+										menuItems: [
+											...(subtitles.selectedSubtitle
+												? [
+														{
+															key: "sync-info",
+															type: "info",
+															title: "Senkronizasyon",
+															value: `${
+																subtitles.subtitleOffset >
+																0
+																	? "+"
+																	: ""
+															}${subtitles.subtitleOffset.toFixed(1)} sn`,
+														},
+														{
+															key: "sync-label",
+															type: "label",
+															title: "GECİKME",
+														},
+														...[-0.5, -0.1, 0, 0.1, 0.5].map(
+															(v) => ({
+																key: `sync-${v}`,
+																title:
+																	v === 0
+																		? "Sıfırla"
+																		: `${v > 0 ? "+" : ""}${v}s`,
+																icon: "time-outline",
+																onPress: () =>
+																	subtitles.updateOffset(
+																		v,
+																		v === 0,
+																	),
+															}),
+														),
+													]
+												: []),
+											{
+												key: "sub-label",
+												type: "label",
+												title: "ALTYAZI",
+											},
+											{
+												key: "sub-off",
+												title: "Kapalı",
+												icon: "close-circle-outline",
+												selected:
+													!subtitles.selectedSubtitle,
+												value: !subtitles.selectedSubtitle
+													? "Seçili"
+													: undefined,
+												onPress: () =>
+													subtitles.selectSubtitle(
+														null,
+													),
+											},
+											...subtitles.allSubtitles.map(
+												(s, i) => ({
+													key: `sub-${i}`,
+													title:
+														s.title ||
+														s.language ||
+														`Altyazı ${i + 1}`,
+													icon: "chatbubble-ellipses-outline",
+													selected:
+														subtitles.selectedSubtitle ===
+														s,
+													value:
+														subtitles.selectedSubtitle ===
+														s
+															? "Seçili"
+															: undefined,
+													onPress: () =>
+														subtitles.selectSubtitle(
+															s,
+														),
+												}),
+											),
+										],
 									},
 									{
 										key: "source",
 										icon: "server-outline",
 										label: "Kaynak",
-										onPress: () => {
-											startHideTimerRef.current?.();
-											setModalType("sources");
-										},
+										menuItems: [
+											{
+												key: "src-label",
+												type: "label",
+												title: "VİDEO KAYNAKLARI",
+											},
+											...sources.map((s, i) => ({
+												key: `src-${i}`,
+												title:
+													s.result?.name ||
+													s.extractor ||
+													`Kaynak ${i + 1}`,
+												description:
+													(s.result?.subtitles
+														?.length || 0) > 0
+														? `${s.result.subtitles.length} altyazı dili`
+														: "Harici altyazı yok",
+												icon: "server-outline",
+												selected:
+													activeSourceIndex === i,
+												value:
+													activeSourceIndex === i
+														? "Aktif"
+														: undefined,
+												onPress: () =>
+													handleSelectSource(i),
+											})),
+										],
 									},
 									{
 										key: "tracks",
@@ -1990,10 +2099,89 @@ export default function VideoPlayer({
 										label: "Parçalar",
 										active:
 											selectedAudioTrackIndex !== null,
-										onPress: () => {
-											startHideTimerRef.current?.();
-											setModalType("tracks");
-										},
+										menuItems: [
+											{
+												key: "v-label",
+												type: "label",
+												title: "VİDEO KALİTESİ",
+											},
+											{
+												key: "v-auto",
+												title: "Otomatik",
+												description: isLive
+													? "Bağlantı hızına göre otomatik seçilir"
+													: "En yüksek kalite (sabit)",
+												icon: "sparkles-outline",
+												selected:
+													selectedVariantId === null,
+												value:
+													selectedVariantId === null
+														? "Aktif"
+														: undefined,
+												onPress: () =>
+													selectVariant?.(null),
+											},
+											...videoVariants.map((v) => ({
+												key: `variant-${v.id}`,
+												title:
+													v.resolution || "Kalite",
+												description: v.bandwidth
+													? `${Math.round(v.bandwidth / 1000)} kbps`
+													: undefined,
+												icon: "videocam-outline",
+												selected:
+													selectedVariantId === v.id,
+												value:
+													selectedVariantId === v.id
+														? "Aktif"
+														: undefined,
+												onPress: () =>
+													selectVariant?.(v.id),
+											})),
+											{
+												key: "a-label",
+												type: "label",
+												title: "SES PARÇALARI",
+											},
+											...availableAudioTracks.map(
+												(track, index) => {
+													const trackId =
+														typeof track.index ===
+														"number"
+															? track.index
+															: index;
+													const isSelected =
+														selectedAudioTrackIndex ===
+															trackId ||
+														(selectedAudioTrackIndex ===
+															null &&
+															track.selected);
+													return {
+														key: `audio-${index}`,
+														title:
+															track.title ||
+															(track.language
+																? `Ses (${track.language.toUpperCase()})`
+																: `Ses Parçası ${index + 1}`),
+														description:
+															track.bitrate
+																? `${Math.round(track.bitrate / 1000)} kbps`
+																: undefined,
+														icon: "volume-high-outline",
+														selected: isSelected,
+														value: isSelected
+															? "Aktif"
+															: undefined,
+														onPress: () => {
+															setSelectedAudioTrackIndex(
+																trackId,
+															);
+															subtitles.resetUserChoice();
+														},
+													};
+												},
+											),
+										],
 									},
 									{
 										key: "speed",
@@ -2004,13 +2192,28 @@ export default function VideoPlayer({
 												: `${playbackRate}×`,
 										active: playbackRate !== 1,
 										disabled: isLive,
-										onPress: () => {
-											setSpeedSheetOpen(true);
-											if (hideTimerRef.current)
-												clearTimeout(
-													hideTimerRef.current,
-												);
-										},
+										menuItems: PLAYBACK_RATES.map(
+											(rate) => ({
+												key: `rate-${rate}`,
+												title:
+													rate === 1
+														? "Normal"
+														: `${rate}×`,
+												icon: "speedometer-outline",
+												selected:
+													Math.abs(
+														playbackRate - rate,
+													) < 0.01,
+												value:
+													Math.abs(
+														playbackRate - rate,
+													) < 0.01
+														? "Aktif"
+														: undefined,
+												onPress: () =>
+													selectRate(rate),
+											}),
+										),
 									},
 									// Sonraki bölüm (yalnızca dizi + sonraki bölüm biliniyorsa)
 									nextEpisode && onNextEpisode
@@ -2111,20 +2314,36 @@ export default function VideoPlayer({
 					 */}
 					<View style={styles.errorButtonsRow}>
 						{sources.length > 1 && (
-							<TVPressable
-								autoFocus
-								style={styles.switchSourceButton}
-								focusedStyle={styles.switchSourceButtonFocused}
-								onPress={() => setModalType("sources")}>
-								<Ionicons
-									name="server-outline"
-									size={18}
-									color="#FFFFFF"
-								/>
-								<Text style={styles.switchSourceButtonText}>
-									{`Farklı Kaynak Seç (${sources.length} Kaynak)`}
-								</Text>
-							</TVPressable>
+							<AppPeekMenu
+								items={sourceMenuItems()}
+								activateOn="tap">
+								<TVPressable
+									autoFocus
+									style={styles.switchSourceButton}
+									focusedStyle={
+										styles.switchSourceButtonFocused
+									}
+									onPress={
+										Platform.isTV
+											? () =>
+													openAppMenu({
+														items: sourceMenuItems(),
+													})
+											: undefined
+									}>
+									<Ionicons
+										name="server-outline"
+										size={18}
+										color="#FFFFFF"
+									/>
+									<Text
+										style={
+											styles.switchSourceButtonText
+										}>
+										{`Farklı Kaynak Seç (${sources.length} Kaynak)`}
+									</Text>
+								</TVPressable>
+							</AppPeekMenu>
 						)}
 						<TVPressable
 							autoFocus={sources.length <= 1}
@@ -2168,49 +2387,6 @@ export default function VideoPlayer({
 					</View>
 				</View>
 			)}
-
-			{/* 7. KATMAN: Paneller */}
-			<SpeedSheet
-				visible={isSpeedSheetOpen}
-				currentRate={playbackRate}
-				onSelect={(r) => {
-					selectRate(r);
-					setSpeedSheetOpen(false);
-				}}
-				onClose={() => setSpeedSheetOpen(false)}
-			/>
-
-			<TrackSelectionModal
-				visible={Boolean(modalType)}
-				type={modalType || "sources"}
-				onClose={() => {
-					setModalType(null);
-					startHideTimerRef.current?.();
-				}}
-				sources={sources}
-				selectedSourceIndex={activeSourceIndex}
-				onSelectSource={handleSelectSource}
-				subtitles={subtitles.allSubtitles}
-				selectedSubtitle={subtitles.selectedSubtitle}
-				onSelectSubtitle={subtitles.selectSubtitle}
-				subtitleOffset={subtitles.subtitleOffset}
-				onUpdateSubtitleOffset={subtitles.updateOffset}
-				audioTracks={availableAudioTracks}
-				selectedAudioTrack={selectedAudioTrackIndex}
-				onSelectAudioTrack={(index) => {
-					setSelectedAudioTrackIndex(index);
-					// Ses değişti → altyazı otomatik seçimi (Türkçe ses → Forced) yeniden değerlendirilsin.
-					subtitles.resetUserChoice();
-				}}
-				videoVariants={videoVariants}
-				selectedVariantId={selectedVariantId}
-				onSelectVariant={selectVariant}
-				autoDescription={
-					isLive
-						? "Bağlantı hızına göre otomatik seçilir"
-						: undefined
-				}
-			/>
 		</View>
 	);
 }

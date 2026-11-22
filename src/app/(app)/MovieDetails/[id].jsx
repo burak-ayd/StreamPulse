@@ -15,7 +15,6 @@ import {
 } from "@/utils/storage";
 import { useReactiveData } from "@/utils/storageListener";
 import { useTvMetrics } from "@/utils/tvMetrics";
-import ListSelectModal from "@components/modal/ListSelectModal";
 import { useContentDetails } from "@hooks/useContentDetails";
 import {
 	Stack,
@@ -650,8 +649,6 @@ export default function MovieDetailsScreen() {
 	const [isFav, setIsFav] = useState(false);
 	const [inWatchlist, setInWatchlist] = useState(false);
 	const [watchlistStatus, setWatchlistStatus] = useState(null); // 'watching' | 'planned' | 'completed' | null
-	const [isListSelectModalVisible, setIsListSelectModalVisible] =
-		useState(false);
 	const [selectedSeason, setSelectedSeason] = useState(() => {
 		// Deep-link automatic target takes priority in the starting season (Faz 6 decision 2).
 		const ilk = otomatikBolum?.sezon ?? passedMovie?.initialSeason;
@@ -681,10 +678,6 @@ export default function MovieDetailsScreen() {
 				if (seasonsRef.current?.cancelSelection?.()) {
 					return true;
 				}
-				if (isListSelectModalVisible) {
-					setIsListSelectModalVisible(false);
-					return true;
-				}
 				if (router.canGoBack()) router.back();
 				else router.replace("/(app)");
 				return true;
@@ -695,7 +688,7 @@ export default function MovieDetailsScreen() {
 				onBackPress,
 			);
 			return () => subscription.remove();
-		}, [isListSelectModalVisible, router]),
+		}, [router]),
 	);
 
 	const movieItem = useMemo(() => {
@@ -888,11 +881,6 @@ export default function MovieDetailsScreen() {
 		}
 	};
 
-	const handleToggleWatchlist = () => {
-		if (!movieItem) return;
-		setIsListSelectModalVisible(true);
-	};
-
 	const handleListStatusChanged = (newList, newFav) => {
 		setWatchlistStatus(newList);
 		setInWatchlist(Boolean(newList));
@@ -964,7 +952,7 @@ export default function MovieDetailsScreen() {
 			isFav={isFav}
 			watchProgress={watchProgress}
 			totalEpisodesCount={totalEpisodesCount}
-			onToggleWatchlist={handleToggleWatchlist}
+			onWatchlistChanged={handleListStatusChanged}
 			onToggleFavorite={handleToggleFavorite}
 			onOpenTrailer={handleOpenTrailer}
 		/>
@@ -1234,13 +1222,6 @@ export default function MovieDetailsScreen() {
 					)}
 				</View>
 			</ScrollView>
-			{/* List Selection Modal */}
-			<ListSelectModal
-				visible={isListSelectModalVisible}
-				movie={movieItem}
-				onClose={() => setIsListSelectModalVisible(false)}
-				onStatusChanged={handleListStatusChanged}
-			/>
 		</View>
 	);
 }

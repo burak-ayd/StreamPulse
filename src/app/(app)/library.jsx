@@ -1,7 +1,10 @@
 import BottomNavigation from "@/components/BottomNavigation";
 import TVPressable from "@/components/common/TVPressable";
-import LibraryItemActionModal from "@/components/modal/LibraryItemActionModal";
-import ListSelectModal from "@/components/modal/ListSelectModal";
+import LibraryItemPeekMenu from "@/components/peek/LibraryItemPeekMenu";
+import AppPeekMenu from "@/components/peek/AppPeekMenu";
+import { useAppMenu } from "@/components/peek/AppMenuProvider";
+import { LIST_LABELS, libraryMenuItems } from "@/components/peek/libraryItems";
+import { useLibraryStatus } from "@/context/LibraryStatusContext";
 import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useNavLayout } from "@/hooks/useNavLayout";
@@ -36,8 +39,8 @@ import {
 	ActivityIndicator,
 	BackHandler,
 	FlatList,
+	Platform,
 	ScrollView,
-	Share,
 	StatusBar,
 	StyleSheet,
 	Text,
@@ -200,7 +203,6 @@ export default function LibraryScreen() {
 	// Seçim modu (Düzenle): kart basışı seçer, alttaki çubuk toplu eylem sunar.
 	const [isSelectionMode, setIsSelectionMode] = useState(false);
 	const [selectedIds, setSelectedIds] = useState(() => new Set());
-	const [isBulkListSheetVisible, setIsBulkListSheetVisible] = useState(false);
 	// Hızlı İşlemler paneli odaklanan kartı izler.
 	const [focusedItemId, setFocusedItemId] = useState(null);
 
@@ -238,12 +240,9 @@ export default function LibraryScreen() {
 	 */
 	const cardWidth = cardWidthFor(gridWidth, columns);
 
-	// Özel Seçenekler & Liste Değiştirme Modalları
-	const [selectedActionItem, setSelectedActionItem] = useState(null);
-	const [isActionModalVisible, setIsActionModalVisible] = useState(false);
-	const [listSelectTargetItem, setListSelectTargetItem] = useState(null);
-	const [isListSelectModalVisible, setIsListSelectModalVisible] =
-		useState(false);
+	// Peek menüleri: durum/favori satırları ortak sağlayıcıdan okunur.
+	const { open: openAppMenu } = useAppMenu();
+	const { statusOf, isFavorite } = useLibraryStatus();
 
 	// Veri Listeleri
 	const [continueWatchingList, setContinueWatchingList] = useState([]);
@@ -265,18 +264,6 @@ export default function LibraryScreen() {
 					setIsSortModalVisible(false);
 					return true;
 				}
-				if (isBulkListSheetVisible) {
-					setIsBulkListSheetVisible(false);
-					return true;
-				}
-				if (isActionModalVisible) {
-					setIsActionModalVisible(false);
-					return true;
-				}
-				if (isListSelectModalVisible) {
-					setIsListSelectModalVisible(false);
-					return true;
-				}
 				if (isSelectionMode) {
 					setIsSelectionMode(false);
 					setSelectedIds(new Set());
@@ -293,15 +280,9 @@ export default function LibraryScreen() {
 			return () => sub.remove();
 		}, [
 			isSortModalVisible,
-			isBulkListSheetVisible,
-			isActionModalVisible,
-			isListSelectModalVisible,
 			isSelectionMode,
 			// Setter'lar sabit; React Compiler deps listesinde görmek istiyor.
 			setIsSortModalVisible,
-			setIsBulkListSheetVisible,
-			setIsActionModalVisible,
-			setIsListSelectModalVisible,
 			setIsSelectionMode,
 			setSelectedIds,
 			router,
@@ -716,11 +697,7 @@ export default function LibraryScreen() {
 		);
 	};
 
-	// Seçenekler Menüsü (Kart Menüsü) - Artık Alert yerine şık modal açılıyor
-	const handleItemOptions = (item) => {
-		setSelectedActionItem(item);
-		setIsActionModalVisible(true);
-	};
+	// Kitaplık kartı eylem menüsü: kartın "⋯" düğmesi açar (LibraryItemPeekMenu).
 
 	// Kitaplıktan Kaldır (Tamamlananlar dahil tüm sekmeler için çalışır)
 	//
@@ -782,7 +759,6 @@ export default function LibraryScreen() {
 	};
 
 	const handleBulkMoveToList = async (targetList) => {
-		setIsBulkListSheetVisible(false);
 		try {
 			for (const item of selectedItems) {
 				await setContentLibraryList(item, targetList);
@@ -804,10 +780,56 @@ export default function LibraryScreen() {
 		}
 	};
 
-	// Listeyi Değiştir Modalı Aç
-	const handleChangeList = (item) => {
-		setListSelectTargetItem(item);
-		setIsListSelectModalVisible(true);
+	// Liste menüsü (TV hızlı işlemler paneli): durum + favori + izlendi.
+	const buildLibraryMenuItems = (item) => {
+		if (!item) return [];
+		const status = statusOf(item);
+		const fav = isFavorite(item);
+		return [
+			{
+				key: "header",
+				type: "header",
+				title: item.title || "İçerik",
+				subtitle: `Durum: ${status ? LIST_LABELS[status] : "Listede değil"}`,
+				posterUri:
+					item.poster ||
+					item.poster_url ||
+					item.image ||
+					item.backdrop_url ||
+					null,
+			},
+			...libraryMenuItems({
+				status,
+				isFavorite: fav,
+				onStatus: async (target) => {
+					try {
+						await setContentLibraryList(item, target);
+						await loadLibraryData();
+					} catch (e) {
+						console.error("Liste taşınamadı:", e);
+					}
+				},
+				onFavorite: async () => {
+					try {
+						await toggleFavorite(item);
+						await loadLibraryData();
+					} catch (e) {
+						console.error("Favori değiştirilemedi:", e);
+					}
+				},
+			}),
+			{
+				key: "watched",
+				title: "İzlendi Olarak İşaretle",
+				icon: "checkmark-done",
+				onPress: () => handleMarkWatched(item),
+			},
+		];
+	};
+
+	const openLibraryStatusMenu = (item) => {
+		if (!isTV) return;
+		openAppMenu({ items: buildLibraryMenuItems(item) });
 	};
 
 	// Oynatıcıyı Başlat
@@ -1115,7 +1137,18 @@ export default function LibraryScreen() {
 			onPress={() => handleCardPress(item)}
 			onLongPress={() => handleCardLongPress(item)}
 			onFocus={() => setFocusedItemId(itemKey(item))}
-			onMore={() => handleItemOptions(item)}
+			onMore={() => {}}
+			wrapMore={(renderButton) => (
+				<LibraryItemPeekMenu
+					item={item}
+					activeTab={activeTab}
+					onDetails={() => handleOpenDetails(item)}
+					onRemove={() => handleRemoveItem(item)}>
+					{(menu) =>
+						renderButton(Platform.isTV ? menu.openMenu : undefined)
+					}
+				</LibraryItemPeekMenu>
+			)}
 		/>
 	);
 
@@ -1127,7 +1160,18 @@ export default function LibraryScreen() {
 			onPress={() => handleCardPress(item)}
 			onLongPress={() => handleCardLongPress(item)}
 			onFocus={() => setFocusedItemId(itemKey(item))}
-			onMore={() => handleItemOptions(item)}
+			onMore={() => {}}
+			wrapMore={(renderButton) => (
+				<LibraryItemPeekMenu
+					item={item}
+					activeTab={activeTab}
+					onDetails={() => handleOpenDetails(item)}
+					onRemove={() => handleRemoveItem(item)}>
+					{(menu) =>
+						renderButton(Platform.isTV ? menu.openMenu : undefined)
+					}
+				</LibraryItemPeekMenu>
+			)}
 		/>
 	);
 
@@ -1226,7 +1270,7 @@ export default function LibraryScreen() {
 				key: "move",
 				icon: "folder-open-outline",
 				label: "Başka Listeye Taşı",
-				onPress: () => handleChangeList(item),
+				onPress: () => openLibraryStatusMenu(item),
 			},
 			{
 				key: "watched",
@@ -1311,35 +1355,62 @@ export default function LibraryScreen() {
 					</Text>
 				</TVPressable>
 
-				{rows.map((row) => (
-					<TVPressable
-						key={row.key}
-						onPress={row.onPress}
-						activeOpacity={0.75}
-						style={({ focused }) => [
-							styles.panelGhostButton,
-							{
-								paddingVertical: sp(5),
-								paddingHorizontal: sp(6),
-								borderRadius: sp(10),
-								gap: sp(8),
-							},
-							focused && styles.focusRing,
-						]}>
-						<Ionicons
-							name={row.icon}
-							size={sp(14)}
-							color={
-								row.danger ? Palette.error : Palette.onSurface
-							}
-						/>
-						<Text
-							numberOfLines={1}
-							style={[styles.panelGhostText, { fontSize: sp(12) }]}>
-							{row.label}
-						</Text>
-					</TVPressable>
-				))}
+				{rows.map((row) => {
+					const button = (onPress) => (
+						<TVPressable
+							key={row.key}
+							onPress={onPress}
+							disabled={!onPress}
+							activeOpacity={0.75}
+							style={({ focused }) => [
+								styles.panelGhostButton,
+								{
+									paddingVertical: sp(5),
+									paddingHorizontal: sp(6),
+									borderRadius: sp(10),
+									gap: sp(8),
+								},
+								focused && styles.focusRing,
+							]}>
+							<Ionicons
+								name={row.icon}
+								size={sp(14)}
+								color={
+									row.danger
+										? Palette.error
+										: Palette.onSurface
+								}
+							/>
+							<Text
+								numberOfLines={1}
+								style={[
+									styles.panelGhostText,
+									{ fontSize: sp(12) },
+								]}>
+								{row.label}
+							</Text>
+						</TVPressable>
+					);
+
+					if (row.key !== "move") return button(row.onPress);
+
+					const menuItems = buildLibraryMenuItems(item);
+					return (
+						<AppPeekMenu
+							key={row.key}
+							items={menuItems}
+							activateOn="tap">
+							{button(
+								isTV
+									? () =>
+											openAppMenu({
+												items: menuItems,
+											})
+									: undefined,
+							)}
+						</AppPeekMenu>
+					);
+				})}
 			</View>
 		);
 	};
@@ -1357,7 +1428,7 @@ export default function LibraryScreen() {
 				key: "move",
 				icon: "folder-open-outline",
 				label: "Listeye Taşı",
-				onPress: () => setIsBulkListSheetVisible(true),
+				onPress: () => {},
 			},
 			{
 				key: "watched",
@@ -1373,6 +1444,77 @@ export default function LibraryScreen() {
 				disabled: selectedItems.length !== 1,
 			},
 		];
+
+		const bulkMoveItems = [
+			{
+				key: "to-watching",
+				title: "İzlemeye Devam Edenler",
+				icon: "play-circle-outline",
+				onPress: () => handleBulkMoveToList("watching"),
+			},
+			{
+				key: "to-planned",
+				title: "Planlananlar",
+				icon: "bookmark-outline",
+				onPress: () => handleBulkMoveToList("planned"),
+			},
+			{
+				key: "to-completed",
+				title: "Tamamlananlar",
+				icon: "checkmark-circle-outline",
+				onPress: () => handleBulkMoveToList("completed"),
+			},
+		];
+
+		const renderAction = (action, onPress) => (
+			<TVPressable
+				key={action.key}
+				onPress={onPress}
+				disabled={!onPress || action.disabled}
+				activeOpacity={0.8}
+				style={({ focused }) => [
+					styles.selectionAction,
+					{
+						borderRadius: sp(12),
+						paddingVertical: sp(10),
+						gap: sp(4),
+						opacity: action.disabled ? 0.45 : 1,
+					},
+					action.key === "watched" &&
+						styles.selectionActionSecondary,
+					action.key === "details" &&
+						styles.selectionActionPrimary,
+					focused && styles.focusRing,
+				]}>
+				<Ionicons
+					name={action.icon}
+					size={sp(16)}
+					color={
+						action.key === "watched"
+							? Palette.surfaceLowest
+							: action.key === "details"
+								? Palette.onPrimaryContainer
+								: Palette.onSurface
+					}
+				/>
+				<Text
+					numberOfLines={1}
+					style={[
+						styles.selectionActionText,
+						{
+							fontSize: sp(11),
+							color:
+								action.key === "watched"
+									? Palette.surfaceLowest
+									: action.key === "details"
+										? Palette.onPrimaryContainer
+										: Palette.onSurface,
+						},
+					]}>
+					{action.label}
+				</Text>
+			</TVPressable>
+		);
 
 		return (
 			<View
@@ -1422,55 +1564,27 @@ export default function LibraryScreen() {
 				</View>
 
 				<View style={[styles.selectionActions, { gap: sp(8) }]}>
-					{actions.map((action) => (
-						<TVPressable
-							key={action.key}
-							onPress={action.onPress}
-							disabled={action.disabled}
-							activeOpacity={0.8}
-							style={({ focused }) => [
-								styles.selectionAction,
-								{
-									borderRadius: sp(12),
-									paddingVertical: sp(10),
-									gap: sp(4),
-									opacity: action.disabled ? 0.45 : 1,
-								},
-								action.key === "watched" &&
-									styles.selectionActionSecondary,
-								action.key === "details" &&
-									styles.selectionActionPrimary,
-								focused && styles.focusRing,
-							]}>
-							<Ionicons
-								name={action.icon}
-								size={sp(16)}
-								color={
-									action.key === "watched"
-										? Palette.surfaceLowest
-										: action.key === "details"
-											? Palette.onPrimaryContainer
-											: Palette.onSurface
-								}
-							/>
-							<Text
-								numberOfLines={1}
-								style={[
-									styles.selectionActionText,
-									{
-										fontSize: sp(11),
-										color:
-											action.key === "watched"
-												? Palette.surfaceLowest
-												: action.key === "details"
-													? Palette.onPrimaryContainer
-													: Palette.onSurface,
-									},
-								]}>
-								{action.label}
-							</Text>
-						</TVPressable>
-					))}
+					{actions.map((action) => {
+						if (action.key !== "move") {
+							return renderAction(action, action.onPress);
+						}
+						return (
+							<AppPeekMenu
+								key={action.key}
+								items={bulkMoveItems}
+								activateOn="tap">
+								{renderAction(
+									action,
+									isTV
+										? () =>
+												openAppMenu({
+													items: bulkMoveItems,
+												})
+										: undefined,
+								)}
+							</AppPeekMenu>
+						);
+					})}
 				</View>
 			</View>
 		);
@@ -2037,109 +2151,6 @@ export default function LibraryScreen() {
 						</Text>
 					</TVPressable>
 				</BottomSheetModal>
-
-				{/* 9. TOPLU LİSTE SEÇİMİ */}
-				<BottomSheetModal
-					visible={isBulkListSheetVisible}
-					onClose={() => setIsBulkListSheetVisible(false)}
-					fitContent={true}
-					title={`${selectedIds.size} içeriği taşı`}
-					opacity={0.7}
-					handle={true}>
-					<View style={{ gap: sp(8), paddingBottom: sp(8) }}>
-						{[
-							{
-								key: "watching",
-								label: "İzlemeye Devam Edenler",
-								icon: "play-circle-outline",
-							},
-							{
-								key: "planned",
-								label: "Planlananlar",
-								icon: "bookmark-outline",
-							},
-							{
-								key: "completed",
-								label: "Tamamlananlar",
-								icon: "checkmark-circle-outline",
-							},
-						].map((opt) => (
-							<TVPressable
-								key={opt.key}
-								onPress={() => handleBulkMoveToList(opt.key)}
-								activeOpacity={0.75}
-								style={({ focused }) => [
-									styles.sheetRow,
-									{
-										height: sp(50),
-										borderRadius: sp(12),
-										paddingHorizontal: sp(12),
-										gap: sp(10),
-									},
-									focused && styles.focusRing,
-								]}>
-								<Ionicons
-									name={opt.icon}
-									size={sp(18)}
-									color={Palette.primary}
-								/>
-								<Text
-									numberOfLines={1}
-									style={[
-										styles.sheetRowText,
-										{
-											fontSize: sp(14),
-											color: Palette.onSurface,
-										},
-									]}>
-									{opt.label}
-								</Text>
-							</TVPressable>
-						))}
-					</View>
-				</BottomSheetModal>
-
-				{/* 10. KART EYLEM MENÜSÜ */}
-				<LibraryItemActionModal
-					visible={isActionModalVisible}
-					item={selectedActionItem}
-					activeTab={activeTab}
-					onClose={() => setIsActionModalVisible(false)}
-					onGoDetails={() => {
-						if (selectedActionItem)
-							handleOpenDetails(selectedActionItem);
-					}}
-					onChangeList={() => {
-						if (selectedActionItem)
-							handleChangeList(selectedActionItem);
-					}}
-					onRemove={() => {
-						if (selectedActionItem)
-							handleRemoveItem(selectedActionItem);
-					}}
-					onShare={async () => {
-						if (selectedActionItem) {
-							try {
-								await Share.share({
-									title:
-										selectedActionItem.title ||
-										"StreamPulse",
-									message: `StreamPulse'da "${selectedActionItem.title}" izle! ${selectedActionItem.url || ""}`,
-								});
-							} catch (_e) {}
-						}
-					}}
-				/>
-
-				{/* 11. TEK ÖĞE LİSTE SEÇİMİ */}
-				<ListSelectModal
-					visible={isListSelectModalVisible}
-					movie={listSelectTargetItem}
-					onClose={() => setIsListSelectModalVisible(false)}
-					onStatusChanged={async () => {
-						await loadLibraryData();
-					}}
-				/>
 			</SafeAreaView>
 		</>
 	);
@@ -2194,9 +2205,34 @@ function LibraryCard({
 	onLongPress,
 	onFocus,
 	onMore,
+	wrapMore,
 }) {
 	const { sp } = useTvMetrics();
 	const m = cardMeta(item);
+
+	const renderMoreButton = (onPress) => (
+		<TVPressable
+			onPress={onPress}
+			disabled={!onPress}
+			hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+			accessibilityLabel="Seçenekler"
+			style={({ focused }) => [
+				{
+					width: sp(20),
+					height: sp(20),
+					borderRadius: sp(10),
+					alignItems: "center",
+					justifyContent: "center",
+				},
+				focused && styles.focusRing,
+			]}>
+			<Ionicons
+				name="ellipsis-vertical"
+				size={sp(13)}
+				color={Palette.onSurfaceVariant}
+			/>
+		</TVPressable>
+	);
 
 	return (
 		<TVPressable
@@ -2292,26 +2328,7 @@ function LibraryCard({
 						style={[styles.cardTitle, { fontSize: sp(14) }]}>
 						{m.title}
 					</Text>
-					<TVPressable
-						onPress={onMore}
-						hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-						accessibilityLabel="Seçenekler"
-						style={({ focused }) => [
-							{
-								width: sp(20),
-								height: sp(20),
-								borderRadius: sp(10),
-								alignItems: "center",
-								justifyContent: "center",
-							},
-							focused && styles.focusRing,
-						]}>
-						<Ionicons
-							name="ellipsis-vertical"
-							size={sp(13)}
-							color={Palette.onSurfaceVariant}
-						/>
-					</TVPressable>
+					{wrapMore ? wrapMore(renderMoreButton) : renderMoreButton(onMore)}
 				</View>
 
 				<View style={[styles.cardMetaRow, { gap: sp(6) }]}>
@@ -2346,9 +2363,34 @@ function LibraryRow({
 	onLongPress,
 	onFocus,
 	onMore,
+	wrapMore,
 }) {
 	const { sp } = useTvMetrics();
 	const m = cardMeta(item);
+
+	const renderMoreButton = (onPress) => (
+		<TVPressable
+			onPress={onPress}
+			disabled={!onPress}
+			hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+			accessibilityLabel="Seçenekler"
+			style={({ focused }) => [
+				{
+					width: sp(24),
+					height: sp(24),
+					borderRadius: sp(12),
+					alignItems: "center",
+					justifyContent: "center",
+				},
+				focused && styles.focusRing,
+			]}>
+			<Ionicons
+				name="ellipsis-vertical"
+				size={sp(14)}
+				color={Palette.onSurfaceVariant}
+			/>
+		</TVPressable>
+	);
 
 	return (
 		<TVPressable
@@ -2410,26 +2452,7 @@ function LibraryRow({
 				</Text>
 			) : null}
 
-			<TVPressable
-				onPress={onMore}
-				hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-				accessibilityLabel="Seçenekler"
-				style={({ focused }) => [
-					{
-						width: sp(24),
-						height: sp(24),
-						borderRadius: sp(12),
-						alignItems: "center",
-						justifyContent: "center",
-					},
-					focused && styles.focusRing,
-				]}>
-				<Ionicons
-					name="ellipsis-vertical"
-					size={sp(14)}
-					color={Palette.onSurfaceVariant}
-				/>
-			</TVPressable>
+			{wrapMore ? wrapMore(renderMoreButton) : renderMoreButton(onMore)}
 		</TVPressable>
 	);
 }

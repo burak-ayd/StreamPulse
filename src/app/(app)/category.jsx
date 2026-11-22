@@ -24,7 +24,7 @@ import CategoryCard, {
 	gridCardStride,
 } from "@/components/content/CategoryCard";
 import CategoryCardSkeleton from "@/components/content/CategoryCardSkeleton";
-import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
+import ContentPeekMenu from "@/components/peek/ContentPeekMenu";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useFocusCentering } from "@/hooks/useFocusCentering";
 import { useNavLayout } from "@/hooks/useNavLayout";
@@ -451,38 +451,30 @@ export default function CategoryScreen() {
     [router, platformName],
   );
 
-  // ── Uzun basma → hızlı önizleme (ana sayfayla aynı) ────────────
-  const [previewItem, setPreviewItem] = useState(null);
-
-  const handleLongPress = useCallback(
-    (item) => {
-      if (!item) return;
-      setPreviewItem({
-        ...item,
-        // Modal, oynatırken/yorum eklerken eklentiye ihtiyaç duyuyor.
-        plugin: item.plugin || platformName,
-        type: canonicalType(item),
-      });
-    },
-    [platformName],
-  );
+  // ── Uzun basma → peek menüsü (ContentPeekMenu; ana sayfayla aynı) ──
 
   const renderItem = useCallback(
     ({ item, index }) => (
-      <CategoryCard
+      <ContentPeekMenu
         item={item}
-        variant="grid"
-        width={cardWidth}
-        onPress={() => handleItemPress(item)}
-        // ⚠️ Ana sayfadaki kartla AYNI davranış: uzun basma hızlı önizleme
-        // modalını açar. Kart paylaşıldığı için bu davranış burada da
-        // ücretsiz geldi — önceki ikinci kopyada hiç yoktu.
-        onLongPress={() => handleLongPress(item)}
-        // Sorun 5: odaklanan kart ekranın ortasına taşınır.
-        onFocus={() => handleCardFocus(index)}
-      />
+        platformName={platformName}
+        onPlay={handleItemPress}
+        onDetails={handleItemPress}>
+        {(peek) => (
+          <CategoryCard
+            item={item}
+            variant="grid"
+            width={cardWidth}
+            onPress={() => handleItemPress(item)}
+            onLongPress={
+              Platform.isTV ? () => peek.openMenu() : undefined
+            }
+            onFocus={() => handleCardFocus(index)}
+          />
+        )}
+      </ContentPeekMenu>
     ),
-    [cardWidth, handleItemPress, handleLongPress, handleCardFocus],
+    [cardWidth, handleItemPress, handleCardFocus, platformName],
   );
 
   /**
@@ -717,24 +709,6 @@ export default function CategoryScreen() {
 			    kumandayla doğrudan bölümler arasında geçilebilir olmalı
 			    (sorun 3). */}
       <BottomNavigation activeRoute="/(app)" />
-
-      {/* Hızlı önizleme — ana sayfadaki kartla aynı deneyim.
-			    Kart paylaşıldığı için uzun basma davranışı her iki ekranda da
-			    aynı; modal'ı da burada aynı şekilde bağlıyoruz. */}
-      <QuickPreviewModal
-        visible={Boolean(previewItem)}
-        movie={previewItem}
-        platformName={platformName}
-        onClose={() => setPreviewItem(null)}
-        onPlayPress={(item) => {
-          setPreviewItem(null);
-          handleItemPress(item);
-        }}
-        onDetailsPress={(item) => {
-          setPreviewItem(null);
-          handleItemPress(item);
-        }}
-      />
     </>
   );
 }

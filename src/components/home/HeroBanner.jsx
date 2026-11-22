@@ -1,6 +1,7 @@
 import LanguageBadge from "@/components/common/LanguageBadge";
 import RozetNokta from "@/components/common/RozetNokta";
 import TVPressable from "@/components/common/TVPressable";
+import LibraryPeekMenu from "@/components/peek/LibraryPeekMenu";
 import { useAppUpdate } from "@/context/AppUpdateContext";
 import { useTVFocus } from "@/context/TVFocusContext";
 import {
@@ -33,7 +34,8 @@ export default function HeroBanner({
 	isInList,
 	userAvatarUrl,
 	onPlayPress,
-	onToggleList,
+	/** Liste/favori menüsünden sonra (panelin "Listede" durumu tazelensin). */
+	onListChanged,
 	/** Detay sayfası — oynatmanın yanında ayrı bir "Bilgi" düğmesi. */
 	onInfoPress,
 	onPlatformPress,
@@ -356,19 +358,34 @@ export default function HeroBanner({
 						<Text style={styles.playButtonText}>Oynat</Text>
 					</TVPressable>
 
-					<TVPressable
-						style={styles.listButton}
-						focusedStyle={styles.listButtonFocused}
-						onPress={onToggleList}>
-						<Ionicons
-							name={isInList ? "checkmark" : "bookmark-outline"}
-							size={20}
-							color={Palette.onSurface}
-						/>
-						<Text style={styles.listButtonText}>
-							{isInList ? "Listede" : "Listem"}
-						</Text>
-					</TVPressable>
+					<LibraryPeekMenu
+						item={movie}
+						onChanged={onListChanged}>
+						{(listMenu) => (
+							<TVPressable
+								style={styles.listButton}
+								focusedStyle={styles.listButtonFocused}
+								disabled={!Platform.isTV}
+								onPress={
+									Platform.isTV
+										? listMenu.openMenu
+										: undefined
+								}>
+								<Ionicons
+									name={
+										isInList
+											? "checkmark"
+											: "bookmark-outline"
+									}
+									size={20}
+									color={Palette.onSurface}
+								/>
+								<Text style={styles.listButtonText}>
+									{isInList ? "Listede" : "Listem"}
+								</Text>
+							</TVPressable>
+						)}
+					</LibraryPeekMenu>
 
 					{onInfoPress ? (
 						<TVPressable

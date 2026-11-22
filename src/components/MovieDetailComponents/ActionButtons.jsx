@@ -1,5 +1,6 @@
 import { useFeedback } from "@/components/feedback/AppFeedbackProvider";
 import TVPressable from "@/components/common/TVPressable";
+import LibraryPeekMenu from "@/components/peek/LibraryPeekMenu";
 import { FontFamily, Palette } from "@/constants/theme";
 import { useDownload } from "@/context/DownloadContext";
 import { useTvMetrics } from "@/utils/tvMetrics";
@@ -7,7 +8,7 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { formatTime } from "@utils/formatters";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { ActivityIndicator, Alert, Linking, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Platform, StyleSheet, Text, View } from "react-native";
 
 import { isSeriesContent } from "@/utils/mediaType";
 
@@ -26,7 +27,8 @@ export default function ActionButtons({
 	watchlistStatus = null,
 	watchProgress = null,
 	totalEpisodesCount = 0,
-	onToggleWatchlist,
+	/** Liste/favori peek menüsünde durum değiştiğinde. */
+	onWatchlistChanged,
 	onToggleFavorite,
 	onOpenTrailer,
 }) {
@@ -359,7 +361,6 @@ export default function ActionButtons({
 			key: "watchlist",
 			icon: watchlistIcon,
 			label: watchlistLabel,
-			onPress: onToggleWatchlist,
 			active: Boolean(effectiveWatchlistStatus),
 		},
 		{
@@ -442,6 +443,94 @@ export default function ActionButtons({
 		</TVPressable>
 	);
 
+	/* ── Eylem kutusu ───────────────────────────────────────────────
+	 * Liste kutusu artık bir peek menüsü açar: telefonda dokununca
+	 * kutunun üzerinde, TV'de odaklanıp OK'a basınca merkezî panelde
+	 * (bkz. components/peek). Diğer kutular doğrudan çalışır.
+	 */
+	const renderAction = (action, compact) => {
+		const color =
+			action.color ||
+			(action.active
+				? Palette.primary
+				: compact
+					? Palette.onSurface
+					: Palette.onSurfaceVariant);
+
+		const pressable = (onPress) => (
+			<TVPressable
+				key={action.key}
+				style={
+					compact
+						? [
+								styles.pill,
+								{
+									height: sp(48),
+									borderRadius: sp(24),
+									gap: sp(6),
+									paddingHorizontal: sp(14),
+								},
+							]
+						: [
+								styles.tile,
+								{
+									gap: sp(6),
+									paddingVertical: sp(10),
+									borderRadius: sp(12),
+									backgroundColor: action.active
+										? Palette.surfaceHigh
+										: Palette.surface,
+									minWidth: isTV ? sp(90) : 0,
+								},
+							]
+				}
+				focusedStyle={styles.focusRing}
+				onPress={onPress}
+				disabled={!onPress}
+				activeOpacity={0.85}>
+				{action.busy ? (
+					<ActivityIndicator size="small" color={color} />
+				) : (
+					<Ionicons
+						name={action.icon}
+						size={sp(compact ? 18 : 21)}
+						color={color}
+					/>
+				)}
+				<Text
+					style={
+						compact
+							? [
+									styles.pillText,
+									{ fontSize: sp(14), color },
+								]
+							: [
+									styles.tileLabel,
+									{ fontSize: sp(11.5), color },
+								]
+					}
+					numberOfLines={1}>
+					{action.label}
+				</Text>
+			</TVPressable>
+		);
+
+		if (action.key !== "watchlist") return pressable(action.onPress);
+
+		return (
+			<LibraryPeekMenu
+				key={action.key}
+				item={content}
+				onChanged={onWatchlistChanged}>
+				{(listMenu) =>
+					pressable(
+						Platform.isTV ? listMenu.openMenu : undefined,
+					)
+				}
+			</LibraryPeekMenu>
+		);
+	};
+
 	/*
 	 * TV / yatay tablet (10-feet) referansı: eylemler ikon kutusu değil,
 	 * YUVARLAK HAP butonlar — birincil dolgulu, kalanlar yüzey rengi —
@@ -476,60 +565,7 @@ export default function ActionButtons({
 					</Text>
 				</TVPressable>
 
-				{actions.map((action) => (
-					<TVPressable
-						key={action.key}
-						style={[
-							styles.pill,
-							{
-								height: sp(48),
-								borderRadius: sp(24),
-								gap: sp(6),
-								paddingHorizontal: sp(14),
-							},
-						]}
-						focusedStyle={styles.focusRing}
-						onPress={action.onPress}
-						activeOpacity={0.85}>
-						{action.busy ? (
-							<ActivityIndicator
-								size="small"
-								color={
-									action.color ||
-									(action.active
-										? Palette.primary
-										: Palette.onSurface)
-								}
-							/>
-						) : (
-							<Ionicons
-								name={action.icon}
-								size={sp(18)}
-								color={
-									action.color ||
-									(action.active
-										? Palette.primary
-										: Palette.onSurface)
-								}
-							/>
-						)}
-						<Text
-							style={[
-								styles.pillText,
-								{
-									fontSize: sp(14),
-									color:
-										action.color ||
-										(action.active
-											? Palette.primary
-											: Palette.onSurface),
-								},
-							]}
-							numberOfLines={1}>
-							{action.label}
-						</Text>
-					</TVPressable>
-				))}
+				{actions.map((action) => renderAction(action, true))}
 			</View>
 		);
 	}
@@ -591,63 +627,7 @@ export default function ActionButtons({
 			)}
 
 			<View style={[styles.actionsRow, { gap: sp(10) }]}>
-				{actions.map((action) => (
-					<TVPressable
-						key={action.key}
-						style={[
-							styles.tile,
-							{
-								gap: sp(6),
-								paddingVertical: sp(10),
-								borderRadius: sp(12),
-								backgroundColor: action.active
-									? Palette.surfaceHigh
-									: Palette.surface,
-								minWidth: isTV ? sp(90) : 0,
-							},
-						]}
-						focusedStyle={styles.focusRing}
-						onPress={action.onPress}
-						activeOpacity={0.85}>
-						{action.busy ? (
-							<ActivityIndicator
-								size="small"
-								color={
-									action.color ||
-									(action.active
-										? Palette.primary
-										: Palette.onSurfaceVariant)
-								}
-							/>
-						) : (
-							<Ionicons
-								name={action.icon}
-								size={sp(21)}
-								color={
-									action.color ||
-									(action.active
-										? Palette.primary
-										: Palette.onSurfaceVariant)
-								}
-							/>
-						)}
-						<Text
-							style={[
-								styles.tileLabel,
-								{
-									fontSize: sp(11.5),
-									color:
-										action.color ||
-										(action.active
-											? Palette.primary
-											: Palette.onSurfaceVariant),
-								},
-							]}
-							numberOfLines={1}>
-							{action.label}
-						</Text>
-					</TVPressable>
-				))}
+				{actions.map((action) => renderAction(action, false))}
 			</View>
 		</View>
 	);

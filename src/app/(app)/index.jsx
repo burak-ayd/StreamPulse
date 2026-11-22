@@ -6,8 +6,6 @@ import MovieCategorySection, {
 } from "@/components/home/MovieCategorySection";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
 import BottomSheetModal from "@/components/modal/Bottomsheetmodal";
-import QuickPreviewModal from "@/components/modal/QuickPreviewModal";
-import ListSelectModal from "@/components/modal/ListSelectModal";
 import { useAuth } from "@/context/AuthContext";
 import { FontFamily, Palette } from "@/constants/theme";
 import { episodeMetaOf } from "@/utils/contentMeta";
@@ -93,23 +91,12 @@ export default function Index() {
 	const [isPlatformModalVisible, setIsPlatformModalVisible] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 	const [visibleCount, setVisibleCount] = useState(6);
-	const [previewMovie, setPreviewMovie] = useState(null);
-	const [isPreviewModalVisible, setIsPreviewModalVisible] = useState(false);
-	const [isHeroListSelectVisible, setIsHeroListSelectVisible] = useState(false);
 
-	// Android TV Kumanda Geri Tuşu: Açık modal varsa kapat
+	// Android TV Kumanda Geri Tuşu: Platform seçim paneli açıksa kapat
 	useEffect(() => {
 		const onBackPress = () => {
 			if (isPlatformModalVisible) {
 				setIsPlatformModalVisible(false);
-				return true;
-			}
-			if (isPreviewModalVisible) {
-				setIsPreviewModalVisible(false);
-				return true;
-			}
-			if (isHeroListSelectVisible) {
-				setIsHeroListSelectVisible(false);
 				return true;
 			}
 			return false;
@@ -120,7 +107,7 @@ export default function Index() {
 			onBackPress,
 		);
 		return () => sub.remove();
-	}, [isPlatformModalVisible, isPreviewModalVisible, isHeroListSelectVisible]);
+	}, [isPlatformModalVisible]);
 
 	/*
 	 * Temiz yeniden başlatma — listeyi en başa getir.
@@ -505,18 +492,7 @@ export default function Index() {
 		[router, selectedPlatform],
 	);
 
-	// Uzun basma ile Hızlı Önizleme Modalı aç
-	const handleMovieLongPress = useCallback(
-		(movie) => {
-			if (!movie || movie.id === "offline-placeholder") return;
-			setPreviewMovie({
-				...movie,
-				plugin: movie.plugin || selectedPlatform?.name,
-			});
-			setIsPreviewModalVisible(true);
-		},
-		[selectedPlatform],
-	);
+	// Uzun basma artık kartın kendi peek menüsünü açar (ContentPeekMenu).
 
 	const handleContinueWatchingPress = useCallback(
 		async (item) => {
@@ -736,7 +712,6 @@ export default function Index() {
 				category={category}
 				rowIndex={rowIndex}
 				onMoviePress={handleMoviePress}
-				onMovieLongPress={handleMovieLongPress}
 				onSeeAll={handleSeeAllCategory}
 				// Sorun 1: sol ray bulunan düzende satır sonunda
 				// odaklanabilir "Tümünü Gör" kutusu.
@@ -750,7 +725,6 @@ export default function Index() {
 		[
 			selectedPlatform,
 			handleMoviePress,
-			handleMovieLongPress,
 			handleSeeAllCategory,
 			isSideRail,
 			handleRowFocused,
@@ -842,9 +816,8 @@ export default function Index() {
 							userAvatarUrl={user?.avatar_url || userAvatarUrl}
 							onPlayPress={() => handleMoviePress(featuredMovie)}
 							onInfoPress={() => handleMoviePress(featuredMovie)}
-							onToggleList={() => {
-								if (!featuredMovie || featuredMovie.id === "offline-placeholder") return;
-								setIsHeroListSelectVisible(true);
+							onListChanged={(newStatus, newFav) => {
+								setIsInList(Boolean(newStatus || newFav));
 							}}
 							onPlatformPress={() =>
 								setIsPlatformModalVisible(true)
@@ -977,8 +950,8 @@ export default function Index() {
 								{continueWatching.length > 0 && (
 									<ContinueWatchingSection
 										items={continueWatching}
+										platformName={selectedPlatform?.name}
 										onItemPress={handleContinueWatchingPress}
-										onItemLongPress={handleMovieLongPress}
 										onRemoveItem={handleRemoveContinueWatching}
 										onSeeAllPress={() =>
 											router.push({
@@ -996,8 +969,8 @@ export default function Index() {
 								{continueWatching.length > 0 && (
 									<ContinueWatchingSection
 										items={continueWatching}
+										platformName={selectedPlatform?.name}
 										onItemPress={handleContinueWatchingPress}
-										onItemLongPress={handleMovieLongPress}
 										onRemoveItem={handleRemoveContinueWatching}
 										onSeeAllPress={() =>
 											router.push({
@@ -1037,32 +1010,6 @@ export default function Index() {
 						onClose={() => setIsPlatformModalVisible(false)}
 					/>
 				</BottomSheetModal>
-
-				{/* Quick Preview Modal (Long-press) */}
-				<QuickPreviewModal
-					visible={isPreviewModalVisible}
-					movie={previewMovie}
-					platformName={selectedPlatform?.name}
-					onClose={() => setIsPreviewModalVisible(false)}
-					onPlayPress={(item) => {
-						setIsPreviewModalVisible(false);
-						handleMoviePress(item);
-					}}
-					onDetailsPress={(item) => {
-						setIsPreviewModalVisible(false);
-						handleMoviePress(item);
-					}}
-				/>
-
-				{/* Hero Movie List Select Modal */}
-				<ListSelectModal
-					visible={isHeroListSelectVisible}
-					movie={featuredMovie}
-					onClose={() => setIsHeroListSelectVisible(false)}
-					onStatusChanged={(newStatus, newFav) => {
-						setIsInList(Boolean(newStatus || newFav));
-					}}
-				/>
 			</View>
 		</>
 	);
