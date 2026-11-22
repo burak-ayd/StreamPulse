@@ -322,8 +322,12 @@ export default function ActionButtons({
 	let downloadLabel = episodeDownloaded ? "İndirildi" : "İndir";
 	let downloadBusy = downloadPending;
 	let downloadActive = episodeDownloaded;
+	let downloadColor = episodeDownloaded
+		? Palette.success
+		: Palette.onSurfaceVariant;
 	if (downloadPending) {
 		downloadLabel = "Kaynak aranıyor…";
+		downloadColor = Palette.onSurface;
 	} else if (
 		downloadState?.status === "downloading" ||
 		downloadState?.status === "queued" ||
@@ -333,13 +337,21 @@ export default function ActionButtons({
 		downloadIcon = "cloud-download-outline";
 		downloadLabel = downloadState.status === "queued" ? "Sırada…" : `%${pct}`;
 		downloadActive = true;
+		downloadColor = Palette.secondary;
 	} else if (downloadState?.status === "paused") {
 		downloadIcon = "pause-circle-outline";
 		downloadLabel = "Duraklatıldı";
 		downloadActive = true;
+		downloadColor = Palette.tertiary;
 	} else if (downloadState?.status === "failed") {
 		downloadIcon = "alert-circle-outline";
 		downloadLabel = "Hata";
+		downloadColor = Palette.error;
+	} else if (downloadState?.status === "completed") {
+		downloadIcon = "checkmark-done-outline";
+		downloadLabel = "İndirildi";
+		downloadActive = true;
+		downloadColor = Palette.success;
 	}
 
 	const actions = [
@@ -365,6 +377,7 @@ export default function ActionButtons({
 			onPress: handleDownload,
 			active: downloadActive,
 			busy: downloadBusy,
+			color: downloadColor,
 			hidden: isSeries,
 		},
 		{
@@ -479,15 +492,24 @@ export default function ActionButtons({
 						onPress={action.onPress}
 						activeOpacity={0.85}>
 						{action.busy ? (
-							<ActivityIndicator size="small" color={Palette.onSurface} />
+							<ActivityIndicator
+								size="small"
+								color={
+									action.color ||
+									(action.active
+										? Palette.primary
+										: Palette.onSurface)
+								}
+							/>
 						) : (
 							<Ionicons
 								name={action.icon}
 								size={sp(18)}
 								color={
-									action.active
+									action.color ||
+									(action.active
 										? Palette.primary
-										: Palette.onSurface
+										: Palette.onSurface)
 								}
 							/>
 						)}
@@ -496,9 +518,11 @@ export default function ActionButtons({
 								styles.pillText,
 								{
 									fontSize: sp(14),
-									color: action.active
-										? Palette.primary
-										: Palette.onSurface,
+									color:
+										action.color ||
+										(action.active
+											? Palette.primary
+											: Palette.onSurface),
 								},
 							]}
 							numberOfLines={1}>
@@ -588,16 +612,22 @@ export default function ActionButtons({
 						{action.busy ? (
 							<ActivityIndicator
 								size="small"
-								color={Palette.onSurfaceVariant}
+								color={
+									action.color ||
+									(action.active
+										? Palette.primary
+										: Palette.onSurfaceVariant)
+								}
 							/>
 						) : (
 							<Ionicons
 								name={action.icon}
 								size={sp(21)}
 								color={
-									action.active
+									action.color ||
+									(action.active
 										? Palette.primary
-										: Palette.onSurfaceVariant
+										: Palette.onSurfaceVariant)
 								}
 							/>
 						)}
@@ -606,9 +636,11 @@ export default function ActionButtons({
 								styles.tileLabel,
 								{
 									fontSize: sp(11.5),
-									color: action.active
-										? Palette.primary
-										: Palette.onSurfaceVariant,
+									color:
+										action.color ||
+										(action.active
+											? Palette.primary
+											: Palette.onSurfaceVariant),
 								},
 							]}
 							numberOfLines={1}>

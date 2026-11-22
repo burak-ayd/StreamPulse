@@ -146,6 +146,8 @@ export const Palette = {
 	secondary: "#4cd7f6",
 	tertiary: "#fbbc2e",
 	error: "#ffb4ab",
+	/** Başarı durumu (indirme tamamlandı vb.) — koyu temada açık yeşil. */
+	success: "#10b981",
 } as const;
 
 /**

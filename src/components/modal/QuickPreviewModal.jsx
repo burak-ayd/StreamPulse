@@ -325,7 +325,12 @@ export default function QuickPreviewModal({
 	const downloadState = getDownloadState(downloadKeyInfo);
 
 	const downloadUi = downloadPending
-		? { icon: "download-outline", label: "Kaynak aranıyor…", busy: true }
+		? {
+				icon: "download-outline",
+				label: "Kaynak aranıyor…",
+				busy: true,
+				color: Palette.onSurface,
+			}
 		: downloadState?.status === "downloading" ||
 			  downloadState?.status === "queued" ||
 			  downloadState?.status === "merging"
@@ -333,12 +338,35 @@ export default function QuickPreviewModal({
 					icon: "cloud-download-outline",
 					label: `%${Math.round((downloadState.progress || 0) * 100)}`,
 					busy: false,
+					color: Palette.secondary,
 				}
 			: downloadState?.status === "paused"
-				? { icon: "pause-circle-outline", label: "Duraklatıldı", busy: false }
-				: downloadState?.status === "completed"
-					? { icon: "checkmark-done", label: "İndirildi", busy: false }
-					: { icon: "download-outline", label: "İndir", busy: false };
+				? {
+						icon: "pause-circle-outline",
+						label: "Duraklatıldı",
+						busy: false,
+						color: Palette.tertiary,
+					}
+				: downloadState?.status === "failed"
+					? {
+							icon: "alert-circle-outline",
+							label: "Hata",
+							busy: false,
+							color: Palette.error,
+						}
+					: downloadState?.status === "completed"
+						? {
+								icon: "checkmark-done",
+								label: "İndirildi",
+								busy: false,
+								color: Palette.success,
+							}
+						: {
+								icon: "download-outline",
+								label: "İndir",
+								busy: false,
+								color: Palette.onSurface,
+							};
 
 	/**
 	 * İndirme: merkezi akış (DownloadContext.requestDownload).
@@ -722,6 +750,7 @@ export default function QuickPreviewModal({
 				icon: downloadUi.icon,
 				label: downloadUi.label,
 				busy: downloadUi.busy,
+				color: downloadUi.color,
 				onPress: handleDownload,
 			},
 			{
@@ -770,13 +799,13 @@ export default function QuickPreviewModal({
 						{item.busy ? (
 							<ActivityIndicator
 								size="small"
-								color={Palette.onSurface}
+								color={item.color || Palette.onSurface}
 							/>
 						) : (
 							<Ionicons
 								name={item.icon}
 								size={phone ? sp(22) : sp(21)}
-								color={Palette.onSurface}
+								color={item.color || Palette.onSurface}
 							/>
 						)}
 						<Text
@@ -784,6 +813,7 @@ export default function QuickPreviewModal({
 								styles.subActionLabel,
 								{
 									fontSize: phone ? sp(11.5) : sp(12),
+									color: item.color || Palette.onSurface,
 									...(phone ? { textAlign: "center" } : null),
 								},
 							]}

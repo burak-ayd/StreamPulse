@@ -29,6 +29,20 @@ import {
 } from "react-native";
 
 /**
+ * Bölüm indirme dairesinin durum renkleri. Daire HER ZAMAN dolu; ikon/yazı
+ * daire zemininin zıt tonunda (`background`) — kart zemini ne olursa olsun
+ * ("Kaldığın yerden devam et" kartı dahil) renkler birbirine karışmaz.
+ */
+const EP_DL_VISUAL = {
+	idle: { bg: Palette.surfaceBright, fg: Palette.onSurfaceVariant },
+	waiting: { bg: Palette.surfaceHighest, fg: Palette.secondary },
+	downloading: { bg: Palette.secondary, fg: Palette.background },
+	paused: { bg: Palette.tertiary, fg: Palette.background },
+	completed: { bg: Palette.success, fg: Palette.background },
+	failed: { bg: Palette.error, fg: Palette.background },
+};
+
+/**
  * Format episode duration to Turkish string (e.g., "2 saat 21 dakika" or "45 dakika")
  */
 function getEpisodeDurationTurkish(ep, epProgress, fallbackMinutes) {
@@ -1280,16 +1294,18 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 						epDl?.status === "downloading" || epDl?.status === "merging";
 					const epDlWaiting =
 						epDlPending || epDl?.status === "queued";
-					const epDlColor =
-						epDl?.status === "failed"
-							? Palette.error
+					const epDlVisual = epDlWaiting
+						? EP_DL_VISUAL.waiting
+						: epDlBusy
+							? EP_DL_VISUAL.downloading
 							: epDl?.status === "paused"
-								? Palette.tertiary
-								: epDlBusy || epIndirildi
-									? Palette.secondary
-									: isInProgress
-										? Palette.background
-										: Palette.onSurfaceVariant;
+								? EP_DL_VISUAL.paused
+								: epDl?.status === "failed"
+									? EP_DL_VISUAL.failed
+									: epIndirildi ||
+										  epDl?.status === "completed"
+										? EP_DL_VISUAL.completed
+										: EP_DL_VISUAL.idle;
 
 					const epKey = `s${selectedSeason}_e${epNumber}`;
 					const epProgress =
@@ -1760,10 +1776,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 														width: sp(36),
 														height: sp(36),
 														borderRadius: sp(18),
-														backgroundColor:
-															isInProgress
-																? Palette.secondary
-																: Palette.surfaceHigh,
+														backgroundColor: epDlVisual.bg,
 													},
 													focused && styles.focusRing,
 												]}
@@ -1784,7 +1797,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 												{epDlWaiting ? (
 													<ActivityIndicator
 														size="small"
-														color={Palette.secondary}
+														color={epDlVisual.fg}
 													/>
 												) : epDlBusy ? (
 													<Text
@@ -1792,7 +1805,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 															styles.downloadPct,
 															{
 																fontSize: sp(9),
-																color: Palette.secondary,
+																color: epDlVisual.fg,
 															},
 														]}>
 														{`%${epDlPct}`}
@@ -1810,7 +1823,7 @@ const SeasonsSection = forwardRef(function SeasonsSection(
 																		: "download-outline"
 														}
 														size={sp(18)}
-														color={epDlColor}
+														color={epDlVisual.fg}
 													/>
 												)}
 											</TVPressable>
@@ -2180,6 +2193,9 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		backgroundColor: Palette.surfaceHigh,
 		flexShrink: 0,
+		// Her zemin üzerinde ayırt edilsin: ince açık halka.
+		borderWidth: 1,
+		borderColor: "rgba(229, 225, 228, 0.45)",
 	},
 	downloadPct: {
 		fontFamily: FontFamily.bold,
