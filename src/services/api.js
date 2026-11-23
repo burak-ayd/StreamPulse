@@ -574,28 +574,34 @@ export async function searchPluginContent(pluginName, query) {
 /**
  * Extract video stream sources from target URL
  * @param {string} url - Target movie or series/episode URL
+ * @param {{ amac?: "oynat"|"indir" }} [options]
+ *   `oynat`: oynatıcı kaynakları (CehennemPass MP4 backend'de elenir, 30 sn sınır).
+ *   `indir`: indirme listesi (tüm kaynaklar, 60 sn sınır — CehennemPass hız ölçümü).
  * @returns {Promise<Array>} Array of extractor results: [{ extractor, result: { name, url, referer, headers, subtitles } }]
  */
-export async function extractVideoSources(url) {
+export async function extractVideoSources(url, { amac = "indir" } = {}) {
 	// ⚡ Kısa ömürlü önbellek: oynatıcı ve indirme modalı aynı bölüm için
 	// `/api/extract`'i tekrar tekrar çağırıyordu (modal'ın "kaynaklar
 	// yükleniyor" beklemesi kullanıcı raporu: #8). Sonuç 10 dk cache'lenir;
 	// segment URL'leri token'lı ve süreli olduğu için TTL kısa tutulur.
+	// Anahtar `amac` içerir: oynatma listesi CehennemPass'sız, indirme listesi tam.
+	const anahtar = `${amac}:${url}`;
 	const simdi = Date.now();
-	const cacheHit = extractCache.get(url);
+	const cacheHit = extractCache.get(anahtar);
 	if (cacheHit && simdi - cacheHit.at < EXTRACT_CACHE_TTL_MS) {
 		return cacheHit.sources;
 	}
-	// ⏱ 30 sn sınırı: RN fetch'in kendi zarfı olduğu sürece (timeout yok)
-	// ağ takılırken "kaynak yükleniyor" ekranı sonsuza kadar dönüyordu.
+	// ⏱ Oynatma 30 sn / indirme 60 sn: indirme yolu CehennemPass CDN hız
+	// ölçümü yüzünden daha uzun sürebilir; oynatma yolu bu kaynağı beklemez.
 	// (AbortController kalıbı: AbortSignal.timeout Hermes'te sürüme bağımlı.)
+	const zamanAsimiMs = amac === "oynat" ? 30000 : 60000;
 	const kontrol = new AbortController();
-	const zamanlimiti = setTimeout(() => kontrol.abort(), 30000);
+	const zamanlimiti = setTimeout(() => kontrol.abort(), zamanAsimiMs);
 	try {
 		const response = await fetch(`${API_BASE_URL}/api/extract`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ url }),
+			body: JSON.stringify({ url, amac }),
 			signal: kontrol.signal,
 		});
 		if (response.ok) {
@@ -638,7 +644,7 @@ export async function extractVideoSources(url) {
 						},
 					};
 				});
-				extractCache.set(url, { at: Date.now(), sources });
+				extractCache.set(anahtar, { at: Date.now(), sources });
 				return sources;
 			}
 		} else {

@@ -66,6 +66,9 @@ export default function DownloadConfigModal({
 }) {
 
 	const [loading, setLoading] = useState(false);
+	// İndirme yolu 60 sn sürebilir (CehennemPass hız ölçümü). Kalan süre
+	// modalda gösterilir; kullanıcı "dondu mu?" diye düşünmez.
+	const [kalanSaniye, setKalanSaniye] = useState(null);
 	const [loadError, setLoadError] = useState(null);
 	const [sources, setSources] = useState([]);
 	const [selectedSourceIdx, setSelectedSourceIdx] = useState(0);
@@ -88,6 +91,25 @@ export default function DownloadConfigModal({
 	const pluginName = content?.plugin || "";
 	const targetUrl = (episode?.url || content?.url) || "";
 
+	// İndirme kaynak taraması: `extractVideoSources` 60 sn'de iptal eder.
+	useEffect(() => {
+		if (!loading) {
+			const temizle = setTimeout(() => setKalanSaniye(null), 0);
+			return () => clearTimeout(temizle);
+		}
+		const bitis = Date.now() + 60000;
+		const baslat = setTimeout(() => setKalanSaniye(60), 0);
+		const sayac = setInterval(() => {
+			const kalan = Math.max(0, Math.ceil((bitis - Date.now()) / 1000));
+			setKalanSaniye(kalan);
+			if (kalan <= 0) clearInterval(sayac);
+		}, 1000);
+		return () => {
+			clearTimeout(baslat);
+			clearInterval(sayac);
+		};
+	}, [loading]);
+
 	/** Kaynakları çeker; modal her açılışta taze listeyi ister. */
 	const loadSources = useCallback(async () => {
 		if (!targetUrl) {
@@ -100,7 +122,7 @@ export default function DownloadConfigModal({
 		setSelectedSourceIdx(0);
 		setSelectedSubtitleIdx(-1);
 		try {
-			const extracted = await extractVideoSources(targetUrl);
+			const extracted = await extractVideoSources(targetUrl, { amac: "indir" });
 			const list = Array.isArray(extracted) ? extracted : [];
 			// Doğrudan dosya (progressive MP4) tercih edilir: tek dosya, ~8 istek,
 			// HLS'in 1150 segment isteği/429 kuyruğu/ses fazı yok — en stabil
@@ -401,7 +423,9 @@ export default function DownloadConfigModal({
 							<View style={styles.centerBox}>
 								<ActivityIndicator color={ACCENT} />
 								<Text style={[styles.hint, { color: mutedColor }]}>
-									Kaynaklar yükleniyor…
+									{kalanSaniye != null
+										? `Kaynaklar yükleniyor… ${kalanSaniye} sn`
+										: "Kaynaklar yükleniyor…"}
 								</Text>
 							</View>
 						) : loadError ? (

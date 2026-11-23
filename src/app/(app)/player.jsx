@@ -267,11 +267,35 @@ const [sources, setSources] = useState([]);
 	// Canlı TV'de `targetUrl` yoktur; yalnız `loading`'in bu yüzden `false`
 	// başlaması ekranı "bağlantı bulunamadı" hatasında açardı.
 	const [loading, setLoading] = useState(Boolean(targetUrl || liveKanalId));
+	// Kaynak tarama geri sayımı (sn). API 30 sn'de iptal eder; kullanıcı
+	// "takıldı mı?" diye düşünmeden kalan süreyi görür.
+	const [kaynakGeriSayim, setKaynakGeriSayim] = useState(null);
 	const [error, setError] = useState(
 		!targetUrl && !liveKanalId
 			? "Oynatılacak video bağlantısı bulunamadı."
 			: null,
 	);
+	// Film/dizi kaynak taraması: `extractVideoSources` 30 sn'de iptal eder.
+	// Canlı TV'de extractor zinciri yok; sayaç gösterilmez.
+	useEffect(() => {
+		if (!loading || isCanli) {
+			// setState'i effect gövdesinde senkron çağırmamak için 0 ms'e erteliyoruz.
+			const temizle = setTimeout(() => setKaynakGeriSayim(null), 0);
+			return () => clearTimeout(temizle);
+		}
+		const bitis = Date.now() + 30000;
+		const baslat = setTimeout(() => setKaynakGeriSayim(30), 0);
+		const sayac = setInterval(() => {
+			const kalan = Math.max(0, Math.ceil((bitis - Date.now()) / 1000));
+			setKaynakGeriSayim(kalan);
+			if (kalan <= 0) clearInterval(sayac);
+		}, 1000);
+		return () => {
+			clearTimeout(baslat);
+			clearInterval(sayac);
+		};
+	}, [loading, isCanli]);
+
 	useEffect(() => {
 		async function checkResumePosition() {
 			/*
@@ -430,7 +454,7 @@ const [sources, setSources] = useState([]);
 					elenen: 0,
 				};
 			}
-			const extracted = await extractVideoSources(targetUrl);
+			const extracted = await extractVideoSources(targetUrl, { amac: "oynat" });
 			/*
 			 * CehennemPass progressive MP4 YALNIZ indirme modalında sunulur
 			 * (tek dosya indirme için ideal); oynatıcıda HLS kaynakları kalır
@@ -753,7 +777,11 @@ const [sources, setSources] = useState([]);
 					<ActivityIndicator size="large" color={Palette.primary} />
 					<Text style={styles.loadingTitle}>Video Kaynakları Taranıyor</Text>
 					<Text style={styles.loadingSubtitle}>
-						Lütfen bekleyin, en uygun yayın akışı hazırlanıyor...
+						{isCanli
+							? "Lütfen bekleyin, en uygun yayın akışı hazırlanıyor..."
+							: kaynakGeriSayim != null
+								? `Kaynaklar taranıyor... ${kaynakGeriSayim} sn`
+								: "Lütfen bekleyin, en uygun yayın akışı hazırlanıyor..."}
 					</Text>
 					<TVPressable
 						autoFocus={true}
